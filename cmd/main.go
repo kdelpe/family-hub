@@ -64,7 +64,7 @@ func dispatch(args []string, stdout io.Writer) error {
 	case "seed":
 		return seed(commandArgs)
 	case "version":
-		if err := parseNoArgs("version", commandArgs); err != nil {
+		if err := parseNoArgs(newFlagSet("version"), commandArgs); err != nil {
 			return err
 		}
 		_, err := fmt.Fprintln(stdout, version)
@@ -81,19 +81,19 @@ func newFlagSet(name string) *flag.FlagSet {
 	return fs
 }
 
-func parseNoArgs(name string, args []string) error {
-	fs := newFlagSet(name)
+// parseNoArgs parses fs's flags and rejects any positional arguments.
+func parseNoArgs(fs *flag.FlagSet, args []string) error {
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("%s: %w", name, err)
+		return fmt.Errorf("%s: %w", fs.Name(), err)
 	}
 	if fs.NArg() > 0 {
-		return fmt.Errorf("%s: unexpected arguments %q", name, fs.Args())
+		return fmt.Errorf("%s: unexpected arguments %q", fs.Name(), fs.Args())
 	}
 	return nil
 }
 
 func serve(args []string) error {
-	if err := parseNoArgs("serve", args); err != nil {
+	if err := parseNoArgs(newFlagSet("serve"), args); err != nil {
 		return err
 	}
 	return fmt.Errorf("serve: %w", errNotImplemented)
@@ -116,9 +116,8 @@ func migrate(args []string) error {
 }
 
 func parseMigrateAction(args []string) (migrateAction, error) {
-	invalid := fmt.Errorf("invalid action %q (want up, down [N], version or force N)", strings.Join(args, " "))
 	if len(args) == 0 {
-		return migrateAction{}, invalid
+		return migrateAction{}, invalidMigrateAction(args)
 	}
 
 	name, rest := args[0], args[1:]
@@ -141,8 +140,12 @@ func parseMigrateAction(args []string) (migrateAction, error) {
 		}
 		return migrateAction{name: name, n: n}, nil
 	default:
-		return migrateAction{}, invalid
+		return migrateAction{}, invalidMigrateAction(args)
 	}
+}
+
+func invalidMigrateAction(args []string) error {
+	return fmt.Errorf("invalid action %q (want up, down [N], version or force N)", strings.Join(args, " "))
 }
 
 func admin(args []string) error {
@@ -156,11 +159,8 @@ func admin(args []string) error {
 
 	createFs := newFlagSet("admin create")
 	email := createFs.String("email", "", "email of the first admin")
-	if err := createFs.Parse(fs.Args()[1:]); err != nil {
-		return fmt.Errorf("admin create: %w", err)
-	}
-	if createFs.NArg() > 0 {
-		return fmt.Errorf("admin create: unexpected arguments %q", createFs.Args())
+	if err := parseNoArgs(createFs, fs.Args()[1:]); err != nil {
+		return err
 	}
 	if *email == "" {
 		return errors.New("admin create: --email is required")
@@ -169,7 +169,7 @@ func admin(args []string) error {
 }
 
 func seed(args []string) error {
-	if err := parseNoArgs("seed", args); err != nil {
+	if err := parseNoArgs(newFlagSet("seed"), args); err != nil {
 		return err
 	}
 	return fmt.Errorf("seed: %w", errNotImplemented)
