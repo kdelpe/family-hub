@@ -2,7 +2,12 @@ BIN     := bin/family-hub
 # Keep in sync with the golangci-lint version in .github/workflows/ci.yml.
 GOLANGCI_LINT_VERSION := 2.15.0
 
-.PHONY: up down build run test lint vuln
+DATABASE_URL      ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
+# Integration tests use only this, so they never touch the dev database.
+TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
+export DATABASE_URL TEST_DATABASE_URL
+
+.PHONY: up down build run test lint vuln migrate-up migrate-down
 
 up:
 	docker compose up -d --wait
@@ -19,6 +24,7 @@ build:
 run:
 	go run ./cmd $(ARGS)
 
+# Integration tests need Postgres: run `make up` first.
 test:
 	go test -race ./...
 
@@ -29,3 +35,10 @@ lint:
 
 vuln:
 	go tool govulncheck ./...
+
+migrate-up:
+	go run ./cmd migrate up
+
+# Roll back N migrations, e.g. `make migrate-down N=2` (default 1).
+migrate-down:
+	go run ./cmd migrate down $(or $(N),1)
