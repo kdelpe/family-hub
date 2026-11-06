@@ -10,9 +10,6 @@ import (
 	"strings"
 )
 
-// version is set at build time with -ldflags "-X main.version=...".
-var version = "dev"
-
 var errNotImplemented = errors.New("not implemented yet")
 
 const usage = `Usage: family-hub [command]
@@ -25,7 +22,6 @@ Commands:
   migrate force N             set the migration version without running any
   admin create --email ADDR   create the first admin (prompts for the password)
   seed                        load the sample family into an empty database (dev only)
-  version                     print the build version
 `
 
 func main() {
@@ -37,14 +33,14 @@ func main() {
 
 // run prints the usage for -h at any level, so subcommands just return flag.ErrHelp.
 func run(args []string, stdout io.Writer) error {
-	err := dispatch(args, stdout)
+	err := dispatch(args)
 	if errors.Is(err, flag.ErrHelp) {
 		_, err = io.WriteString(stdout, usage)
 	}
 	return err
 }
 
-func dispatch(args []string, stdout io.Writer) error {
+func dispatch(args []string) error {
 	fs := newFlagSet("family-hub")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -63,12 +59,6 @@ func dispatch(args []string, stdout io.Writer) error {
 		return admin(commandArgs)
 	case "seed":
 		return seed(commandArgs)
-	case "version":
-		if err := parseNoArgs(newFlagSet("version"), commandArgs); err != nil {
-			return err
-		}
-		_, err := fmt.Fprintln(stdout, version)
-		return err
 	default:
 		return fmt.Errorf("unknown command %q (see family-hub -h)", command)
 	}

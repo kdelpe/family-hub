@@ -50,9 +50,6 @@ func TestRun(t *testing.T) {
 
 		{name: "seed", args: []string{"seed"}, wantErr: errNotImplemented, wantErrMsg: "seed:"},
 		{name: "seed extra argument", args: []string{"seed", "big"}, wantErrMsg: "seed: unexpected arguments"},
-
-		{name: "version prints build version", args: []string{"version"}, wantStdout: "dev\n"},
-		{name: "version extra argument", args: []string{"version", "x"}, wantErrMsg: "version: unexpected arguments"},
 	}
 
 	for _, tt := range tests {
