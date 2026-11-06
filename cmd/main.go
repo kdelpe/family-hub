@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/kdelpe/family-hub/internal/config"
+	"github.com/kdelpe/family-hub/internal/database"
 )
 
 var errNotImplemented = errors.New("not implemented yet")
@@ -47,3 +50,15 @@ func run(args []string, stdout io.Writer) error {
 
 func serve() error           { return fmt.Errorf("serve: %w", errNotImplemented) }
 func admin(_ []string) error { return fmt.Errorf("admin: %w", errNotImplemented) }
+
+func migrate(args []string) error {
+	command, err := database.ParseMigrateCommand(args)
+	if err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	return command.Run(cfg.DatabaseURL)
+}

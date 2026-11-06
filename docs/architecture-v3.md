@@ -84,6 +84,7 @@ family-hub/
 │   ├── database/
 │   │   ├── db.go                 # pgxpool setup
 │   │   ├── migrate.go            # embedded golang-migrate runner
+│   │   ├── command.go            # parses `migrate up | down [N]` for cmd/main.go
 │   │   ├── migrations/           # one numbered .up.sql/.down.sql pair per phase, from Phase 2 (§6.2)
 │   │   ├── testdata/migrations/  # throwaway migrations for the runner's tests
 │   │   ├── seed.sql              # made-up sample family for local dev (`make seed`)
@@ -734,7 +735,7 @@ func Handler() http.Handler {
 
 ### 6.4 `main.go` shape
 
-The binary has only the commands production needs; dev-only tasks live in the Makefile. `main.go` is a plain switch, and each command parses its own arguments with the stdlib `flag` package (in its own file under `cmd/` once it grows); `family-hub -h` prints the usage. `serve` (default): load config → pgxpool → optional migrate → build `App` → `http.Server` with `ReadHeaderTimeout`, `signal.NotifyContext` for SIGINT/SIGTERM → graceful `Shutdown(30s)`. `migrate up|down [N]` and `admin create` reuse the same config loader. If migration N fails halfway, golang-migrate records `version = N, dirty = true`. Either undo its partial changes and set `version = N-1, dirty = false` (the next `migrate up` retries N), or finish N by hand and set only `dirty = false`. Clearing `dirty` alone after a rollback would skip N for good. No `force` command needed. Sample data is `make seed`, which loads `internal/database/seed.sql` through the compose Postgres and refuses to run unless the database is empty (a check at the top of the file). The seeded test user stores a precomputed Argon2id hash of a known dev password.
+The binary has only the commands production needs; dev-only tasks live in the Makefile. `cmd/` holds only `main.go`: a plain switch that loads config and hands off. Each command's arguments are parsed by the package that owns it (`database.ParseMigrateCommand`), with the stdlib `flag` package where it needs flags; `family-hub -h` prints the usage. `serve` (default): load config → pgxpool → optional migrate → build `App` → `http.Server` with `ReadHeaderTimeout`, `signal.NotifyContext` for SIGINT/SIGTERM → graceful `Shutdown(30s)`. `migrate up|down [N]` and `admin create` reuse the same config loader. If migration N fails halfway, golang-migrate records `version = N, dirty = true`. Either undo its partial changes and set `version = N-1, dirty = false` (the next `migrate up` retries N), or finish N by hand and set only `dirty = false`. Clearing `dirty` alone after a rollback would skip N for good. No `force` command needed. Sample data is `make seed`, which loads `internal/database/seed.sql` through the compose Postgres and refuses to run unless the database is empty (a check at the top of the file). The seeded test user stores a precomputed Argon2id hash of a known dev password.
 
 ### 6.5 Configuration (env vars)
 
