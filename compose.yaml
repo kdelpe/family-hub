@@ -1,0 +1,32 @@
+# Local development only. Ports bind to 127.0.0.1 so nothing is exposed to the network.
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: familyhub
+    ports: ["127.0.0.1:5432:5432"]
+    # Postgres 18 images keep data under /var/lib/postgresql/18/docker, so mount the parent.
+    volumes: [pgdata:/var/lib/postgresql]
+    configs:
+      - source: create-test-db
+        target: /docker-entrypoint-initdb.d/create-test-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d familyhub"]
+      interval: 2s
+      retries: 15
+
+  # Catches outgoing mail; web UI at http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.33.0
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+
+# Init scripts run only when the volume is first created; `docker compose down -v` resets it.
+configs:
+  create-test-db:
+    content: |
+      CREATE DATABASE familyhub_test;
+
+volumes:
+  pgdata: {}

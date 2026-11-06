@@ -2,7 +2,14 @@ BIN     := bin/family-hub
 # Keep in sync with the golangci-lint version in .github/workflows/ci.yml.
 GOLANGCI_LINT_VERSION := 2.15.0
 
-.PHONY: build run test lint vuln
+.PHONY: up down build run test lint vuln
+
+# --wait returns once Postgres passes its healthcheck.
+up:
+	docker compose up -d --wait
+
+down:
+	docker compose down
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN) ./cmd
