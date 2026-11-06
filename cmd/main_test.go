@@ -20,7 +20,7 @@ func TestRun(t *testing.T) {
 		{name: "-h prints usage", args: []string{"-h"}, wantStdout: usage},
 		{name: "--help prints usage", args: []string{"--help"}, wantStdout: usage},
 		{name: "subcommand -h prints usage", args: []string{"migrate", "-h"}, wantStdout: usage},
-		{name: "unknown top-level flag", args: []string{"-v", "migrate", "up"}, wantErrMsg: "flag provided but not defined: -v"},
+		{name: "unknown top-level flag", args: []string{"-v", "migrate", "up"}, wantErrMsg: "flag provided but not defined: -v (see family-hub -h)"},
 		{name: "unknown command", args: []string{"bogus"}, wantErrMsg: `unknown command "bogus"`},
 		{name: "empty command", args: []string{""}, wantErrMsg: `unknown command ""`},
 
@@ -44,6 +44,7 @@ func TestRun(t *testing.T) {
 
 		{name: "admin create", args: []string{"admin", "create", "--email", "admin@example.com"}, wantErr: errNotImplemented, wantErrMsg: "admin create:"},
 		{name: "admin create without email", args: []string{"admin", "create"}, wantErrMsg: "admin create: --email is required"},
+		{name: "admin create blank email", args: []string{"admin", "create", "--email", " "}, wantErrMsg: "admin create: --email is required"},
 		{name: "admin create extra argument", args: []string{"admin", "create", "--email", "a@example.com", "x"}, wantErrMsg: "admin create: unexpected arguments"},
 		{name: "admin without create", args: []string{"admin"}, wantErrMsg: "admin: want admin create"},
 		{name: "admin unknown action", args: []string{"admin", "delete"}, wantErrMsg: "admin: want admin create"},

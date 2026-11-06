@@ -43,7 +43,7 @@ func run(args []string, stdout io.Writer) error {
 func dispatch(args []string) error {
 	fs := newFlagSet("family-hub")
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("%w (see family-hub -h)", err)
 	}
 	if fs.NArg() == 0 {
 		return serve(nil)
@@ -71,7 +71,6 @@ func newFlagSet(name string) *flag.FlagSet {
 	return fs
 }
 
-// parseNoArgs parses fs's flags and rejects any positional arguments.
 func parseNoArgs(fs *flag.FlagSet, args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("%s: %w", fs.Name(), err)
@@ -89,48 +88,39 @@ func serve(args []string) error {
 	return fmt.Errorf("serve: %w", errNotImplemented)
 }
 
-type migrateAction struct {
-	name string
-	n    int
-}
-
 func migrate(args []string) error {
 	fs := newFlagSet("migrate")
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
-	if _, err := parseMigrateAction(fs.Args()); err != nil {
+	if err := validateMigrateAction(fs.Args()); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
 	return fmt.Errorf("migrate: %w", errNotImplemented)
 }
 
-func parseMigrateAction(args []string) (migrateAction, error) {
+func validateMigrateAction(args []string) error {
 	if len(args) == 0 {
-		return migrateAction{}, invalidMigrateAction(args)
+		return invalidMigrateAction(args)
 	}
 
 	name, rest := args[0], args[1:]
 	switch {
-	case (name == "up" || name == "version") && len(rest) == 0:
-		return migrateAction{name: name}, nil
-	case name == "down" && len(rest) == 0:
-		return migrateAction{name: name, n: 1}, nil
+	case (name == "up" || name == "version" || name == "down") && len(rest) == 0:
+		return nil
 	case name == "down" && len(rest) == 1:
-		n, err := strconv.Atoi(rest[0])
-		if err != nil || n < 1 {
-			return migrateAction{}, fmt.Errorf("down: N must be a positive integer, got %q", rest[0])
+		if n, err := strconv.Atoi(rest[0]); err != nil || n < 1 {
+			return fmt.Errorf("down: N must be a positive integer, got %q", rest[0])
 		}
-		return migrateAction{name: name, n: n}, nil
+		return nil
 	case name == "force" && len(rest) == 1:
 		// golang-migrate accepts -1 here to mean "no version".
-		n, err := strconv.Atoi(rest[0])
-		if err != nil || n < -1 {
-			return migrateAction{}, fmt.Errorf("force: N must be an integer ≥ -1, got %q", rest[0])
+		if n, err := strconv.Atoi(rest[0]); err != nil || n < -1 {
+			return fmt.Errorf("force: N must be an integer ≥ -1, got %q", rest[0])
 		}
-		return migrateAction{name: name, n: n}, nil
+		return nil
 	default:
-		return migrateAction{}, invalidMigrateAction(args)
+		return invalidMigrateAction(args)
 	}
 }
 
@@ -152,7 +142,7 @@ func admin(args []string) error {
 	if err := parseNoArgs(createFs, fs.Args()[1:]); err != nil {
 		return err
 	}
-	if *email == "" {
+	if strings.TrimSpace(*email) == "" {
 		return errors.New("admin create: --email is required")
 	}
 	return fmt.Errorf("admin create: %w", errNotImplemented)
