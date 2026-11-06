@@ -699,7 +699,7 @@ Changes vs V2: no CORS middleware (Vite proxies `/api`, so dev is same-origin to
 
 ### 6.2 Embedded migrations (`internal/database/migrate.go`)
 
-`database.MigrateUp(url)` and `database.MigrateDown(url, steps)` run the migrations embedded from `internal/database/migrations/` through golang-migrate's `iofs` source and pgx v5 driver. The driver registers the `pgx5://` scheme, so `postgres://` and `postgresql://` prefixes are rewritten (that's why `DATABASE_URL` must be a URL, §6.5). golang-migrate holds an advisory lock, so concurrent starts are safe. An empty migrations directory is a no-op, and `down` with nothing applied says so.
+`database.MigrateUp(url)` (also used by `serve` with `AUTO_MIGRATE`) and `database.ParseMigrateCommand(args).Run(url)` (the CLI) run the migrations embedded from `internal/database/migrations/` through golang-migrate's `iofs` source and pgx v5 driver. The driver registers the `pgx5://` scheme, so `postgres://` and `postgresql://` prefixes are rewritten (that's why `DATABASE_URL` must be a URL, §6.5). Both refuse a dirty database and one at a version the binary doesn't have (an older release); those checks run inside golang-migrate under its advisory lock, so concurrent starts are safe. `down N` refuses to roll back more than is applied, because golang-migrate would otherwise undo everything before reporting it. An empty migrations directory is a no-op.
 
 **One migration per phase:** each phase adds the tables its code uses, starting with the auth tables in Phase 2. §3.1 shows the full schema as one file for reading; it's split by phase when written. `serve` runs `MigrateUp` on startup only when `AUTO_MIGRATE=true`; otherwise use `family-hub migrate up`.
 
@@ -787,7 +787,6 @@ The end state after Phase 1. Each target lands in the PR that needs it, so the r
 
 ```make
 DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
-# Integration tests use only this, so they never truncate the dev database.
 TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
 export DATABASE_URL TEST_DATABASE_URL
 
@@ -812,7 +811,7 @@ dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 dev-ui:        ; cd web && npm run dev
 run:           ; go run ./cmd $(ARGS)
 
-test: ui-stub ; go test -race ./...
+test: ui-stub ; env -u DATABASE_URL go test -race ./...   # tests can't reach the dev database
 lint: ui-stub ; golangci-lint run && cd web && npm run lint && npm run typecheck
 vuln:          ; go tool govulncheck ./...
 

@@ -28,7 +28,6 @@ func main() {
 	}
 }
 
-// Each command parses its own arguments once it's implemented.
 func run(args []string, stdout io.Writer) error {
 	if len(args) == 0 {
 		return serve()
