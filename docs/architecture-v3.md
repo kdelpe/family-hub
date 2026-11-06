@@ -110,7 +110,7 @@ Why `family/` is one package: relationship writes need the ancestor walk (cycle 
 
 ## 3. Database schema
 
-Conventions: **Postgres 18**. UUID PKs via the built-in `uuidv7()` (Postgres 18, no extension): time-ordered, so B-tree indexes stay compact. `uuidv7()` embeds the creation time; that's fine here because IDs are only ever shown to signed-in family members. `TIMESTAMPTZ` everywhere. Partial dates are stored as a date plus a precision flag (`1950-01-01` + `year` means "1950"). Soft delete via `deleted_at` on people, events and media.
+Conventions: **Postgres 18**. UUID PKs via the built-in `uuidv7()` (Postgres 18, no extension): time-ordered, so B-tree indexes stay compact. `uuidv7()` embeds the creation time. That's acceptable: IDs reach signed-in members, and media IDs also appear in presigned bucket URLs (§9), which can be forwarded. Those keys already carry the upload year (`media/<yyyy>/...`), and anyone holding the URL can see the photo itself, so the extra exposure is only the upload timestamp. **Postgres 18 everywhere:** local compose, the CI test service, production, and the `pg_dump` client used for backups (an older `pg_dump` refuses a newer server). Managed hosting (§14 Option B) is only an option on providers that offer 18. `TIMESTAMPTZ` everywhere. Partial dates are stored as a date plus a precision flag (`1950-01-01` + `year` means "1950"). Soft delete via `deleted_at` on people, events and media.
 
 ### 3.1 `000001_init_schema.up.sql`
 
@@ -163,7 +163,7 @@ CREATE TABLE persons (
   death_date_precision  TEXT CHECK (death_date_precision IN ('day','month','year','circa')),
   is_deceased           BOOLEAN NOT NULL DEFAULT false, -- true even when date unknown
   bio                   TEXT,
-  search_name           TEXT GENERATED ALWAYS AS (first_name || ' ' || coalesce(last_name, '')) STORED,
+  search_name           TEXT GENERATED ALWAYS AS (first_name || coalesce(' ' || last_name, '')) STORED,  -- no trailing space; concat_ws isn't immutable so can't be used here
   avatar_media_id       UUID,                           -- FK added below
   created_by            UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -338,9 +338,9 @@ Only parent links and couples are stored. Everything else is computed from them,
 
 | Relation | Rule |
 |---|---|
-| **Full siblings** | Share **two** family parents. |
-| **Half-siblings** | Share **exactly one** family parent, and at least one of them has another family parent the other doesn't share. |
-| **Siblings (unspecified)** | Share one family parent and neither has a second family parent recorded. Shown as "sibling" rather than guessing full or half. |
+| **Full siblings** | Their sets of family parents are **identical** and have at least two people. |
+| **Half-siblings** | They share at least one family parent, and **each** has a family parent the other lacks. |
+| **Siblings (unspecified)** | They share at least one family parent, but neither rule above holds (typically one person's second parent simply isn't recorded yet). Shown as "sibling" rather than guessing full or half. |
 | **Step-parent** | A family parent's couple partner who isn't your parent by any link. Labelled "former step-parent" if that couple is `ended`. |
 | **Step-siblings** | Children (via family-parent links) of your step-parent who share no family parent with you. |
 | **Grandparents, aunts/uncles, cousins** | Walks over family-parent links only (lowest common ancestor). |
@@ -350,7 +350,7 @@ Only parent links and couples are stored. Everything else is computed from them,
 
 The ancestry cycle check (§10) still walks **every** parent link, foster included, so no loop of any kind can be stored.
 
-Households (§7) follow the same data: a half-sibling appears under the household of the parent you share, alongside the other parent if one is recorded. The admin "add sibling" flow asks **full or half**; for half, which parent is shared. It then creates only parent links.
+Households (§7) follow the same data: a half-sibling appears under the household of the parent you share, alongside the other parent if one is recorded. The admin "add sibling" flow asks **full or half**; for half, which parent is shared. It then creates only parent links to the person's recorded parents. Siblings are always linked through parents, so if the person has **no** family parent recorded, the flow first asks the admin to add one (a first name such as "Unknown" is enough; it can be filled in later). A "full" sibling of someone with only one recorded parent is linked to that parent and shows as "sibling" until the second parent is added.
 
 ## 4. REST API
 
@@ -388,8 +388,8 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET/POST | `/api/persons/{id}/contacts` | admin | List all / add on behalf of someone (e.g. a relative without a login) |
 | PATCH/DELETE | `/api/persons/{id}/contacts/{cid}` | admin | Edit / remove any contact method |
 | GET | `/api/directory` | session | `?q=` people with at least one `family`-visible contact method, with only those methods |
-| POST | `/api/relationships` | admin | `{type:"parent_child", parent_id, child_id, subtype}` or `{type:"couple", person_ids:[id1,id2], subtype, ended}`. `person_ids` must hold **exactly two distinct** existing, non-deleted people, in any order (the service sorts them); anything else is a `400 validation_error`. Validates direction, duplicates, ancestry cycles, at most two biological parents |
-| PATCH | `/api/relationships/{id}` | admin | Subtype, `ended`, notes |
+| POST | `/api/relationships` | admin | `{type:"parent_child", parent_id, child_id, subtype}` or `{type:"couple", person_ids:[id1,id2], subtype, ended}`. `person_ids` must hold **exactly two distinct** existing, non-deleted people, in any order (the service sorts them). `subtype` is optional for `parent_child` (defaults to `biological`) and required for `couple` (`married` or `partner`, no guessing). Invalid input is a `400 validation_error`, never a database error. Validates direction, duplicates, ancestry cycles, at most two biological parents |
+| PATCH | `/api/relationships/{id}` | admin | Subtype, `ended`, notes. Type and people can't change (delete and re-create instead). A subtype change runs the same locked validation as POST, so switching a link to `biological` can't create a third biological parent |
 | DELETE | `/api/relationships/{id}` | admin | Hard delete |
 | GET | `/api/events` | session | Chronological feed |
 | POST | `/api/events` | admin (members when `MEMBERS_CAN_CONTRIBUTE=true`) | Create (with `person_ids`) |
@@ -685,7 +685,7 @@ Subcommands are parsed with the stdlib `flag` package. `seed` loads the sample f
 - **Family tree view: a Workday-style focus view, not a canvas of the whole family.** The screen shows one **focus person** with their parents' household above, their own household beside them, and their children below: about two generations up and down. Siblings sit next to the focus person.
   - **Cards:** initials (photo once media lands in Phase 5), name, life dates (month/day only for living people to non-admins, §5.2), and a badge for what's collapsed, e.g. "3 children".
   - **Interaction:** tap a card to open a detail panel (bio, visible contacts, photos); tap an arrow to expand a branch in place; tap "Make focus" to re-center; "Back" and "Back to me" are always visible; a search box jumps to anyone. Pan and zoom aren't required.
-  - **Households play the role of Workday's teams.** A couple, or a person with children and no partner on record, is one grouped card. Multiple marriages appear as separate households; step and adoptive links get a small label. Households are derived from `relationships`, with no schema change.
+  - **Households play the role of Workday's teams.** A couple, or a person with children and no partner on record, is one grouped card. Multiple marriages appear as separate households, with ended couples marked "former". Adoptive and foster links get a small label; step-relations are derived (§3.4) and labelled from the viewer's point of view. Households are derived from `relationships`, with no schema change.
   - **Layout:** only a few generations are drawn at a time, so plain CSS grid/flex with SVG connector lines is enough and no auto-layout engine is needed. Reach for elkjs or React Flow only if you later add a "whole family" overview.
   - **Data:** the client builds the view from the already-loaded `/api/tree` payload. A server-side "neighborhood" endpoint (§10) is a later optimization.
   - **Accessibility for older relatives:** large tap targets and type, high contrast, keyboard navigation, no hover-only actions, text labels instead of icon-only buttons.
@@ -892,7 +892,7 @@ SELECT EXISTS (SELECT 1 FROM anc WHERE id = sqlc.arg(child_id));
 
 For a "multi-decade" archive, this section matters more than any other.
 
-- **Postgres:** nightly `pg_dump -Fc` to a bucket in a **different account/provider** than the media bucket, 30 daily + 12 monthly retention. Managed Postgres with PITR is a bonus, not a substitute.
+- **Postgres:** nightly `pg_dump -Fc` (run from a `postgres:18` container so the client matches the server) to a bucket in a **different account/provider** than the media bucket, 30 daily + 12 monthly retention. Managed Postgres with PITR is a bonus, not a substitute.
 - **Media:** originals are never deleted synchronously (§9.3). Periodically `rclone sync` originals to a second location (external disk, Backblaze B2, or S3 Glacier). R2 doesn't offer object versioning as far as I know **(verify)**, so this copy is your protection against accidental deletes and account problems.
 - **Know when a backup fails:** the backup job pings `BACKUP_PING_URL` (a free dead-man's-switch service such as healthchecks.io) only on success. If no ping arrives in ~26 h, you get an email. Without this, a broken backup is discovered only when you need it.
 - **Succession:** name a second admin and keep a one-page handover note (where the VPS, domain, R2, mail provider and backup buckets live; how to renew the domain; how to run a restore), stored somewhere they can reach without you. A multi-decade archive shouldn't depend on one person's accounts.
@@ -911,7 +911,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 ## 13. Testing & CI
 
-- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection (including a chain deeper than any display bound, and a loop closed through a foster link), ancestors/descendants exclude foster links, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, derived relations (full/half/unspecified siblings, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), token single-use and expiry, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
+- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection (including a chain deeper than any display bound, and a loop closed through a foster link), ancestors/descendants exclude foster links, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected (via POST and via PATCH changing a subtype), missing `subtype` defaults or returns 400, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, derived relations (full/half/unspecified siblings, including one sibling's second parent not yet recorded and people with more than two family parents, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), token single-use and expiry, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
 - **Web:** Vitest + Testing Library for components; one Playwright smoke test (login via a test-only token → add person → see tree) once Phase 4b lands.
 ### 13.1 Branches, CI and releases
 
@@ -921,7 +921,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 | Job | Checks |
 |---|---|
-| go | `go vet`, `golangci-lint`, `govulncheck`, `go test` with a Postgres service |
+| go | `go vet`, `golangci-lint`, `govulncheck`, `go test` with a `postgres:18` service |
 | generated | Re-runs `sqlc generate` and `mockery`; fails if the committed output differs |
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |
@@ -937,7 +937,7 @@ For a "multi-decade" archive, this section matters more than any other.
 | Option | Shape | Pros | Cons |
 |---|---|---|---|
 | **A. Single VPS (recommended start)** | Docker Compose: app + Postgres (volume) + Caddy (automatic TLS); media on R2 | Cheapest, simplest, no cold starts; you own backups | You patch the box |
-| B. Managed | App on Fly.io/Cloud Run + Neon/Cloud SQL/RDS + R2 | Less ops | Cost, cold starts (Neon scale-to-zero), more moving parts |
+| B. Managed | App on Fly.io/Cloud Run + Neon/Cloud SQL/RDS (must offer Postgres 18) + R2 | Less ops | Cost, cold starts (Neon scale-to-zero), more moving parts |
 
 Either way: `TRUSTED_PROXY=true` only when behind Caddy/the platform proxy, `COOKIE_SECURE=true`, `BASE_URL` set to the real domain, R2 CORS configured for it, and the §11 jobs scheduled before real family data is entered.
 
