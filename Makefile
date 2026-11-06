@@ -24,7 +24,6 @@ build:
 run:
 	go run ./cmd $(ARGS)
 
-# Integration tests need Postgres: run `make up` first.
 test:
 	go test -race ./...
 
@@ -39,6 +38,6 @@ vuln:
 migrate-up:
 	go run ./cmd migrate up
 
-# Roll back N migrations, e.g. `make migrate-down N=2` (default 1).
+# e.g. `make migrate-down N=2`
 migrate-down:
 	go run ./cmd migrate down $(or $(N),1)
