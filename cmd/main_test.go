@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,7 +19,8 @@ func TestRun(t *testing.T) {
 	}{
 		{name: "no args defaults to serve", args: nil, wantErr: errNotImplemented, wantErrMsg: "serve:"},
 		{name: "serve", args: []string{"serve"}, wantErr: errNotImplemented, wantErrMsg: "serve:"},
-		{name: "migrate", args: []string{"migrate", "up"}, wantErr: errNotImplemented, wantErrMsg: "migrate:"},
+		{name: "migrate needs a config", args: []string{"migrate", "up"}, wantErrMsg: "DATABASE_URL is required"},
+		{name: "migrate bad args", args: []string{"migrate", "sideways"}, wantErr: errMigrateUsage, wantErrMsg: "migrate:"},
 		{name: "admin", args: []string{"admin", "create"}, wantErr: errNotImplemented, wantErrMsg: "admin:"},
 		{name: "-h prints usage", args: []string{"-h"}, wantStdout: usage},
 		{name: "--help prints usage", args: []string{"--help"}, wantStdout: usage},
@@ -30,6 +32,7 @@ func TestRun(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("DATABASE_URL", "")
 			var stdout bytes.Buffer
 
 			err := run(tt.args, &stdout)
@@ -42,7 +45,8 @@ func TestRun(t *testing.T) {
 			}
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
-			} else {
+			}
+			if !errors.Is(tt.wantErr, errNotImplemented) {
 				assert.NotErrorIs(t, err, errNotImplemented)
 			}
 			assert.Equal(t, tt.wantStdout, stdout.String())

@@ -45,6 +45,5 @@ func run(args []string, stdout io.Writer) error {
 	}
 }
 
-func serve() error             { return fmt.Errorf("serve: %w", errNotImplemented) }
-func migrate(_ []string) error { return fmt.Errorf("migrate: %w", errNotImplemented) }
-func admin(_ []string) error   { return fmt.Errorf("admin: %w", errNotImplemented) }
+func serve() error           { return fmt.Errorf("serve: %w", errNotImplemented) }
+func admin(_ []string) error { return fmt.Errorf("admin: %w", errNotImplemented) }
