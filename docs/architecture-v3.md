@@ -804,7 +804,7 @@ export DATABASE_URL
 
 .PHONY: up down run dev-api dev-ui ui-stub generate test lint vuln build migrate-up migrate-down migrate-new seed
 
-up:            ; docker compose up -d --wait   # returns once Postgres is healthy
+up:            ; docker compose up -d --wait && <create familyhub_test if missing>   # waits for every service to be healthy
 down:          ; docker compose down
 
 # Creates a placeholder so `go build/vet/test` work before the UI has been built.
@@ -836,24 +836,22 @@ build:
 
 ### 8.2 `compose.yaml` (shape)
 
-Local development only. Ports bind to `127.0.0.1`. GoLand's database tool connects to `localhost:5432`, user and password `app`, database `familyhub`.
+Local development only. Ports bind to `127.0.0.1`. Images are pinned exactly; Dependabot groups their updates into one weekly PR and skips Postgres major versions (those need a dump and restore). `make up` creates `familyhub_test` if it's missing, so it works on an existing volume too. GoLand's database tool connects to `localhost:5432`, user and password `app`, database `familyhub`.
 
 ```yaml
 services:
   postgres:
-    image: postgres:18
+    image: postgres:18.6
     environment: { POSTGRES_USER: app, POSTGRES_PASSWORD: app, POSTGRES_DB: familyhub }
     ports: ["127.0.0.1:5432:5432"]
     volumes: [pgdata:/var/lib/postgresql]   # Postgres 18 images keep data under /var/lib/postgresql/18/docker
-    configs:                                # creates familyhub_test on first start (init scripts run once per volume)
-      - { source: create-test-db, target: /docker-entrypoint-initdb.d/create-test-db.sql }
-    healthcheck: { test: ["CMD-SHELL", "pg_isready -U app -d familyhub"], interval: 2s, retries: 15 }
+    healthcheck:                            # over TCP, so first-run setup doesn't count as ready
+      { test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U app -d familyhub"], start_period: 30s, interval: 2s, retries: 15 }
   mailpit:                       # catches outgoing mail; UI on :8025
     image: axllent/mailpit:v1.33.0
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
   storage:                       # added in Phase 5: S3-compatible server chosen then (see §9.5)
     # image: ...
-configs: { create-test-db: { content: "CREATE DATABASE familyhub_test;" } }
 volumes: { pgdata: {} }
 ```
 
