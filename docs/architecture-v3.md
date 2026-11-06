@@ -754,6 +754,8 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 
 ### 6.5 Configuration (env vars)
 
+`internal/config.Load` reads these and reports every invalid or missing value at once, never echoing `DATABASE_URL` (it holds the password). Each variable is added in the phase that uses it; Phase 1 has `DATABASE_URL` (required), `HTTP_ADDR` (default `:8080`) and `AUTO_MIGRATE` (default `false`). `.env.example` is the template for the server's `.env`, with safe local values only.
+
 | Var | Example | Notes |
 |---|---|---|
 | `DATABASE_URL` | `postgres://app:app@localhost:5432/familyhub?sslmode=disable` | |
