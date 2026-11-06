@@ -1019,11 +1019,11 @@ For a "multi-decade" archive, this section matters more than any other.
 
 **Branches (trunk-based):** `main` plus short-lived work branches named `<type>/kdelpe/<descriptive-name>` (types `feature`, `fix`, `docs`, `chore`; e.g. `feature/kdelpe/password-login-and-reset`). Every change reaches `main` through a PR that is **squash-merged**, so `main` has one commit per PR. Releases are tags on `main`.
 
-**`ci.yml`** runs on PRs into `main` and on pushes to `main`:
+**`ci.yml`** runs on PRs into `main` and on pushes to `main`. Each job lands once there's something for it to check (Postgres with the first DB test, `generated` with sqlc, `web` with the frontend, `docker` with the Dockerfile):
 
 | Job | Checks |
 |---|---|
-| go | `go vet`, `golangci-lint`, `govulncheck`, `go test` with a `postgres:18` service |
+| go | `go mod tidy -diff`, golangci-lint (its `standard` linters include `go vet`, plus the gofmt formatter; `.golangci.yml`), `govulncheck`, `go test` with a `postgres:18` service, `make build` |
 | generated | Re-runs `sqlc generate` and `mockery`; fails if the committed output differs |
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |
