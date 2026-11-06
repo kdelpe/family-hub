@@ -748,7 +748,7 @@ func Handler() http.Handler {
 
 ### 6.4 `main.go` shape
 
-Subcommands are parsed with the stdlib `flag` package. `seed` loads the sample family (dev only; refuses to run unless the database is empty). `serve` (default): load config → pgxpool → optional migrate → build `App` → `http.Server` with `ReadHeaderTimeout`, `signal.NotifyContext` for SIGINT/SIGTERM → graceful `Shutdown(30s)`. `migrate up|down|version|force N` and `admin create` reuse the same config loader.
+Subcommands are parsed with the stdlib `flag` package; unknown flags or extra arguments are errors, and `-h` at any level prints the usage. `seed` loads the sample family (dev only; refuses to run unless the database is empty). `serve` (default): load config → pgxpool → optional migrate → build `App` → `http.Server` with `ReadHeaderTimeout`, `signal.NotifyContext` for SIGINT/SIGTERM → graceful `Shutdown(30s)`. `migrate up|down|version|force N` and `admin create` reuse the same config loader.
 
 ### 6.5 Configuration (env vars)
 
@@ -797,8 +797,9 @@ Subcommands are parsed with the stdlib `flag` package. `seed` loads the sample f
 ```make
 DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 export DATABASE_URL
+VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null),dev)
 
-.PHONY: up down dev-api dev-ui ui-stub generate test lint vuln build migrate-up migrate-down migrate-new
+.PHONY: up down run dev-api dev-ui ui-stub generate test vet lint vuln build migrate-up migrate-down migrate-new
 
 up:            ; docker compose up -d
 down:          ; docker compose down
@@ -816,8 +817,10 @@ migrate-down:  ; go run ./cmd migrate down 1
 
 dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 dev-ui:        ; cd web && npm run dev
+run:           ; go run ./cmd $(ARGS)
 
 test: ui-stub ; go test ./...
+vet:  ui-stub ; go vet ./...
 lint: ui-stub ; golangci-lint run && cd web && npm run lint && npm run typecheck
 vuln:          ; go tool govulncheck ./...
 
