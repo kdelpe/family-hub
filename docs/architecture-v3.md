@@ -64,7 +64,7 @@ family-hub/
 │   ├── pull_request_template.md
 │   ├── CODEOWNERS
 │   └── dependabot.yml            # Go, npm, Actions, Docker update PRs -> main
-├── cmd/main.go                   # subcommands (flag): serve (default) | migrate | admin | seed; built with -o family-hub
+├── cmd/main.go                   # subcommands: serve (default) | migrate up/down | admin create; built with -o family-hub
 ├── internal/
 │   ├── app/                      # builds dependencies (pool, services, handlers), server lifecycle, graceful shutdown
 │   ├── router/                   # chi route table + middleware chain; the only place routes are wired (§6.1)
@@ -85,6 +85,7 @@ family-hub/
 │   │   ├── db.go                 # pgxpool setup
 │   │   ├── migrate.go            # embedded golang-migrate runner
 │   │   ├── migrations/           # 000001_init_schema.up.sql / .down.sql ...
+│   │   ├── seed.sql              # made-up sample family for local dev (`make seed`)
 │   │   ├── queries/              # *.sql consumed by sqlc
 │   │   └── gen/                  # sqlc output (committed; CI checks it's current)
 │   └── webui/
@@ -749,7 +750,7 @@ func Handler() http.Handler {
 
 ### 6.4 `main.go` shape
 
-Subcommands are parsed with the stdlib `flag` package; unknown flags or extra arguments are errors, and `family-hub -h` or `family-hub <command> -h` prints the usage. `seed` loads the sample family (dev only; refuses to run unless the database is empty). `serve` (default): load config → pgxpool → optional migrate → build `App` → `http.Server` with `ReadHeaderTimeout`, `signal.NotifyContext` for SIGINT/SIGTERM → graceful `Shutdown(30s)`. `migrate up|down|version|force N` and `admin create` reuse the same config loader.
+The binary has only the commands production needs; dev-only tasks live in the Makefile. `main.go` is a plain switch, and each command parses its own arguments with the stdlib `flag` package (in its own file under `cmd/` once it grows); `family-hub -h` prints the usage. `serve` (default): load config → pgxpool → optional migrate → build `App` → `http.Server` with `ReadHeaderTimeout`, `signal.NotifyContext` for SIGINT/SIGTERM → graceful `Shutdown(30s)`. `migrate up|down [N]` and `admin create` reuse the same config loader. If a migration fails halfway, golang-migrate marks the database dirty: fix the schema by hand, then clear the flag with `UPDATE schema_migrations SET dirty = false` (no `force` command needed). Sample data is `make seed`, which loads `internal/database/seed.sql` through the compose Postgres and refuses to run unless the database is empty (a check at the top of the file). The seeded test user stores a precomputed Argon2id hash of a known dev password.
 
 ### 6.5 Configuration (env vars)
 
@@ -799,7 +800,7 @@ Subcommands are parsed with the stdlib `flag` package; unknown flags or extra ar
 DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 export DATABASE_URL
 
-.PHONY: up down run dev-api dev-ui ui-stub generate test vet lint vuln build migrate-up migrate-down migrate-new
+.PHONY: up down run dev-api dev-ui ui-stub generate test vet lint vuln build migrate-up migrate-down migrate-new seed
 
 up:            ; docker compose up -d
 down:          ; docker compose down
@@ -814,6 +815,7 @@ generate:      ; go tool sqlc generate && mockery
 migrate-new:   ; go tool migrate create -ext sql -dir internal/database/migrations -seq $(name)
 migrate-up:    ; go run ./cmd migrate up
 migrate-down:  ; go run ./cmd migrate down 1
+seed:          ; docker compose exec -T postgres psql -U app -d familyhub -v ON_ERROR_STOP=1 < internal/database/seed.sql
 
 dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 dev-ui:        ; cd web && npm run dev
