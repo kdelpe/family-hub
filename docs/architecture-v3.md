@@ -891,7 +891,7 @@ For a "multi-decade" archive, this section matters more than any other.
 - **Web:** Vitest + Testing Library for components; one Playwright smoke test (login via a test-only token → add person → see tree) once Phase 4b lands.
 ### 13.1 Branches, CI and releases
 
-**Branches (trunk-based):** `main` plus short-lived work branches (`feat/`, `fix/`, `docs/`, `chore/`). Every change reaches `main` through a PR that is **squash-merged**, so `main` has one commit per PR. Releases are tags on `main`.
+**Branches (trunk-based):** `main` plus short-lived work branches named `<type>/kdelpe/<descriptive-name>` (types `feature`, `fix`, `docs`, `chore`; e.g. `feature/kdelpe/magic-link-login`). Every change reaches `main` through a PR that is **squash-merged**, so `main` has one commit per PR. Releases are tags on `main`.
 
 **`ci.yml`** runs on PRs into `main` and on pushes to `main`:
 
