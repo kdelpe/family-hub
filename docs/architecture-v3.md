@@ -1031,7 +1031,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 **Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; `draft-release.yml` gets `contents: write`, the release job gets `contents: read` and `packages: write` (listing any permission sets the rest to none)); third-party actions pinned to commit SHAs; Dependabot keeps them current.
 
-**Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), passing CI checks once `ci.yml` exists, no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
+**Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), the `go` CI check must pass on a branch that is up to date with `main` (add each new CI job here as it lands), no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
 
 ## 14. Deployment (Phase 4c options)
 
