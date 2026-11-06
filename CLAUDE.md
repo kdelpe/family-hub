@@ -29,6 +29,7 @@ Trunk-based: short-lived branches and `main`. No `develop` branch.
 
 - `main`: reviewed and always working. Protected: changes arrive only by pull request, CI must pass, no direct pushes or force-pushes. Claude never commits to, pushes to or merges into `main`.
 - All work happens on a short-lived branch off `main`, named `<type>/kdelpe/<descriptive-name>` in lowercase kebab-case, e.g. `feature/kdelpe/magic-link-login`, `fix/kdelpe/session-expiry`, `docs/kdelpe/schema-revision`, `chore/kdelpe/ci-workflow`. Types: `feature`, `fix`, `docs`, `chore`. One branch = one reviewable piece of work.
+- **Claude reviews before Copilot does.** When the work on a branch is done, Claude runs its own review (`/code-review`) of the branch's diff against `main`, fixes what it finds, and only then opens the PR (or pushes the final changes) for Copilot and the owner. Docs-only changes get the same consistency pass.
 - Claude opens the PR into `main`; the owner reviews it and **squash-merges** it, so each PR becomes one commit on `main`. The small commits stay visible in the PR.
 - Releases are manual, only from `main`: the owner runs the release workflow, which tags the commit (`vX.Y.Z`) and builds the image. Claude never triggers a release.
 
