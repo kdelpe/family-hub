@@ -373,17 +373,19 @@ JSON in/out. Errors: `{"error": {"code": "not_found", "message": "..."}}` with a
 
 Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejected unless `id` is their own `person_id`, and then only for profile fields); the UI hiding buttons is a convenience, not the control.
 
+**Auth column:** `session` means a signed-in user is required; `admin` additionally requires the admin role. Only the sign-in flow itself works without a session (`no session (sign-in flow)`), and none of those endpoints return family data. Health checks are reachable only from the server itself.
+
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/healthz` | public | Liveness (process up) |
-| GET | `/readyz` | public | Readiness (DB reachable) |
-| POST | `/api/auth/login` | public, rate-limited | `{email, password}` → sets session cookie; any failure is the same `401 invalid_credentials` |
-| POST | `/api/auth/password/forgot` | public, rate-limited | `{email}` → always `202`; reset email sent only if user exists and is enabled |
-| POST | `/api/auth/password/reset` | public, rate-limited | `{token, password}` (invite or reset link) → sets password, revokes other sessions, signs in |
+| GET | `/health` | internal only (blocked at Caddy) | Liveness: process is up |
+| GET | `/ready` | internal only (blocked at Caddy) | Readiness: database reachable |
+| POST | `/api/auth/login` | no session (sign-in flow), rate-limited | `{email, password}` → sets session cookie; any failure is the same `401 invalid_credentials` |
+| POST | `/api/auth/password/forgot` | no session (sign-in flow), rate-limited | `{email}` → always `202`; reset email sent only if user exists and is enabled |
+| POST | `/api/auth/password/reset` | no session (sign-in flow), rate-limited | `{token, password}` (invite or reset link) → sets password, revokes other sessions, signs in |
 | POST | `/api/auth/password/change` | session | `{current_password, new_password}` → revokes other sessions |
-| GET | `/api/auth/google/start` | public, rate-limited | Redirects to Google (state, nonce, PKCE) |
+| GET | `/api/auth/google/start` | no session (sign-in flow), rate-limited | Redirects to Google (state, nonce, PKCE) |
 | GET | `/api/auth/google/link/start` | session | Links a Google account to the signed-in user (needed for non-Gmail/Workspace addresses, §5) |
-| GET | `/api/auth/google/callback` | public, rate-limited | Verifies the ID token; signs in by `sub`, auto-links only Gmail/Workspace invited emails, or completes a signed-in link (§5); redirects into the app |
+| GET | `/api/auth/google/callback` | no session (sign-in flow), rate-limited | Verifies the ID token; signs in by `sub`, auto-links only Gmail/Workspace invited emails, or completes a signed-in link (§5); redirects into the app |
 | POST | `/api/admin/users/{id}/send-reset` | admin | Resend invite or send a password-reset email |
 | GET | `/api/auth/me` | session | Current user, role, linked person |
 | POST | `/api/auth/logout` | session | Deletes the session row |
@@ -609,8 +611,8 @@ func New(h Handlers, mw Middleware) http.Handler {
     r.Use(middleware.Recoverer)
     r.Use(httpx.SecurityHeaders)        // CSP, nosniff, Referrer-Policy, X-Robots-Tag: noindex
 
-    r.Get("/healthz", h.Health.Live)
-    r.Get("/readyz", h.Health.Ready)
+    r.Get("/health", h.Health.Live)
+    r.Get("/ready", h.Health.Ready)
 
     r.Route("/api", func(r chi.Router) {
         r.Use(middleware.Timeout(30 * time.Second))
@@ -863,7 +865,7 @@ USER app
 WORKDIR /app
 COPY --from=gobuild /out/family-hub .
 EXPOSE 8080
-HEALTHCHECK CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1
+HEALTHCHECK CMD wget -qO- http://127.0.0.1:8080/health || exit 1
 ENTRYPOINT ["./family-hub"]
 ```
 
@@ -1017,6 +1019,8 @@ For a "multi-decade" archive, this section matters more than any other.
 | **A. Single VPS (recommended start)** | Docker Compose: app + Postgres (volume) + Caddy (automatic TLS); media on R2 | Cheapest, simplest, no cold starts; you own backups | You patch the box |
 | B. Managed | App on Fly.io/Cloud Run + Neon/Cloud SQL/RDS (must offer Postgres 18) + R2 | Less ops | Cost, cold starts (Neon scale-to-zero), more moving parts |
 
+**Health checks stay internal:** Caddy answers `404` for `/health` and `/ready` from the internet; Docker's `HEALTHCHECK` and any monitoring call them on the server itself (`127.0.0.1:8080`). The app also never serves them under `/api`.
+
 Either way: `TRUSTED_PROXY=true` only when behind Caddy/the platform proxy, `COOKIE_SECURE=true`, `BASE_URL` set to the real domain, R2 CORS configured for it, and the §11 jobs scheduled before real family data is entered.
 
 ## 15. Phased roadmap
@@ -1027,7 +1031,7 @@ Real family data gets entered from Phase 4 onward, so the MVP ships (deploy + ba
 
 | Phase | Goal | Exit criteria |
 |---|---|---|
-| **1. Foundation** | Repo, compose, config, migrations, health, CI, `webui` embed + SPA handler | `make dev-api` runs (it starts compose itself); `/healthz` + `/readyz` pass; CI green on a fresh clone (stub UI) |
+| **1. Foundation** | Repo, compose, config, migrations, health, CI, `webui` embed + SPA handler | `make dev-api` runs (it starts compose itself); `/health` + `/ready` pass; CI green on a fresh clone (stub UI) |
 | **2. Auth** | Invite-only email + password (Argon2id), invite and forgot-password emails, change password, sessions, rate limits, `admin create`, admin user endpoints, person linking (§5.1). Then Continue with Google as a separate PR | Invite → set password via Mailpit → sign in; forgot/reset works and revokes sessions; Google sign-in links an invited account and refuses an uninvited one; enumeration, replay, expiry and disabled-user tests pass; one-login-per-person enforced |
 | **3. People, tree & contacts API** | Admin-only persons/relationships writes, `/api/tree`, ancestors/descendants, cycle validation, contact methods with visibility filtering, `/api/directory` | Integration tests incl. cycle rejection and the role/visibility matrix (§13); seed script loads a sample family |
 | **4a. Frontend shell** | Login UI, onboarding + "My profile" (bio and contact visibility toggles; initials only, avatars arrive in Phase 5), person profile page, directory, upcoming-birthdays panel | Accept an invite via Mailpit, set a password, sign in and land on the home page; forgot-password works end to end; edit own bio and contact visibility; a member sees only visible contacts in profiles and the directory; works on desktop and phone |
