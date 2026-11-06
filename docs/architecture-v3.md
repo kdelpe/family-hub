@@ -693,7 +693,7 @@ Subcommands are parsed with the stdlib `flag` package. `seed` loads the sample f
 - Upload modal: request `upload-url`, `XMLHttpRequest`/`fetch` PUT with the returned headers (needed for progress events), then `confirm`. Compute width/height/duration client-side from the file for the confirm call.
 - Auth pages: `/auth/login` (email form), `/auth/verify` (reads `#t=`, POSTs, redirects).
 - **Member experience is read-mostly:** tree view centered on "you", person profiles, a directory of visible contact info, and a "My profile" page (bio, avatar, contact methods with visibility toggles). Tree-editing controls are not rendered for members.
-- **Admin editing without raw edges:** admins never see "relationship type: parent_child, person A/B". From a person's card they choose "Add parent / child / spouse / sibling", pick or create the other person, and the app maps that to a relationship (and, for "sibling", to shared parents). Large icon buttons, plain-language labels, and undo (soft delete + restore) keep this safe for non-technical admins.
+- **Admin editing without raw edges:** admins never see "relationship type: parent_child, person A/B". From a person's card they choose "Add parent / child / partner / sibling", pick or create the other person, and the app maps that to a relationship (and, for "sibling", to shared parents). "Add parent" and "Add child" ask biological, adoptive or foster (default biological). "Add partner" asks **married or partner** and whether the relationship has **ended**; both can be changed later from the couple's card. Large icon buttons, plain-language labels, and undo (soft delete + restore) keep this safe for non-technical admins.
 
 ## 8. Tooling: Makefile, Compose, Dockerfile
 
@@ -845,19 +845,21 @@ MinIO was the V2 default. Its community edition is in maintenance mode and has b
 - **`GET /api/tree`** is two flat reads: all non-deleted `persons` (slim columns) and all `relationships` whose endpoints are both non-deleted. At family scale (hundreds to low thousands of people) this is a few hundred KB; no recursion needed. The client builds union nodes and runs the layout. Birth dates in this payload are masked per viewer (§5.2): non-admins get month/day for living people, never the year.
 - **Optional later:** `GET /api/persons/{id}/neighborhood?up=2&down=2` returns just the households around one person (same masking), if the full payload ever gets too large for phones. Not needed at family scale.
 - **One masked person read.** Every query that returns people to a browser (`/api/tree`, `/api/persons`, `/api/persons/{id}`, ancestors, descendants, directory, event and media tags) returns `masked_birth_date(p, $viewer_is_admin, $viewer_person_id)` (defined in the init migration, §3.1) and never selects `birth_date` or `p.*`. sqlc can't share column lists between queries, so the SQL function is the single place the rule lives, and a living person's birth year can't leak through an endpoint added later.
-- **Ancestors / descendants** use recursive CTEs with a depth bound:
+- **Ancestors / descendants** use recursive CTEs with a depth bound, over **family-parent links only** (`biological`, `adoptive`; §3.4), so foster links never appear as ancestors or descendants:
 
 ```sql
 -- name: Ancestors :many
 WITH RECURSIVE anc AS (
   SELECT r.person_a AS id, 1 AS depth
   FROM relationships r
-  WHERE r.type = 'parent_child' AND r.person_b = $1
+  WHERE r.type = 'parent_child' AND r.subtype IN ('biological','adoptive')
+    AND r.person_b = sqlc.arg(person_id)
   UNION ALL
   SELECT r.person_a, a.depth + 1
   FROM relationships r
   JOIN anc a ON r.person_b = a.id
-  WHERE r.type = 'parent_child' AND a.depth < $2
+  WHERE r.type = 'parent_child' AND r.subtype IN ('biological','adoptive')
+    AND a.depth < sqlc.arg(max_depth)
 )
 -- never p.* : birth dates go through masked_birth_date (see above)
 SELECT p.id, p.first_name, p.last_name, p.is_deceased,
@@ -867,7 +869,22 @@ FROM anc JOIN persons p ON p.id = anc.id AND p.deleted_at IS NULL
 GROUP BY p.id;
 ```
 
-- **Cycle prevention at write time.** Inside one transaction that first takes `pg_advisory_xact_lock(<constant>)` (relationship writes are rare, so serializing them is free, and it stops two concurrent inserts from jointly forming a loop): run the ancestor walk for A with a generous bound (e.g. depth 200, **not** the API default of 5) and without the `deleted_at` filter, and reject "A is parent of B" if B appears (B would become its own ancestor). Couple edges aren't traversed by these CTEs, so they can't create loops. The same locked transaction also rejects a third **biological** parent for the child (§3.3).
+- **Cycle prevention at write time.** Inside one transaction that first takes `pg_advisory_xact_lock(<constant>)` (relationship writes are rare, so serializing them is free, and it stops two concurrent inserts from jointly forming a loop), reject "A is parent of B" if B is already an ancestor of A. Unlike the display queries, this walk has **no depth bound**, follows **every** parent link (foster included) and ignores `deleted_at`, so it is a guarantee rather than a heuristic. It uses `UNION`, not `UNION ALL`: already-visited people are dropped, so the recursion always terminates, even on damaged data.
+
+```sql
+-- name: IsAncestor :one
+WITH RECURSIVE anc(id) AS (
+  SELECT person_a FROM relationships
+  WHERE type = 'parent_child' AND person_b = sqlc.arg(parent_id)
+  UNION
+  SELECT r.person_a FROM relationships r
+  JOIN anc ON r.person_b = anc.id
+  WHERE r.type = 'parent_child'
+)
+SELECT EXISTS (SELECT 1 FROM anc WHERE id = sqlc.arg(child_id));
+```
+
+  Couple edges aren't traversed, so they can't create loops. The same locked transaction also rejects a third **biological** parent for the child (§3.3).
 - **Name search** queries the `search_name` generated column (§3.1), which the trigram index covers, so query and index can't drift apart. To make middle or maiden names searchable later, change the column's expression in a migration.
 - Direction convention is enforced by the service, not just documented: the API accepts `{type:"parent_child", parent_id, child_id}` and maps to `person_a/person_b`; for couples it sorts the pair so `person_a < person_b`.
 
@@ -894,7 +911,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 ## 13. Testing & CI
 
-- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, derived relations (full/half/unspecified siblings, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), token single-use and expiry, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
+- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection (including a chain deeper than any display bound, and a loop closed through a foster link), ancestors/descendants exclude foster links, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, derived relations (full/half/unspecified siblings, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), token single-use and expiry, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
 - **Web:** Vitest + Testing Library for components; one Playwright smoke test (login via a test-only token → add person → see tree) once Phase 4b lands.
 ### 13.1 Branches, CI and releases
 
@@ -936,7 +953,7 @@ Real family data gets entered from Phase 4 onward, so the MVP ships (deploy + ba
 | **2. Auth** | Invite-only magic link, sessions, rate limits, `admin create`, admin user endpoints, person linking (§5.1) | Full login via Mailpit; replay, expiry and disabled-user tests pass; one-login-per-person enforced |
 | **3. People, tree & contacts API** | Admin-only persons/relationships writes, `/api/tree`, ancestors/descendants, cycle validation, contact methods with visibility filtering, `/api/directory` | Integration tests incl. cycle rejection and the role/visibility matrix (§13); seed script loads a sample family |
 | **4a. Frontend shell** | Login UI, onboarding + "My profile" (bio and contact visibility toggles; initials only, avatars arrive in Phase 5), person profile page, directory, upcoming-birthdays panel | Log in via Mailpit and land on the home page; edit own bio and contact visibility; a member sees only visible contacts in profiles and the directory; works on desktop and phone |
-| **4b. Family tree** | **Mockup first:** a standalone clickable focus-view mockup (§7) with the real family shape, tried on the owner's phone, then by one non-technical relative. Then the real focus-view family tree centered on "you" (§7), "back to me", search-to-jump, admin add-parent/child/spouse/sibling flows | Sample family can be navigated by clicking, with multiple marriages and step-children shown as households, on desktop and phone; an admin can build a branch without touching raw edges |
+| **4b. Family tree** | **Mockup first:** a standalone clickable focus-view mockup (§7) with the real family shape, tried on the owner's phone, then by one non-technical relative. Then the real focus-view family tree centered on "you" (§7), "back to me", search-to-jump, admin add-parent/child/partner/sibling flows (§7) | Sample family can be navigated by clicking, with multiple marriages and step-children shown as households, on desktop and phone; an admin can build a branch without touching raw edges |
 | **4c Ship the MVP** | Deploy (§14), mail provider + domain with SPF/DKIM/DMARC, nightly backups + failure alert, restore drill, TLS, basic security headers | Deployed behind TLS; login email lands in Gmail and Outlook inboxes; restore drill passes; a deliberately failed backup triggers the alert; first real invites sent |
 | **5. Events & media (originals)** | **Storage spike first:** choose the local server and prove the four capabilities in §9.5 against it and R2 with a throwaway Go test; add `storage` to compose. Then events + feed, upload/confirm/view (admin-only at first; members via `MEMBERS_CAN_CONTRIBUTE`), avatars (members can always set their own), tagging, orphan sweep, admin "missing info" tracker (§5.4) | Upload a 1 GB video from the browser and play it back with seeking |
 | **6. Processing** | Worker: thumbnails, posters, H.264 variant, HEIC, EXIF | An iPhone HEVC `.mov` plays in Chrome and Firefox |
