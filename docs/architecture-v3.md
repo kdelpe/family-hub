@@ -332,16 +332,23 @@ Down migrations are a local-dev convenience. In production, fix forward with a n
 
 ### 3.4 Derived relationships (never stored)
 
-Only parent links and couples are stored. Everything else is computed from them, client-side for the tree and labels, server-side where a query needs it, so it can never drift out of sync:
+Only parent links and couples are stored. Everything else is computed from them, client-side for the tree and labels, server-side where a query needs it, so it can never drift out of sync.
+
+**Which parent links count.** A *family parent* is a `biological` or `adoptive` parent link: adoption makes a child a full member of the family, so the two are treated identically for every rule below. `foster` links never create family relations; they only produce the foster labels at the end of the table. (Whether a link is biological or adoptive is shown on the person's profile, not in the sibling label.)
 
 | Relation | Rule |
 |---|---|
-| **Full siblings** | Share **two** parents. |
-| **Half-siblings** | Share **exactly one** parent, and at least one of them has another known parent the other doesn't share. |
-| **Siblings (unspecified)** | Share one parent and neither has a second parent recorded. Shown as "sibling" rather than guessing full or half. |
-| **Step-parent** | Your parent's couple partner who isn't your parent. Labelled "former step-parent" if that couple is `ended`. |
-| **Step-siblings** | Children of your step-parent who share no parent with you. |
-| **Grandparents, aunts/uncles, cousins, in-laws** | Walks over parent and couple links (lowest common ancestor for blood relations; one couple hop for in-laws). |
+| **Full siblings** | Share **two** family parents. |
+| **Half-siblings** | Share **exactly one** family parent, and at least one of them has another family parent the other doesn't share. |
+| **Siblings (unspecified)** | Share one family parent and neither has a second family parent recorded. Shown as "sibling" rather than guessing full or half. |
+| **Step-parent** | A family parent's couple partner who isn't your parent by any link. Labelled "former step-parent" if that couple is `ended`. |
+| **Step-siblings** | Children (via family-parent links) of your step-parent who share no family parent with you. |
+| **Grandparents, aunts/uncles, cousins** | Walks over family-parent links only (lowest common ancestor). |
+| **In-laws** | One couple hop from the above. |
+| **Foster parent / foster child** | A `foster` link, labelled as such; never counted as a parent for any rule above. |
+| **Foster siblings** | Share a foster parent, or one is a foster child of the other's family parent, and they aren't already siblings by the rules above. |
+
+The ancestry cycle check (§10) still walks **every** parent link, foster included, so no loop of any kind can be stored.
 
 Households (§7) follow the same data: a half-sibling appears under the household of the parent you share, alongside the other parent if one is recorded. The admin "add sibling" flow asks **full or half**; for half, which parent is shared. It then creates only parent links.
 
@@ -887,7 +894,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 ## 13. Testing & CI
 
-- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, derived relations (full/half/unspecified siblings, step-parents incl. former, step-siblings), token single-use and expiry, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
+- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, derived relations (full/half/unspecified siblings, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), token single-use and expiry, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
 - **Web:** Vitest + Testing Library for components; one Playwright smoke test (login via a test-only token → add person → see tree) once Phase 4b lands.
 ### 13.1 Branches, CI and releases
 
