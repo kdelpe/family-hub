@@ -4,9 +4,11 @@ GOLANGCI_LINT_VERSION := 2.15.0
 
 .PHONY: up down build run test lint vuln
 
-# --wait returns once Postgres passes its healthcheck.
+# --wait returns once every service is healthy; then create the test DB if it's missing.
 up:
 	docker compose up -d --wait
+	@echo "SELECT 'CREATE DATABASE familyhub_test' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'familyhub_test')\gexec" \
+	  | docker compose exec -T postgres psql -q -U app -d familyhub
 
 down:
 	docker compose down
