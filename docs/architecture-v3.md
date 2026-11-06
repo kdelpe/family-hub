@@ -754,14 +754,14 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 
 ### 6.5 Configuration (env vars)
 
-`internal/config.Load` reads these and reports every invalid or missing value at once. Values are trimmed. `DATABASE_URL` must be a `postgres://` URL with a host or a `?host=` socket path; the keyword/value form is rejected because golang-migrate needs a URL. It's checked with `net/url`, not pgx, whose parser also reads `PG*` variables and `~/.pgpass`; no error ever quotes it, since it holds the password. `AUTO_MIGRATE` is exactly `true` or `false`, and `HTTP_ADDR` needs a port from 1 to 65535. Each variable is added in the phase that uses it; Phase 1 has `DATABASE_URL` (required), `HTTP_ADDR` (default `:8080`) and `AUTO_MIGRATE` (default `false`). `.env.example` is the template for the server's `.env`, with safe local values only.
+`internal/config.Load` reads these and reports every invalid or missing value at once. Values are trimmed. `DATABASE_URL` must be a `postgres://` URL with a host or a `?host=` socket path; the prefix must be lowercase (pgx matches it case-sensitively), and the keyword/value form is rejected so the pool and migrations parse one format (how the migrate driver takes it is checked in the migrations PR **(verify)**). It's checked with `net/url`, not pgx, whose parser also reads `PG*` variables and `~/.pgpass`; no error ever quotes it, since it holds the password. `AUTO_MIGRATE` is exactly `true` or `false`, and `HTTP_ADDR` needs a port from 1 to 65535. Each variable is added in the phase that uses it; Phase 1 has `DATABASE_URL` (required), `HTTP_ADDR` (default `:8080`) and `AUTO_MIGRATE` (default `false`). `.env.example` is the template for the server's `.env`, with safe local values only.
 
 | Var | Example | Notes |
 |---|---|---|
 | `DATABASE_URL` | `postgres://app:app@localhost:5432/familyhub?sslmode=disable` | Required; URL form only |
 | `HTTP_ADDR` | `:8080` | Default `:8080` |
 | `BASE_URL` | `http://localhost:5173` (dev), `https://family.example.com` | Used in email links and the Origin check |
-| `AUTO_MIGRATE` | `true` in dev | Default `false` |
+| `AUTO_MIGRATE` | `false` | Default `false`; `make dev-api` sets `true`. Booleans accept `true`/`false` in any case |
 | `TRUSTED_PROXY` | `false` | Enables `RealIP` |
 | `COOKIE_SECURE` | `true` | `false` for local http |
 | `SMTP_HOST/PORT/USER/PASS`, `MAIL_FROM` | `localhost:1025` (Mailpit) | Invites and password resets |
