@@ -14,3 +14,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      compose-images:
+        patterns: ["*"]
+    ignore:
+      # A Postgres major upgrade needs a dump and restore, so it's done by hand.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
