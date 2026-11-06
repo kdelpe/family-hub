@@ -28,7 +28,7 @@ The repo is public. Security relies on auth, server-side checks and secrets in e
 Trunk-based: short-lived branches and `main`. No `develop` branch.
 
 - `main`: reviewed and always working. Protected: changes arrive only by pull request, CI must pass, no direct pushes or force-pushes. Claude never commits to, pushes to or merges into `main`.
-- All work happens on a short-lived branch off `main`, named `<type>/kdelpe/<descriptive-name>` in lowercase kebab-case, e.g. `feature/kdelpe/magic-link-login`, `fix/kdelpe/session-expiry`, `docs/kdelpe/schema-revision`, `chore/kdelpe/ci-workflow`. Types: `feature`, `fix`, `docs`, `chore`. One branch = one reviewable piece of work.
+- All work happens on a short-lived branch off `main`, named `<type>/kdelpe/<descriptive-name>` in lowercase kebab-case, e.g. `feature/kdelpe/password-login-and-reset`, `fix/kdelpe/session-expiry`, `docs/kdelpe/schema-revision`, `chore/kdelpe/ci-workflow`. Types: `feature`, `fix`, `docs`, `chore`. One branch = one reviewable piece of work.
 - The name says exactly what the branch does, usually 3–7 words (`add-docker-compose-postgres-mailpit`, not `foundation` or `setup`). If no short descriptive name fits, the branch is doing too much: split it.
 - **Claude reviews before Copilot does.** When the work on a branch is done, Claude runs its own review (`/code-review`) of the branch's diff against `main`, fixes what it finds, and only then opens the PR (or pushes the final changes) for Copilot and the owner. Docs-only changes get the same consistency pass.
 - Claude opens the PR into `main`; the owner reviews it and **squash-merges** it, so each PR becomes one commit on `main`. The small commits stay visible in the PR.
@@ -38,7 +38,7 @@ Trunk-based: short-lived branches and `main`. No `develop` branch.
 
 - Small: one logical change per commit, easy to review in a few minutes.
 - Every commit leaves the repo building with tests passing (once there is code).
-- Message: a short imperative summary line (≤ 72 chars), a blank line, then *why* if it isn't obvious.
+- Message: **one line only**, a short imperative summary (≤ 72 chars). No body; the *why* goes in the PR description.
 - **No AI attribution** anywhere: no `Co-Authored-By: Claude` trailer in commits, no "Generated with Claude Code" line in PR descriptions.
 - Commit and push (to the work branch only) once the owner has okayed the step.
 
