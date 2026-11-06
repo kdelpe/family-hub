@@ -59,7 +59,7 @@ family-hub/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml                # checks on PRs into main and pushes to main (§13.1)
-│   │   └── release.yml           # manual release, main only (§13.1)
+│   │   └── release.yml           # builds the image when a Release is published from main (§13.1)
 │   ├── pull_request_template.md
 │   ├── CODEOWNERS
 │   └── dependabot.yml            # Go, npm, Actions, Docker update PRs -> main
@@ -797,7 +797,6 @@ Subcommands are parsed with the stdlib `flag` package; unknown flags or extra ar
 ```make
 DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 export DATABASE_URL
-VERSION := $(or $(shell git describe --tags --always --dirty 2>/dev/null),dev)
 
 .PHONY: up down run dev-api dev-ui ui-stub generate test vet lint vuln build migrate-up migrate-down migrate-new
 
@@ -817,7 +816,7 @@ migrate-down:  ; go run ./cmd migrate down 1
 
 dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 dev-ui:        ; cd web && npm run dev
-run:           ; go run -ldflags="-X main.version=$(VERSION)" ./cmd $(ARGS)
+run:           ; go run ./cmd $(ARGS)
 
 test: ui-stub ; go test ./...
 vet:  ui-stub ; go vet ./...
@@ -826,7 +825,7 @@ vuln:          ; go tool govulncheck ./...
 
 build:
 	cd web && npm ci && npm run build
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o bin/family-hub ./cmd
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/family-hub ./cmd
 ```
 
 `sqlc`, `govulncheck` and the `migrate` CLI are pinned in `go.mod` via `go get -tool ...` (Go ≥1.24), so there's no `@latest`. mockery (v3) and golangci-lint are installed as pinned binaries instead, locally and in CI, because both projects advise against installing via `go get`/`go tool` (dependency conflicts) **(verify current guidance)**. `go tool migrate` is only used for `create`; `up/down` go through the app binary, so the CLI doesn't need database build tags **(verify)**.
@@ -873,9 +872,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /src/internal/webui/dist ./internal/webui/dist
-# release.yml passes --build-arg VERSION=vX.Y.Z
-ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/family-hub ./cmd
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/family-hub ./cmd
 
 # Pin the current Alpine release. Phase 6 adds ffmpeg + vips here.
 FROM alpine:3.21
@@ -1026,9 +1023,9 @@ For a "multi-decade" archive, this section matters more than any other.
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |
 
-**`release.yml`** is manual (`workflow_dispatch` with a `version` input such as `v1.2.0`) and runs **only from `main`**: the job checks `github.ref == 'refs/heads/main'` and runs in a `release` GitHub environment whose deployment-branch rule allows only `main`. Steps: fail if the tag exists → create the tag → build the image with `--build-arg VERSION=<tag>`, which the Dockerfile injects via `-ldflags "-X main.version=..."` → push to GitHub Container Registry → create a GitHub Release with generated notes. Deploying is a separate, deliberate step (the VPS pulls the tagged image).
+**Releases** are cut by the owner in the GitHub UI: create a Release with a new tag such as `v1.2.0`, target `main`, and use "Generate release notes". **`release.yml`** runs on `release: published`: it checks out the tag with full history, fails unless the tagged commit is on `main` (`git merge-base --is-ancestor`), then builds the image and pushes it to GitHub Container Registry tagged with the release tag. The image tag is the version; the binary doesn't embed one. A tag ruleset on `v*` blocks updating or deleting release tags. Deploying is a separate, deliberate step (the VPS pulls the tagged image).
 
-**Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; the release job gets `contents: write` and `packages: write`); third-party actions pinned to commit SHAs; Dependabot keeps them current.
+**Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; the release job gets `packages: write`); third-party actions pinned to commit SHAs; Dependabot keeps them current.
 
 **Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), passing CI checks once `ci.yml` exists, no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
 

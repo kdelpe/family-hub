@@ -32,7 +32,7 @@ Trunk-based: short-lived branches and `main`. No `develop` branch.
 - The name says exactly what the branch does, usually 3–7 words (`add-docker-compose-postgres-mailpit`, not `foundation` or `setup`). If no short descriptive name fits, the branch is doing too much: split it.
 - **Claude reviews before Copilot does.** When the work on a branch is done, Claude runs its own review (`/code-review`) of the branch's diff against `main`, fixes what it finds, and only then opens the PR (or pushes the final changes) for Copilot and the owner. Docs-only changes get the same consistency pass.
 - Claude opens the PR into `main`; the owner reviews it and **squash-merges** it, so each PR becomes one commit on `main`. The small commits stay visible in the PR.
-- Releases are manual, only from `main`: the owner runs the release workflow, which tags the commit (`vX.Y.Z`) and builds the image. Claude never triggers a release.
+- Releases are manual, only from `main`: the owner publishes a GitHub Release with a new `vX.Y.Z` tag on `main`, and the release workflow builds the image. Claude never creates tags or releases.
 
 ## Commits
 
