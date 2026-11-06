@@ -38,7 +38,7 @@ Trunk-based: short-lived branches and `main`. No `develop` branch.
 
 - Small: one logical change per commit, easy to review in a few minutes.
 - Every commit leaves the repo building with tests passing (once there is code).
-- Message: a short imperative summary line (≤ 72 chars), a blank line, then *why* if it isn't obvious.
+- Message: **one line only**, a short imperative summary (≤ 72 chars). No body; the *why* goes in the PR description.
 - **No AI attribution** anywhere: no `Co-Authored-By: Claude` trailer in commits, no "Generated with Claude Code" line in PR descriptions.
 - Commit and push (to the work branch only) once the owner has okayed the step.
 
