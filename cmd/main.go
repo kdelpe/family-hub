@@ -2,12 +2,9 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
-	"strconv"
-	"strings"
 )
 
 var errNotImplemented = errors.New("not implemented yet")
@@ -18,10 +15,7 @@ Commands:
   serve                       run the web server (default)
   migrate up                  apply all pending migrations
   migrate down [N]            roll back N migrations (default 1)
-  migrate version             print the current migration version
-  migrate force N             set the migration version without running any
   admin create --email ADDR   create the first admin (prompts for the password)
-  seed                        load the sample family into an empty database (dev only)
 `
 
 func main() {
@@ -31,126 +25,26 @@ func main() {
 	}
 }
 
-// run prints the usage for -h at any level, so subcommands just return flag.ErrHelp.
+// Each command parses its own arguments once it's implemented.
 func run(args []string, stdout io.Writer) error {
-	err := dispatch(args)
-	if errors.Is(err, flag.ErrHelp) {
-		_, err = io.WriteString(stdout, usage)
-	}
-	return err
-}
-
-func dispatch(args []string) error {
-	fs := newFlagSet("family-hub")
-	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("%w (see family-hub -h)", err)
-	}
-	if fs.NArg() == 0 {
-		return serve(nil)
-	}
-
-	command, commandArgs := fs.Arg(0), fs.Args()[1:]
-	switch command {
-	case "serve":
-		return serve(commandArgs)
-	case "migrate":
-		return migrate(commandArgs)
-	case "admin":
-		return admin(commandArgs)
-	case "seed":
-		return seed(commandArgs)
-	default:
-		return fmt.Errorf("unknown command %q (see family-hub -h)", command)
-	}
-}
-
-// newFlagSet discards the flag package's own output; run prints errors and usage once.
-func newFlagSet(name string) *flag.FlagSet {
-	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	return fs
-}
-
-func parseNoArgs(fs *flag.FlagSet, args []string) error {
-	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("%s: %w", fs.Name(), err)
-	}
-	if fs.NArg() > 0 {
-		return fmt.Errorf("%s: unexpected arguments %q", fs.Name(), fs.Args())
-	}
-	return nil
-}
-
-func serve(args []string) error {
-	if err := parseNoArgs(newFlagSet("serve"), args); err != nil {
-		return err
-	}
-	return fmt.Errorf("serve: %w", errNotImplemented)
-}
-
-func migrate(args []string) error {
-	fs := newFlagSet("migrate")
-	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("migrate: %w", err)
-	}
-	if err := validateMigrateAction(fs.Args()); err != nil {
-		return fmt.Errorf("migrate: %w", err)
-	}
-	return fmt.Errorf("migrate: %w", errNotImplemented)
-}
-
-func validateMigrateAction(args []string) error {
 	if len(args) == 0 {
-		return invalidMigrateAction(args)
+		return serve()
 	}
-
-	name, rest := args[0], args[1:]
-	switch {
-	case (name == "up" || name == "version" || name == "down") && len(rest) == 0:
-		return nil
-	case name == "down" && len(rest) == 1:
-		if n, err := strconv.Atoi(rest[0]); err != nil || n < 1 {
-			return fmt.Errorf("down: N must be a positive integer, got %q", rest[0])
-		}
-		return nil
-	case name == "force" && len(rest) == 1:
-		// golang-migrate accepts -1 here to mean "no version".
-		if n, err := strconv.Atoi(rest[0]); err != nil || n < -1 {
-			return fmt.Errorf("force: N must be an integer ≥ -1, got %q", rest[0])
-		}
-		return nil
+	switch args[0] {
+	case "serve":
+		return serve()
+	case "migrate":
+		return migrate(args[1:])
+	case "admin":
+		return admin(args[1:])
+	case "-h", "--help", "help":
+		_, err := io.WriteString(stdout, usage)
+		return err
 	default:
-		return invalidMigrateAction(args)
+		return fmt.Errorf("unknown command %q (see family-hub -h)", args[0])
 	}
 }
 
-func invalidMigrateAction(args []string) error {
-	return fmt.Errorf("invalid action %q (want up, down [N], version or force N)", strings.Join(args, " "))
-}
-
-func admin(args []string) error {
-	fs := newFlagSet("admin")
-	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("admin: %w", err)
-	}
-	if fs.Arg(0) != "create" {
-		return errors.New("admin: want admin create --email ADDR")
-	}
-
-	createFs := newFlagSet("admin create")
-	email := createFs.String("email", "", "email of the first admin")
-	if err := parseNoArgs(createFs, fs.Args()[1:]); err != nil {
-		return err
-	}
-	if strings.TrimSpace(*email) == "" {
-		return errors.New("admin create: --email is required")
-	}
-	return fmt.Errorf("admin create: %w", errNotImplemented)
-}
-
-func seed(args []string) error {
-	if err := parseNoArgs(newFlagSet("seed"), args); err != nil {
-		return err
-	}
-	return fmt.Errorf("seed: %w", errNotImplemented)
-}
+func serve() error             { return fmt.Errorf("serve: %w", errNotImplemented) }
+func migrate(_ []string) error { return fmt.Errorf("migrate: %w", errNotImplemented) }
+func admin(_ []string) error   { return fmt.Errorf("admin: %w", errNotImplemented) }
