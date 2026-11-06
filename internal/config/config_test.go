@@ -82,6 +82,16 @@ func TestLoad(t *testing.T) {
 			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
 		},
 		{
+			name:        "DATABASE_URL badly encoded query",
+			env:         map[string]string{"DATABASE_URL": "postgres://db/familyhub?sslmode=verify%ZZ"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
+		},
+		{
+			name:        "DATABASE_URL socket path with badly encoded query",
+			env:         map[string]string{"DATABASE_URL": "postgres:///familyhub?host=/var/run/postgresql&sslmode=%ZZ"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
+		},
+		{
 			name:        "DATABASE_URL keyword/value form",
 			env:         map[string]string{"DATABASE_URL": "host=db user=app dbname=familyhub"},
 			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
@@ -164,6 +174,7 @@ func TestLoadNeverEchoesDatabaseURL(t *testing.T) {
 		{name: "wrong scheme", databaseURL: "mysql://app:hunter2@localhost/familyhub"},
 		{name: "keyword/value form", databaseURL: "host=db user=app password=hunter2"},
 		{name: "unparseable URL", databaseURL: "postgres://app:hunter2@local host/familyhub"},
+		{name: "badly encoded query", databaseURL: "postgres://app:hunter2@db/familyhub?sslmode=%ZZ"},
 		{name: "not a connection string at all", databaseURL: "hunter2"},
 	}
 

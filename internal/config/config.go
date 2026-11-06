@@ -59,7 +59,12 @@ func isPostgresURL(raw string) bool {
 	if err != nil {
 		return false
 	}
-	return u.Hostname() != "" || u.Query().Get("host") != ""
+	// u.Query() silently drops badly encoded parameters, so parse strictly.
+	query, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return false
+	}
+	return u.Hostname() != "" || query.Get("host") != ""
 }
 
 func validListenAddr(addr string) bool {
