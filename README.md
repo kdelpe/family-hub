@@ -15,7 +15,7 @@ Go (chi, pgx, sqlc) · Postgres · React + TypeScript + Vite · S3-compatible st
 
 ## Local setup
 
-Needs Go 1.27, Docker and golangci-lint 2.15.0 (`brew install go golangci-lint`, plus Docker Desktop).
+Needs Go 1.27, Docker Desktop and golangci-lint 2.15.0 (`brew install go golangci-lint`). `make lint` requires the exact golangci-lint version CI uses. If Homebrew has moved past it, bump `GOLANGCI_LINT_VERSION` in the Makefile and the version in `ci.yml` together in a PR.
 
 ```sh
 make up      # Postgres and Mailpit in Docker
