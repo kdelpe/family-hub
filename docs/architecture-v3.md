@@ -151,25 +151,20 @@ CREATE TABLE sessions (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at   TIMESTAMPTZ NOT NULL,                   -- absolute cap
-  authenticated_at TIMESTAMPTZ NOT NULL DEFAULT now(), -- last credential proof; gates linking Google (§5)
   user_agent   TEXT
 );
 CREATE INDEX idx_sessions_user ON sessions(user_id);
 CREATE INDEX idx_sessions_expires ON sessions(expires_at);
 
--- Google sign-in/link flows, held server-side; the browser only holds an opaque handle (§5)
+-- Google sign-in flows, held server-side; the browser only holds an opaque handle (§5)
 CREATE TABLE oauth_flows (
   handle_hash   BYTEA PRIMARY KEY,                     -- SHA-256 of the cookie handle
-  purpose       TEXT NOT NULL CHECK (purpose IN ('sign_in','link')),
   state         TEXT NOT NULL,
   nonce         TEXT NOT NULL,
   pkce_verifier TEXT NOT NULL,
-  session_hash  BYTEA REFERENCES sessions(id_hash) ON DELETE CASCADE,  -- link only: logout cancels the flow
-  user_id       UUID REFERENCES users(id) ON DELETE CASCADE,           -- link only
   expires_at    TIMESTAMPTZ NOT NULL,
   consumed_at   TIMESTAMPTZ,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK ((purpose = 'link') = (session_hash IS NOT NULL AND user_id IS NOT NULL))
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_oauth_flows_expires ON oauth_flows(expires_at);
 
@@ -398,12 +393,10 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/ready` | internal only (blocked at Caddy) | Readiness: database reachable |
 | POST | `/api/auth/login` | no session (sign-in flow), rate-limited | `{email, password}` → sets session cookie; any failure is the same `401 invalid_credentials` |
 | POST | `/api/auth/password/forgot` | no session (sign-in flow), rate-limited | `{email}` → always `202`; reset email sent only if user exists and is enabled |
-| POST | `/api/auth/password/reset` | no session (sign-in flow), rate-limited | `{token, password, remove_google?}` (invite or reset link) → sets password, optionally unlinks Google, revokes other sessions, signs in |
+| POST | `/api/auth/password/reset` | no session (sign-in flow), rate-limited | `{token, password}` (invite or reset link) → sets password, revokes other sessions, signs in |
 | POST | `/api/auth/password/change` | session | `{current_password, new_password}` → revokes other sessions |
 | GET | `/api/auth/google/start` | no session (sign-in flow), rate-limited | Redirects to Google (state, nonce, PKCE) |
-| POST | `/api/auth/google/link/start` | session + fresh auth, rate-limited | `{password}` (unless signed in within 10 min) → `{redirect_url}`; bound to this session (§5) |
-| POST | `/api/auth/google/unlink` | session + fresh auth | `{password}` (unless signed in within 10 min) → removes the user's own Google link; refused if it's their only sign-in method |
-| GET | `/api/auth/google/callback` | no session (sign-in flow), rate-limited | Verifies the ID token; signs in by `sub`, auto-links only Gmail/Workspace invited emails, or completes a signed-in link (§5); redirects into the app |
+| GET | `/api/auth/google/callback` | no session (sign-in flow), rate-limited | Verifies the ID token; signs in by `sub`, auto-links only Gmail/Workspace invited emails (§5); redirects into the app |
 | POST | `/api/admin/users/{id}/send-reset` | admin | Resend invite or send a password-reset email |
 | GET | `/api/auth/me` | session | Current user, role, linked person |
 | POST | `/api/auth/logout` | session | Deletes the session row |
@@ -449,7 +442,7 @@ Two ways to sign in, both ending in the same server-side session:
 | Method | For whom |
 |---|---|
 | **Email + password** | Anyone. Password set from the invite email; reset by email. |
-| **Continue with Google** | Gmail and Google Workspace addresses link on first use, no password needed. Anyone else with a Google account signs in with their password once, then links Google from My profile. Hidden when `GOOGLE_CLIENT_ID` isn't set (e.g. local dev). |
+| **Continue with Google** | Invited **Gmail and Google Workspace** addresses only; links on first use, no password needed. Everyone else uses their password. Hidden when `GOOGLE_CLIENT_ID` isn't set (e.g. local dev). |
 
 A user may have a password, a linked Google account, or both (`password_hash` and `google_sub` are each optional).
 
@@ -480,36 +473,17 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
 - **Hashing:** Argon2id (`golang.org/x/crypto/argon2`), stored as a PHC string (`$argon2id$v=19$m=…,t=…,p=…$salt$hash`) with a 16-byte random salt. Parameters start at the OWASP recommendation (m=19 MiB, t=2, p=1) **(verify current guidance)**; because they're stored per hash, they can be raised later and old hashes are re-hashed on the next successful login. At most 4 hashes run at once (a semaphore); excess requests wait briefly or get `503`, so a burst of password attempts can't exhaust the VPS's memory.
 - **Password rules:** minimum 12 characters, maximum 128, no composition rules (no "must include a symbol"); reject a small embedded list of the most common passwords. Long passphrases are encouraged in the UI.
 - **Forgot password:** `POST /api/auth/password/forgot {email}` always returns `202` with the same body (no enumeration) and sends the reset email asynchronously, only if the user exists and is enabled. Google-only users get the same email, which lets them add a password.
-- **Change password** (signed in): `POST /api/auth/password/change {current_password, new_password}`; signs out every other session. Uses **fresh authentication** (below): `current_password` is always required here, and wrong attempts count toward the shared per-user budget.
+- **Change password** (signed in): `POST /api/auth/password/change {current_password, new_password}`; signs out every other session. `current_password` is always required (a session cookie alone may be old or stolen); wrong attempts run one Argon2 verify each and are limited per user (5 per 15 min).
 
-**Continue with Google** (OpenID Connect, authorization-code flow with PKCE; `golang.org/x/oauth2` + `github.com/coreos/go-oidc/v3`)
+**Continue with Google** (OpenID Connect, authorization-code flow with PKCE; `golang.org/x/oauth2` + `github.com/coreos/go-oidc/v3`). Sign-in only; there is no self-service linking of Google to an existing account.
 
-1. `GET /api/auth/google/start` creates a row in **`oauth_flows`** (server-side; §3.1) holding the purpose (`sign_in` or `link`), `state`, `nonce`, the PKCE verifier, a 10-minute expiry, and, for `link`, the initiating session and user. The browser only gets an **opaque random handle** in a flow cookie (`fh_oauth`; `HttpOnly; Secure; SameSite=Lax; Path=/api/auth/google`, so both start endpoints and the shared callback see it). Then it redirects to Google.
+1. `GET /api/auth/google/start` creates a row in **`oauth_flows`** (server-side; §3.1) holding `state`, `nonce`, the PKCE verifier and a 10-minute expiry. The browser only gets an **opaque random handle** in a flow cookie (`fh_oauth`; `HttpOnly; Secure; SameSite=Lax; Path=/api/auth/google`). Then it redirects to Google.
 2. `GET /api/auth/google/callback` looks up the flow by the handle's hash and **consumes it atomically** (single use, unexpired), checks `state`, exchanges the code, and verifies the ID token (signature, issuer, audience, expiry, `nonce`). Nothing about the flow can be forged or replayed from the client side, because none of it lives there.
 3. Matching, never creating:
    - If an **enabled** user already has this `google_sub`, sign them in.
    - Otherwise, **automatic linking by email** happens only where Google is authoritative for the mailbox: the (normalized) email is `@gmail.com` / `@googlemail.com`, or the ID token carries a Workspace `hd` claim matching the email's domain, **and** `email_verified` is true, **and** it matches an invited, enabled user with no `google_sub` yet. Then link the `sub` and sign them in. For any other address (e.g. a Yahoo address on a Google account), `email_verified` may reflect an old verification of a mailbox that has since changed hands, so it's not proof.
-   - Such users see "Sign in with your password first, then link Google from My profile".
-
-**Fresh authentication** (one rule for every sensitive account action: change password, link Google, unlink Google). A session cookie alone isn't enough, since it can be up to 180 days old or stolen:
-
-- The request must include the user's **current password**, unless the session proved a credential in the last 10 minutes (`sessions.authenticated_at`, set when a session is created by sign-in or by an invite/reset link). A Google-only user without a password re-proves by signing in with Google again.
-- Wrong passwords on any of these actions share **one per-user budget** (5 per 15 min, §5 rate limits) and run one Argon2 verify each, like login.
-- All of these endpoints sit behind per-IP router limits too.
-- Every successful credential change here runs under the user-row lock and **signs out every other session**.
-
-**Linking Google from My profile** (adds a permanent sign-in method):
-
-1. `POST /api/auth/google/link/start {password}` passes fresh authentication, then creates a `link` flow bound to **this session and user** and returns the Google URL; the SPA navigates there.
-2. The callback completes the link only if, under the row lock, the initiating session still exists and belongs to the same user, so logging out, a password reset or an admin change during the Google round trip cancels it.
-3. The `sub` must not already belong to another user.
-4. Every new link sends a **notification email**: *"A Google account (name@…) was linked to your Family Hub sign-in. If this wasn't you, sign in, go to My profile, choose **Unlink Google**, and change your password, or reset your password and tick **Also remove the linked Google account**."*
-
-**Unlinking Google** (`POST /api/auth/google/unlink {password}`): passes fresh authentication, then, under the row lock, clears `google_sub`, invalidates outstanding tokens and **signs out every other session**, so any Google session created before the unlink doesn't survive. Refused if Google is the user's only sign-in method (set a password first).
-
-**Password reset and Google:** the set-password page shows the linked Google account, if any, with **"Also remove the linked Google account"**. A legitimate link survives a routine reset, and an unwanted one can be removed in the same step with no sign-in needed.
-   - Otherwise show a generic "no invitation found for this account" page. Nothing is created.
-4. After linking, sign-in is by `sub`, so a later change to the Google account's email doesn't lock them out.
+   - Otherwise show a generic "no invitation found for this account" page. Nothing is created. Relatives whose invited address isn't Gmail or Workspace simply use their password; the page says so.
+4. After linking, sign-in is by `sub`, so a later change to the Google account's email doesn't lock them out. Only an admin can remove a Google link (`unlink_google`, below), which also signs the user out everywhere.
 
 **Invites.** The admin invites `{email, role, person_id}`; the invite email says: *"Set a password, or sign in with Google if this is your Google address."* Admins can resend an invite or trigger a password reset from the users screen.
 
@@ -526,7 +500,7 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
 - **Per IP, as router middleware** (it only needs the client address): `login` 20 per 15 min, `password/forgot` 20/hour, `password/reset` 10/minute, `google/*` 20/minute.
 - **Per account, inside the auth service** (only the service knows the email and whether verification failed), counting **failures only**:
   - `login`: 5 failures per 15 min per **email + IP** pair, and a backstop of 50 failures per hour per email across all IPs.
-  - **Fresh authentication** (`password/change`, `google/link/start`, `google/unlink`): one shared budget of 5 wrong passwords per 15 min per user.
+  - `password/change`: 5 wrong `current_password` attempts per 15 min per user.
   - `password/forgot`: 5 emails per hour per address.
 
 Honest limits of this: a determined attacker rotating IPs can, at worst, hit the 50/hour backstop and **delay password sign-in** for one account. They can never block that person's **Google sign-in or password reset**, both of which prove ownership another way, and the login error page links to both. There's no hard lockout.
@@ -671,8 +645,6 @@ func New(h Handlers, mw Middleware) http.Handler {
             r.Get("/auth/me", h.Auth.Me)
             r.Post("/auth/logout", h.Auth.Logout)
             r.Post("/auth/password/change", h.Auth.ChangePassword)
-            r.With(mw.LimitGoogle).Post("/auth/google/link/start", h.Auth.GoogleLinkStart)
-            r.With(mw.LimitGoogle).Post("/auth/google/unlink", h.Auth.GoogleUnlink)
 
             r.Get("/tree", h.Family.Tree)
             r.Get("/persons", h.Family.SearchPersons)
@@ -1031,7 +1003,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 ## 13. Testing & CI
 
-- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection (including a chain deeper than any display bound, and a loop closed through a foster link), ancestors/descendants exclude foster links, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected (via POST and via PATCH changing a subtype), missing `subtype` defaults or returns 400, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, blank or whitespace-only names are rejected (a blank surname input is stored as NULL), derived relations (full/half/unspecified siblings, including one sibling's second parent not yet recorded and people with more than two family parents, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), emailed tokens single-use and expiring (invite 7 days, reset 30 min), reset revokes all sessions, login returns the same 401 for unknown email / wrong password / Google-only / disabled user, every login failure path runs one Argon2 verify (unknown, Google-only and disabled users alike), any credential change invalidates all outstanding tokens, disabled users are refused on every path including Google by `sub`, admin email change clears `google_sub` and the password and revokes sessions, a new reset request leaves earlier reset links valid, token consumption is all-or-nothing (a failure mid-way leaves the token unconsumed and the old password intact), concurrent credential changes for one user serialize on the row lock, emails are matched case-insensitively (incl. Google's), per-account failure limits and the 50/hour backstop never block Google or reset, `password/change` is rate-limited, the hash semaphore caps concurrent Argon2 work, Argon2id rehash when parameters change, password length and common-password rules, Google sign-in rejects unverified emails, uninvited emails, already-linked users and state/nonce mismatches, and auto-links only Gmail or matching-`hd` Workspace addresses (a verified non-Gmail address without `hd` is refused and must use the signed-in link flow), and links `google_sub` on first use, a login whose verified hash changed before the session commit is refused (no stale session, no rehash over a new password), Google sign-in by `sub` is refused if unlinked or disabled mid-flow, linking from My profile requires a fresh password (or sign-in within 10 min), is cancelled if the initiating session is logged out or revoked mid-flow, sends a notification email, and the flow cookie reaches the callback from both start endpoints, a forged, expired or reused flow handle is refused, change password / link / unlink share one fresh-auth budget, unlink signs out other sessions, reset with `remove_google` unlinks under the same transaction, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
+- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection (including a chain deeper than any display bound, and a loop closed through a foster link), ancestors/descendants exclude foster links, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected (via POST and via PATCH changing a subtype), missing `subtype` defaults or returns 400, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, blank or whitespace-only names are rejected (a blank surname input is stored as NULL), derived relations (full/half/unspecified siblings, including one sibling's second parent not yet recorded and people with more than two family parents, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), emailed tokens single-use and expiring (invite 7 days, reset 30 min), reset revokes all sessions, login returns the same 401 for unknown email / wrong password / Google-only / disabled user, every login failure path runs one Argon2 verify (unknown, Google-only and disabled users alike), any credential change invalidates all outstanding tokens, disabled users are refused on every path including Google by `sub`, admin email change clears `google_sub` and the password and revokes sessions, a new reset request leaves earlier reset links valid, token consumption is all-or-nothing (a failure mid-way leaves the token unconsumed and the old password intact), concurrent credential changes for one user serialize on the row lock, emails are matched case-insensitively (incl. Google's), per-account failure limits and the 50/hour backstop never block Google or reset, `password/change` is rate-limited, the hash semaphore caps concurrent Argon2 work, Argon2id rehash when parameters change, password length and common-password rules, Google sign-in rejects unverified emails, uninvited emails, already-linked users and state/nonce mismatches, and auto-links only Gmail or matching-`hd` Workspace addresses (a verified non-Gmail address without `hd` is refused; that user signs in with their password), and links `google_sub` on first use, a login whose verified hash changed before the session commit is refused (no stale session, no rehash over a new password), Google sign-in by `sub` is refused if unlinked or disabled mid-flow, a forged, expired or reused flow handle is refused, change password always requires the current password and is limited per user, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
 - **Web:** Vitest + Testing Library for components; one Playwright smoke test (seed a user with a known password → sign in → add person → see tree) once Phase 4b lands.
 ### 13.1 Branches, CI and releases
 
