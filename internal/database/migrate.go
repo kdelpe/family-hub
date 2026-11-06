@@ -1,4 +1,3 @@
-// Package database owns the Postgres schema and the connection to it.
 package database
 
 import (
@@ -18,12 +17,10 @@ import (
 //go:embed migrations
 var embedded embed.FS
 
-// MigrateUp applies every pending migration. golang-migrate holds an advisory lock, so concurrent starts are safe.
 func MigrateUp(databaseURL string) error {
 	return migrateUp(embedded, databaseURL)
 }
 
-// MigrateDown rolls back the given number of applied migrations.
 func MigrateDown(databaseURL string, steps int) error {
 	return migrateDown(embedded, databaseURL, steps)
 }
@@ -33,7 +30,7 @@ func migrateUp(fsys fs.FS, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	defer closeMigrate(m)
+	defer func() { _, _ = m.Close() }()
 
 	// golang-migrate reports an empty migrations directory as fs.ErrNotExist.
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) && !errors.Is(err, fs.ErrNotExist) {
@@ -50,7 +47,7 @@ func migrateDown(fsys fs.FS, databaseURL string, steps int) error {
 	if err != nil {
 		return err
 	}
-	defer closeMigrate(m)
+	defer func() { _, _ = m.Close() }()
 
 	if _, _, err := m.Version(); errors.Is(err, migrate.ErrNilVersion) {
 		return errors.New("migrate down: no migrations applied")
@@ -73,12 +70,6 @@ func newMigrate(fsys fs.FS, databaseURL string) (*migrate.Migrate, error) {
 	return m, nil
 }
 
-func closeMigrate(m *migrate.Migrate) {
-	// Close only releases connections; migration errors are already reported.
-	_, _ = m.Close()
-}
-
-// The pgx v5 driver registers pgx5://; config.Load guarantees one of these prefixes.
 func toPgx5Scheme(databaseURL string) string {
 	for _, prefix := range []string{"postgres://", "postgresql://"} {
 		if rest, ok := strings.CutPrefix(databaseURL, prefix); ok {
