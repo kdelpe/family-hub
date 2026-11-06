@@ -13,7 +13,7 @@ A private, invite-only, multi-generational family archive: interactive family tr
 | 1 | `ui.go` was `package main` at repo root; `cmd/server` can't import it and `go:embed` can't reach `..` | Embed lives in `internal/webui` (package `webui`); Vite builds into it (§2, §7) |
 | 2 | Fresh clone fails `go build`/`go test` because `dist/` doesn't exist | `make ui-stub` writes a placeholder; `dist/` is git-ignored (§8.1) |
 | 3 | Makefile `POSTGRES_URL` garbled in the PDF | Rewritten; migrations also run via the binary itself (§8) |
-| 4 | 6-digit code: brute-forceable, replayable, bare SHA-256, no session storage | 256-bit single-use link token, server-side sessions, rate limits, enumeration-safe (§5) |
+| 4 | 6-digit code: brute-forceable, replayable, bare SHA-256, no session storage | Email + password (Argon2id) or Google sign-in; 256-bit single-use invite/reset tokens; server-side sessions, rate limits, enumeration-safe (§5) |
 | 5 | `RealIP` trusted unconditionally | Only enabled behind a configured trusted proxy (§6) |
 | 6 | No way to *view* media; no write endpoints | Full endpoint table incl. presigned-GET and CRUD (§4) |
 | 7 | `confirm` trusted the client | `HeadObject` verify; Content-Length and Content-Type signed into the PUT; orphan cleanup (§9) |
@@ -48,7 +48,7 @@ A private, invite-only, multi-generational family archive: interactive family tr
 | Mail | SMTP (`net/smtp`) behind a `Mailer` interface | Mailpit local; Resend/SES/Postmark SMTP later |
 | Frontend | React 19 + TypeScript + Vite, TanStack Query | Focus-view family tree (§7); plain CSS + SVG connectors |
 | Jobs | Postgres queue (`FOR UPDATE SKIP LOCKED`) in-process | No Redis/SQS needed at this scale; added in Phase 6 |
-| Auth | Argon2id via `golang.org/x/crypto/argon2`; Google sign-in via `golang.org/x/oauth2` + `github.com/coreos/go-oidc/v3` | Both `x/` packages are maintained by the Go team |
+| Auth | Argon2id via `golang.org/x/crypto/argon2`; Google sign-in via `golang.org/x/oauth2` + `github.com/coreos/go-oidc/v3`; hidden password prompt for `admin create` via `golang.org/x/term` | The `x/` packages are maintained by the Go team |
 | Stdlib where nothing else is needed | `log/slog` (logs), `flag` (subcommands), `os.Getenv` + validation (config), `http.CrossOriginProtection` (CSRF, Go 1.25), `crypto/*` | No cobra, no config library |
 | Testing | `testing` + **testify** (assertions, mocks) + **mockery** (generated mocks) + `testing/synctest` (fake clock, Go 1.25) | Database is never mocked: real Postgres in integration tests (§13) |
 | Lint & security | golangci-lint, `govulncheck` | |
@@ -388,7 +388,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | POST | `/api/auth/logout` | session | Deletes the session row |
 | GET | `/api/admin/users` | admin | List users |
 | POST | `/api/admin/users` | admin | Invite: `{email, role, person_id}` (person required, §5.1) |
-| PATCH | `/api/admin/users/{id}` | admin | Role, disable/enable, link person |
+| PATCH | `/api/admin/users/{id}` | admin | Role, disable/enable, link person, change email (clears Google link, revokes sessions and tokens, re-invites), `unlink_google` (§5) |
 | GET | `/api/tree` | session | All non-deleted people + relationships (flat; see §10) |
 | GET | `/api/persons` | session | `?q=` trigram search for autocomplete |
 | POST | `/api/persons` | admin | Create |
@@ -435,30 +435,38 @@ A user may have a password, a linked Google account, or both (`password_hash` an
 **Email links (invite and password reset).** Both use the same single-use token mechanism, stored in `auth_tokens` with a `purpose`:
 
 1. Generate 32 random bytes; store `SHA-256(token)` (TTL: **7 days** for `invite`, **30 min** for `password_reset`). A new token invalidates that user's older unconsumed tokens of the same purpose.
+   **Any credential change invalidates all of the user's outstanding tokens** (every purpose): consuming a token, setting or changing a password, linking or unlinking Google, an admin changing the email, and disabling the user. An old invite or reset link therefore never outlives the credential it was meant to create.
 2. Email `https://<BASE_URL>/auth/set-password#t=<token>`. The token is in the **URL fragment**, so it never reaches server logs or `Referer`, and email link-scanners that GET links can't burn it. The SPA page shows a "choose a password" form and POSTs `{token, password}` to `/api/auth/password/reset`.
 3. Consume atomically and re-check the user is still enabled: `UPDATE auth_tokens t SET consumed_at = now() FROM users u WHERE t.token_hash = $1 AND t.consumed_at IS NULL AND t.expires_at > now() AND u.id = t.user_id AND u.disabled_at IS NULL RETURNING t.user_id, t.purpose`. Then set the password, **delete all of the user's existing sessions**, and create a new one (signed in).
 
 A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for high-entropy secrets.
 
+**Rules for every sign-in path**
+
+- **Emails are normalized** (trimmed, lowercased) wherever one enters the system: login, forgot password, invites, admin edits and the email Google returns. `users.email` is stored lowercase, so comparisons are plain equality.
+- **A disabled user can't sign in by any path** (password, emailed token, Google by `sub` or first link), and disabling deletes their sessions and tokens.
+
 **Email + password sign-in**
 
-- `POST /api/auth/login {email, password}`. On failure, always the same `401 invalid_credentials`, whether the email is unknown, the password is wrong, the user has no password (Google-only) or is disabled. When the email is unknown the server still verifies against a fixed dummy hash, so response time doesn't reveal which accounts exist.
-- **Hashing:** Argon2id (`golang.org/x/crypto/argon2`), stored as a PHC string (`$argon2id$v=19$m=…,t=…,p=…$salt$hash`) with a 16-byte random salt. Parameters start at the OWASP recommendation (m=19 MiB, t=2, p=1) **(verify current guidance)**; because they're stored per hash, they can be raised later and old hashes are re-hashed on the next successful login.
+- `POST /api/auth/login {email, password}`. On failure, always the same `401 invalid_credentials`, whether the email is unknown, the password is wrong, the user has no password (Google-only) or is disabled. **Every failure path runs exactly one Argon2 verification** (against a fixed dummy hash when there's no usable password), so response time doesn't reveal which emails have accounts or how they sign in.
+- **Hashing:** Argon2id (`golang.org/x/crypto/argon2`), stored as a PHC string (`$argon2id$v=19$m=…,t=…,p=…$salt$hash`) with a 16-byte random salt. Parameters start at the OWASP recommendation (m=19 MiB, t=2, p=1) **(verify current guidance)**; because they're stored per hash, they can be raised later and old hashes are re-hashed on the next successful login. At most 4 hashes run at once (a semaphore); excess requests wait briefly or get `503`, so a burst of password attempts can't exhaust the VPS's memory.
 - **Password rules:** minimum 12 characters, maximum 128, no composition rules (no "must include a symbol"); reject a small embedded list of the most common passwords. Long passphrases are encouraged in the UI.
 - **Forgot password:** `POST /api/auth/password/forgot {email}` always returns `202` with the same body (no enumeration) and sends the reset email asynchronously, only if the user exists and is enabled. Google-only users get the same email, which lets them add a password.
-- **Change password** (signed in): `POST /api/auth/password/change {current_password, new_password}`; signs out every other session.
+- **Change password** (signed in): `POST /api/auth/password/change {current_password, new_password}`; signs out every other session. Wrong `current_password` attempts are rate-limited per user, so a stolen session cookie can't be used to guess the password.
 
 **Continue with Google** (OpenID Connect, authorization-code flow with PKCE; `golang.org/x/oauth2` + `github.com/coreos/go-oidc/v3`)
 
 1. `GET /api/auth/google/start` generates `state`, `nonce` and a PKCE verifier, keeps them in a short-lived (10 min) `HttpOnly; Secure; SameSite=Lax` cookie, and redirects to Google.
 2. `GET /api/auth/google/callback` checks `state`, exchanges the code, and verifies the ID token (signature, issuer, audience, expiry, `nonce`).
 3. Matching, never creating:
-   - If a user already has this `google_sub`, sign them in.
-   - Otherwise, if `email_verified` is true and the email matches an invited, enabled user with no `google_sub` yet, link the `sub` to that user and sign them in.
+   - If an **enabled** user already has this `google_sub`, sign them in.
+   - Otherwise, if `email_verified` is true and the (normalized) email matches an invited, enabled user with no `google_sub` yet, link the `sub` to that user and sign them in.
    - Otherwise show a generic "no invitation found for this account" page. Nothing is created.
 4. After linking, sign-in is by `sub`, so a later change to the Google account's email doesn't lock them out.
 
 **Invites.** The admin invites `{email, role, person_id}`; the invite email says: *"Set a password, or sign in with Google if this is your Google address."* Admins can resend an invite or trigger a password reset from the users screen.
+
+**When an admin changes a user's email** (e.g. fixing a typo'd invite): the user's `google_sub` is cleared, their sessions and outstanding tokens are deleted, and a fresh invite goes to the new address. Whoever received the old address loses access, and the real person re-links Google on their next sign-in. Admins can also **unlink Google** on its own (`PATCH /api/admin/users/{id}` with `unlink_google: true`), with the same session and token cleanup.
 
 **Sessions**
 
@@ -466,15 +474,19 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
 - Cookie flags: `HttpOnly; Secure; SameSite=Lax; Path=/`. Name `__Host-fh_session` in prod. In local dev set `COOKIE_SECURE=false` and drop the prefix, because Safari doesn't accept `Secure` cookies on `http://localhost` **(verify)**.
 - Lifetime: 30-day sliding window, 180-day absolute cap. `last_seen_at` is only rewritten when it's more than an hour stale, to avoid a DB write on every request. Logout and "disable user" delete rows, so revocation is immediate.
 
-**Rate limits** (in-memory `x/time/rate` is fine for a single instance):
-- `login`: 5 failures per 15 min per email, 20 per 15 min per IP. Throttling rather than a hard lockout, so nobody can lock a relative out by guessing on purpose.
-- `password/forgot`: 5/hour per email, 20/hour per IP.
-- `password/reset`: 10/minute per IP.
-- `google/start` and `google/callback`: 20/minute per IP.
+**Rate limits** (in-memory `x/time/rate` is fine for a single instance). Two layers:
+
+- **Per IP, as router middleware** (it only needs the client address): `login` 20 per 15 min, `password/forgot` 20/hour, `password/reset` 10/minute, `google/*` 20/minute.
+- **Per account, inside the auth service** (only the service knows the email and whether verification failed), counting **failures only**:
+  - `login`: 5 failures per 15 min per **email + IP** pair, and a backstop of 50 failures per hour per email across all IPs.
+  - `password/change`: 5 wrong `current_password` attempts per 15 min per user.
+  - `password/forgot`: 5 emails per hour per address.
+
+Honest limits of this: a determined attacker rotating IPs can, at worst, hit the 50/hour backstop and **delay password sign-in** for one account. They can never block that person's **Google sign-in or password reset**, both of which prove ownership another way, and the login error page links to both. There's no hard lockout.
 
 **CSRF:** `SameSite=Lax` plus the stdlib `http.CrossOriginProtection` (Go 1.25), which rejects non-safe cross-origin browser requests using `Sec-Fetch-Site` and `Origin`; and require `Content-Type: application/json` when a body exists. **(verify it accepts the Vite-proxied dev origin without extra config; otherwise add `BASE_URL` with `AddTrustedOrigin`.)**
 
-**Bootstrap:** `family-hub admin create --email you@example.com` creates the first admin and prints a one-time set-password link to the terminal, so the very first sign-in needs no working mail setup (no env-var backdoor).
+**Bootstrap:** `family-hub admin create --email you@example.com` creates the first admin and **prompts for the password on the terminal** with hidden input (`golang.org/x/term`), twice. Nothing secret is printed, so nothing lands in Docker or journald logs, and the very first sign-in needs no working mail setup. The command refuses to run without an interactive terminal (no env-var backdoor).
 
 **Google callback and CSRF:** the callback is a top-level `GET` redirect from Google, which `SameSite=Lax` cookies and `CrossOriginProtection` both allow (it only blocks unsafe methods); the `state` check is what protects it.
 
@@ -573,6 +585,7 @@ type Handlers struct {
 
 type Middleware struct {
     RequireSession func(http.Handler) http.Handler // from auth
+    // per-IP limits only; per-account failure limits live in the auth service (§5)
     LimitLogin     func(http.Handler) http.Handler
     LimitForgot    func(http.Handler) http.Handler
     LimitReset     func(http.Handler) http.Handler
@@ -969,8 +982,8 @@ For a "multi-decade" archive, this section matters more than any other.
 
 ## 13. Testing & CI
 
-- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection (including a chain deeper than any display bound, and a loop closed through a foster link), ancestors/descendants exclude foster links, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected (via POST and via PATCH changing a subtype), missing `subtype` defaults or returns 400, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, blank or whitespace-only names are rejected (a blank surname input is stored as NULL), derived relations (full/half/unspecified siblings, including one sibling's second parent not yet recorded and people with more than two family parents, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), emailed tokens single-use and expiring (invite 7 days, reset 30 min), reset revokes all sessions, login returns the same 401 for unknown email / wrong password / Google-only / disabled user, dummy-hash timing path for unknown emails, Argon2id rehash when parameters change, password length and common-password rules, Google sign-in rejects unverified emails, uninvited emails, already-linked users and state/nonce mismatches, and links `google_sub` on first use, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
-- **Web:** Vitest + Testing Library for components; one Playwright smoke test (login via a test-only token → add person → see tree) once Phase 4b lands.
+- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection (including a chain deeper than any display bound, and a loop closed through a foster link), ancestors/descendants exclude foster links, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected (via POST and via PATCH changing a subtype), missing `subtype` defaults or returns 400, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, blank or whitespace-only names are rejected (a blank surname input is stored as NULL), derived relations (full/half/unspecified siblings, including one sibling's second parent not yet recorded and people with more than two family parents, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), emailed tokens single-use and expiring (invite 7 days, reset 30 min), reset revokes all sessions, login returns the same 401 for unknown email / wrong password / Google-only / disabled user, every login failure path runs one Argon2 verify (unknown, Google-only and disabled users alike), any credential change invalidates all outstanding tokens, disabled users are refused on every path including Google by `sub`, admin email change clears `google_sub` and revokes sessions, emails are matched case-insensitively (incl. Google's), per-account failure limits and the 50/hour backstop never block Google or reset, `password/change` is rate-limited, the hash semaphore caps concurrent Argon2 work, Argon2id rehash when parameters change, password length and common-password rules, Google sign-in rejects unverified emails, uninvited emails, already-linked users and state/nonce mismatches, and links `google_sub` on first use, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
+- **Web:** Vitest + Testing Library for components; one Playwright smoke test (seed a user with a known password → sign in → add person → see tree) once Phase 4b lands.
 ### 13.1 Branches, CI and releases
 
 **Branches (trunk-based):** `main` plus short-lived work branches named `<type>/kdelpe/<descriptive-name>` (types `feature`, `fix`, `docs`, `chore`; e.g. `feature/kdelpe/password-login-and-reset`). Every change reaches `main` through a PR that is **squash-merged**, so `main` has one commit per PR. Releases are tags on `main`.
@@ -1010,7 +1023,7 @@ Real family data gets entered from Phase 4 onward, so the MVP ships (deploy + ba
 | **1. Foundation** | Repo, compose, config, migrations, health, CI, `webui` embed + SPA handler | `make dev-api` runs (it starts compose itself); `/healthz` + `/readyz` pass; CI green on a fresh clone (stub UI) |
 | **2. Auth** | Invite-only email + password (Argon2id), invite and forgot-password emails, change password, sessions, rate limits, `admin create`, admin user endpoints, person linking (§5.1). Then Continue with Google as a separate PR | Invite → set password via Mailpit → sign in; forgot/reset works and revokes sessions; Google sign-in links an invited account and refuses an uninvited one; enumeration, replay, expiry and disabled-user tests pass; one-login-per-person enforced |
 | **3. People, tree & contacts API** | Admin-only persons/relationships writes, `/api/tree`, ancestors/descendants, cycle validation, contact methods with visibility filtering, `/api/directory` | Integration tests incl. cycle rejection and the role/visibility matrix (§13); seed script loads a sample family |
-| **4a. Frontend shell** | Login UI, onboarding + "My profile" (bio and contact visibility toggles; initials only, avatars arrive in Phase 5), person profile page, directory, upcoming-birthdays panel | Log in via Mailpit and land on the home page; edit own bio and contact visibility; a member sees only visible contacts in profiles and the directory; works on desktop and phone |
+| **4a. Frontend shell** | Login UI, onboarding + "My profile" (bio and contact visibility toggles; initials only, avatars arrive in Phase 5), person profile page, directory, upcoming-birthdays panel | Accept an invite via Mailpit, set a password, sign in and land on the home page; forgot-password works end to end; edit own bio and contact visibility; a member sees only visible contacts in profiles and the directory; works on desktop and phone |
 | **4b. Family tree** | **Mockup first:** a standalone clickable focus-view mockup (§7) with the real family shape, tried on the owner's phone, then by one non-technical relative. Then the real focus-view family tree centered on "you" (§7), "back to me", search-to-jump, admin add-parent/child/partner/sibling flows (§7) | Sample family can be navigated by clicking, with multiple marriages and step-children shown as households, on desktop and phone; an admin can build a branch without touching raw edges |
 | **4c Ship the MVP** | Deploy (§14), mail provider + domain with SPF/DKIM/DMARC, nightly backups + failure alert, restore drill, TLS, basic security headers | Deployed behind TLS; login email lands in Gmail and Outlook inboxes; restore drill passes; a deliberately failed backup triggers the alert; first real invites sent |
 | **5. Events & media (originals)** | **Storage spike first:** choose the local server and prove the four capabilities in §9.5 against it and R2 with a throwaway Go test; add `storage` to compose. Then events + feed, upload/confirm/view (admin-only at first; members via `MEMBERS_CAN_CONTRIBUTE`), avatars (members can always set their own), tagging, orphan sweep, admin "missing info" tracker (§5.4) | Upload a 1 GB video from the browser and play it back with seeking |
@@ -1032,4 +1045,4 @@ Real family data gets entered from Phase 4 onward, so the MVP ships (deploy + ba
 **Still open, but not blocking until later**
 
 - **Local storage server:** settled by the storage spike at the start of Phase 5 (§9.5).
-- **Mail provider and sending domain:** needed before the first real invites, because sign-in emails depend on it (locally, Mailpit covers everything). My recommendation: register a cheap dedicated domain and use it for both the site and email, sending through a transactional provider with a free tier. Current lean: **Resend** (3,000/month free, SMTP), with Postmark as the switch-by-config alternative; register the domain at Cloudflare Registrar (DNS alongside R2), auto-renew on, several years prepaid, and listed in the handover note. **Verify current limits at Phase 4c.** Add the SPF/DKIM/DMARC records the provider gives you, then test delivery to Gmail and Outlook.
+- **Mail provider and sending domain:** needed before the first real invites, because invite and password-reset emails depend on it (locally, Mailpit covers everything). My recommendation: register a cheap dedicated domain and use it for both the site and email, sending through a transactional provider with a free tier. Current lean: **Resend** (3,000/month free, SMTP), with Postmark as the switch-by-config alternative; register the domain at Cloudflare Registrar (DNS alongside R2), auto-renew on, several years prepaid, and listed in the handover note. **Verify current limits at Phase 4c.** Add the SPF/DKIM/DMARC records the provider gives you, then test delivery to Gmail and Outlook.
