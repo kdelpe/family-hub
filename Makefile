@@ -1,6 +1,6 @@
 BIN     := bin/family-hub
 
-.PHONY: build run test vet
+.PHONY: build run test vet lint vuln
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN) ./cmd
@@ -14,3 +14,9 @@ test:
 
 vet:
 	go vet ./...
+
+lint:
+	golangci-lint run
+
+vuln:
+	go tool govulncheck ./...
