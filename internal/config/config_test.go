@@ -1,0 +1,194 @@
+package config
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const validDatabaseURL = "postgres://app:secret@localhost:5432/familyhub?sslmode=disable"
+
+func TestLoad(t *testing.T) {
+	tests := []struct {
+		name        string
+		env         map[string]string
+		want        Config
+		wantErrMsgs []string
+	}{
+		{
+			name: "defaults",
+			env:  map[string]string{"DATABASE_URL": validDatabaseURL},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080"},
+		},
+		{
+			name: "all set",
+			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "HTTP_ADDR": "127.0.0.1:9000", "AUTO_MIGRATE": "true"},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: "127.0.0.1:9000", AutoMigrate: true},
+		},
+		{
+			name: "postgresql scheme",
+			env:  map[string]string{"DATABASE_URL": "postgresql://app@db/familyhub"},
+			want: Config{DatabaseURL: "postgresql://app@db/familyhub", HTTPAddr: ":8080"},
+		},
+		{
+			name: "unix socket URL",
+			env:  map[string]string{"DATABASE_URL": "postgres:///familyhub?host=/var/run/postgresql"},
+			want: Config{DatabaseURL: "postgres:///familyhub?host=/var/run/postgresql", HTTPAddr: ":8080"},
+		},
+		{
+			name: "values are trimmed",
+			env:  map[string]string{"DATABASE_URL": " " + validDatabaseURL + "\r", "HTTP_ADDR": " :9000 "},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":9000"},
+		},
+		{
+			name: "AUTO_MIGRATE with surrounding spaces",
+			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "AUTO_MIGRATE": " true "},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", AutoMigrate: true},
+		},
+		{
+			name: "AUTO_MIGRATE any case",
+			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "AUTO_MIGRATE": "True"},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", AutoMigrate: true},
+		},
+		{
+			name: "AUTO_MIGRATE false",
+			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "AUTO_MIGRATE": "false"},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080"},
+		},
+		{
+			name:        "missing DATABASE_URL",
+			env:         map[string]string{},
+			wantErrMsgs: []string{"DATABASE_URL is required"},
+		},
+		{
+			name:        "DATABASE_URL wrong scheme",
+			env:         map[string]string{"DATABASE_URL": "mysql://app:secret@localhost/familyhub"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
+		},
+		{
+			name:        "DATABASE_URL without host",
+			env:         map[string]string{"DATABASE_URL": "postgres:///familyhub"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
+		},
+		{
+			name:        "DATABASE_URL uppercase scheme",
+			env:         map[string]string{"DATABASE_URL": "POSTGRES://app:secret@localhost/familyhub"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
+		},
+		{
+			name:        "DATABASE_URL port without hostname",
+			env:         map[string]string{"DATABASE_URL": "postgres://app:secret@:5432/familyhub"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
+		},
+		{
+			name:        "DATABASE_URL badly encoded query",
+			env:         map[string]string{"DATABASE_URL": "postgres://db/familyhub?sslmode=verify%ZZ"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
+		},
+		{
+			name:        "DATABASE_URL socket path with badly encoded query",
+			env:         map[string]string{"DATABASE_URL": "postgres:///familyhub?host=/var/run/postgresql&sslmode=%ZZ"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
+		},
+		{
+			name:        "DATABASE_URL keyword/value form",
+			env:         map[string]string{"DATABASE_URL": "host=db user=app dbname=familyhub"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
+		},
+		{
+			name:        "HTTP_ADDR without port",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "HTTP_ADDR": "localhost"},
+			wantErrMsgs: []string{`HTTP_ADDR must be host:port or :port with a port from 1 to 65535, got "localhost"`},
+		},
+		{
+			name:        "HTTP_ADDR with empty port",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "HTTP_ADDR": "localhost:"},
+			wantErrMsgs: []string{"HTTP_ADDR must be"},
+		},
+		{
+			name:        "HTTP_ADDR port out of range",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "HTTP_ADDR": ":99999"},
+			wantErrMsgs: []string{"HTTP_ADDR must be"},
+		},
+		{
+			name:        "HTTP_ADDR port not a number",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "HTTP_ADDR": ":http"},
+			wantErrMsgs: []string{"HTTP_ADDR must be"},
+		},
+		{
+			name:        "HTTP_ADDR port with sign",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "HTTP_ADDR": ":+8080"},
+			wantErrMsgs: []string{"HTTP_ADDR must be"},
+		},
+		{
+			name:        "HTTP_ADDR port with leading zero",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "HTTP_ADDR": ":08080"},
+			wantErrMsgs: []string{"HTTP_ADDR must be"},
+		},
+		{
+			name:        "HTTP_ADDR port zero",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "HTTP_ADDR": ":0"},
+			wantErrMsgs: []string{"HTTP_ADDR must be"},
+		},
+		{
+			name:        "AUTO_MIGRATE not a bool",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "AUTO_MIGRATE": "yes"},
+			wantErrMsgs: []string{`AUTO_MIGRATE must be true or false, got "yes"`},
+		},
+		{
+			name:        "AUTO_MIGRATE 1 is rejected",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "AUTO_MIGRATE": "1"},
+			wantErrMsgs: []string{`AUTO_MIGRATE must be true or false, got "1"`},
+		},
+		{
+			name:        "reports every problem at once",
+			env:         map[string]string{"HTTP_ADDR": "nope", "AUTO_MIGRATE": "maybe"},
+			wantErrMsgs: []string{"DATABASE_URL is required", "HTTP_ADDR must be", "AUTO_MIGRATE must be"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Load(func(key string) string { return tt.env[key] })
+
+			if len(tt.wantErrMsgs) == 0 {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got)
+				return
+			}
+			require.Error(t, err)
+			for _, msg := range tt.wantErrMsgs {
+				assert.Contains(t, err.Error(), msg)
+			}
+			assert.Equal(t, Config{}, got)
+		})
+	}
+}
+
+func TestLoadNeverEchoesDatabaseURL(t *testing.T) {
+	tests := []struct {
+		name        string
+		databaseURL string
+	}{
+		{name: "wrong scheme", databaseURL: "mysql://app:hunter2@localhost/familyhub"},
+		{name: "keyword/value form", databaseURL: "host=db user=app password=hunter2"},
+		{name: "unparseable URL", databaseURL: "postgres://app:hunter2@local host/familyhub"},
+		{name: "badly encoded query", databaseURL: "postgres://app:hunter2@db/familyhub?sslmode=%ZZ"},
+		{name: "not a connection string at all", databaseURL: "hunter2"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Load(func(key string) string {
+				if key == "DATABASE_URL" {
+					return tt.databaseURL
+				}
+				return ""
+			})
+
+			require.Error(t, err)
+			assert.NotContains(t, err.Error(), "hunter2")
+		})
+	}
+}
