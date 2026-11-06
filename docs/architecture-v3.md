@@ -754,7 +754,7 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 
 ### 6.5 Configuration (env vars)
 
-`internal/config.Load` reads these and reports every invalid or missing value at once, never echoing `DATABASE_URL` (it holds the password). Each variable is added in the phase that uses it; Phase 1 has `DATABASE_URL` (required), `HTTP_ADDR` (default `:8080`) and `AUTO_MIGRATE` (default `false`). `.env.example` is the template for the server's `.env`, with safe local values only.
+`internal/config.Load` reads these and reports every invalid or missing value at once. `DATABASE_URL` is validated by `pgxpool.ParseConfig`, so any URL or keyword/value form pgx accepts works (including Unix sockets); pgx's error is dropped because it can echo the raw string, which holds the password. `AUTO_MIGRATE` is exactly `true` or `false`, and `HTTP_ADDR` needs a port from 1 to 65535. Each variable is added in the phase that uses it; Phase 1 has `DATABASE_URL` (required), `HTTP_ADDR` (default `:8080`) and `AUTO_MIGRATE` (default `false`). `.env.example` is the template for the server's `.env`, with safe local values only.
 
 | Var | Example | Notes |
 |---|---|---|
