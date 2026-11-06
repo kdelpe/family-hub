@@ -23,6 +23,8 @@ func TestParseMigrateCommand(t *testing.T) {
 		{name: "down with two arguments", args: []string{"down", "1", "2"}, wantErrMsg: ErrMigrateUsage.Error()},
 		{name: "down zero", args: []string{"down", "0"}, wantErrMsg: `down: steps must be a positive integer, got "0"`},
 		{name: "down not a number", args: []string{"down", "x"}, wantErrMsg: `down: steps must be a positive integer, got "x"`},
+		{name: "down with sign", args: []string{"down", "+3"}, wantErrMsg: `down: steps must be a positive integer, got "+3"`},
+		{name: "down with leading zero", args: []string{"down", "007"}, wantErrMsg: `down: steps must be a positive integer, got "007"`},
 	}
 
 	for _, tt := range tests {

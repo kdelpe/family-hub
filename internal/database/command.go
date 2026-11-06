@@ -22,7 +22,8 @@ func ParseMigrateCommand(args []string) (MigrateCommand, error) {
 		return MigrateCommand{down: true, steps: 1}, nil
 	case len(args) == 2 && args[0] == "down":
 		n, err := strconv.Atoi(args[1])
-		if err != nil || n < 1 {
+		// Round-trip so "+3" and "007" are rejected for a destructive command.
+		if err != nil || n < 1 || strconv.Itoa(n) != args[1] {
 			return MigrateCommand{}, fmt.Errorf("down: steps must be a positive integer, got %q", args[1])
 		}
 		return MigrateCommand{down: true, steps: n}, nil
@@ -33,7 +34,7 @@ func ParseMigrateCommand(args []string) (MigrateCommand, error) {
 
 func (c MigrateCommand) Run(databaseURL string) error {
 	if c.down {
-		return MigrateDown(databaseURL, c.steps)
+		return migrateDown(embedded, databaseURL, c.steps)
 	}
 	return MigrateUp(databaseURL)
 }

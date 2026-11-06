@@ -40,6 +40,20 @@ func TestMigrateUp(t *testing.T) {
 	}
 }
 
+func TestMigrateUpConcurrently(t *testing.T) {
+	db := newTestSchema(t)
+
+	errs := make(chan error, 4)
+	for range cap(errs) {
+		go func() { errs <- migrateUp(testMigrations, db.url) }()
+	}
+	for range cap(errs) {
+		require.NoError(t, <-errs)
+	}
+
+	assert.Equal(t, 2, db.version(t))
+}
+
 func TestMigrateDown(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -51,7 +65,6 @@ func TestMigrateDown(t *testing.T) {
 	}{
 		{name: "one step", steps: 1, wantVersion: 1, wantWidgets: true},
 		{name: "every step", steps: 2, wantVersion: 0},
-		{name: "zero steps", steps: 0, wantErrMsg: "steps must be a positive integer, got 0", wantVersion: 2, wantWidgets: true, wantNameField: true},
 		{name: "more steps than applied changes nothing", steps: 3, wantErrMsg: "only 2 applied, refusing to roll back 3", wantVersion: 2, wantWidgets: true, wantNameField: true},
 	}
 
@@ -107,19 +120,25 @@ func TestMigrateRefusesUnsafeDatabase(t *testing.T) {
 			name:       "up at a version this binary doesn't have",
 			setup:      "UPDATE schema_migrations SET version = 99",
 			migrate:    func(url string) error { return migrateUp(testMigrations, url) },
-			wantErrMsg: "migrate up: database is at version 99, which this binary doesn't have",
+			wantErrMsg: "migrate up: database is at a version this binary doesn't have",
 		},
 		{
 			name:       "down at a version this binary doesn't have",
 			setup:      "UPDATE schema_migrations SET version = 99",
 			migrate:    func(url string) error { return migrateDown(testMigrations, url, 1) },
-			wantErrMsg: "migrate down: database is at version 99, which this binary doesn't have",
+			wantErrMsg: "migrate down: database is at a version this binary doesn't have",
 		},
 		{
-			name:       "embedded up at a version this binary doesn't have",
-			setup:      "UPDATE schema_migrations SET version = 99",
-			migrate:    MigrateUp,
-			wantErrMsg: "migrate up: database is at version 99, which this binary doesn't have",
+			name:       "up when the first migration's rollback failed",
+			setup:      "UPDATE schema_migrations SET version = -1, dirty = true",
+			migrate:    func(url string) error { return migrateUp(testMigrations, url) },
+			wantErrMsg: "migrate up: database is dirty at version -1",
+		},
+		{
+			name:       "down when the first migration's rollback failed",
+			setup:      "UPDATE schema_migrations SET version = -1, dirty = true",
+			migrate:    func(url string) error { return migrateDown(testMigrations, url, 1) },
+			wantErrMsg: "migrate down: database is dirty at version -1",
 		},
 	}
 

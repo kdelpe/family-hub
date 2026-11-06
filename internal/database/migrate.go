@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"slices"
 	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -22,10 +21,6 @@ func MigrateUp(databaseURL string) error {
 	return migrateUp(embedded, databaseURL)
 }
 
-func MigrateDown(databaseURL string, steps int) error {
-	return migrateDown(embedded, databaseURL, steps)
-}
-
 func migrateUp(fsys fs.FS, databaseURL string) error {
 	m, versions, err := open(fsys, databaseURL)
 	if err != nil {
@@ -33,85 +28,50 @@ func migrateUp(fsys fs.FS, databaseURL string) error {
 	}
 	defer func() { _, _ = m.Close() }()
 
-	if _, _, err := checkedVersion(m, versions); err != nil {
-		return fmt.Errorf("migrate up: %w", err)
-	}
 	if len(versions) == 0 {
 		return nil
 	}
+	// No pre-checks: golang-migrate checks dirty and unknown versions under its advisory lock.
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("migrate up: %w", err)
+		return fmt.Errorf("migrate up: %w", explain(err))
 	}
 	return nil
 }
 
 func migrateDown(fsys fs.FS, databaseURL string, steps int) error {
-	if steps < 1 {
-		return fmt.Errorf("migrate down: steps must be a positive integer, got %d", steps)
-	}
 	m, versions, err := open(fsys, databaseURL)
 	if err != nil {
 		return fmt.Errorf("migrate down: %w", err)
 	}
 	defer func() { _, _ = m.Close() }()
 
-	version, applied, err := checkedVersion(m, versions)
-	if err != nil {
-		return fmt.Errorf("migrate down: %w", err)
-	}
-	if !applied {
+	// golang-migrate rolls back all it can before reporting a short limit, so count first.
+	// This read happens outside the lock; down is a manual command, not run at startup.
+	version, _, err := m.Version()
+	switch {
+	case errors.Is(err, migrate.ErrNilVersion):
+		// Version hides the dirty flag at nil version; Steps reports it.
+		if err := m.Steps(-steps); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("migrate down: %w", explain(err))
+		}
 		return errors.New("migrate down: no migrations applied")
+	case err != nil:
+		return fmt.Errorf("migrate down: read version: %w", err)
 	}
-	// golang-migrate would roll back everything it can before reporting a short limit.
 	if count := appliedCount(versions, version); steps > count {
 		return fmt.Errorf("migrate down: only %d applied, refusing to roll back %d", count, steps)
 	}
 	if err := m.Steps(-steps); err != nil {
-		return fmt.Errorf("migrate down: %w", err)
+		return fmt.Errorf("migrate down: %w", explain(err))
 	}
 	return nil
 }
 
 func open(fsys fs.FS, databaseURL string) (*migrate.Migrate, []uint, error) {
-	versions, err := sourceVersions(fsys)
-	if err != nil {
-		return nil, nil, err
-	}
 	src, err := iofs.New(fsys, "migrations")
 	if err != nil {
 		return nil, nil, fmt.Errorf("migrations source: %w", err)
 	}
-	m, err := migrate.NewWithSourceInstance("iofs", src, toPgx5Scheme(databaseURL))
-	if err != nil {
-		return nil, nil, fmt.Errorf("init: %w", err)
-	}
-	return m, versions, nil
-}
-
-// checkedVersion returns the database's version, refusing a dirty database or one at a
-// version this binary has no file for (e.g. after rolling back to an older release).
-func checkedVersion(m *migrate.Migrate, versions []uint) (version uint, applied bool, err error) {
-	version, dirty, err := m.Version()
-	switch {
-	case errors.Is(err, migrate.ErrNilVersion):
-		return 0, false, nil
-	case err != nil:
-		return 0, false, fmt.Errorf("read version: %w", err)
-	case dirty:
-		return 0, false, fmt.Errorf("database is dirty at version %d: a migration failed partway; repair it as in architecture §6.4", version)
-	case !slices.Contains(versions, version):
-		return 0, false, fmt.Errorf("database is at version %d, which this binary doesn't have", version)
-	}
-	return version, true, nil
-}
-
-func sourceVersions(fsys fs.FS) ([]uint, error) {
-	src, err := iofs.New(fsys, "migrations")
-	if err != nil {
-		return nil, fmt.Errorf("migrations source: %w", err)
-	}
-	defer func() { _ = src.Close() }()
-
 	var versions []uint
 	v, err := src.First()
 	for err == nil {
@@ -119,9 +79,26 @@ func sourceVersions(fsys fs.FS) ([]uint, error) {
 		v, err = src.Next(v)
 	}
 	if !errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("migrations source: %w", err)
+		return nil, nil, fmt.Errorf("migrations source: %w", err)
 	}
-	return versions, nil
+
+	m, err := migrate.NewWithSourceInstance("iofs", src, toPgx5Scheme(databaseURL))
+	if err != nil {
+		return nil, nil, fmt.Errorf("init: %w", err)
+	}
+	return m, versions, nil
+}
+
+// explain replaces golang-migrate's "force version" advice: we repair by hand instead.
+func explain(err error) error {
+	var dirty migrate.ErrDirty
+	switch {
+	case errors.As(err, &dirty):
+		return fmt.Errorf("database is dirty at version %d: a migration failed partway; repair it as in architecture §6.4", dirty.Version)
+	case errors.Is(err, fs.ErrNotExist):
+		return fmt.Errorf("database is at a version this binary doesn't have (an older release?): %w", err)
+	}
+	return err
 }
 
 func appliedCount(versions []uint, current uint) int {
