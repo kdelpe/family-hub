@@ -47,6 +47,12 @@ Trunk-based: short-lived branches and `main`. No `develop` branch.
 - Items marked **(verify)** in the architecture doc are checked against current docs before relying on them.
 - Keep the architecture doc current: when a decision changes, update the doc in the same change.
 
+## Comments
+
+- Names do the explaining. No comments that restate what a well-named variable, function or type already says.
+- Comment only what the code can't show: *why* something is done, a non-obvious constraint, or a gotcha.
+- Keep necessary comments to one or two lines. Exported Go identifiers still get a short doc comment where `golangci-lint` requires it, kept to one line where possible.
+
 ## To fill in later
 
 <!-- Placeholders: complete these as the project takes shape. -->
