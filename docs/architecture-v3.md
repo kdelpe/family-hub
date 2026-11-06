@@ -806,7 +806,7 @@ export DATABASE_URL
 
 up:
 	docker compose up -d --wait
-	@echo "SELECT 'CREATE DATABASE familyhub_test' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'familyhub_test')\gexec" \
+	@printf '%s\n' "SELECT 'CREATE DATABASE familyhub_test' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'familyhub_test')\gexec" \
 	  | docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 down:          ; docker compose down
 
@@ -839,7 +839,7 @@ build:
 
 ### 8.2 `compose.yaml` (shape)
 
-Local development only. Ports bind to `127.0.0.1`. Images are pinned to exact version tags; Dependabot groups their updates into one weekly PR and skips Postgres major versions (those need a dump and restore). `make up` creates `familyhub_test` if it's missing, so it works on an existing volume too. CI won't run `make up`: its Postgres service container sets `POSTGRES_DB: familyhub_test` directly.
+Local development only. Ports bind to `127.0.0.1`. Images are pinned to exact version tags; Dependabot groups their updates into one weekly PR and skips Postgres major versions (those need a dump and restore). `make up` creates `familyhub_test` if it's missing, so it works on an existing volume too. CI won't run `make up`: when the first DB test lands, the `go` job gets a Postgres service container that sets `POSTGRES_DB: familyhub_test` directly.
 
 ```yaml
 services:
@@ -849,7 +849,7 @@ services:
     ports: ["127.0.0.1:5432:5432"]
     volumes: [pgdata:/var/lib/postgresql]   # Postgres 18 images keep data under /var/lib/postgresql/18/docker
     healthcheck:                            # over TCP, so first-run setup doesn't count as ready
-      { test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U app -d familyhub"], start_period: 30s, interval: 2s, retries: 15 }
+      { test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""], start_period: 30s, interval: 2s, retries: 15 }
   mailpit:                       # catches outgoing mail; UI on :8025
     image: axllent/mailpit:v1.33.0
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
