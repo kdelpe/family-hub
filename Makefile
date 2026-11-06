@@ -1,6 +1,8 @@
 BIN     := bin/family-hub
+# Keep in sync with the golangci-lint version in .github/workflows/ci.yml.
+GOLANGCI_LINT_VERSION := 2.15.0
 
-.PHONY: build run test vet lint vuln
+.PHONY: build run test lint vuln
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN) ./cmd
@@ -10,12 +12,11 @@ run:
 	go run ./cmd $(ARGS)
 
 test:
-	go test ./...
-
-vet:
-	go vet ./...
+	go test -race ./...
 
 lint:
+	@v=$$(golangci-lint version --short 2>/dev/null); \
+	  [ "$$v" = "$(GOLANGCI_LINT_VERSION)" ] || { echo "need golangci-lint $(GOLANGCI_LINT_VERSION), found '$$v'"; exit 1; }
 	golangci-lint run
 
 vuln:
