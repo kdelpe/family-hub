@@ -63,7 +63,7 @@ family-hub/
 │   ├── pull_request_template.md
 │   ├── CODEOWNERS
 │   └── dependabot.yml            # Go, npm, Actions, Docker update PRs -> main
-├── cmd/family-hub/main.go        # subcommands (flag): serve (default) | migrate | admin | seed
+├── cmd/main.go                   # subcommands (flag): serve (default) | migrate | admin | seed; built with -o family-hub
 ├── internal/
 │   ├── app/                      # builds dependencies (pool, services, handlers), server lifecycle, graceful shutdown
 │   ├── router/                   # chi route table + middleware chain; the only place routes are wired (§6.1)
@@ -811,10 +811,10 @@ ui-stub:
 # sqlc output + mockery mocks; both committed, CI fails if they're stale
 generate:      ; go tool sqlc generate && mockery
 migrate-new:   ; go tool migrate create -ext sql -dir internal/database/migrations -seq $(name)
-migrate-up:    ; go run ./cmd/family-hub migrate up
-migrate-down:  ; go run ./cmd/family-hub migrate down 1
+migrate-up:    ; go run ./cmd migrate up
+migrate-down:  ; go run ./cmd migrate down 1
 
-dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd/family-hub
+dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 dev-ui:        ; cd web && npm run dev
 
 test: ui-stub ; go test ./...
@@ -823,7 +823,7 @@ vuln:          ; go tool govulncheck ./...
 
 build:
 	cd web && npm ci && npm run build
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/family-hub ./cmd/family-hub
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o bin/family-hub ./cmd
 ```
 
 `sqlc`, `govulncheck` and the `migrate` CLI are pinned in `go.mod` via `go get -tool ...` (Go ≥1.24), so there's no `@latest`. mockery (v3) and golangci-lint are installed as pinned binaries instead, locally and in CI, because both projects advise against installing via `go get`/`go tool` (dependency conflicts) **(verify current guidance)**. `go tool migrate` is only used for `create`; `up/down` go through the app binary, so the CLI doesn't need database build tags **(verify)**.
@@ -870,7 +870,9 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /src/internal/webui/dist ./internal/webui/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/family-hub ./cmd/family-hub
+# release.yml passes --build-arg VERSION=vX.Y.Z
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/family-hub ./cmd
 
 # Pin the current Alpine release. Phase 6 adds ffmpeg + vips here.
 FROM alpine:3.21
@@ -1021,7 +1023,7 @@ For a "multi-decade" archive, this section matters more than any other.
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |
 
-**`release.yml`** is manual (`workflow_dispatch` with a `version` input such as `v1.2.0`) and runs **only from `main`**: the job checks `github.ref == 'refs/heads/main'` and runs in a `release` GitHub environment whose deployment-branch rule allows only `main`. Steps: fail if the tag exists → create the tag → build the image with the version injected (`-ldflags "-X main.version=..."`) → push to GitHub Container Registry → create a GitHub Release with generated notes. Deploying is a separate, deliberate step (the VPS pulls the tagged image).
+**`release.yml`** is manual (`workflow_dispatch` with a `version` input such as `v1.2.0`) and runs **only from `main`**: the job checks `github.ref == 'refs/heads/main'` and runs in a `release` GitHub environment whose deployment-branch rule allows only `main`. Steps: fail if the tag exists → create the tag → build the image with `--build-arg VERSION=<tag>`, which the Dockerfile injects via `-ldflags "-X main.version=..."` → push to GitHub Container Registry → create a GitHub Release with generated notes. Deploying is a separate, deliberate step (the VPS pulls the tagged image).
 
 **Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; the release job gets `contents: write` and `packages: write`); third-party actions pinned to commit SHAs; Dependabot keeps them current.
 
