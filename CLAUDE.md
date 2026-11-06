@@ -4,7 +4,7 @@ A private, invite-only family archive. The design lives in `docs/architecture-v3
 
 ## Current stage
 
-**Planning. No application code yet.** Work right now is analysis and design documents only. Don't scaffold, generate or write code until the owner says the stage has changed.
+**Phase 1 (foundation) in progress.** Planning is done; code is written one small PR at a time, in the order below.
 
 Planned order:
 1. Repo structure: settled (architecture §2).
