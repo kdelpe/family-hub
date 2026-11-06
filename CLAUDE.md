@@ -8,8 +8,8 @@ A private, invite-only family archive. The design lives in `docs/architecture-v3
 
 Planned order:
 1. Repo structure: settled (architecture §2).
-2. Phase 0: a clickable tree-view mockup (no backend), tried on the owner's phone and then by a relative.
-3. Then code, phase by phase (architecture §15), in small commits on `develop`.
+2. Backend first: Phase 1 (foundation), 2 (auth), 3 (people/tree/contacts API on the §3 schema).
+3. Then frontend; the clickable tree mockup opens Phase 4b. Code phase by phase (architecture §15), one short-lived branch and PR at a time.
 
 ## Guiding principle
 
@@ -25,22 +25,24 @@ The repo is public. Security relies on auth, server-side checks and secrets in e
 
 ## Branches
 
-- `main`: reviewed and stable. Claude never commits to, pushes to or merges into `main`.
-- `develop`: where work lands. The owner reviews `develop` and merges it into `main` themselves (via PR).
-- Larger pieces of work may use a short-lived `feat/<name>` branch off `develop`, merged back into `develop` when done.
-- Pull requests into `main` come only from `develop`, and only after the CI checks pass.
-- Releases are manual and only from `main` (a release workflow run by the owner). Claude never triggers a release.
+Trunk-based: short-lived branches and `main`. No `develop` branch.
+
+- `main`: reviewed and always working. Protected: changes arrive only by pull request, CI must pass, no direct pushes or force-pushes. Claude never commits to, pushes to or merges into `main`.
+- All work happens on a short-lived branch off `main`: `feat/<name>`, `fix/<name>`, `docs/<name>` or `chore/<name>`. One branch = one reviewable piece of work.
+- Claude opens the PR into `main`; the owner reviews it and **squash-merges** it, so each PR becomes one commit on `main`. The small commits stay visible in the PR.
+- Releases are manual, only from `main`: the owner runs the release workflow, which tags the commit (`vX.Y.Z`) and builds the image. Claude never triggers a release.
 
 ## Commits
 
 - Small: one logical change per commit, easy to review in a few minutes.
 - Every commit leaves the repo building with tests passing (once there is code).
 - Message: a short imperative summary line (≤ 72 chars), a blank line, then *why* if it isn't obvious.
-- Commit only when the owner has okayed the step; never push without asking.
+- **No AI attribution** anywhere: no `Co-Authored-By: Claude` trailer in commits, no "Generated with Claude Code" line in PR descriptions.
+- Commit and push (to the work branch only) once the owner has okayed the step.
 
 ## How we approach work
 
-- No separate design phase: `docs/architecture-v3.md` is the design. The PR description into `develop` explains what changed and why, including any decision made along the way.
+- No separate design phase: `docs/architecture-v3.md` is the design. The PR description explains what changed and why, including any decision made along the way.
 - HTTP code: routes are wired only in `internal/router`; all handlers live in `internal/handler` (HTTP only, one file per area); business logic lives in the feature packages' services (no HTTP). Dependencies point one way: router → handler → services.
 - Items marked **(verify)** in the architecture doc are checked against current docs before relying on them.
 - Keep the architecture doc current: when a decision changes, update the doc in the same change.
@@ -52,6 +54,6 @@ The repo is public. Security relies on auth, server-side checks and secrets in e
 - **Code style (Go):** _TBD_
 - **Code style (TypeScript/React):** _TBD_
 - **Testing conventions:** table-driven tests by default: a `tests := []struct{ name string; ... }` slice, looped with `t.Run(tt.name, ...)` subtests. testify `require` for setup/fatal checks, `assert` for comparisons. Mocks from mockery; the database is never mocked (real Postgres). Rest _TBD_.
-- **Review checklist for develop → main:** _TBD_
+- **PR review checklist:** _TBD_
 - **Local setup / commands:** _TBD (see architecture §8 for the planned Makefile)_
 - **Definition of done per phase:** _TBD_
