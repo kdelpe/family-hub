@@ -2,7 +2,7 @@
 
 A private, invite-only family archive: an interactive family tree, person profiles, a family directory, and (later) events, photos and videos.
 
-> **Status:** planning. No application code yet.
+> **Status:** Phase 1 (foundation) in progress.
 
 ## Docs
 

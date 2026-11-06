@@ -40,7 +40,7 @@ A private, invite-only, multi-generational family archive: interactive family tr
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Language | Go (≥1.25 is plenty; confirm the 1.27 toolchain with `go version`) | Nothing here needs 1.27 specifically. `go tool` directives need ≥1.24. |
+| Language | Go 1.27 (`go 1.27` in `go.mod`) | 1.25 is the floor for `CrossOriginProtection` and `synctest`; `go tool` directives need ≥1.24. |
 | HTTP | chi v5 | stdlib `net/http` compatible |
 | DB access | pgx v5 pool + **sqlc** | Typed queries from `.sql` files; no runtime reflection |
 | Migrations | golang-migrate, embedded, pgx v5 driver | Auto-run gated by `AUTO_MIGRATE` |
@@ -59,11 +59,12 @@ family-hub/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml                # checks on PRs into main and pushes to main (§13.1)
-│   │   └── release.yml           # manual release, main only (§13.1)
+│   │   ├── draft-release.yml     # keeps one draft Release with generated notes, updated on each push to main (§13.1)
+│   │   └── release.yml           # builds the image when a Release is published from main (§13.1)
 │   ├── pull_request_template.md
 │   ├── CODEOWNERS
 │   └── dependabot.yml            # Go, npm, Actions, Docker update PRs -> main
-├── cmd/family-hub/main.go        # subcommands (flag): serve (default) | migrate | admin | seed
+├── cmd/main.go                   # subcommands: serve (default) | migrate up/down | admin create; built with -o family-hub
 ├── internal/
 │   ├── app/                      # builds dependencies (pool, services, handlers), server lifecycle, graceful shutdown
 │   ├── router/                   # chi route table + middleware chain; the only place routes are wired (§6.1)
@@ -84,6 +85,7 @@ family-hub/
 │   │   ├── db.go                 # pgxpool setup
 │   │   ├── migrate.go            # embedded golang-migrate runner
 │   │   ├── migrations/           # 000001_init_schema.up.sql / .down.sql ...
+│   │   ├── seed.sql              # made-up sample family for local dev (`make seed`)
 │   │   ├── queries/              # *.sql consumed by sqlc
 │   │   └── gen/                  # sqlc output (committed; CI checks it's current)
 │   └── webui/
@@ -96,7 +98,7 @@ family-hub/
 ├── docs/
 │   └── architecture-v3.md        # the design; kept current as decisions change
 ├── CLAUDE.md                     # working rules (branches, commits, approach)
-├── README.md  .editorconfig  .gitignore  .env.example
+├── README.md  .gitignore  .env.example
 ├── compose.yaml                  # postgres, mailpit, storage
 └── Dockerfile  .dockerignore  Makefile  sqlc.yaml  .mockery.yml  .golangci.yml  go.mod
 ```
@@ -748,7 +750,7 @@ func Handler() http.Handler {
 
 ### 6.4 `main.go` shape
 
-Subcommands are parsed with the stdlib `flag` package. `seed` loads the sample family (dev only; refuses to run unless the database is empty). `serve` (default): load config → pgxpool → optional migrate → build `App` → `http.Server` with `ReadHeaderTimeout`, `signal.NotifyContext` for SIGINT/SIGTERM → graceful `Shutdown(30s)`. `migrate up|down|version|force N` and `admin create` reuse the same config loader.
+The binary has only the commands production needs; dev-only tasks live in the Makefile. `main.go` is a plain switch, and each command parses its own arguments with the stdlib `flag` package (in its own file under `cmd/` once it grows); `family-hub -h` prints the usage. `serve` (default): load config → pgxpool → optional migrate → build `App` → `http.Server` with `ReadHeaderTimeout`, `signal.NotifyContext` for SIGINT/SIGTERM → graceful `Shutdown(30s)`. `migrate up|down [N]` and `admin create` reuse the same config loader. If migration N fails halfway, golang-migrate records `version = N, dirty = true`. Either undo its partial changes and set `version = N-1, dirty = false` (the next `migrate up` retries N), or finish N by hand and set only `dirty = false`. Clearing `dirty` alone after a rollback would skip N for good. No `force` command needed. Sample data is `make seed`, which loads `internal/database/seed.sql` through the compose Postgres and refuses to run unless the database is empty (a check at the top of the file). The seeded test user stores a precomputed Argon2id hash of a known dev password.
 
 ### 6.5 Configuration (env vars)
 
@@ -794,11 +796,13 @@ Subcommands are parsed with the stdlib `flag` package. `seed` loads the sample f
 
 ### 8.1 Makefile (essentials)
 
+The end state after Phase 1. Each target lands in the PR that needs it, so the real Makefile grows toward this one.
+
 ```make
 DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 export DATABASE_URL
 
-.PHONY: up down dev-api dev-ui ui-stub generate test lint vuln build migrate-up migrate-down migrate-new
+.PHONY: up down run dev-api dev-ui ui-stub generate test vet lint vuln build migrate-up migrate-down migrate-new seed
 
 up:            ; docker compose up -d
 down:          ; docker compose down
@@ -811,19 +815,22 @@ ui-stub:
 # sqlc output + mockery mocks; both committed, CI fails if they're stale
 generate:      ; go tool sqlc generate && mockery
 migrate-new:   ; go tool migrate create -ext sql -dir internal/database/migrations -seq $(name)
-migrate-up:    ; go run ./cmd/family-hub migrate up
-migrate-down:  ; go run ./cmd/family-hub migrate down 1
+migrate-up:    ; go run ./cmd migrate up
+migrate-down:  ; go run ./cmd migrate down 1
+seed: up migrate-up ; docker compose exec -T postgres psql -U app -d familyhub -v ON_ERROR_STOP=1 < internal/database/seed.sql
 
-dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd/family-hub
+dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 dev-ui:        ; cd web && npm run dev
+run:           ; go run ./cmd $(ARGS)
 
 test: ui-stub ; go test ./...
+vet:  ui-stub ; go vet ./...
 lint: ui-stub ; golangci-lint run && cd web && npm run lint && npm run typecheck
 vuln:          ; go tool govulncheck ./...
 
 build:
 	cd web && npm ci && npm run build
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/family-hub ./cmd/family-hub
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/family-hub ./cmd
 ```
 
 `sqlc`, `govulncheck` and the `migrate` CLI are pinned in `go.mod` via `go get -tool ...` (Go ≥1.24), so there's no `@latest`. mockery (v3) and golangci-lint are installed as pinned binaries instead, locally and in CI, because both projects advise against installing via `go get`/`go tool` (dependency conflicts) **(verify current guidance)**. `go tool migrate` is only used for `create`; `up/down` go through the app binary, so the CLI doesn't need database build tags **(verify)**.
@@ -852,8 +859,8 @@ volumes: { pgdata: {} }
 ### 8.3 Dockerfile (shape)
 
 ```dockerfile
-# Set to whatever toolchain go.mod requires (>=1.24 for `go tool`).
-ARG GO_VERSION=1.25
+# Keep in step with the `go` line in go.mod.
+ARG GO_VERSION=1.27
 
 FROM node:22-alpine AS web
 WORKDIR /src/web
@@ -870,7 +877,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /src/internal/webui/dist ./internal/webui/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/family-hub ./cmd/family-hub
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/family-hub ./cmd
 
 # Pin the current Alpine release. Phase 6 adds ffmpeg + vips here.
 FROM alpine:3.21
@@ -1021,9 +1028,9 @@ For a "multi-decade" archive, this section matters more than any other.
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |
 
-**`release.yml`** is manual (`workflow_dispatch` with a `version` input such as `v1.2.0`) and runs **only from `main`**: the job checks `github.ref == 'refs/heads/main'` and runs in a `release` GitHub environment whose deployment-branch rule allows only `main`. Steps: fail if the tag exists → create the tag → build the image with the version injected (`-ldflags "-X main.version=..."`) → push to GitHub Container Registry → create a GitHub Release with generated notes. Deploying is a separate, deliberate step (the VPS pulls the tagged image).
+**Releases** are cut by the owner in the GitHub UI. **`draft-release.yml`** runs on every push to `main` (each squash-merge) and keeps exactly one draft Release. With no draft, it creates one (`gh release create --draft --generate-notes`) suggesting the next patch version as the tag (`v0.1.0` when there are no tags). With a draft, it updates it in place: new target commit and regenerated notes since the last published `v*` tag (`gh release edit` can't generate notes, so it calls the `releases/generate-notes` API and passes the result to `gh release edit --notes` **(verify)**), but the draft's tag name is kept, so a tag the owner changed survives. It never deletes the draft, so a draft open in the UI can still be published. A `concurrency` group stops back-to-back merges from creating two drafts. The owner changes the tag for a minor or major bump, edits the notes just before publishing (a later merge regenerates them), and clicks Publish, which creates the tag. **`release.yml`** runs on `release: published` and skips prereleases (`github.event.release.prerelease`), so a `-rc` tag never produces a deployable image: it checks out the tag with full history, fails unless the tagged commit is on `main` (`git merge-base --is-ancestor`), then builds the image and pushes it to GitHub Container Registry tagged with the release tag. The image tag is the version; the binary doesn't embed one. A tag ruleset on `v*` blocks updating or deleting release tags. Deploying is a separate, deliberate step (the VPS pulls the tagged image).
 
-**Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; the release job gets `contents: write` and `packages: write`); third-party actions pinned to commit SHAs; Dependabot keeps them current.
+**Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; `draft-release.yml` gets `contents: write`, the release job gets `contents: read` and `packages: write` (listing any permission sets the rest to none)); third-party actions pinned to commit SHAs; Dependabot keeps them current.
 
 **Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), passing CI checks once `ci.yml` exists, no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
 
@@ -1046,7 +1053,7 @@ Real family data gets entered from Phase 4 onward, so the MVP ships (deploy + ba
 
 | Phase | Goal | Exit criteria |
 |---|---|---|
-| **1. Foundation** | Repo, compose, config, migrations, health, CI, `webui` embed + SPA handler | `make dev-api` runs (it starts compose itself); `/health` + `/ready` pass; CI green on a fresh clone (stub UI) |
+| **1. Foundation** | Repo, compose, config, migrations, health, CI, `webui` embed + SPA handler, draft-release and release workflows | `make dev-api` runs (it starts compose itself); `/health` + `/ready` pass; CI green on a fresh clone (stub UI) |
 | **2. Auth** | Invite-only email + password (Argon2id), invite and forgot-password emails, change password, sessions, rate limits, `admin create`, admin user endpoints, person linking (§5.1). Then Continue with Google as a separate PR | Invite → set password via Mailpit → sign in; forgot/reset works and revokes sessions; Google sign-in links an invited account and refuses an uninvited one; enumeration, replay, expiry and disabled-user tests pass; one-login-per-person enforced |
 | **3. People, tree & contacts API** | Admin-only persons/relationships writes, `/api/tree`, ancestors/descendants, cycle validation, contact methods with visibility filtering, `/api/directory` | Integration tests incl. cycle rejection and the role/visibility matrix (§13); seed script loads a sample family |
 | **4a. Frontend shell** | Login UI, onboarding + "My profile" (bio and contact visibility toggles; initials only, avatars arrive in Phase 5), person profile page, directory, upcoming-birthdays panel | Accept an invite via Mailpit, set a password, sign in and land on the home page; forgot-password works end to end; edit own bio and contact visibility; a member sees only visible contacts in profiles and the directory; works on desktop and phone |
