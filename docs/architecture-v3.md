@@ -750,7 +750,7 @@ func Handler() http.Handler {
 
 ### 6.4 `main.go` shape
 
-The binary has only the commands production needs; dev-only tasks live in the Makefile. `main.go` is a plain switch, and each command parses its own arguments with the stdlib `flag` package (in its own file under `cmd/` once it grows); `family-hub -h` prints the usage. `serve` (default): load config → pgxpool → optional migrate → build `App` → `http.Server` with `ReadHeaderTimeout`, `signal.NotifyContext` for SIGINT/SIGTERM → graceful `Shutdown(30s)`. `migrate up|down [N]` and `admin create` reuse the same config loader. If a migration fails halfway, golang-migrate marks the database dirty: fix the schema by hand, then clear the flag with `UPDATE schema_migrations SET dirty = false` (no `force` command needed). Sample data is `make seed`, which loads `internal/database/seed.sql` through the compose Postgres and refuses to run unless the database is empty (a check at the top of the file). The seeded test user stores a precomputed Argon2id hash of a known dev password.
+The binary has only the commands production needs; dev-only tasks live in the Makefile. `main.go` is a plain switch, and each command parses its own arguments with the stdlib `flag` package (in its own file under `cmd/` once it grows); `family-hub -h` prints the usage. `serve` (default): load config → pgxpool → optional migrate → build `App` → `http.Server` with `ReadHeaderTimeout`, `signal.NotifyContext` for SIGINT/SIGTERM → graceful `Shutdown(30s)`. `migrate up|down [N]` and `admin create` reuse the same config loader. If migration N fails halfway, golang-migrate records `version = N, dirty = true`. Either undo its partial changes and set `version = N-1, dirty = false` (the next `migrate up` retries N), or finish N by hand and set only `dirty = false`. Clearing `dirty` alone after a rollback would skip N for good. No `force` command needed. Sample data is `make seed`, which loads `internal/database/seed.sql` through the compose Postgres and refuses to run unless the database is empty (a check at the top of the file). The seeded test user stores a precomputed Argon2id hash of a known dev password.
 
 ### 6.5 Configuration (env vars)
 
@@ -796,6 +796,8 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 
 ### 8.1 Makefile (essentials)
 
+The end state after Phase 1. Each target lands in the PR that needs it, so the real Makefile grows toward this one.
+
 ```make
 DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 export DATABASE_URL
@@ -815,7 +817,7 @@ generate:      ; go tool sqlc generate && mockery
 migrate-new:   ; go tool migrate create -ext sql -dir internal/database/migrations -seq $(name)
 migrate-up:    ; go run ./cmd migrate up
 migrate-down:  ; go run ./cmd migrate down 1
-seed:          ; docker compose exec -T postgres psql -U app -d familyhub -v ON_ERROR_STOP=1 < internal/database/seed.sql
+seed: up migrate-up ; docker compose exec -T postgres psql -U app -d familyhub -v ON_ERROR_STOP=1 < internal/database/seed.sql
 
 dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 dev-ui:        ; cd web && npm run dev
@@ -1026,7 +1028,7 @@ For a "multi-decade" archive, this section matters more than any other.
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |
 
-**Releases** are cut by the owner in the GitHub UI. **`draft-release.yml`** runs on every push to `main` (each squash-merge) and keeps exactly one draft Release. With no draft, it creates one (`gh release create --draft --generate-notes`) suggesting the next patch version as the tag (`v0.1.0` when there are no tags). With a draft, it updates it in place: new target commit and regenerated notes since the last published `v*` tag, but the draft's tag name is kept, so a tag the owner changed survives. It never deletes the draft, so a draft open in the UI can still be published. A `concurrency` group stops back-to-back merges from creating two drafts. The owner changes the tag for a minor or major bump, edits the notes just before publishing (a later merge regenerates them), and clicks Publish, which creates the tag. **`release.yml`** runs on `release: published`: it checks out the tag with full history, fails unless the tagged commit is on `main` (`git merge-base --is-ancestor`), then builds the image and pushes it to GitHub Container Registry tagged with the release tag. The image tag is the version; the binary doesn't embed one. A tag ruleset on `v*` blocks updating or deleting release tags. Deploying is a separate, deliberate step (the VPS pulls the tagged image).
+**Releases** are cut by the owner in the GitHub UI. **`draft-release.yml`** runs on every push to `main` (each squash-merge) and keeps exactly one draft Release. With no draft, it creates one (`gh release create --draft --generate-notes`) suggesting the next patch version as the tag (`v0.1.0` when there are no tags). With a draft, it updates it in place: new target commit and regenerated notes since the last published `v*` tag (`gh release edit` can't generate notes, so it calls the `releases/generate-notes` API and passes the result to `gh release edit --notes` **(verify)**), but the draft's tag name is kept, so a tag the owner changed survives. It never deletes the draft, so a draft open in the UI can still be published. A `concurrency` group stops back-to-back merges from creating two drafts. The owner changes the tag for a minor or major bump, edits the notes just before publishing (a later merge regenerates them), and clicks Publish, which creates the tag. **`release.yml`** runs on `release: published` and skips prereleases (`github.event.release.prerelease`), so a `-rc` tag never produces a deployable image: it checks out the tag with full history, fails unless the tagged commit is on `main` (`git merge-base --is-ancestor`), then builds the image and pushes it to GitHub Container Registry tagged with the release tag. The image tag is the version; the binary doesn't embed one. A tag ruleset on `v*` blocks updating or deleting release tags. Deploying is a separate, deliberate step (the VPS pulls the tagged image).
 
 **Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; `draft-release.yml` gets `contents: write`, the release job gets `contents: read` and `packages: write` (listing any permission sets the rest to none)); third-party actions pinned to commit SHAs; Dependabot keeps them current.
 
