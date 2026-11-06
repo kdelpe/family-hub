@@ -5,10 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"strconv"
 	"strings"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Config grows phase by phase; architecture §6.5 lists every planned variable.
@@ -21,17 +20,15 @@ type Config struct {
 // Load reads settings through getenv (os.Getenv outside tests) and reports every problem at once.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
-		DatabaseURL: getenv("DATABASE_URL"),
-		HTTPAddr:    getenv("HTTP_ADDR"),
+		DatabaseURL: strings.TrimSpace(getenv("DATABASE_URL")),
+		HTTPAddr:    strings.TrimSpace(getenv("HTTP_ADDR")),
 	}
 	var errs []error
 
-	// pgx decides validity so we accept exactly what the driver does. Its error is dropped:
-	// it masks passwords in URLs but echoes input it can't parse at all.
 	if cfg.DatabaseURL == "" {
 		errs = append(errs, errors.New("DATABASE_URL is required"))
-	} else if _, err := pgxpool.ParseConfig(cfg.DatabaseURL); err != nil {
-		errs = append(errs, errors.New("DATABASE_URL is not a valid Postgres connection string (percent-encode special characters in the password)"))
+	} else if !isPostgresURL(cfg.DatabaseURL) {
+		errs = append(errs, errors.New("DATABASE_URL must be a postgres:// URL with a host or ?host= socket path"))
 	}
 
 	if cfg.HTTPAddr == "" {
@@ -52,6 +49,16 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("invalid config: %w", errors.Join(errs...))
 	}
 	return cfg, nil
+}
+
+// URL form only: golang-migrate can't take keyword/value strings. url.Parse errors are
+// never returned because they quote the raw URL, password included.
+func isPostgresURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
+		return false
+	}
+	return u.Host != "" || u.Query().Get("host") != ""
 }
 
 func validListenAddr(addr string) bool {

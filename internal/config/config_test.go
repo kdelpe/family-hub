@@ -37,9 +37,9 @@ func TestLoad(t *testing.T) {
 			want: Config{DatabaseURL: "postgres:///familyhub?host=/var/run/postgresql", HTTPAddr: ":8080"},
 		},
 		{
-			name: "keyword/value form",
-			env:  map[string]string{"DATABASE_URL": "host=db user=app dbname=familyhub"},
-			want: Config{DatabaseURL: "host=db user=app dbname=familyhub", HTTPAddr: ":8080"},
+			name: "values are trimmed",
+			env:  map[string]string{"DATABASE_URL": " " + validDatabaseURL + "\r", "HTTP_ADDR": " :9000 "},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":9000"},
 		},
 		{
 			name: "AUTO_MIGRATE with surrounding spaces",
@@ -59,12 +59,17 @@ func TestLoad(t *testing.T) {
 		{
 			name:        "DATABASE_URL wrong scheme",
 			env:         map[string]string{"DATABASE_URL": "mysql://app:secret@localhost/familyhub"},
-			wantErrMsgs: []string{"DATABASE_URL is not a valid Postgres connection string"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
 		},
 		{
-			name:        "DATABASE_URL invalid port",
-			env:         map[string]string{"DATABASE_URL": "postgres://app:secret@localhost:99999/familyhub"},
-			wantErrMsgs: []string{"DATABASE_URL is not a valid Postgres connection string"},
+			name:        "DATABASE_URL without host",
+			env:         map[string]string{"DATABASE_URL": "postgres:///familyhub"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
+		},
+		{
+			name:        "DATABASE_URL keyword/value form",
+			env:         map[string]string{"DATABASE_URL": "host=db user=app dbname=familyhub"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
 		},
 		{
 			name:        "HTTP_ADDR without port",
@@ -132,7 +137,7 @@ func TestLoadNeverEchoesDatabaseURL(t *testing.T) {
 		databaseURL string
 	}{
 		{name: "wrong scheme", databaseURL: "mysql://app:hunter2@localhost/familyhub"},
-		{name: "invalid port", databaseURL: "postgres://app:hunter2@localhost:99999/familyhub"},
+		{name: "keyword/value form", databaseURL: "host=db user=app password=hunter2"},
 		{name: "unparseable URL", databaseURL: "postgres://app:hunter2@local host/familyhub"},
 		{name: "not a connection string at all", databaseURL: "hunter2"},
 	}
