@@ -802,7 +802,7 @@ The end state after Phase 1. Each target lands in the PR that needs it, so the r
 DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 export DATABASE_URL
 
-.PHONY: up down run dev-api dev-ui ui-stub generate test vet lint vuln build migrate-up migrate-down migrate-new seed
+.PHONY: up down run dev-api dev-ui ui-stub generate test lint vuln build migrate-up migrate-down migrate-new seed
 
 up:            ; docker compose up -d
 down:          ; docker compose down
@@ -823,8 +823,7 @@ dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 dev-ui:        ; cd web && npm run dev
 run:           ; go run ./cmd $(ARGS)
 
-test: ui-stub ; go test ./...
-vet:  ui-stub ; go vet ./...
+test: ui-stub ; go test -race ./...
 lint: ui-stub ; golangci-lint run && cd web && npm run lint && npm run typecheck
 vuln:          ; go tool govulncheck ./...
 
@@ -1019,11 +1018,11 @@ For a "multi-decade" archive, this section matters more than any other.
 
 **Branches (trunk-based):** `main` plus short-lived work branches named `<type>/kdelpe/<descriptive-name>` (types `feature`, `fix`, `docs`, `chore`; e.g. `feature/kdelpe/password-login-and-reset`). Every change reaches `main` through a PR that is **squash-merged**, so `main` has one commit per PR. Releases are tags on `main`.
 
-**`ci.yml`** runs on PRs into `main` and on pushes to `main`:
+**`ci.yml`** runs on PRs into `main` and on pushes to `main`. Each job lands once there's something for it to check (Postgres with the first DB test, `generated` with sqlc, `web` with the frontend, `docker` with the Dockerfile):
 
 | Job | Checks |
 |---|---|
-| go | `go vet`, `golangci-lint`, `govulncheck`, `go test` with a `postgres:18` service |
+| go | `go mod tidy -diff`, golangci-lint (its `standard` linters include `go vet`, plus the gofmt formatter; `.golangci.yml`), `govulncheck`, `go test -race` (via `make test`) with a `postgres:18` service, `make build` |
 | generated | Re-runs `sqlc generate` and `mockery`; fails if the committed output differs |
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |
@@ -1032,7 +1031,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 **Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; `draft-release.yml` gets `contents: write`, the release job gets `contents: read` and `packages: write` (listing any permission sets the rest to none)); third-party actions pinned to commit SHAs; Dependabot keeps them current.
 
-**Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), passing CI checks once `ci.yml` exists, no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
+**Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), the `go` CI check must pass on a branch that is up to date with `main` (add each new CI job here as it lands), no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
 
 ## 14. Deployment (Phase 4c options)
 
