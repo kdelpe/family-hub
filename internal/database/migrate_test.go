@@ -51,8 +51,8 @@ func TestMigrateDown(t *testing.T) {
 	}{
 		{name: "one step", steps: 1, wantVersion: 1, wantWidgets: true},
 		{name: "every step", steps: 2, wantVersion: 0},
-		{name: "zero steps", steps: 0, wantErrMsg: "steps must be at least 1", wantVersion: 2, wantWidgets: true, wantNameField: true},
-		{name: "more steps than applied", steps: 3, wantErrMsg: "migrate down:", wantVersion: 0},
+		{name: "zero steps", steps: 0, wantErrMsg: "steps must be a positive integer, got 0", wantVersion: 2, wantWidgets: true, wantNameField: true},
+		{name: "more steps than applied changes nothing", steps: 3, wantErrMsg: "only 2 applied, refusing to roll back 3", wantVersion: 2, wantWidgets: true, wantNameField: true},
 	}
 
 	for _, tt := range tests {
@@ -84,10 +84,66 @@ func TestMigrateDownWithNothingApplied(t *testing.T) {
 	assert.Equal(t, "migrate down: no migrations applied", err.Error())
 }
 
+func TestMigrateRefusesUnsafeDatabase(t *testing.T) {
+	tests := []struct {
+		name       string
+		setup      string
+		migrate    func(url string) error
+		wantErrMsg string
+	}{
+		{
+			name:       "up on a dirty database",
+			setup:      "UPDATE schema_migrations SET dirty = true",
+			migrate:    func(url string) error { return migrateUp(testMigrations, url) },
+			wantErrMsg: "migrate up: database is dirty at version 2",
+		},
+		{
+			name:       "down on a dirty database",
+			setup:      "UPDATE schema_migrations SET dirty = true",
+			migrate:    func(url string) error { return migrateDown(testMigrations, url, 1) },
+			wantErrMsg: "migrate down: database is dirty at version 2",
+		},
+		{
+			name:       "up at a version this binary doesn't have",
+			setup:      "UPDATE schema_migrations SET version = 99",
+			migrate:    func(url string) error { return migrateUp(testMigrations, url) },
+			wantErrMsg: "migrate up: database is at version 99, which this binary doesn't have",
+		},
+		{
+			name:       "down at a version this binary doesn't have",
+			setup:      "UPDATE schema_migrations SET version = 99",
+			migrate:    func(url string) error { return migrateDown(testMigrations, url, 1) },
+			wantErrMsg: "migrate down: database is at version 99, which this binary doesn't have",
+		},
+		{
+			name:       "embedded up at a version this binary doesn't have",
+			setup:      "UPDATE schema_migrations SET version = 99",
+			migrate:    MigrateUp,
+			wantErrMsg: "migrate up: database is at version 99, which this binary doesn't have",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := newTestSchema(t)
+			require.NoError(t, migrateUp(testMigrations, db.url))
+			db.exec(t, tt.setup)
+
+			err := tt.migrate(db.url)
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErrMsg)
+			assert.True(t, db.columnExists(t, "widgets", "name"), "schema must be untouched")
+		})
+	}
+}
+
 func TestMigrateUpEmbedded(t *testing.T) {
 	db := newTestSchema(t)
 
 	require.NoError(t, MigrateUp(db.url))
+
+	assert.Equal(t, 0, db.version(t))
 }
 
 func TestToPgx5Scheme(t *testing.T) {
@@ -144,6 +200,12 @@ func newTestSchema(t *testing.T) testSchema {
 	u.RawQuery = q.Encode()
 
 	return testSchema{url: u.String(), conn: conn, name: name}
+}
+
+func (s testSchema) exec(t *testing.T, sql string) {
+	t.Helper()
+	_, err := s.conn.Exec(context.Background(), "SET search_path TO "+pgx.Identifier{s.name}.Sanitize()+"; "+sql)
+	require.NoError(t, err)
 }
 
 func (s testSchema) version(t *testing.T) int {
