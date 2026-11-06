@@ -40,7 +40,7 @@ A private, invite-only, multi-generational family archive: interactive family tr
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Language | Go (≥1.25 is plenty; confirm the 1.27 toolchain with `go version`) | Nothing here needs 1.27 specifically. `go tool` directives need ≥1.24. |
+| Language | Go 1.27 (`go 1.27` in `go.mod`) | 1.25 is the floor for `CrossOriginProtection` and `synctest`; `go tool` directives need ≥1.24. |
 | HTTP | chi v5 | stdlib `net/http` compatible |
 | DB access | pgx v5 pool + **sqlc** | Typed queries from `.sql` files; no runtime reflection |
 | Migrations | golang-migrate, embedded, pgx v5 driver | Auto-run gated by `AUTO_MIGRATE` |
@@ -96,7 +96,7 @@ family-hub/
 ├── docs/
 │   └── architecture-v3.md        # the design; kept current as decisions change
 ├── CLAUDE.md                     # working rules (branches, commits, approach)
-├── README.md  .editorconfig  .gitignore  .env.example
+├── README.md  .gitignore  .env.example
 ├── compose.yaml                  # postgres, mailpit, storage
 └── Dockerfile  .dockerignore  Makefile  sqlc.yaml  .mockery.yml  .golangci.yml  go.mod
 ```
@@ -852,8 +852,8 @@ volumes: { pgdata: {} }
 ### 8.3 Dockerfile (shape)
 
 ```dockerfile
-# Set to whatever toolchain go.mod requires (>=1.24 for `go tool`).
-ARG GO_VERSION=1.25
+# Keep in step with the `go` line in go.mod.
+ARG GO_VERSION=1.27
 
 FROM node:22-alpine AS web
 WORKDIR /src/web
