@@ -836,7 +836,7 @@ build:
 
 ### 8.2 `compose.yaml` (shape)
 
-Local development only. Ports bind to `127.0.0.1`. Images are pinned exactly; Dependabot groups their updates into one weekly PR and skips Postgres major versions (those need a dump and restore). `make up` creates `familyhub_test` if it's missing, so it works on an existing volume too. GoLand's database tool connects to `localhost:5432`, user and password `app`, database `familyhub`.
+Local development only. Ports bind to `127.0.0.1`. Images are pinned exactly; Dependabot groups their updates into one weekly PR and skips Postgres major versions (those need a dump and restore). `make up` creates `familyhub_test` if it's missing, so it works on an existing volume too.
 
 ```yaml
 services:
