@@ -37,13 +37,11 @@ func Load(getenv func(string) string) (Config, error) {
 		errs = append(errs, fmt.Errorf("HTTP_ADDR must be host:port or :port with a port from 1 to 65535, got %q", cfg.HTTPAddr))
 	}
 
-	switch v := strings.TrimSpace(getenv("AUTO_MIGRATE")); v {
-	case "", "false":
-	case "true":
-		cfg.AutoMigrate = true
-	default:
-		errs = append(errs, fmt.Errorf("AUTO_MIGRATE must be true or false, got %q", v))
+	autoMigrate, err := parseBool("AUTO_MIGRATE", getenv("AUTO_MIGRATE"))
+	if err != nil {
+		errs = append(errs, err)
 	}
+	cfg.AutoMigrate = autoMigrate
 
 	if len(errs) > 0 {
 		return Config{}, fmt.Errorf("invalid config: %w", errors.Join(errs...))
@@ -51,14 +49,17 @@ func Load(getenv func(string) string) (Config, error) {
 	return cfg, nil
 }
 
-// URL form only: golang-migrate can't take keyword/value strings. url.Parse errors are
-// never returned because they quote the raw URL, password included.
+// URL form only, one format for the pool and migrations. The prefix check is case-sensitive
+// like pgx's. url.Parse errors are never returned: they quote the raw URL, password included.
 func isPostgresURL(raw string) bool {
-	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
+	if !strings.HasPrefix(raw, "postgres://") && !strings.HasPrefix(raw, "postgresql://") {
 		return false
 	}
-	return u.Host != "" || u.Query().Get("host") != ""
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	return u.Hostname() != "" || u.Query().Get("host") != ""
 }
 
 func validListenAddr(addr string) bool {
@@ -66,6 +67,19 @@ func validListenAddr(addr string) bool {
 	if err != nil {
 		return false
 	}
+	// Round-trip so "+8080" and "08080" fail here rather than at net.Listen.
 	n, err := strconv.Atoi(port)
-	return err == nil && n >= 1 && n <= 65535
+	return err == nil && strconv.Itoa(n) == port && n >= 1 && n <= 65535
+}
+
+// parseBool takes true or false in any case; unset means false.
+func parseBool(name, raw string) (bool, error) {
+	switch v := strings.ToLower(strings.TrimSpace(raw)); v {
+	case "", "false":
+		return false, nil
+	case "true":
+		return true, nil
+	default:
+		return false, fmt.Errorf("%s must be true or false, got %q", name, raw)
+	}
 }

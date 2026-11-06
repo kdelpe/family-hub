@@ -47,6 +47,11 @@ func TestLoad(t *testing.T) {
 			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", AutoMigrate: true},
 		},
 		{
+			name: "AUTO_MIGRATE any case",
+			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "AUTO_MIGRATE": "True"},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", AutoMigrate: true},
+		},
+		{
 			name: "AUTO_MIGRATE false",
 			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "AUTO_MIGRATE": "false"},
 			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080"},
@@ -64,6 +69,16 @@ func TestLoad(t *testing.T) {
 		{
 			name:        "DATABASE_URL without host",
 			env:         map[string]string{"DATABASE_URL": "postgres:///familyhub"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
+		},
+		{
+			name:        "DATABASE_URL uppercase scheme",
+			env:         map[string]string{"DATABASE_URL": "POSTGRES://app:secret@localhost/familyhub"},
+			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
+		},
+		{
+			name:        "DATABASE_URL port without hostname",
+			env:         map[string]string{"DATABASE_URL": "postgres://app:secret@:5432/familyhub"},
 			wantErrMsgs: []string{"DATABASE_URL must be a postgres:// URL"},
 		},
 		{
@@ -89,6 +104,16 @@ func TestLoad(t *testing.T) {
 		{
 			name:        "HTTP_ADDR port not a number",
 			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "HTTP_ADDR": ":http"},
+			wantErrMsgs: []string{"HTTP_ADDR must be"},
+		},
+		{
+			name:        "HTTP_ADDR port with sign",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "HTTP_ADDR": ":+8080"},
+			wantErrMsgs: []string{"HTTP_ADDR must be"},
+		},
+		{
+			name:        "HTTP_ADDR port with leading zero",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "HTTP_ADDR": ":08080"},
 			wantErrMsgs: []string{"HTTP_ADDR must be"},
 		},
 		{
