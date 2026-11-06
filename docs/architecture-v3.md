@@ -381,7 +381,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET/POST | `/api/persons/{id}/contacts` | admin | List all / add on behalf of someone (e.g. a relative without a login) |
 | PATCH/DELETE | `/api/persons/{id}/contacts/{cid}` | admin | Edit / remove any contact method |
 | GET | `/api/directory` | session | `?q=` people with at least one `family`-visible contact method, with only those methods |
-| POST | `/api/relationships` | admin | `{type:"parent_child", parent_id, child_id, subtype}` or `{type:"couple", person_ids, subtype, ended}`. Validates direction, duplicates, ancestry cycles, at most two biological parents |
+| POST | `/api/relationships` | admin | `{type:"parent_child", parent_id, child_id, subtype}` or `{type:"couple", person_ids:[id1,id2], subtype, ended}`. `person_ids` must hold **exactly two distinct** existing, non-deleted people, in any order (the service sorts them); anything else is a `400 validation_error`. Validates direction, duplicates, ancestry cycles, at most two biological parents |
 | PATCH | `/api/relationships/{id}` | admin | Subtype, `ended`, notes |
 | DELETE | `/api/relationships/{id}` | admin | Hard delete |
 | GET | `/api/events` | session | Chronological feed |
