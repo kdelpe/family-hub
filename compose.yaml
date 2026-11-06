@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:18.6
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: familyhub
+    ports: ["127.0.0.1:5432:5432"]
+    # Postgres 18 images keep data under /var/lib/postgresql/18/docker, so mount the parent.
+    volumes: [pgdata:/var/lib/postgresql]
+    healthcheck:
+      # Over TCP: the socket also answers during first-run setup, before the real server starts.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      start_period: 30s
+      interval: 2s
+      retries: 15
+
+  mailpit:
+    image: axllent/mailpit:v1.33.0
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+
+volumes:
+  pgdata: {}

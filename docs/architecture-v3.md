@@ -800,11 +800,13 @@ The end state after Phase 1. Each target lands in the PR that needs it, so the r
 
 ```make
 DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
-export DATABASE_URL
+# Integration tests use only this, so they never truncate the dev database.
+TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
+export DATABASE_URL TEST_DATABASE_URL
 
 .PHONY: up down run dev-api dev-ui ui-stub generate test lint vuln build migrate-up migrate-down migrate-new seed
 
-up:            ; docker compose up -d
+up:            ; docker compose up -d --wait, then create familyhub_test if missing (see Makefile)
 down:          ; docker compose down
 
 # Creates a placeholder so `go build/vet/test` work before the UI has been built.
@@ -817,7 +819,7 @@ generate:      ; go tool sqlc generate && mockery
 migrate-new:   ; go tool migrate create -ext sql -dir internal/database/migrations -seq $(name)
 migrate-up:    ; go run ./cmd migrate up
 migrate-down:  ; go run ./cmd migrate down 1
-seed: up migrate-up ; docker compose exec -T postgres psql -U app -d familyhub -v ON_ERROR_STOP=1 < internal/database/seed.sql
+seed: up migrate-up ; docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < internal/database/seed.sql
 
 dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 dev-ui:        ; cd web && npm run dev
@@ -836,20 +838,20 @@ build:
 
 ### 8.2 `compose.yaml` (shape)
 
+Local development only. Ports bind to `127.0.0.1`. Images are pinned to exact version tags; Dependabot groups their updates into one weekly PR and skips Postgres major versions (those need a dump and restore). `make up` creates `familyhub_test` if it's missing, so it works on an existing volume too. CI won't run `make up`: when the first DB test lands, the `go` job gets a Postgres service container that sets `POSTGRES_DB: familyhub_test` directly.
+
 ```yaml
 services:
   postgres:
-    image: postgres:18
+    image: postgres:18.6
     environment: { POSTGRES_USER: app, POSTGRES_PASSWORD: app, POSTGRES_DB: familyhub }
-    ports: ["5432:5432"]
-    volumes: [pgdata:/var/lib/postgresql]   # Postgres 18 images moved the data dir under here (verify)
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app -d familyhub"]
-      interval: 5s
-      retries: 10
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql]   # Postgres 18 images keep data under /var/lib/postgresql/18/docker
+    healthcheck:                            # over TCP, so first-run setup doesn't count as ready
+      { test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""], start_period: 30s, interval: 2s, retries: 15 }
   mailpit:                       # catches outgoing mail; UI on :8025
-    image: axllent/mailpit
-    ports: ["1025:1025", "8025:8025"]
+    image: axllent/mailpit:v1.33.0
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
   storage:                       # added in Phase 5: S3-compatible server chosen then (see §9.5)
     # image: ...
 volumes: { pgdata: {} }
@@ -1012,7 +1014,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 ## 13. Testing & CI
 
-- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection (including a chain deeper than any display bound, and a loop closed through a foster link), ancestors/descendants exclude foster links, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected (via POST and via PATCH changing a subtype), missing `subtype` defaults or returns 400, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, blank or whitespace-only names are rejected (a blank surname input is stored as NULL), derived relations (full/half/unspecified siblings, including one sibling's second parent not yet recorded and people with more than two family parents, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), emailed tokens single-use and expiring (invite 7 days, reset 30 min), reset revokes all sessions, login returns the same 401 for unknown email / wrong password / Google-only / disabled user, every login failure path runs one Argon2 verify (unknown, Google-only and disabled users alike), any credential change invalidates all outstanding tokens, disabled users are refused on every path including Google by `sub`, admin email change clears `google_sub` and the password and revokes sessions, a new reset request leaves earlier reset links valid, token consumption is all-or-nothing (a failure mid-way leaves the token unconsumed and the old password intact), concurrent credential changes for one user serialize on the row lock, emails are matched case-insensitively (incl. Google's), per-account failure limits and the 50/hour backstop never block Google or reset, `password/change` is rate-limited, the hash semaphore caps concurrent Argon2 work, Argon2id rehash when parameters change, password length and common-password rules, Google sign-in: repeat sign-in with the user's existing `sub` succeeds; an email auto-link attempt with a **different** `sub` for a user already linked is rejected, as are unverified emails, uninvited emails and state/nonce mismatches, and auto-links only Gmail or matching-`hd` Workspace addresses (a verified non-Gmail address without `hd` is refused; that user signs in with their password), and links `google_sub` on first use, a login whose verified hash changed before the session commit is refused (no stale session, no rehash over a new password), Google sign-in by `sub` is refused if the email was changed or the user disabled mid-flow (and a flow started before an email change can't re-link by email), the auth cleanup job deletes expired/consumed flows, tokens and sessions, a forged, expired or reused flow handle is refused, change password always requires the current password and is limited per user, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
+- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose via `TEST_DATABASE_URL`, never `DATABASE_URL`, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection (including a chain deeper than any display bound, and a loop closed through a foster link), ancestors/descendants exclude foster links, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected (via POST and via PATCH changing a subtype), missing `subtype` defaults or returns 400, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, blank or whitespace-only names are rejected (a blank surname input is stored as NULL), derived relations (full/half/unspecified siblings, including one sibling's second parent not yet recorded and people with more than two family parents, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), emailed tokens single-use and expiring (invite 7 days, reset 30 min), reset revokes all sessions, login returns the same 401 for unknown email / wrong password / Google-only / disabled user, every login failure path runs one Argon2 verify (unknown, Google-only and disabled users alike), any credential change invalidates all outstanding tokens, disabled users are refused on every path including Google by `sub`, admin email change clears `google_sub` and the password and revokes sessions, a new reset request leaves earlier reset links valid, token consumption is all-or-nothing (a failure mid-way leaves the token unconsumed and the old password intact), concurrent credential changes for one user serialize on the row lock, emails are matched case-insensitively (incl. Google's), per-account failure limits and the 50/hour backstop never block Google or reset, `password/change` is rate-limited, the hash semaphore caps concurrent Argon2 work, Argon2id rehash when parameters change, password length and common-password rules, Google sign-in: repeat sign-in with the user's existing `sub` succeeds; an email auto-link attempt with a **different** `sub` for a user already linked is rejected, as are unverified emails, uninvited emails and state/nonce mismatches, and auto-links only Gmail or matching-`hd` Workspace addresses (a verified non-Gmail address without `hd` is refused; that user signs in with their password), and links `google_sub` on first use, a login whose verified hash changed before the session commit is refused (no stale session, no rehash over a new password), Google sign-in by `sub` is refused if the email was changed or the user disabled mid-flow (and a flow started before an email change can't re-link by email), the auth cleanup job deletes expired/consumed flows, tokens and sessions, a forged, expired or reused flow handle is refused, change password always requires the current password and is limited per user, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
 - **Web:** Vitest + Testing Library for components; one Playwright smoke test (seed a user with a known password → sign in → add person → see tree) once Phase 4b lands.
 ### 13.1 Branches, CI and releases
 
