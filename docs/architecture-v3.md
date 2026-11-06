@@ -802,7 +802,7 @@ The end state after Phase 1. Each target lands in the PR that needs it, so the r
 DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 export DATABASE_URL
 
-.PHONY: up down run dev-api dev-ui ui-stub generate test vet lint vuln build migrate-up migrate-down migrate-new seed
+.PHONY: up down run dev-api dev-ui ui-stub generate test lint vuln build migrate-up migrate-down migrate-new seed
 
 up:            ; docker compose up -d
 down:          ; docker compose down
@@ -823,8 +823,7 @@ dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 dev-ui:        ; cd web && npm run dev
 run:           ; go run ./cmd $(ARGS)
 
-test: ui-stub ; go test ./...
-vet:  ui-stub ; go vet ./...
+test: ui-stub ; go test -race ./...
 lint: ui-stub ; golangci-lint run && cd web && npm run lint && npm run typecheck
 vuln:          ; go tool govulncheck ./...
 
@@ -1023,7 +1022,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 | Job | Checks |
 |---|---|
-| go | `go mod tidy -diff`, golangci-lint (its `standard` linters include `go vet`, plus the gofmt formatter; `.golangci.yml`), `govulncheck`, `go test` with a `postgres:18` service, `make build` |
+| go | `go mod tidy -diff`, golangci-lint (its `standard` linters include `go vet`, plus the gofmt formatter; `.golangci.yml`), `govulncheck`, `go test -race` (via `make test`) with a `postgres:18` service, `make build` |
 | generated | Re-runs `sqlc generate` and `mockery`; fails if the committed output differs |
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |

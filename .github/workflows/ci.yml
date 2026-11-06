@@ -11,7 +11,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded PR runs only; every commit on main keeps its CI result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   go:
@@ -31,13 +32,14 @@ jobs:
       - name: Lint (includes go vet and gofmt)
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
+          # Keep in sync with GOLANGCI_LINT_VERSION in the Makefile.
           version: v2.15.0
 
       - name: Vulnerability check
-        run: go tool govulncheck ./...
+        run: make vuln
 
       - name: Test
-        run: go test ./...
+        run: make test
 
       - name: Build
         run: make build
