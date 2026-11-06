@@ -59,6 +59,7 @@ family-hub/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml                # checks on PRs into main and pushes to main (§13.1)
+│   │   ├── draft-release.yml     # keeps one draft Release with generated notes, updated on each push to main (§13.1)
 │   │   └── release.yml           # builds the image when a Release is published from main (§13.1)
 │   ├── pull_request_template.md
 │   ├── CODEOWNERS
@@ -1023,9 +1024,9 @@ For a "multi-decade" archive, this section matters more than any other.
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |
 
-**Releases** are cut by the owner in the GitHub UI: create a Release with a new tag such as `v1.2.0`, target `main`, and use "Generate release notes". **`release.yml`** runs on `release: published`: it checks out the tag with full history, fails unless the tagged commit is on `main` (`git merge-base --is-ancestor`), then builds the image and pushes it to GitHub Container Registry tagged with the release tag. The image tag is the version; the binary doesn't embed one. A tag ruleset on `v*` blocks updating or deleting release tags. Deploying is a separate, deliberate step (the VPS pulls the tagged image).
+**Releases** are cut by the owner in the GitHub UI. **`draft-release.yml`** runs on every push to `main` (each squash-merge) and keeps exactly one draft Release: it deletes the previous draft and recreates it with `gh release create --draft --generate-notes`, targeted at the new `main` commit (a `concurrency` group stops back-to-back merges from creating two drafts), with notes since the last published `v*` tag and the next patch version suggested as the tag (`v0.1.0` when there are no tags). The owner edits the tag if it's a minor or major bump and clicks Publish, which creates the tag. **`release.yml`** runs on `release: published`: it checks out the tag with full history, fails unless the tagged commit is on `main` (`git merge-base --is-ancestor`), then builds the image and pushes it to GitHub Container Registry tagged with the release tag. The image tag is the version; the binary doesn't embed one. A tag ruleset on `v*` blocks updating or deleting release tags. Deploying is a separate, deliberate step (the VPS pulls the tagged image).
 
-**Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; the release job gets `packages: write`); third-party actions pinned to commit SHAs; Dependabot keeps them current.
+**Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; `draft-release.yml` gets `contents: write`, the release job gets `packages: write`); third-party actions pinned to commit SHAs; Dependabot keeps them current.
 
 **Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), passing CI checks once `ci.yml` exists, no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
 
@@ -1048,7 +1049,7 @@ Real family data gets entered from Phase 4 onward, so the MVP ships (deploy + ba
 
 | Phase | Goal | Exit criteria |
 |---|---|---|
-| **1. Foundation** | Repo, compose, config, migrations, health, CI, `webui` embed + SPA handler | `make dev-api` runs (it starts compose itself); `/health` + `/ready` pass; CI green on a fresh clone (stub UI) |
+| **1. Foundation** | Repo, compose, config, migrations, health, CI, `webui` embed + SPA handler, draft-release and release workflows | `make dev-api` runs (it starts compose itself); `/health` + `/ready` pass; CI green on a fresh clone (stub UI) |
 | **2. Auth** | Invite-only email + password (Argon2id), invite and forgot-password emails, change password, sessions, rate limits, `admin create`, admin user endpoints, person linking (§5.1). Then Continue with Google as a separate PR | Invite → set password via Mailpit → sign in; forgot/reset works and revokes sessions; Google sign-in links an invited account and refuses an uninvited one; enumeration, replay, expiry and disabled-user tests pass; one-login-per-person enforced |
 | **3. People, tree & contacts API** | Admin-only persons/relationships writes, `/api/tree`, ancestors/descendants, cycle validation, contact methods with visibility filtering, `/api/directory` | Integration tests incl. cycle rejection and the role/visibility matrix (§13); seed script loads a sample family |
 | **4a. Frontend shell** | Login UI, onboarding + "My profile" (bio and contact visibility toggles; initials only, avatars arrive in Phase 5), person profile page, directory, upcoming-birthdays panel | Accept an invite via Mailpit, set a password, sign in and land on the home page; forgot-password works end to end; edit own bio and contact visibility; a member sees only visible contacts in profiles and the directory; works on desktop and phone |
