@@ -1,5 +1,5 @@
 BIN     := bin/family-hub
-VERSION ?= dev
+VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null),dev)
 
 .PHONY: build run test vet
 
