@@ -40,6 +40,10 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # The UI isn't built in this job, and Go won't compile without something to embed.
+      - name: Placeholder UI
+        run: make ui-stub
+
       - name: go.mod and go.sum are tidy
         run: go mod tidy -diff
 
