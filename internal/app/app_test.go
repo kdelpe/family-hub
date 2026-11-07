@@ -15,13 +15,13 @@ import (
 	"github.com/kdelpe/family-hub/internal/testdb"
 )
 
-func TestRunServesUntilCanceled(t *testing.T) {
-	url := testdb.URL(t)
+func TestServerAnswersReadyUntilCanceled(t *testing.T) {
+	pool := testdb.Pool(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- run(ctx, config.Config{DatabaseURL: url}, ln) }()
+	go func() { done <- serve(ctx, newServer(pool), ln, time.Second) }()
 
 	resp := waitForServer(t, "http://"+ln.Addr().String()+"/ready", done)
 	defer func() { _ = resp.Body.Close() }()
@@ -127,7 +127,7 @@ func waitForServer(t *testing.T, url string, done <-chan error) *http.Response {
 		}
 		select {
 		case err := <-done:
-			t.Fatalf("Run returned before serving: %v", err)
+			t.Fatalf("serve returned before answering: %v", err)
 		case <-deadline:
 			t.Fatalf("server never answered: %v", err)
 		case <-time.After(50 * time.Millisecond):
