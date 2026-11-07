@@ -38,7 +38,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 	}
 	defer pool.Close()
 
-	ln, err := net.Listen("tcp", cfg.HTTPAddr)
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
