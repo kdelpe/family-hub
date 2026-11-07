@@ -122,22 +122,23 @@ func TestMigrateUpGivesUpOnAHeldLock(t *testing.T) {
 	assert.Less(t, time.Since(start), 2*time.Second)
 }
 
-func TestToMigrateURL(t *testing.T) {
+func TestWithTimeouts(t *testing.T) {
 	tests := []struct {
 		name       string
 		in         string
 		want       string
 		wantErrMsg string
 	}{
-		{name: "postgres", in: "postgres://app@db/familyhub", want: "pgx5://app@db/familyhub?connect_timeout=10&lock_timeout=300000"},
-		{name: "postgresql", in: "postgresql://app@db/familyhub?sslmode=disable", want: "pgx5://app@db/familyhub?connect_timeout=10&lock_timeout=300000&sslmode=disable"},
-		{name: "keeps explicit timeouts", in: "postgres://app@db/familyhub?connect_timeout=3&lock_timeout=1000", want: "pgx5://app@db/familyhub?connect_timeout=3&lock_timeout=1000"},
+		{name: "adds both", in: "postgres://app@db/familyhub", want: "postgres://app@db/familyhub?connect_timeout=10&lock_timeout=300000"},
+		{name: "appends to an existing query", in: "postgresql://app@db/familyhub?sslmode=disable", want: "postgresql://app@db/familyhub?sslmode=disable&connect_timeout=10&lock_timeout=300000"},
+		{name: "keeps explicit timeouts", in: "postgres://app@db/familyhub?connect_timeout=3&lock_timeout=1000", want: "postgres://app@db/familyhub?connect_timeout=3&lock_timeout=1000"},
+		{name: "keeps query encoding", in: "postgres://app@db/familyhub?password=two%20words", want: "postgres://app@db/familyhub?password=two%20words&connect_timeout=10&lock_timeout=300000"},
 		{name: "unparseable URL never quotes it", in: "postgres://app:hunter2@local host/familyhub", wantErrMsg: "DATABASE_URL is not a valid URL"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := toMigrateURL(tt.in)
+			got, err := withTimeouts(tt.in)
 
 			if tt.wantErrMsg != "" {
 				require.Error(t, err)
@@ -146,6 +147,38 @@ func TestToMigrateURL(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestMigrateUpWithASpaceInThePassword(t *testing.T) {
+	tests := []struct {
+		name  string
+		build func(u *url.URL, role string)
+	}{
+		{name: "in the user info", build: func(u *url.URL, role string) { u.User = url.UserPassword(role, "two words") }},
+		{name: "in the query", build: func(u *url.URL, role string) {
+			u.User = url.User(role)
+			u.RawQuery += "&password=two%20words"
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := newTestSchema(t)
+			role := db.name + "_role"
+			db.exec(t, "CREATE ROLE "+pgx.Identifier{role}.Sanitize()+" LOGIN PASSWORD 'two words'; "+
+				"GRANT USAGE, CREATE ON SCHEMA "+pgx.Identifier{db.name}.Sanitize()+" TO "+pgx.Identifier{role}.Sanitize())
+			t.Cleanup(func() {
+				db.exec(t, "DROP OWNED BY "+pgx.Identifier{role}.Sanitize()+"; DROP ROLE "+pgx.Identifier{role}.Sanitize())
+			})
+			u, err := url.Parse(db.url)
+			require.NoError(t, err)
+			tt.build(u, role)
+
+			require.NoError(t, migrateUp(testMigrations, u.String()))
+
+			assert.Equal(t, 2, db.version(t))
 		})
 	}
 }
@@ -180,9 +213,10 @@ func newTestSchema(t *testing.T) testSchema {
 
 	u, err := url.Parse(base)
 	require.NoError(t, err)
-	q := u.Query()
-	q.Set("search_path", name)
-	u.RawQuery = q.Encode()
+	if u.RawQuery != "" {
+		u.RawQuery += "&"
+	}
+	u.RawQuery += "search_path=" + name
 
 	return testSchema{url: u.String(), conn: conn, name: name}
 }

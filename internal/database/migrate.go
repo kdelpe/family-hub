@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5" // registers the pgx5:// scheme
+	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 const (
@@ -58,13 +60,28 @@ func newMigrate(fsys fs.FS, databaseURL string) (*migrate.Migrate, error) {
 		return nil, fmt.Errorf("migrations source: %w", err)
 	}
 
-	migrateURL, err := toMigrateURL(databaseURL)
+	connURL, err := withTimeouts(databaseURL)
 	if err != nil {
 		_ = src.Close()
 		return nil, err
 	}
-	m, err := migrate.NewWithSourceInstance("iofs", src, migrateURL)
+	// pgx's redaction of the password is best effort, so its error is dropped.
+	cfg, err := pgx.ParseConfig(connURL)
 	if err != nil {
+		_ = src.Close()
+		return nil, errors.New("DATABASE_URL is not a valid connection string")
+	}
+	// Opened here, not from a URL by the driver: it re-encodes the query, turning %20 into a + that pgx reads literally.
+	db := stdlib.OpenDB(*cfg)
+	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{})
+	if err != nil {
+		_ = db.Close()
+		_ = src.Close()
+		return nil, fmt.Errorf("init: %w", err)
+	}
+	m, err := migrate.NewWithInstance("iofs", src, "pgx5", driver)
+	if err != nil {
+		_ = driver.Close()
 		_ = src.Close()
 		return nil, fmt.Errorf("init: %w", err)
 	}
@@ -85,20 +102,25 @@ func explain(err error) error {
 	return err
 }
 
-// url.Parse errors are dropped: they quote the password.
-func toMigrateURL(databaseURL string) (string, error) {
+// url.Parse errors are dropped: they quote the password. The timeouts are appended
+// rather than re-encoding the query, which would change how pgx reads it.
+func withTimeouts(databaseURL string) (string, error) {
 	u, err := url.Parse(databaseURL)
 	if err != nil {
 		return "", errors.New("DATABASE_URL is not a valid URL")
 	}
-	u.Scheme = "pgx5"
 	query := u.Query()
-	if query.Get("connect_timeout") == "" {
-		query.Set("connect_timeout", strconv.Itoa(int(connectTimeout.Seconds())))
+	for _, param := range []struct{ key, value string }{
+		{"connect_timeout", strconv.Itoa(int(connectTimeout.Seconds()))},
+		{"lock_timeout", strconv.FormatInt(lockWait.Milliseconds(), 10)},
+	} {
+		if query.Has(param.key) {
+			continue
+		}
+		if u.RawQuery != "" {
+			u.RawQuery += "&"
+		}
+		u.RawQuery += param.key + "=" + param.value
 	}
-	if query.Get("lock_timeout") == "" {
-		query.Set("lock_timeout", strconv.FormatInt(lockWait.Milliseconds(), 10))
-	}
-	u.RawQuery = query.Encode()
 	return u.String(), nil
 }
