@@ -33,6 +33,11 @@ func main() {
 	context.AfterFunc(ctx, stop)
 	err := run(ctx, os.Args[1:], os.Stdout)
 	stop()
+	// Stopped by a signal before the work finished: an ordinary stop, not a failure.
+	if ctx.Err() != nil && errors.Is(err, context.Canceled) {
+		fmt.Fprintln(os.Stderr, "family-hub: stopped:", err)
+		return
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "family-hub:", err)
 		os.Exit(1)
