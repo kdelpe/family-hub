@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -17,7 +18,8 @@ func NewPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, errInvalidConnString
 	}
-	if cfg.ConnConfig.ConnectTimeout == 0 {
+	// Checked on the URL, not the config: pgx reads an explicit connect_timeout=0 as unset.
+	if u, err := url.Parse(databaseURL); err == nil && !u.Query().Has("connect_timeout") {
 		cfg.ConnConfig.ConnectTimeout = connectTimeout
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
