@@ -47,13 +47,17 @@ func migrateUp(fsys fs.FS, databaseURL string) error {
 	return nil
 }
 
-func newMigrate(fsys fs.FS, databaseURL string) (*migrate.Migrate, error) {
+func newMigrate(fsys fs.FS, databaseURL string) (m *migrate.Migrate, err error) {
 	src, err := iofs.New(fsys, "migrations")
 	if err != nil {
 		return nil, fmt.Errorf("migrations source: %w", err)
 	}
+	defer func() {
+		if m == nil {
+			_ = src.Close()
+		}
+	}()
 	if _, err := src.First(); err != nil {
-		_ = src.Close()
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, nil
 		}
@@ -62,13 +66,11 @@ func newMigrate(fsys fs.FS, databaseURL string) (*migrate.Migrate, error) {
 
 	connURL, err := withTimeouts(databaseURL)
 	if err != nil {
-		_ = src.Close()
 		return nil, err
 	}
 	// pgx's redaction of the password is best effort, so its error is dropped.
 	cfg, err := pgx.ParseConfig(connURL)
 	if err != nil {
-		_ = src.Close()
 		return nil, errors.New("DATABASE_URL is not a valid connection string")
 	}
 	// Opened here, not from a URL by the driver: it re-encodes the query, turning %20 into a + that pgx reads literally.
@@ -76,13 +78,11 @@ func newMigrate(fsys fs.FS, databaseURL string) (*migrate.Migrate, error) {
 	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{})
 	if err != nil {
 		_ = db.Close()
-		_ = src.Close()
 		return nil, fmt.Errorf("init: %w", err)
 	}
-	m, err := migrate.NewWithInstance("iofs", src, "pgx5", driver)
+	m, err = migrate.NewWithInstance("iofs", src, "pgx5", driver)
 	if err != nil {
 		_ = driver.Close()
-		_ = src.Close()
 		return nil, fmt.Errorf("init: %w", err)
 	}
 	// Postgres's lock_timeout is the real bound; this only has to outlast it, even when the URL raises it.
@@ -102,8 +102,7 @@ func explain(err error) error {
 	return err
 }
 
-// url.Parse errors are dropped: they quote the password. The timeouts are appended
-// rather than re-encoding the query, which would change how pgx reads it.
+// url.Parse errors are dropped: they quote the password.
 func withTimeouts(databaseURL string) (string, error) {
 	u, err := url.Parse(databaseURL)
 	if err != nil {
@@ -114,13 +113,17 @@ func withTimeouts(databaseURL string) (string, error) {
 		{"connect_timeout", strconv.Itoa(int(connectTimeout.Seconds()))},
 		{"lock_timeout", strconv.FormatInt(lockWait.Milliseconds(), 10)},
 	} {
-		if query.Has(param.key) {
-			continue
+		if !query.Has(param.key) {
+			appendRawQuery(u, param.key, param.value)
 		}
-		if u.RawQuery != "" {
-			u.RawQuery += "&"
-		}
-		u.RawQuery += param.key + "=" + param.value
 	}
 	return u.String(), nil
+}
+
+// Re-encoding the whole query would change how pgx reads it, so value must already be query-safe.
+func appendRawQuery(u *url.URL, key, value string) {
+	if u.RawQuery != "" {
+		u.RawQuery += "&"
+	}
+	u.RawQuery += key + "=" + value
 }

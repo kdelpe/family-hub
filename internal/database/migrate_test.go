@@ -154,27 +154,26 @@ func TestWithTimeouts(t *testing.T) {
 func TestMigrateUpWithASpaceInThePassword(t *testing.T) {
 	tests := []struct {
 		name  string
-		build func(u *url.URL, role string)
+		build func(u *url.URL, role, password string)
 	}{
-		{name: "in the user info", build: func(u *url.URL, role string) { u.User = url.UserPassword(role, "two words") }},
-		{name: "in the query", build: func(u *url.URL, role string) {
+		{name: "in the user info", build: func(u *url.URL, role, password string) { u.User = url.UserPassword(role, password) }},
+		{name: "in the query", build: func(u *url.URL, role, password string) {
 			u.User = url.User(role)
-			u.RawQuery += "&password=two%20words"
+			appendRawQuery(u, "password", strings.ReplaceAll(password, " ", "%20"))
 		}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := newTestSchema(t)
-			role := db.name + "_role"
-			db.exec(t, "CREATE ROLE "+pgx.Identifier{role}.Sanitize()+" LOGIN PASSWORD 'two words'; "+
-				"GRANT USAGE, CREATE ON SCHEMA "+pgx.Identifier{db.name}.Sanitize()+" TO "+pgx.Identifier{role}.Sanitize())
-			t.Cleanup(func() {
-				db.exec(t, "DROP OWNED BY "+pgx.Identifier{role}.Sanitize()+"; DROP ROLE "+pgx.Identifier{role}.Sanitize())
-			})
+			role := pgx.Identifier{db.name + "_role"}.Sanitize()
+			password := "two words " + rand.Text()
+			db.exec(t, "CREATE ROLE "+role+" LOGIN PASSWORD '"+password+"'; "+
+				"GRANT USAGE, CREATE ON SCHEMA "+pgx.Identifier{db.name}.Sanitize()+" TO "+role)
+			t.Cleanup(func() { db.exec(t, "DROP OWNED BY "+role+"; DROP ROLE "+role) })
 			u, err := url.Parse(db.url)
 			require.NoError(t, err)
-			tt.build(u, role)
+			tt.build(u, db.name+"_role", password)
 
 			require.NoError(t, migrateUp(testMigrations, u.String()))
 
@@ -213,10 +212,7 @@ func newTestSchema(t *testing.T) testSchema {
 
 	u, err := url.Parse(base)
 	require.NoError(t, err)
-	if u.RawQuery != "" {
-		u.RawQuery += "&"
-	}
-	u.RawQuery += "search_path=" + name
+	appendRawQuery(u, "search_path", name)
 
 	return testSchema{url: u.String(), conn: conn, name: name}
 }
