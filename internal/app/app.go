@@ -63,6 +63,8 @@ func serve(ctx context.Context, srv *http.Server, ln net.Listener, grace time.Du
 
 	select {
 	case err := <-served:
+		// Serve leaves accepted connections open; closing them cancels those requests too.
+		_ = srv.Close()
 		return fmt.Errorf("http: %w", err)
 	case <-ctx.Done():
 	}

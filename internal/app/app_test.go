@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -114,6 +115,52 @@ func TestServeReportsAFailedListener(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "http:")
+}
+
+func TestServeCancelsRequestsWhenTheListenerFails(t *testing.T) {
+	started, canceled := make(chan struct{}), make(chan struct{})
+	srv := &http.Server{Handler: http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-r.Context().Done()
+		close(canceled)
+	})}
+	inner, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	ln := &failingListener{Listener: inner, fail: make(chan struct{})}
+	served := make(chan error, 1)
+	go func() { served <- serve(t.Context(), srv, ln, time.Second) }()
+	go func() {
+		if resp, err := http.Get("http://" + inner.Addr().String()); err == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+	<-started
+
+	close(ln.fail)
+
+	require.Error(t, <-served)
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("the in-flight request's context was never canceled")
+	}
+}
+
+// Accepts the first connection, then fails once fail is closed.
+type failingListener struct {
+	net.Listener
+	fail     chan struct{}
+	accepted bool
+}
+
+func (l *failingListener) Accept() (net.Conn, error) {
+	if !l.accepted {
+		l.accepted = true
+		return l.Listener.Accept()
+	}
+	<-l.fail
+	_ = l.Close()
+	return nil, errors.New("listener failed")
 }
 
 // Fails with Run's own error if it returns before the server answers.
