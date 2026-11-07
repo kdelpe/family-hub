@@ -3,7 +3,7 @@ package httpx
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -88,6 +88,9 @@ func TestRecover(t *testing.T) {
 		{name: "an abort passes through unlogged", handler: func(http.ResponseWriter, *http.Request) {
 			panic(http.ErrAbortHandler)
 		}, wantStatus: 200, wantAbort: true},
+		{name: "a wrapped abort passes on the exact value", handler: func(http.ResponseWriter, *http.Request) {
+			panic(fmt.Errorf("proxy: %w", http.ErrAbortHandler))
+		}, wantStatus: 200, wantAbort: true},
 	}
 
 	for _, tt := range tests {
@@ -143,13 +146,12 @@ func newRequest(target string) (*http.Request, *logBuffer) {
 	return r.WithContext(zerolog.New(logs).WithContext(r.Context())), logs
 }
 
-// aborted reports a panic with http.ErrAbortHandler, which net/http would turn into a dropped connection.
+// aborted reports a panic with exactly http.ErrAbortHandler: net/http drops the connection quietly only for that value.
 func serve(h http.Handler, r *http.Request) (rec *httptest.ResponseRecorder, aborted bool) {
 	rec = httptest.NewRecorder()
 	defer func() {
 		if v := recover(); v != nil {
-			err, ok := v.(error)
-			if !ok || !errors.Is(err, http.ErrAbortHandler) {
+			if v != http.ErrAbortHandler {
 				panic(v)
 			}
 			aborted = true

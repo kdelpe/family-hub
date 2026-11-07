@@ -77,9 +77,9 @@ func Recover(next http.Handler) http.Handler {
 			if v == nil {
 				return
 			}
-			// net/http's own signal to drop the connection quietly.
+			// net/http's own signal to drop the connection; it stays quiet only for the exact value, not a wrapper.
 			if err, ok := v.(error); ok && errors.Is(err, http.ErrAbortHandler) {
-				panic(v)
+				panic(http.ErrAbortHandler)
 			}
 			zerolog.Ctx(r.Context()).Error().
 				Str("panic", fmt.Sprint(v)).
