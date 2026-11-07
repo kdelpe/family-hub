@@ -45,6 +45,7 @@ Trunk-based: short-lived branches and `main`. No `develop` branch.
 ## How we approach work
 
 - No separate design phase: `docs/architecture-v3.md` is the design. The PR description explains what changed and why, including any decision made along the way.
+- Functions that do I/O or can block take a `context.Context` as their first parameter and pass it on (handlers use `r.Context()`). Don't store it in structs. `context.Background()` only in `main`, tests, and work that must outlive a canceled `ctx` (like the shutdown wait).
 - HTTP code: routes are wired only in `internal/router`; all handlers live in `internal/handler` (HTTP only, one file per area); business logic lives in the feature packages' services (no HTTP). Dependencies point one way: router → handler → services.
 - Items marked **(verify)** in the architecture doc are checked against current docs before relying on them.
 - Keep the architecture doc current: when a decision changes, update the doc in the same change.

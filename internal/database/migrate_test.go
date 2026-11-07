@@ -37,7 +37,7 @@ func TestMigrateUp(t *testing.T) {
 			db := newTestSchema(t)
 
 			for range tt.runs {
-				require.NoError(t, migrateUp(testMigrations, db.url))
+				require.NoError(t, migrateUp(t.Context(), testMigrations, db.url))
 			}
 
 			assert.Equal(t, 2, db.version(t))
@@ -51,7 +51,7 @@ func TestMigrateUpConcurrently(t *testing.T) {
 
 	errs := make(chan error, 4)
 	for range cap(errs) {
-		go func() { errs <- migrateUp(testMigrations, db.url) }()
+		go func() { errs <- migrateUp(t.Context(), testMigrations, db.url) }()
 	}
 	for range cap(errs) {
 		require.NoError(t, <-errs)
@@ -74,10 +74,10 @@ func TestMigrateUpRefusesUnsafeDatabase(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := newTestSchema(t)
-			require.NoError(t, migrateUp(testMigrations, db.url))
+			require.NoError(t, migrateUp(t.Context(), testMigrations, db.url))
 			db.exec(t, tt.setup)
 
-			err := migrateUp(testMigrations, db.url)
+			err := migrateUp(t.Context(), testMigrations, db.url)
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErrMsg)
@@ -88,7 +88,7 @@ func TestMigrateUpRefusesUnsafeDatabase(t *testing.T) {
 func TestMigrateUpWithNoMigrationsDoesNotConnect(t *testing.T) {
 	empty := fstest.MapFS{"migrations/README.md": {Data: []byte("none yet")}}
 
-	require.NoError(t, migrateUp(empty, testdb.UnreachableURL))
+	require.NoError(t, migrateUp(t.Context(), empty, testdb.UnreachableURL))
 }
 
 func TestEmbeddedMigrationsRoundTrip(t *testing.T) {
@@ -98,9 +98,9 @@ func TestEmbeddedMigrationsRoundTrip(t *testing.T) {
 	}
 	db := newTestSchema(t)
 
-	require.NoError(t, MigrateUp(db.url))
+	require.NoError(t, MigrateUp(t.Context(), db.url))
 	db.rollBackAll(t)
-	require.NoError(t, MigrateUp(db.url))
+	require.NoError(t, MigrateUp(t.Context(), db.url))
 
 	assert.Equal(t, int(slices.Max(versions)), db.version(t))
 }
@@ -112,16 +112,37 @@ func TestMigrateUpGivesUpOnAHeldLock(t *testing.T) {
 		"migrations/000001_slow.down.sql": {Data: []byte("SELECT 1;")},
 	}
 	holder := make(chan error, 1)
-	go func() { holder <- migrateUp(slow, db.url) }()
+	// Not t.Context(): that is canceled before the cleanup below waits for the holder.
+	go func() { holder <- migrateUp(context.Background(), slow, db.url) }()
 	t.Cleanup(func() { assert.NoError(t, <-holder) })
 	require.Eventually(t, db.sleeping, 5*time.Second, 50*time.Millisecond)
 
 	start := time.Now()
-	err := migrateUp(slow, db.url+"&lock_timeout=500")
+	err := migrateUp(t.Context(), slow, db.url+"&lock_timeout=500")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "lock timeout")
 	assert.Less(t, time.Since(start), 2*time.Second)
+}
+
+func TestMigrateUpStopsBetweenMigrationsWhenCanceled(t *testing.T) {
+	db := newTestSchema(t)
+	slowFirst := fstest.MapFS{
+		"migrations/000001_slow.up.sql":      {Data: []byte("SELECT pg_sleep(1);")},
+		"migrations/000001_slow.down.sql":    {Data: []byte("SELECT 1;")},
+		"migrations/000002_widgets.up.sql":   {Data: []byte("CREATE TABLE widgets (id int);")},
+		"migrations/000002_widgets.down.sql": {Data: []byte("DROP TABLE widgets;")},
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- migrateUp(ctx, slowFirst, db.url) }()
+	require.Eventually(t, db.sleeping, 5*time.Second, 50*time.Millisecond)
+
+	cancel()
+
+	require.ErrorIs(t, <-done, context.Canceled)
+	assert.Equal(t, 1, db.version(t))
+	assert.False(t, db.tableExists(t, "widgets"))
 }
 
 func TestWithTimeouts(t *testing.T) {
@@ -177,7 +198,7 @@ func TestMigrateUpWithASpaceInThePassword(t *testing.T) {
 			require.NoError(t, err)
 			tt.build(u, db.name+"_role", password)
 
-			require.NoError(t, migrateUp(testMigrations, u.String()))
+			require.NoError(t, migrateUp(t.Context(), testMigrations, u.String()))
 
 			assert.Equal(t, 2, db.version(t))
 		})
@@ -260,7 +281,7 @@ func (s testSchema) version(t *testing.T) int {
 func (s testSchema) sleeping() bool {
 	var sleeping bool
 	err := s.conn.QueryRow(context.Background(),
-		"SELECT EXISTS (SELECT FROM pg_stat_activity WHERE query LIKE 'SELECT pg_sleep(3)%' AND pid <> pg_backend_pid())").Scan(&sleeping)
+		"SELECT EXISTS (SELECT FROM pg_stat_activity WHERE query LIKE 'SELECT pg_sleep(%' AND pid <> pg_backend_pid())").Scan(&sleeping)
 	return err == nil && sleeping
 }
 

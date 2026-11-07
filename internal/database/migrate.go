@@ -1,11 +1,13 @@
 package database
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"fmt"
 	"io/fs"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -27,11 +29,11 @@ const (
 //go:embed migrations
 var embedded embed.FS
 
-func MigrateUp(databaseURL string) error {
-	return migrateUp(embedded, databaseURL)
+func MigrateUp(ctx context.Context, databaseURL string) error {
+	return migrateUp(ctx, embedded, databaseURL)
 }
 
-func migrateUp(fsys fs.FS, databaseURL string) error {
+func migrateUp(ctx context.Context, fsys fs.FS, databaseURL string) error {
 	m, err := newMigrate(fsys, databaseURL)
 	if err != nil {
 		return fmt.Errorf("migrate up: %w", err)
@@ -41,10 +43,21 @@ func migrateUp(fsys fs.FS, databaseURL string) error {
 	}
 	defer func() { _, _ = m.Close() }()
 
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("migrate up: %w", explain(err))
+	// One step at a time, so a canceled ctx stops between migrations, never inside one.
+	// (golang-migrate's own GracefulStop is a data race.)
+	for {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("migrate up: stopped: %w", err)
+		}
+		err := m.Steps(1)
+		// The bare sentinel means every migration is applied; the unknown-version error wraps it instead.
+		if err == os.ErrNotExist {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("migrate up: %w", explain(err))
+		}
 	}
-	return nil
 }
 
 func newMigrate(fsys fs.FS, databaseURL string) (m *migrate.Migrate, err error) {
@@ -71,7 +84,7 @@ func newMigrate(fsys fs.FS, databaseURL string) (m *migrate.Migrate, err error) 
 	// pgx's redaction of the password is best effort, so its error is dropped.
 	cfg, err := pgx.ParseConfig(connURL)
 	if err != nil {
-		return nil, errors.New("DATABASE_URL is not a valid connection string")
+		return nil, errInvalidConnString
 	}
 	// Opened here, not from a URL by the driver: it re-encodes the query, turning %20 into a + that pgx reads literally.
 	db := stdlib.OpenDB(*cfg)

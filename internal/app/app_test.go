@@ -17,12 +17,13 @@ import (
 
 func TestRunServesUntilCanceled(t *testing.T) {
 	url := testdb.URL(t)
-	addr := freeAddr(t)
-	ctx, cancel := context.WithCancel(context.Background())
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- Run(ctx, config.Config{DatabaseURL: url, HTTPAddr: addr}) }()
+	go func() { done <- run(ctx, config.Config{DatabaseURL: url}, ln) }()
 
-	resp := waitForServer(t, "http://"+addr+"/ready", done)
+	resp := waitForServer(t, "http://"+ln.Addr().String()+"/ready", done)
 	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -31,7 +32,7 @@ func TestRunServesUntilCanceled(t *testing.T) {
 }
 
 func TestRunFailsWithoutADatabase(t *testing.T) {
-	err := Run(context.Background(), config.Config{DatabaseURL: testdb.UnreachableURL, HTTPAddr: "127.0.0.1:0"})
+	err := Run(t.Context(), config.Config{DatabaseURL: testdb.UnreachableURL, HTTPAddr: "127.0.0.1:0"})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "database:")
@@ -46,7 +47,7 @@ func TestServeLetsInFlightRequestsFinish(t *testing.T) {
 	})}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	served := make(chan error, 1)
 	go func() { served <- serve(ctx, srv, ln, time.Second) }()
 
@@ -83,7 +84,7 @@ func TestServeCancelsRequestsThatOutlastTheGrace(t *testing.T) {
 	})}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	served := make(chan error, 1)
 	go func() { served <- serve(ctx, srv, ln, 100*time.Millisecond) }()
 	go func() {
@@ -109,7 +110,7 @@ func TestServeReportsAFailedListener(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, ln.Close())
 
-	err = serve(context.Background(), &http.Server{}, ln, time.Second)
+	err = serve(t.Context(), &http.Server{}, ln, time.Second)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "http:")
@@ -132,14 +133,4 @@ func waitForServer(t *testing.T, url string, done <-chan error) *http.Response {
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
-}
-
-// Run takes an address, not a listener, so pick a port that was free a moment ago.
-func freeAddr(t *testing.T) string {
-	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	addr := ln.Addr().String()
-	require.NoError(t, ln.Close())
-	return addr
 }

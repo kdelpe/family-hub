@@ -36,7 +36,7 @@ func TestRun(t *testing.T) {
 			t.Setenv("DATABASE_URL", "")
 			var stdout bytes.Buffer
 
-			err := run(tt.args, &stdout)
+			err := run(t.Context(), tt.args, &stdout)
 
 			if tt.wantErrMsg == "" {
 				require.NoError(t, err)

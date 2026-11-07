@@ -7,9 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/kdelpe/family-hub/internal/config"
@@ -27,11 +24,20 @@ const (
 	shutdownTimeout = 8 * time.Second
 )
 
-// Run serves until ctx is canceled or the process gets SIGINT or SIGTERM.
+// Run serves until ctx is canceled. The port is taken first, so a clash fails before migrating.
 func Run(ctx context.Context, cfg config.Config) error {
-	// Before the signal handler, so Ctrl-C still ends a migration waiting on the lock.
+	ln, err := net.Listen("tcp", cfg.HTTPAddr)
+	if err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
+	return run(ctx, cfg, ln)
+}
+
+// Takes the listener so tests can pass one on a port they already hold.
+func run(ctx context.Context, cfg config.Config, ln net.Listener) error {
+	defer func() { _ = ln.Close() }()
 	if cfg.AutoMigrate {
-		if err := database.MigrateUp(cfg.DatabaseURL); err != nil {
+		if err := database.MigrateUp(ctx, cfg.DatabaseURL); err != nil {
 			return err
 		}
 	}
@@ -41,10 +47,6 @@ func Run(ctx context.Context, cfg config.Config) error {
 	}
 	defer pool.Close()
 
-	ln, err := net.Listen("tcp", cfg.HTTPAddr)
-	if err != nil {
-		return fmt.Errorf("listen: %w", err)
-	}
 	srv := &http.Server{
 		Handler:           router.New(router.Handlers{Health: handler.NewHealth(pool)}),
 		ReadHeaderTimeout: readHeaderTimeout,
@@ -52,12 +54,6 @@ func Run(ctx context.Context, cfg config.Config) error {
 		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
 	}
-
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	// After the first signal, a second one kills the process as usual.
-	context.AfterFunc(ctx, stop)
-
 	slog.InfoContext(ctx, "listening", "addr", ln.Addr().String())
 	return serve(ctx, srv, ln, shutdownTimeout)
 }
