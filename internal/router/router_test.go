@@ -21,6 +21,7 @@ func TestRoutes(t *testing.T) {
 	}{
 		{name: "liveness", method: http.MethodGet, path: "/health", wantStatus: http.StatusOK},
 		{name: "readiness reaches the database check", method: http.MethodGet, path: "/ready", wantStatus: http.StatusServiceUnavailable},
+		{name: "liveness answers HEAD", method: http.MethodHead, path: "/health", wantStatus: http.StatusOK},
 		{name: "health is GET only", method: http.MethodPost, path: "/health", wantStatus: http.StatusMethodNotAllowed},
 		{name: "health is not under /api", method: http.MethodGet, path: "/api/health", wantStatus: http.StatusNotFound},
 		{name: "unknown path", method: http.MethodGet, path: "/nope", wantStatus: http.StatusNotFound},

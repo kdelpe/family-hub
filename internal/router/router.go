@@ -16,8 +16,8 @@ type Handlers struct {
 
 func New(h Handlers) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.GetHead)
 
 	r.Get("/health", h.Health.Live)
 	r.Get("/ready", h.Health.Ready)
