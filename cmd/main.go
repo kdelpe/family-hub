@@ -5,16 +5,21 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/kdelpe/family-hub/internal/config"
+	"github.com/kdelpe/family-hub/internal/database"
 )
 
-var errNotImplemented = errors.New("not implemented yet")
+var (
+	errNotImplemented = errors.New("not implemented yet")
+	errMigrateUsage   = errors.New("usage: family-hub migrate up")
+)
 
 const usage = `Usage: family-hub [command]
 
 Commands:
   serve                       run the web server (default)
   migrate up                  apply all pending migrations
-  migrate down [N]            roll back N migrations (default 1)
   admin create --email ADDR   create the first admin (prompts for the password)
 `
 
@@ -25,7 +30,6 @@ func main() {
 	}
 }
 
-// Each command parses its own arguments once it's implemented.
 func run(args []string, stdout io.Writer) error {
 	if len(args) == 0 {
 		return serve()
@@ -45,6 +49,16 @@ func run(args []string, stdout io.Writer) error {
 	}
 }
 
-func serve() error             { return fmt.Errorf("serve: %w", errNotImplemented) }
-func migrate(_ []string) error { return fmt.Errorf("migrate: %w", errNotImplemented) }
-func admin(_ []string) error   { return fmt.Errorf("admin: %w", errNotImplemented) }
+func serve() error           { return fmt.Errorf("serve: %w", errNotImplemented) }
+func admin(_ []string) error { return fmt.Errorf("admin: %w", errNotImplemented) }
+
+func migrate(args []string) error {
+	if len(args) != 1 || args[0] != "up" {
+		return fmt.Errorf("migrate: %w", errMigrateUsage)
+	}
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	return database.MigrateUp(cfg.DatabaseURL)
+}

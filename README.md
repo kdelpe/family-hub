@@ -19,9 +19,10 @@ Needs Xcode Command Line Tools (`xcode-select --install`; `go test -race` needs 
 
 ```sh
 make up      # Postgres and Mailpit in Docker
-make test    # tests with the race detector
+make test    # tests with the race detector (needs `make up`)
 make lint    # golangci-lint, same version as CI
 make build   # bin/family-hub
+make migrate-up   # apply pending migrations to the dev database
 make down    # stop the containers (`docker compose down -v` also wipes the data)
 ```
 

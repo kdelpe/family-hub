@@ -18,6 +18,19 @@ concurrency:
 jobs:
   go:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Keep in sync with compose.yaml; Dependabot doesn't update service images.
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: familyhub_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U app -d familyhub_test"
+          --health-interval 2s
+          --health-retries 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
