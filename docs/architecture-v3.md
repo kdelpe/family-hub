@@ -718,7 +718,14 @@ func handler(files fs.FS) http.Handler {          // Handler() passes fs.Sub(dis
     fileServer := http.FileServerFS(files)
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
-        if info, err := fs.Stat(files, name); err != nil || info.IsDir() {
+        r = r.Clone(r.Context())
+        r.URL.Path = "/" + name                          // net/http refuses a path with ".."
+        info, err := fs.Stat(files, name)
+        if err != nil && path.Ext(name) != "" {          // missing file, e.g. a stale tab's old asset
+            http.NotFound(w, r)
+            return
+        }
+        if err != nil || info.IsDir() {
             w.Header().Set("Cache-Control", "no-cache")  // root, client-side routes, directories
             http.ServeFileFS(w, r, files, "index.html")
             return
