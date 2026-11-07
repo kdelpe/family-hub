@@ -6,7 +6,7 @@ DATABASE_URL      ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
 export DATABASE_URL TEST_DATABASE_URL
 
-.PHONY: up down build run test lint vuln migrate-up migrate-down
+.PHONY: up down build run test lint vuln migrate-up
 
 up:
 	docker compose up -d --wait
@@ -37,7 +37,3 @@ vuln:
 
 migrate-up:
 	go run ./cmd migrate up
-
-# e.g. `make migrate-down N=2`
-migrate-down:
-	go run ./cmd migrate down $(or $(N),1)

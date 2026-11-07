@@ -64,7 +64,7 @@ family-hub/
 │   ├── pull_request_template.md
 │   ├── CODEOWNERS
 │   └── dependabot.yml            # Go, npm, Actions, Docker update PRs -> main
-├── cmd/main.go                   # subcommands: serve (default) | migrate up/down | admin create; built with -o family-hub
+├── cmd/main.go                   # subcommands: serve (default) | migrate up | admin create; built with -o family-hub
 ├── internal/
 │   ├── app/                      # builds dependencies (pool, services, handlers), server lifecycle, graceful shutdown
 │   ├── router/                   # chi route table + middleware chain; the only place routes are wired (§6.1)
@@ -84,7 +84,6 @@ family-hub/
 │   ├── database/
 │   │   ├── db.go                 # pgxpool setup
 │   │   ├── migrate.go            # embedded golang-migrate runner
-│   │   ├── command.go            # parses `migrate up | down [N]` for cmd/main.go
 │   │   ├── migrations/           # one numbered .up.sql/.down.sql pair per phase, from Phase 2 (§6.2)
 │   │   ├── testdata/migrations/  # throwaway migrations for the runner's tests
 │   │   ├── seed.sql              # made-up sample family for local dev (`make seed`)
@@ -699,7 +698,9 @@ Changes vs V2: no CORS middleware (Vite proxies `/api`, so dev is same-origin to
 
 ### 6.2 Embedded migrations (`internal/database/migrate.go`)
 
-`database.MigrateUp(url)` (also used by `serve` with `AUTO_MIGRATE`) and `database.ParseMigrateCommand(args).Run(url)` (the CLI) run the migrations embedded from `internal/database/migrations/` through golang-migrate's `iofs` source and pgx v5 driver. The driver registers the `pgx5://` scheme, so `postgres://` and `postgresql://` prefixes are rewritten (that's why `DATABASE_URL` must be a URL, §6.5). Both refuse a dirty database and one at a version the binary doesn't have (an older release); those checks run inside golang-migrate under its advisory lock, so concurrent starts are safe. `down N` refuses to roll back more than is applied, because golang-migrate would otherwise undo everything before reporting it. An empty migrations directory is a no-op.
+`database.MigrateUp(url)`, used by `family-hub migrate up` and by `serve` with `AUTO_MIGRATE`, runs the migrations embedded from `internal/database/migrations/` through golang-migrate's `iofs` source and pgx v5 driver. The driver registers the `pgx5://` scheme, so the `postgres://` prefix is rewritten (that's why `DATABASE_URL` must be a URL, §6.5), and a 10-second `connect_timeout` is added unless the URL sets one. It refuses a dirty database and one at a version the binary doesn't have (an older release); golang-migrate makes those checks under its advisory lock, so concurrent starts are safe. With no migrations embedded it returns without connecting.
+
+**No `migrate down`.** Rolling back a schema on real data loses data, so a change is undone by a new migration (or a backup restore). Locally, reset with `docker compose down -v`, `make up`, `make migrate-up`. Each migration still ships a `.down.sql`: a test applies every embedded migration, rolls them all back and applies them again.
 
 **One migration per phase:** each phase adds the tables its code uses, starting with the auth tables in Phase 2. §3.1 shows the full schema as one file for reading; it's split by phase when written. `serve` runs `MigrateUp` on startup only when `AUTO_MIGRATE=true`; otherwise use `family-hub migrate up`.
 
@@ -735,7 +736,7 @@ func Handler() http.Handler {
 
 ### 6.4 `main.go` shape
 
-The binary has only the commands production needs; dev-only tasks live in the Makefile. `cmd/` holds only `main.go`: a plain switch that loads config and hands off. Each command's arguments are parsed by the package that owns it (`database.ParseMigrateCommand`), with the stdlib `flag` package where it needs flags; `family-hub -h` prints the usage. `serve` (default): load config → pgxpool → optional migrate → build `App` → `http.Server` with `ReadHeaderTimeout`, `signal.NotifyContext` for SIGINT/SIGTERM → graceful `Shutdown(30s)`. `migrate up|down [N]` and `admin create` reuse the same config loader. If migration N fails halfway, golang-migrate records `version = N, dirty = true`. Either undo its partial changes and set `version = N-1, dirty = false` (the next `migrate up` retries N), or finish N by hand and set only `dirty = false`. Clearing `dirty` alone after a rollback would skip N for good. No `force` command needed. Sample data is `make seed`, which loads `internal/database/seed.sql` through the compose Postgres and refuses to run unless the database is empty (a check at the top of the file). The seeded test user stores a precomputed Argon2id hash of a known dev password.
+The binary has only the commands production needs; dev-only tasks live in the Makefile. `cmd/` holds only `main.go`: a plain switch that loads config and hands off to the package that does the work. Arguments beyond a fixed word like `up` are parsed by that package, with the stdlib `flag` package where it needs flags; `family-hub -h` prints the usage. `serve` (default): load config → pgxpool → optional migrate → build `App` → `http.Server` with `ReadHeaderTimeout`, `signal.NotifyContext` for SIGINT/SIGTERM → graceful `Shutdown(30s)`. `migrate up` and `admin create` reuse the same config loader. If migration N fails halfway, golang-migrate records `version = N, dirty = true`. Either undo its partial changes and set `version = N-1, dirty = false` (the next `migrate up` retries N), or finish N by hand and set only `dirty = false`. Clearing `dirty` alone after a rollback would skip N for good. No `force` command needed. Sample data is `make seed`, which loads `internal/database/seed.sql` through the compose Postgres and refuses to run unless the database is empty (a check at the top of the file). The seeded test user stores a precomputed Argon2id hash of a known dev password.
 
 ### 6.5 Configuration (env vars)
 
@@ -790,7 +791,7 @@ DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
 export DATABASE_URL TEST_DATABASE_URL
 
-.PHONY: up down run dev-api dev-ui ui-stub generate test lint vuln build migrate-up migrate-down migrate-new seed
+.PHONY: up down run dev-api dev-ui ui-stub generate test lint vuln build migrate-up migrate-new seed
 
 up:            ; docker compose up -d --wait, then create familyhub_test if missing (see Makefile)
 down:          ; docker compose down
@@ -804,7 +805,6 @@ ui-stub:
 generate:      ; go tool sqlc generate && mockery
 migrate-new:   ; go tool migrate create -ext sql -dir internal/database/migrations -seq $(name)
 migrate-up:    ; go run ./cmd migrate up
-migrate-down:  ; go run ./cmd migrate down $(or $(N),1)   # make migrate-down N=2
 seed: up migrate-up ; docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < internal/database/seed.sql
 
 dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
