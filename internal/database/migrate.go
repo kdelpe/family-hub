@@ -111,6 +111,10 @@ func newMigrate(ctx context.Context, fsys fs.FS, databaseURL string) (m *migrate
 	db := stdlib.OpenDB(*cfg)
 	// WithInstance pings without a context, so connect here first where a signal can cancel it.
 	if err := db.PingContext(ctx); err != nil {
+		// database/sql's pgx adapter reports a canceled ping as ErrBadConn, hiding the cancellation.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			err = ctxErr
+		}
 		_ = db.Close()
 		return nil, 0, fmt.Errorf("init: %w", err)
 	}
