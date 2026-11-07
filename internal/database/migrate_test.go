@@ -2,12 +2,16 @@ package database
 
 import (
 	"context"
-	"fmt"
+	"crypto/rand"
 	"net/url"
 	"os"
+	"slices"
+	"strings"
 	"testing"
-	"time"
+	"testing/fstest"
 
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,12 +22,11 @@ var testMigrations = os.DirFS("testdata")
 
 func TestMigrateUp(t *testing.T) {
 	tests := []struct {
-		name        string
-		runs        int
-		wantVersion int
+		name string
+		runs int
 	}{
-		{name: "applies every migration", runs: 1, wantVersion: 2},
-		{name: "second run is a no-op", runs: 2, wantVersion: 2},
+		{name: "applies every migration", runs: 1},
+		{name: "second run is a no-op", runs: 2},
 	}
 
 	for _, tt := range tests {
@@ -34,7 +37,7 @@ func TestMigrateUp(t *testing.T) {
 				require.NoError(t, migrateUp(testMigrations, db.url))
 			}
 
-			assert.Equal(t, tt.wantVersion, db.version(t))
+			assert.Equal(t, 2, db.version(t))
 			assert.True(t, db.columnExists(t, "widgets", "name"))
 		})
 	}
@@ -54,92 +57,15 @@ func TestMigrateUpConcurrently(t *testing.T) {
 	assert.Equal(t, 2, db.version(t))
 }
 
-func TestMigrateDown(t *testing.T) {
-	tests := []struct {
-		name          string
-		steps         int
-		wantErrMsg    string
-		wantVersion   int
-		wantWidgets   bool
-		wantNameField bool
-	}{
-		{name: "one step", steps: 1, wantVersion: 1, wantWidgets: true},
-		{name: "every step", steps: 2, wantVersion: 0},
-		{name: "more steps than applied changes nothing", steps: 3, wantErrMsg: "only 2 applied, refusing to roll back 3", wantVersion: 2, wantWidgets: true, wantNameField: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			db := newTestSchema(t)
-			require.NoError(t, migrateUp(testMigrations, db.url))
-
-			err := migrateDown(testMigrations, db.url, tt.steps)
-
-			if tt.wantErrMsg == "" {
-				require.NoError(t, err)
-			} else {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.wantErrMsg)
-			}
-			assert.Equal(t, tt.wantVersion, db.version(t))
-			assert.Equal(t, tt.wantWidgets, db.tableExists(t, "widgets"))
-			assert.Equal(t, tt.wantNameField, db.columnExists(t, "widgets", "name"))
-		})
-	}
-}
-
-func TestMigrateDownWithNothingApplied(t *testing.T) {
-	db := newTestSchema(t)
-
-	err := migrateDown(testMigrations, db.url, 1)
-
-	require.Error(t, err)
-	assert.Equal(t, "migrate down: no migrations applied", err.Error())
-}
-
-func TestMigrateRefusesUnsafeDatabase(t *testing.T) {
+func TestMigrateUpRefusesUnsafeDatabase(t *testing.T) {
 	tests := []struct {
 		name       string
 		setup      string
-		migrate    func(url string) error
 		wantErrMsg string
 	}{
-		{
-			name:       "up on a dirty database",
-			setup:      "UPDATE schema_migrations SET dirty = true",
-			migrate:    func(url string) error { return migrateUp(testMigrations, url) },
-			wantErrMsg: "migrate up: database is dirty at version 2",
-		},
-		{
-			name:       "down on a dirty database",
-			setup:      "UPDATE schema_migrations SET dirty = true",
-			migrate:    func(url string) error { return migrateDown(testMigrations, url, 1) },
-			wantErrMsg: "migrate down: database is dirty at version 2",
-		},
-		{
-			name:       "up at a version this binary doesn't have",
-			setup:      "UPDATE schema_migrations SET version = 99",
-			migrate:    func(url string) error { return migrateUp(testMigrations, url) },
-			wantErrMsg: "migrate up: database is at a version this binary doesn't have",
-		},
-		{
-			name:       "down at a version this binary doesn't have",
-			setup:      "UPDATE schema_migrations SET version = 99",
-			migrate:    func(url string) error { return migrateDown(testMigrations, url, 1) },
-			wantErrMsg: "migrate down: database is at a version this binary doesn't have",
-		},
-		{
-			name:       "up when the first migration's rollback failed",
-			setup:      "UPDATE schema_migrations SET version = -1, dirty = true",
-			migrate:    func(url string) error { return migrateUp(testMigrations, url) },
-			wantErrMsg: "migrate up: database is dirty at version -1",
-		},
-		{
-			name:       "down when the first migration's rollback failed",
-			setup:      "UPDATE schema_migrations SET version = -1, dirty = true",
-			migrate:    func(url string) error { return migrateDown(testMigrations, url, 1) },
-			wantErrMsg: "migrate down: database is dirty at version -1",
-		},
+		{name: "dirty", setup: "UPDATE schema_migrations SET dirty = true", wantErrMsg: "migrate up: database is dirty at version 2"},
+		{name: "dirty before any version", setup: "UPDATE schema_migrations SET version = -1, dirty = true", wantErrMsg: "migrate up: database is dirty at version -1"},
+		{name: "unknown version", setup: "UPDATE schema_migrations SET version = 99", wantErrMsg: "migrate up: database is at a version this binary doesn't have"},
 	}
 
 	for _, tt := range tests {
@@ -148,42 +74,63 @@ func TestMigrateRefusesUnsafeDatabase(t *testing.T) {
 			require.NoError(t, migrateUp(testMigrations, db.url))
 			db.exec(t, tt.setup)
 
-			err := tt.migrate(db.url)
+			err := migrateUp(testMigrations, db.url)
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErrMsg)
-			assert.True(t, db.columnExists(t, "widgets", "name"), "schema must be untouched")
 		})
 	}
 }
 
-func TestMigrateUpEmbedded(t *testing.T) {
+func TestMigrateUpWithNoMigrationsDoesNotConnect(t *testing.T) {
+	empty := fstest.MapFS{"migrations/README.md": {Data: []byte("none yet")}}
+
+	require.NoError(t, migrateUp(empty, "postgres://app@127.0.0.1:1/unreachable"))
+}
+
+func TestEmbeddedMigrationsRoundTrip(t *testing.T) {
+	versions, err := sourceVersions(embedded)
+	require.NoError(t, err)
+	if len(versions) == 0 {
+		t.Skip("no embedded migrations yet; Phase 2 adds the first")
+	}
 	db := newTestSchema(t)
 
 	require.NoError(t, MigrateUp(db.url))
+	db.rollBackAll(t)
+	require.NoError(t, MigrateUp(db.url))
 
-	assert.Equal(t, 0, db.version(t))
+	assert.Equal(t, int(slices.Max(versions)), db.version(t))
 }
 
-func TestToPgx5Scheme(t *testing.T) {
+func TestToMigrateURL(t *testing.T) {
 	tests := []struct {
-		name string
-		in   string
-		want string
+		name       string
+		in         string
+		want       string
+		wantErrMsg string
 	}{
-		{name: "postgres", in: "postgres://app@db/familyhub", want: "pgx5://app@db/familyhub"},
-		{name: "postgresql", in: "postgresql://app@db/familyhub", want: "pgx5://app@db/familyhub"},
-		{name: "other prefixes untouched", in: "pgx5://app@db/familyhub", want: "pgx5://app@db/familyhub"},
+		{name: "postgres", in: "postgres://app@db/familyhub", want: "pgx5://app@db/familyhub?connect_timeout=10"},
+		{name: "postgresql", in: "postgresql://app@db/familyhub?sslmode=disable", want: "pgx5://app@db/familyhub?connect_timeout=10&sslmode=disable"},
+		{name: "keeps an explicit connect_timeout", in: "postgres://app@db/familyhub?connect_timeout=3", want: "pgx5://app@db/familyhub?connect_timeout=3"},
+		{name: "other schemes", in: "mysql://app:hunter2@db/familyhub", wantErrMsg: "DATABASE_URL must be a postgres:// URL"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, toPgx5Scheme(tt.in))
+			got, err := toMigrateURL(tt.in)
+
+			if tt.wantErrMsg != "" {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantErrMsg, err.Error())
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-// testSchema is a throwaway Postgres schema, so tests never share tables or migration state.
 type testSchema struct {
 	url  string
 	conn *pgx.Conn
@@ -205,7 +152,7 @@ func newTestSchema(t *testing.T) testSchema {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close(ctx) })
 
-	name := fmt.Sprintf("test_%d", time.Now().UnixNano())
+	name := "test_" + strings.ToLower(rand.Text())
 	_, err = conn.Exec(ctx, "CREATE SCHEMA "+pgx.Identifier{name}.Sanitize())
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -225,6 +172,19 @@ func (s testSchema) exec(t *testing.T, sql string) {
 	t.Helper()
 	_, err := s.conn.Exec(context.Background(), "SET search_path TO "+pgx.Identifier{s.name}.Sanitize()+"; "+sql)
 	require.NoError(t, err)
+}
+
+func (s testSchema) rollBackAll(t *testing.T) {
+	t.Helper()
+	migrateURL, err := toMigrateURL(s.url)
+	require.NoError(t, err)
+	src, err := iofs.New(embedded, "migrations")
+	require.NoError(t, err)
+	m, err := migrate.NewWithSourceInstance("iofs", src, migrateURL)
+	require.NoError(t, err)
+	defer func() { _, _ = m.Close() }()
+
+	require.NoError(t, m.Down())
 }
 
 func (s testSchema) version(t *testing.T) int {

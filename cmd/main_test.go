@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/kdelpe/family-hub/internal/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,7 +20,8 @@ func TestRun(t *testing.T) {
 		{name: "no args defaults to serve", args: nil, wantErr: errNotImplemented, wantErrMsg: "serve:"},
 		{name: "serve", args: []string{"serve"}, wantErr: errNotImplemented, wantErrMsg: "serve:"},
 		{name: "migrate needs a config", args: []string{"migrate", "up"}, wantErrMsg: "DATABASE_URL is required"},
-		{name: "migrate bad args", args: []string{"migrate", "sideways"}, wantErr: database.ErrMigrateUsage, wantErrMsg: "migrate:"},
+		{name: "migrate bad args", args: []string{"migrate", "sideways"}, wantErr: errMigrateUsage, wantErrMsg: "migrate:"},
+		{name: "migrate down is not a command", args: []string{"migrate", "down"}, wantErr: errMigrateUsage, wantErrMsg: "migrate:"},
 		{name: "admin", args: []string{"admin", "create"}, wantErr: errNotImplemented, wantErrMsg: "admin:"},
 		{name: "-h prints usage", args: []string{"-h"}, wantStdout: usage},
 		{name: "--help prints usage", args: []string{"--help"}, wantStdout: usage},

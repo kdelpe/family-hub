@@ -10,14 +10,16 @@ import (
 	"github.com/kdelpe/family-hub/internal/database"
 )
 
-var errNotImplemented = errors.New("not implemented yet")
+var (
+	errNotImplemented = errors.New("not implemented yet")
+	errMigrateUsage   = errors.New("usage: family-hub migrate up")
+)
 
 const usage = `Usage: family-hub [command]
 
 Commands:
   serve                       run the web server (default)
   migrate up                  apply all pending migrations
-  migrate down [N]            roll back N migrations (default 1)
   admin create --email ADDR   create the first admin (prompts for the password)
 `
 
@@ -51,13 +53,12 @@ func serve() error           { return fmt.Errorf("serve: %w", errNotImplemented)
 func admin(_ []string) error { return fmt.Errorf("admin: %w", errNotImplemented) }
 
 func migrate(args []string) error {
-	command, err := database.ParseMigrateCommand(args)
-	if err != nil {
-		return fmt.Errorf("migrate: %w", err)
+	if len(args) != 1 || args[0] != "up" {
+		return fmt.Errorf("migrate: %w", errMigrateUsage)
 	}
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
-	return command.Run(cfg.DatabaseURL)
+	return database.MigrateUp(cfg.DatabaseURL)
 }
