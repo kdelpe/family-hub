@@ -242,7 +242,7 @@ func (s testSchema) exec(t *testing.T, sql string) {
 
 func (s testSchema) rollBackAll(t *testing.T) {
 	t.Helper()
-	m, _, err := newMigrate(embedded, s.url)
+	m, _, err := newMigrate(t.Context(), embedded, s.url)
 	require.NoError(t, err)
 	defer func() { _, _ = m.Close() }()
 
@@ -281,7 +281,7 @@ func (s testSchema) version(t *testing.T) int {
 func (s testSchema) sleeping() bool {
 	var sleeping bool
 	err := s.conn.QueryRow(context.Background(),
-		"SELECT EXISTS (SELECT FROM pg_stat_activity WHERE state = 'active' AND query LIKE 'SELECT pg_sleep(%' AND pid <> pg_backend_pid())").Scan(&sleeping)
+		"SELECT EXISTS (SELECT FROM pg_stat_activity WHERE datname = current_database() AND state = 'active' AND query LIKE 'SELECT pg_sleep(%' AND pid <> pg_backend_pid())").Scan(&sleeping)
 	return err == nil && sleeping
 }
 

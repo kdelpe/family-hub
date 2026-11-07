@@ -34,7 +34,7 @@ func MigrateUp(ctx context.Context, databaseURL string) error {
 }
 
 func migrateUp(ctx context.Context, fsys fs.FS, databaseURL string) error {
-	m, last, err := newMigrate(fsys, databaseURL)
+	m, last, err := newMigrate(ctx, fsys, databaseURL)
 	if err != nil {
 		return fmt.Errorf("migrate up: %w", err)
 	}
@@ -80,7 +80,7 @@ func lastVersion(src source.Driver) (last uint, ok bool, err error) {
 }
 
 // m is nil when nothing is embedded; last is the highest embedded version.
-func newMigrate(fsys fs.FS, databaseURL string) (m *migrate.Migrate, last uint, err error) {
+func newMigrate(ctx context.Context, fsys fs.FS, databaseURL string) (m *migrate.Migrate, last uint, err error) {
 	src, err := iofs.New(fsys, "migrations")
 	if err != nil {
 		return nil, 0, fmt.Errorf("migrations source: %w", err)
@@ -109,6 +109,11 @@ func newMigrate(fsys fs.FS, databaseURL string) (m *migrate.Migrate, last uint, 
 	}
 	// Opened here, not from a URL by the driver: it re-encodes the query, turning %20 into a + that pgx reads literally.
 	db := stdlib.OpenDB(*cfg)
+	// WithInstance pings without a context, so connect here first where a signal can cancel it.
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, 0, fmt.Errorf("init: %w", err)
+	}
 	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{})
 	if err != nil {
 		_ = db.Close()
