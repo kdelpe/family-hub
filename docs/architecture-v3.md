@@ -689,7 +689,7 @@ func New(h Handlers, mw Middleware) http.Handler {
         })
     })
 
-    r.Handle("/*", webui.Handler()) // SPA fallback; /api/* never reaches it
+    r.Get("/*", webui.Handler().ServeHTTP) // SPA fallback, mounted last; /api/* never reaches it
     return r
 }
 ```
@@ -712,29 +712,26 @@ Changes vs V2: no CORS middleware (Vite proxies `/api`, so dev is same-origin to
 
 ```go
 //go:embed all:dist
-var distFS embed.FS
+var dist embed.FS
 
-func Handler() http.Handler {
-    sub, err := fs.Sub(distFS, "dist")
-    if err != nil { panic(err) }
-    files := http.FileServer(http.FS(sub))
-
+func handler(files fs.FS) http.Handler {          // Handler() passes fs.Sub(dist, "dist")
+    fileServer := http.FileServerFS(files)
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        p := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
-        if p == "" { p = "index.html" }
-
-        if _, err := fs.Stat(sub, p); err != nil {      // unknown path -> client-side route
-            r.URL.Path = "/"
-            w.Header().Set("Cache-Control", "no-cache")
-        } else if strings.HasPrefix(p, "assets/") {      // Vite fingerprinted files
+        name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+        if info, err := fs.Stat(files, name); err != nil || info.IsDir() {
+            w.Header().Set("Cache-Control", "no-cache")  // root, client-side routes, directories
+            http.ServeFileFS(w, r, files, "index.html")
+            return
+        }
+        if strings.HasPrefix(name, "assets/") {          // Vite fingerprinted files
             w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
         }
-        files.ServeHTTP(w, r)
+        fileServer.ServeHTTP(w, r)
     })
 }
 ```
 
-`all:` is required so a placeholder dotfile would still embed; the stub approach (§8.1) avoids needing one.
+The root and every path that isn't a file get `index.html`, never cached, so a deploy shows up on the next load. A directory gets it too, so no directory is ever listed. A missing path with a file extension is a plain 404 instead, so a stale tab loading an old asset fails clearly rather than getting HTML. The cleaned path is what gets served, since `net/http` refuses one containing `..`. The router mounts it last as `GET /*`, after an `/api` group whose `NotFound` is a JSON 404, so an unknown `/api` path never gets `index.html`. `all:` is required so a placeholder dotfile would still embed; the stub approach (§8.1) avoids needing one.
 
 ### 6.4 `main.go` shape
 
@@ -801,23 +798,23 @@ down:          ; docker compose down
 # Creates a placeholder so `go build/vet/test` work before the UI has been built.
 ui-stub:
 	@test -f internal/webui/dist/index.html || \
-	  (mkdir -p internal/webui/dist && echo '<!doctype html><title>stub</title>' > internal/webui/dist/index.html)
+	  (mkdir -p internal/webui/dist && printf '%s\n' '<!doctype html><title>Family Hub</title><p>The UI is not built yet.</p>' > internal/webui/dist/index.html)
 
 # sqlc output + mockery mocks; both committed, CI fails if they're stale
 generate:      ; go tool sqlc generate && mockery
 migrate-new:   ; go tool migrate create -ext sql -dir internal/database/migrations -seq $(name)
-migrate-up:    ; go run ./cmd migrate up
+migrate-up: ui-stub ; go run ./cmd migrate up
 seed: up migrate-up ; docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < internal/database/seed.sql
 
-dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
+dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd   # COOKIE_SECURE arrives in Phase 2
 dev-ui:        ; cd web && npm run dev
-run:           ; go run ./cmd $(ARGS)
+run: ui-stub   ; go run ./cmd $(ARGS)
 
 test: ui-stub ; env -u DATABASE_URL go test -race ./...   # tests can't reach the dev database
 lint: ui-stub ; golangci-lint run && cd web && npm run lint && npm run typecheck
-vuln:          ; go tool govulncheck ./...
+vuln: ui-stub  ; go tool govulncheck ./...
 
-build:
+build: ui-stub
 	cd web && npm ci && npm run build
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/family-hub ./cmd
 ```

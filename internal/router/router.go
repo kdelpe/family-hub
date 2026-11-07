@@ -9,6 +9,7 @@ import (
 
 	"github.com/kdelpe/family-hub/internal/handler"
 	"github.com/kdelpe/family-hub/internal/httpx"
+	"github.com/kdelpe/family-hub/internal/webui"
 )
 
 const (
@@ -33,5 +34,11 @@ func New(h Handlers) http.Handler {
 	r.Get(livePath, h.Health.Live)
 	r.Get(readyPath, h.Health.Ready)
 
+	r.Route("/api", func(r chi.Router) {
+		r.NotFound(httpx.NotFound)
+	})
+
+	// Last, so any other GET is the app's, including its client-side routes.
+	r.Get("/*", webui.Handler().ServeHTTP)
 	return r
 }

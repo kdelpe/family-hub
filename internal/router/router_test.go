@@ -18,13 +18,18 @@ func TestRoutes(t *testing.T) {
 		method     string
 		path       string
 		wantStatus int
+		wantType   string
 	}{
 		{name: "liveness", method: http.MethodGet, path: "/health", wantStatus: http.StatusOK},
 		{name: "readiness reaches the database check", method: http.MethodGet, path: "/ready", wantStatus: http.StatusServiceUnavailable},
 		{name: "liveness answers HEAD", method: http.MethodHead, path: "/health", wantStatus: http.StatusOK},
 		{name: "health is GET only", method: http.MethodPost, path: "/health", wantStatus: http.StatusMethodNotAllowed},
-		{name: "health is not under /api", method: http.MethodGet, path: "/api/health", wantStatus: http.StatusNotFound},
-		{name: "unknown path", method: http.MethodGet, path: "/nope", wantStatus: http.StatusNotFound},
+		{name: "health is not under /api", method: http.MethodGet, path: "/api/health", wantStatus: http.StatusNotFound, wantType: "application/json"},
+		{name: "unknown /api path is a JSON 404", method: http.MethodGet, path: "/api/nope", wantStatus: http.StatusNotFound, wantType: "application/json"},
+		{name: "/api itself is a JSON 404", method: http.MethodGet, path: "/api", wantStatus: http.StatusNotFound, wantType: "application/json"},
+		{name: "any other path is the app", method: http.MethodGet, path: "/persons/42", wantStatus: http.StatusOK, wantType: "text/html; charset=utf-8"},
+		{name: "the app answers HEAD", method: http.MethodHead, path: "/", wantStatus: http.StatusOK},
+		{name: "the app is GET only", method: http.MethodPost, path: "/", wantStatus: http.StatusMethodNotAllowed},
 	}
 
 	// Unreachable, so /ready answers 503 without needing Postgres.
@@ -37,6 +42,9 @@ func TestRoutes(t *testing.T) {
 			routes.ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, nil))
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
+			if tt.wantType != "" {
+				assert.Equal(t, tt.wantType, rec.Header().Get("Content-Type"))
+			}
 			assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"), "security headers on every response")
 		})
 	}
