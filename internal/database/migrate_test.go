@@ -3,14 +3,15 @@ package database
 import (
 	"context"
 	"crypto/rand"
+	"io/fs"
 	"net/url"
 	"os"
 	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
-	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
@@ -89,8 +90,7 @@ func TestMigrateUpWithNoMigrationsDoesNotConnect(t *testing.T) {
 }
 
 func TestEmbeddedMigrationsRoundTrip(t *testing.T) {
-	versions, err := sourceVersions(embedded)
-	require.NoError(t, err)
+	versions := embeddedVersions(t)
 	if len(versions) == 0 {
 		t.Skip("no embedded migrations yet; Phase 2 adds the first")
 	}
@@ -103,6 +103,25 @@ func TestEmbeddedMigrationsRoundTrip(t *testing.T) {
 	assert.Equal(t, int(slices.Max(versions)), db.version(t))
 }
 
+func TestMigrateUpGivesUpOnAHeldLock(t *testing.T) {
+	db := newTestSchema(t)
+	slow := fstest.MapFS{
+		"migrations/000001_slow.up.sql":   {Data: []byte("SELECT pg_sleep(3);")},
+		"migrations/000001_slow.down.sql": {Data: []byte("SELECT 1;")},
+	}
+	holder := make(chan error, 1)
+	go func() { holder <- migrateUp(slow, db.url) }()
+	time.Sleep(500 * time.Millisecond)
+
+	start := time.Now()
+	err := migrateUp(slow, db.url+"&lock_timeout=500")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "lock timeout")
+	assert.Less(t, time.Since(start), 2*time.Second)
+	require.NoError(t, <-holder)
+}
+
 func TestToMigrateURL(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -110,10 +129,10 @@ func TestToMigrateURL(t *testing.T) {
 		want       string
 		wantErrMsg string
 	}{
-		{name: "postgres", in: "postgres://app@db/familyhub", want: "pgx5://app@db/familyhub?connect_timeout=10"},
-		{name: "postgresql", in: "postgresql://app@db/familyhub?sslmode=disable", want: "pgx5://app@db/familyhub?connect_timeout=10&sslmode=disable"},
-		{name: "keeps an explicit connect_timeout", in: "postgres://app@db/familyhub?connect_timeout=3", want: "pgx5://app@db/familyhub?connect_timeout=3"},
-		{name: "other schemes", in: "mysql://app:hunter2@db/familyhub", wantErrMsg: "DATABASE_URL must be a postgres:// URL"},
+		{name: "postgres", in: "postgres://app@db/familyhub", want: "pgx5://app@db/familyhub?connect_timeout=10&lock_timeout=300000"},
+		{name: "postgresql", in: "postgresql://app@db/familyhub?sslmode=disable", want: "pgx5://app@db/familyhub?connect_timeout=10&lock_timeout=300000&sslmode=disable"},
+		{name: "keeps explicit timeouts", in: "postgres://app@db/familyhub?connect_timeout=3&lock_timeout=1000", want: "pgx5://app@db/familyhub?connect_timeout=3&lock_timeout=1000"},
+		{name: "unparseable URL never quotes it", in: "postgres://app:hunter2@local host/familyhub", wantErrMsg: "DATABASE_URL is not a valid URL"},
 	}
 
 	for _, tt := range tests {
@@ -176,15 +195,27 @@ func (s testSchema) exec(t *testing.T, sql string) {
 
 func (s testSchema) rollBackAll(t *testing.T) {
 	t.Helper()
-	migrateURL, err := toMigrateURL(s.url)
-	require.NoError(t, err)
-	src, err := iofs.New(embedded, "migrations")
-	require.NoError(t, err)
-	m, err := migrate.NewWithSourceInstance("iofs", src, migrateURL)
+	m, err := newMigrate(embedded, s.url)
 	require.NoError(t, err)
 	defer func() { _, _ = m.Close() }()
 
 	require.NoError(t, m.Down())
+}
+
+func embeddedVersions(t *testing.T) []uint {
+	t.Helper()
+	src, err := iofs.New(embedded, "migrations")
+	require.NoError(t, err)
+	defer func() { _ = src.Close() }()
+
+	var versions []uint
+	v, err := src.First()
+	for err == nil {
+		versions = append(versions, v)
+		v, err = src.Next(v)
+	}
+	require.ErrorIs(t, err, fs.ErrNotExist)
+	return versions
 }
 
 func (s testSchema) version(t *testing.T) int {
