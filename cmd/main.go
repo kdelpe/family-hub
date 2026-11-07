@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 
+	"github.com/kdelpe/family-hub/internal/app"
 	"github.com/kdelpe/family-hub/internal/config"
 	"github.com/kdelpe/family-hub/internal/database"
 )
@@ -49,8 +51,15 @@ func run(args []string, stdout io.Writer) error {
 	}
 }
 
-func serve() error           { return fmt.Errorf("serve: %w", errNotImplemented) }
 func admin(_ []string) error { return fmt.Errorf("admin: %w", errNotImplemented) }
+
+func serve() error {
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		return fmt.Errorf("serve: %w", err)
+	}
+	return app.Run(context.Background(), cfg)
+}
 
 func migrate(args []string) error {
 	if len(args) != 1 || args[0] != "up" {

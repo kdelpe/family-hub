@@ -17,8 +17,8 @@ func TestRun(t *testing.T) {
 		wantErrMsg string
 		wantStdout string
 	}{
-		{name: "no args defaults to serve", args: nil, wantErr: errNotImplemented, wantErrMsg: "serve:"},
-		{name: "serve", args: []string{"serve"}, wantErr: errNotImplemented, wantErrMsg: "serve:"},
+		{name: "no args defaults to serve", args: nil, wantErrMsg: "serve: invalid config: DATABASE_URL is required"},
+		{name: "serve needs a config", args: []string{"serve"}, wantErrMsg: "serve: invalid config: DATABASE_URL is required"},
 		{name: "migrate needs a config", args: []string{"migrate", "up"}, wantErrMsg: "DATABASE_URL is required"},
 		{name: "migrate bad args", args: []string{"migrate", "sideways"}, wantErr: errMigrateUsage, wantErrMsg: "migrate:"},
 		{name: "migrate down is not a command", args: []string{"migrate", "down"}, wantErr: errMigrateUsage, wantErrMsg: "migrate:"},
