@@ -1,16 +1,12 @@
 package handler_test
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
-	"github.com/kdelpe/family-hub/internal/database"
 	"github.com/kdelpe/family-hub/internal/handler"
 	"github.com/kdelpe/family-hub/internal/testdb"
 )
@@ -32,7 +28,7 @@ func TestHealth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := testdb.UnreachablePool(t)
 			if tt.reachable {
-				pool = testPool(t)
+				pool = testdb.Pool(t)
 			}
 			rec := httptest.NewRecorder()
 
@@ -42,12 +38,4 @@ func TestHealth(t *testing.T) {
 			assert.Equal(t, tt.wantBody, rec.Body.String())
 		})
 	}
-}
-
-func testPool(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	pool, err := database.NewPool(context.Background(), testdb.URL(t))
-	require.NoError(t, err)
-	t.Cleanup(pool.Close)
-	return pool
 }
