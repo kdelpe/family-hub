@@ -852,9 +852,34 @@ volumes: { pgdata: {} }
 ### 8.3 Dockerfile (shape)
 
 ```dockerfile
-# Keep in step with the `go` line in go.mod.
-ARG GO_VERSION=1.27
+# Base images are pinned to exact tags; Dependabot proposes updates.
+# The Go version must be at least the `go` line in go.mod.
+FROM golang:1.27.3-alpine3.24 AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+RUN apk add --no-cache make
+COPY . .
+# The Makefile's build, so the image and CI build the same way (with the placeholder UI until Phase 4a).
+RUN make build
 
+# Phase 6 adds ffmpeg and vips here.
+FROM alpine:3.24.4
+RUN apk add --no-cache ca-certificates tzdata \
+ && adduser -D -u 10001 app
+USER app
+WORKDIR /app
+COPY --from=build /src/bin/family-hub .
+EXPOSE 8080
+# The port from HTTP_ADDR (default :8080); the app must listen on all interfaces or loopback.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s \
+  CMD addr="${HTTP_ADDR:-:8080}"; wget -qO- "http://127.0.0.1:${addr##*:}/health" || exit 1
+ENTRYPOINT ["./family-hub"]
+```
+
+Phase 4a puts a Node stage in front, and the build stage then compiles only the Go part (`make build` will also run npm, which this stage doesn't have):
+
+```dockerfile
 FROM node:22-alpine AS web
 WORKDIR /src/web
 COPY web/package*.json ./
@@ -862,32 +887,21 @@ RUN npm ci
 COPY web/ ./
 # vite outDir is ../internal/webui/dist
 RUN npm run build
-
-# Dockerfiles don't support trailing comments on instruction lines, so comments stay on their own lines.
-FROM golang:${GO_VERSION}-alpine AS gobuild
-WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
+# ...and in the build stage, after COPY . .:
 COPY --from=web /src/internal/webui/dist ./internal/webui/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/family-hub ./cmd
-
-# Pin the current Alpine release. Phase 6 adds ffmpeg + vips here.
-FROM alpine:3.21
-RUN apk add --no-cache ca-certificates tzdata \
- && adduser -D -u 10001 app
-USER app
-WORKDIR /app
-COPY --from=gobuild /out/family-hub .
-EXPOSE 8080
-HEALTHCHECK CMD wget -qO- http://127.0.0.1:8080/health || exit 1
-ENTRYPOINT ["./family-hub"]
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/family-hub ./cmd
 ```
+
+The binary is PID 1 (exec-form `ENTRYPOINT`), so `docker stop`'s SIGTERM reaches it directly and the 8-second shutdown (§6.4) fits in Docker's 10-second grace.
 
 `.dockerignore` (keeps `node_modules` and local build output out of the build context, so `COPY . .` doesn't drag in gigabytes):
 
 ```
 .git
+.github
+.idea
+.vscode
+.DS_Store
 bin
 docs
 **/node_modules
@@ -897,7 +911,7 @@ internal/webui/dist
 .env*
 ```
 
-The image builds its own `dist/` in the web stage, so excluding the local one is correct.
+The image builds its own `dist/` (the placeholder until Phase 4a, then the web stage), so excluding the local one is correct. `.env*` keeps local secrets out of the build context.
 
 ## 9. Media pipeline
 

@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+.vscode
+.DS_Store
+bin
+docs
+**/node_modules
+web/dist
+internal/webui/dist
+*.md
+.env*
