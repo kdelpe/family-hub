@@ -338,7 +338,7 @@ $$;
 
 **Accidental-delete protection ("someone deletes grandma").** `persons`, `events` and `media` carry `created_by`/`uploader_id`, `updated_at` and `deleted_at`. `DELETE /api/persons/{id}` is admin-only and only sets `deleted_at`; relationships stay intact, so an admin-only `POST /api/persons/{id}/restore` brings her back with her tree position. A hard purge is a separate manual admin command, never an API call. `updated_at` is set explicitly in every sqlc `UPDATE` (`updated_at = now()`) rather than by a trigger, which keeps behavior visible in the query files.
 
-### 3.2 `000001_init_schema.down.sql`
+### 3.2 Full schema rollback (each phase's `.down.sql` drops its own part)
 
 ```sql
 DROP FUNCTION IF EXISTS masked_birth_date(persons, boolean, uuid);
@@ -698,13 +698,13 @@ Changes vs V2: no CORS middleware (Vite proxies `/api`, so dev is same-origin to
 
 ### 6.2 Embedded migrations (`internal/database/migrate.go`)
 
-`database.MigrateUp(url)`, used by `family-hub migrate up` and by `serve` with `AUTO_MIGRATE`, runs the migrations embedded from `internal/database/migrations/` through golang-migrate's `iofs` source and pgx v5 driver. The driver registers the `pgx5://` scheme, so the `postgres://` prefix is rewritten (that's why `DATABASE_URL` must be a URL, §6.5), and a 10-second `connect_timeout` is added unless the URL sets one. It refuses a dirty database and one at a version the binary doesn't have (an older release); golang-migrate makes those checks under its advisory lock, so concurrent starts are safe. With no migrations embedded it returns without connecting.
+`database.MigrateUp(url)`, used by `family-hub migrate up` and by `serve` with `AUTO_MIGRATE`, runs the migrations embedded from `internal/database/migrations/` through golang-migrate's `iofs` source and pgx v5 driver. The driver registers the `pgx5://` scheme, so the `postgres://` prefix is rewritten (that's why `DATABASE_URL` must be a URL, §6.5), and two timeouts are added unless the URL sets them (both are constants at the top of `migrate.go`): `connect_timeout` of 10 seconds, so an unreachable host fails fast, and `lock_timeout` of 5 minutes, because the driver waits for its advisory lock with no deadline. golang-migrate's own lock wait is raised to the same 5 minutes (default 15 seconds), so a second start waits its turn, then fails rather than hanging. It refuses a dirty database and one at a version the binary doesn't have (an older release); golang-migrate makes those checks under the lock, so concurrent starts are safe, which is why there are no pre-checks of our own. With no migrations embedded it returns without connecting.
 
 **No `migrate down`.** Rolling back a schema on real data loses data, so a change is undone by a new migration (or a backup restore). Locally, reset with `docker compose down -v`, `make up`, `make migrate-up`. Each migration still ships a `.down.sql`: a test applies every embedded migration, rolls them all back and applies them again.
 
 **One migration per phase:** each phase adds the tables its code uses, starting with the auth tables in Phase 2. §3.1 shows the full schema as one file for reading; it's split by phase when written. `serve` runs `MigrateUp` on startup only when `AUTO_MIGRATE=true`; otherwise use `family-hub migrate up`.
 
-**Tests** run against `TEST_DATABASE_URL`, each in a throwaway schema (`search_path`), using small migrations in `internal/database/testdata/`. They skip locally when it's unset and fail in CI.
+**Tests** run against `TEST_DATABASE_URL`, each in a throwaway schema (`search_path`), using small migrations in `internal/database/testdata/`. `make test` always sets it, so run `make up` first; a plain `go test` without it skips them locally, and CI fails instead of skipping.
 
 ### 6.3 SPA handler (`internal/webui`)
 
@@ -820,7 +820,7 @@ build:
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/family-hub ./cmd
 ```
 
-`sqlc`, `govulncheck` and the `migrate` CLI are pinned in `go.mod` via `go get -tool ...` (Go ≥1.24), so there's no `@latest`. mockery (v3) and golangci-lint are installed as pinned binaries instead, locally and in CI, because both projects advise against installing via `go get`/`go tool` (dependency conflicts) **(verify current guidance)**. `go tool migrate` is only used for `create`; `up/down` go through the app binary, so the CLI doesn't need database build tags **(verify)**.
+`sqlc`, `govulncheck` and the `migrate` CLI are pinned in `go.mod` via `go get -tool ...` (Go ≥1.24), so there's no `@latest`. mockery (v3) and golangci-lint are installed as pinned binaries instead, locally and in CI, because both projects advise against installing via `go get`/`go tool` (dependency conflicts) **(verify current guidance)**. `go tool migrate` is only used for `create`; `migrate up` goes through the app binary, so the CLI doesn't need database build tags **(verify)**.
 
 ### 8.2 `compose.yaml` (shape)
 
