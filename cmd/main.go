@@ -58,7 +58,10 @@ func serve() error {
 	if err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
-	return app.Run(context.Background(), cfg)
+	if err := app.Run(context.Background(), cfg); err != nil {
+		return fmt.Errorf("serve: %w", err)
+	}
+	return nil
 }
 
 func migrate(args []string) error {

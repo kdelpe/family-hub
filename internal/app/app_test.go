@@ -5,7 +5,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -13,27 +12,17 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kdelpe/family-hub/internal/config"
+	"github.com/kdelpe/family-hub/internal/testdb"
 )
 
 func TestRunServesUntilCanceled(t *testing.T) {
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		if os.Getenv("CI") != "" {
-			t.Fatal("TEST_DATABASE_URL must be set in CI")
-		}
-		t.Skip("TEST_DATABASE_URL not set; run `make up` and `make test`")
-	}
+	url := testdb.URL(t)
 	addr := freeAddr(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- Run(ctx, config.Config{DatabaseURL: url, HTTPAddr: addr}) }()
 
-	var resp *http.Response
-	require.Eventually(t, func() bool {
-		var err error
-		resp, err = http.Get("http://" + addr + "/ready")
-		return err == nil
-	}, 5*time.Second, 50*time.Millisecond)
+	resp := waitForServer(t, "http://"+addr+"/ready", done)
 	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -42,7 +31,7 @@ func TestRunServesUntilCanceled(t *testing.T) {
 }
 
 func TestRunFailsWithoutADatabase(t *testing.T) {
-	err := Run(context.Background(), config.Config{DatabaseURL: "postgres://app@127.0.0.1:1/familyhub", HTTPAddr: "127.0.0.1:0"})
+	err := Run(context.Background(), config.Config{DatabaseURL: testdb.UnreachableURL, HTTPAddr: "127.0.0.1:0"})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "database:")
@@ -59,7 +48,7 @@ func TestServeLetsInFlightRequestsFinish(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	served := make(chan error, 1)
-	go func() { served <- serve(ctx, srv, ln) }()
+	go func() { served <- serve(ctx, srv, ln, time.Second) }()
 
 	body := make(chan string, 1)
 	go func() {
@@ -85,15 +74,64 @@ func TestServeLetsInFlightRequestsFinish(t *testing.T) {
 	require.NoError(t, <-served)
 }
 
+func TestServeCancelsRequestsThatOutlastTheGrace(t *testing.T) {
+	started, canceled := make(chan struct{}), make(chan struct{})
+	srv := &http.Server{Handler: http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-r.Context().Done()
+		close(canceled)
+	})}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan error, 1)
+	go func() { served <- serve(ctx, srv, ln, 100*time.Millisecond) }()
+	go func() {
+		if resp, err := http.Get("http://" + ln.Addr().String()); err == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+	<-started
+
+	cancel()
+
+	err = <-served
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("the stuck request's context was never canceled")
+	}
+}
+
 func TestServeReportsAFailedListener(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	require.NoError(t, ln.Close())
 
-	err = serve(context.Background(), &http.Server{}, ln)
+	err = serve(context.Background(), &http.Server{}, ln, time.Second)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "serve:")
+	assert.Contains(t, err.Error(), "http:")
+}
+
+// Fails with Run's own error if it returns before the server answers.
+func waitForServer(t *testing.T, url string, done <-chan error) *http.Response {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		resp, err := http.Get(url)
+		if err == nil {
+			return resp
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("Run returned before serving: %v", err)
+		case <-deadline:
+			t.Fatalf("server never answered: %v", err)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 }
 
 // Run takes an address, not a listener, so pick a port that was free a moment ago.

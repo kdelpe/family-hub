@@ -29,9 +29,7 @@ const (
 
 // Run serves until ctx is canceled or the process gets SIGINT or SIGTERM.
 func Run(ctx context.Context, cfg config.Config) error {
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
+	// Before the signal handler, so Ctrl-C still ends a migration waiting on the lock.
 	if cfg.AutoMigrate {
 		if err := database.MigrateUp(cfg.DatabaseURL); err != nil {
 			return err
@@ -54,28 +52,36 @@ func Run(ctx context.Context, cfg config.Config) error {
 		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
 	}
+
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	// After the first signal, a second one kills the process as usual.
+	context.AfterFunc(ctx, stop)
+
 	slog.InfoContext(ctx, "listening", "addr", ln.Addr().String())
-	return serve(ctx, srv, ln)
+	return serve(ctx, srv, ln, shutdownTimeout)
 }
 
-// serve lets in-flight requests finish, up to shutdownTimeout, once ctx is done.
-func serve(ctx context.Context, srv *http.Server, ln net.Listener) error {
+// serve lets in-flight requests finish, up to grace, once ctx is done.
+func serve(ctx context.Context, srv *http.Server, ln net.Listener, grace time.Duration) error {
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
 
 	select {
 	case err := <-served:
-		return fmt.Errorf("serve: %w", err)
+		return fmt.Errorf("http: %w", err)
 	case <-ctx.Done():
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), grace)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
+		// Closing the connections cancels the requests' contexts, so their queries give back pool connections.
+		_ = srv.Close()
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	if err := <-served; !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("serve: %w", err)
+		return fmt.Errorf("http: %w", err)
 	}
 	slog.Info("stopped")
 	return nil
