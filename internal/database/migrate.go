@@ -68,8 +68,8 @@ func newMigrate(fsys fs.FS, databaseURL string) (*migrate.Migrate, error) {
 		_ = src.Close()
 		return nil, fmt.Errorf("init: %w", err)
 	}
-	// Longer than lock_timeout, so Postgres ends the wait rather than leaving the lock query running.
-	m.LockTimeout = lockWait + time.Minute
+	// Postgres's lock_timeout is the real bound; this only has to outlast it, even when the URL raises it.
+	m.LockTimeout = 24 * time.Hour
 	return m, nil
 }
 
