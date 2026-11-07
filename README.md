@@ -23,6 +23,7 @@ make test    # tests with the race detector (needs `make up`)
 make lint    # golangci-lint, same version as CI
 make build   # bin/family-hub
 make migrate-up   # apply pending migrations to the dev database
+make run     # serve on :8080 against the dev database (/health, /ready)
 make down    # stop the containers (`docker compose down -v` also wipes the data)
 ```
 

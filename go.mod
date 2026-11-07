@@ -3,6 +3,7 @@ module github.com/kdelpe/family-hub
 go 1.27
 
 require (
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/stretchr/testify v1.12.1

@@ -1,6 +1,8 @@
 package database
 
 import (
+	"context"
+	"database/sql/driver"
 	"embed"
 	"errors"
 	"fmt"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/golang-migrate/migrate/v4"
 	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	"github.com/golang-migrate/migrate/v4/source"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -27,12 +30,12 @@ const (
 //go:embed migrations
 var embedded embed.FS
 
-func MigrateUp(databaseURL string) error {
-	return migrateUp(embedded, databaseURL)
+func MigrateUp(ctx context.Context, databaseURL string) error {
+	return migrateUp(ctx, embedded, databaseURL)
 }
 
-func migrateUp(fsys fs.FS, databaseURL string) error {
-	m, err := newMigrate(fsys, databaseURL)
+func migrateUp(ctx context.Context, fsys fs.FS, databaseURL string) error {
+	m, last, err := newMigrate(ctx, fsys, databaseURL)
 	if err != nil {
 		return fmt.Errorf("migrate up: %w", err)
 	}
@@ -41,53 +44,93 @@ func migrateUp(fsys fs.FS, databaseURL string) error {
 	}
 	defer func() { _, _ = m.Close() }()
 
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("migrate up: %w", explain(err))
+	// One step at a time, so a canceled ctx stops between migrations, never inside one.
+	// (golang-migrate's own GracefulStop is a data race.)
+	for {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("migrate up: %w", err)
+		}
+		err := m.Steps(1)
+		// Past the last migration Steps reports "not exist"; so does an unknown version, which isn't at last.
+		if errors.Is(err, fs.ErrNotExist) {
+			v, dirty, verr := m.Version()
+			if verr != nil {
+				return fmt.Errorf("migrate up: read version: %w", verr)
+			}
+			if !dirty && v == last {
+				return nil
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("migrate up: %w", explain(err))
+		}
 	}
-	return nil
 }
 
-func newMigrate(fsys fs.FS, databaseURL string) (m *migrate.Migrate, err error) {
+func lastVersion(src source.Driver) (last uint, ok bool, err error) {
+	v, err := src.First()
+	for err == nil {
+		last, ok = v, true
+		v, err = src.Next(v)
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return 0, false, err
+	}
+	return last, ok, nil
+}
+
+// m is nil when nothing is embedded.
+func newMigrate(ctx context.Context, fsys fs.FS, databaseURL string) (m *migrate.Migrate, last uint, err error) {
 	src, err := iofs.New(fsys, "migrations")
 	if err != nil {
-		return nil, fmt.Errorf("migrations source: %w", err)
+		return nil, 0, fmt.Errorf("migrations source: %w", err)
 	}
 	defer func() {
 		if m == nil {
 			_ = src.Close()
 		}
 	}()
-	if _, err := src.First(); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("migrations source: %w", err)
+	last, ok, err := lastVersion(src)
+	if err != nil {
+		return nil, 0, fmt.Errorf("migrations source: %w", err)
+	}
+	if !ok {
+		return nil, 0, nil
 	}
 
 	connURL, err := withTimeouts(databaseURL)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	// pgx's redaction of the password is best effort, so its error is dropped.
 	cfg, err := pgx.ParseConfig(connURL)
 	if err != nil {
-		return nil, errors.New("DATABASE_URL is not a valid connection string")
+		return nil, 0, errInvalidConnString
 	}
 	// Opened here, not from a URL by the driver: it re-encodes the query, turning %20 into a + that pgx reads literally.
 	db := stdlib.OpenDB(*cfg)
+	// WithInstance pings without a context, so connect here first where a signal can cancel it.
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		// database/sql's pgx adapter reports a canceled ping as ErrBadConn, hiding the cancellation.
+		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, driver.ErrBadConn) {
+			err = ctxErr
+		}
+		return nil, 0, fmt.Errorf("init: %w", err)
+	}
 	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{})
 	if err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("init: %w", err)
+		return nil, 0, fmt.Errorf("init: %w", err)
 	}
 	m, err = migrate.NewWithInstance("iofs", src, "pgx5", driver)
 	if err != nil {
 		_ = driver.Close()
-		return nil, fmt.Errorf("init: %w", err)
+		return nil, 0, fmt.Errorf("init: %w", err)
 	}
 	// Postgres's lock_timeout is the real bound; this only has to outlast it, even when the URL raises it.
 	m.LockTimeout = 24 * time.Hour
-	return m, nil
+	return m, last, nil
 }
 
 func explain(err error) error {

@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
+	"github.com/kdelpe/family-hub/internal/app"
 	"github.com/kdelpe/family-hub/internal/config"
 	"github.com/kdelpe/family-hub/internal/database"
 )
@@ -24,21 +28,33 @@ Commands:
 `
 
 func main() {
-	if err := run(os.Args[1:], os.Stdout); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// After the first signal, a second one kills the process as usual.
+	context.AfterFunc(ctx, stop)
+	err := run(ctx, os.Args[1:], os.Stdout)
+	// Read before stop(), which cancels ctx itself.
+	signaled := ctx.Err() != nil
+	stop()
+	// Stopped by a signal before the work finished: an ordinary stop, not a failure.
+	if signaled && errors.Is(err, context.Canceled) {
+		fmt.Fprintln(os.Stderr, "family-hub: stopped")
+		return
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "family-hub:", err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string, stdout io.Writer) error {
+func run(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) == 0 {
-		return serve()
+		return serve(ctx)
 	}
 	switch args[0] {
 	case "serve":
-		return serve()
+		return serve(ctx)
 	case "migrate":
-		return migrate(args[1:])
+		return migrate(ctx, args[1:])
 	case "admin":
 		return admin(args[1:])
 	case "-h", "--help", "help":
@@ -49,10 +65,20 @@ func run(args []string, stdout io.Writer) error {
 	}
 }
 
-func serve() error           { return fmt.Errorf("serve: %w", errNotImplemented) }
 func admin(_ []string) error { return fmt.Errorf("admin: %w", errNotImplemented) }
 
-func migrate(args []string) error {
+func serve(ctx context.Context) error {
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		return fmt.Errorf("serve: %w", err)
+	}
+	if err := app.Run(ctx, cfg); err != nil {
+		return fmt.Errorf("serve: %w", err)
+	}
+	return nil
+}
+
+func migrate(ctx context.Context, args []string) error {
 	if len(args) != 1 || args[0] != "up" {
 		return fmt.Errorf("migrate: %w", errMigrateUsage)
 	}
@@ -60,5 +86,5 @@ func migrate(args []string) error {
 	if err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
-	return database.MigrateUp(cfg.DatabaseURL)
+	return database.MigrateUp(ctx, cfg.DatabaseURL)
 }
