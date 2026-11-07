@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -33,7 +34,10 @@ func Pool(t testing.TB) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if err := pool.Ping(t.Context()); err != nil {
+	// Bounded, so an address that drops packets fails the test instead of hanging it.
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if err := pool.Ping(ctx); err != nil {
 		t.Fatal(err)
 	}
 	return pool
