@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql/driver"
 	"embed"
 	"errors"
 	"fmt"
@@ -112,7 +113,7 @@ func newMigrate(ctx context.Context, fsys fs.FS, databaseURL string) (m *migrate
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		// database/sql's pgx adapter reports a canceled ping as ErrBadConn, hiding the cancellation.
-		if ctxErr := ctx.Err(); ctxErr != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, driver.ErrBadConn) {
 			err = ctxErr
 		}
 		return nil, 0, fmt.Errorf("init: %w", err)
