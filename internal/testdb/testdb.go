@@ -29,7 +29,7 @@ func URL(t testing.TB) string {
 // Pool connects to the test Postgres, skipping or failing as URL does.
 func Pool(t testing.TB) *pgxpool.Pool {
 	t.Helper()
-	pool, err := pgxpool.New(context.Background(), URL(t))
+	pool, err := pgxpool.New(t.Context(), URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func Pool(t testing.TB) *pgxpool.Pool {
 // UnreachablePool connects lazily, so creating it succeeds and every use fails.
 func UnreachablePool(t testing.TB) *pgxpool.Pool {
 	t.Helper()
-	pool, err := pgxpool.New(context.Background(), UnreachableURL)
+	pool, err := pgxpool.New(t.Context(), UnreachableURL)
 	if err != nil {
 		t.Fatal(err)
 	}

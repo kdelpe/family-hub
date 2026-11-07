@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/kdelpe/family-hub/internal/handler"
@@ -26,9 +27,11 @@ func TestHealth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pool := testdb.UnreachablePool(t)
+			var pool *pgxpool.Pool
 			if tt.reachable {
 				pool = testdb.Pool(t)
+			} else {
+				pool = testdb.UnreachablePool(t)
 			}
 			rec := httptest.NewRecorder()
 
