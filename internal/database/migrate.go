@@ -50,9 +50,12 @@ func newMigrate(fsys fs.FS, databaseURL string) (*migrate.Migrate, error) {
 	if err != nil {
 		return nil, fmt.Errorf("migrations source: %w", err)
 	}
-	if _, err := src.First(); errors.Is(err, fs.ErrNotExist) {
+	if _, err := src.First(); err != nil {
 		_ = src.Close()
-		return nil, nil
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("migrations source: %w", err)
 	}
 
 	migrateURL, err := toMigrateURL(databaseURL)
@@ -62,9 +65,11 @@ func newMigrate(fsys fs.FS, databaseURL string) (*migrate.Migrate, error) {
 	}
 	m, err := migrate.NewWithSourceInstance("iofs", src, migrateURL)
 	if err != nil {
+		_ = src.Close()
 		return nil, fmt.Errorf("init: %w", err)
 	}
-	m.LockTimeout = lockWait
+	// Longer than lock_timeout, so Postgres ends the wait rather than leaving the lock query running.
+	m.LockTimeout = lockWait + time.Minute
 	return m, nil
 }
 
@@ -73,7 +78,7 @@ func explain(err error) error {
 	switch {
 	case errors.As(err, &dirty):
 		return fmt.Errorf("database is dirty at version %d: a migration failed partway; repair it as in architecture §6.4", dirty.Version)
-	// No typed error exists for this; the message is the only signal.
+	// It wraps fs.ErrNotExist, but so does a missing socket; the message is the precise signal.
 	case strings.Contains(err.Error(), "no migration found for version"):
 		return fmt.Errorf("database is at a version this binary doesn't have (an older release?): %w", err)
 	}

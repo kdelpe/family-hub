@@ -111,7 +111,7 @@ func TestMigrateUpGivesUpOnAHeldLock(t *testing.T) {
 	}
 	holder := make(chan error, 1)
 	go func() { holder <- migrateUp(slow, db.url) }()
-	time.Sleep(500 * time.Millisecond)
+	require.Eventually(t, db.sleeping, 5*time.Second, 50*time.Millisecond)
 
 	start := time.Now()
 	err := migrateUp(slow, db.url+"&lock_timeout=500")
@@ -228,6 +228,14 @@ func (s testSchema) version(t *testing.T) int {
 		"SELECT coalesce(max(version), 0) FROM "+pgx.Identifier{s.name, "schema_migrations"}.Sanitize()).Scan(&version)
 	require.NoError(t, err)
 	return version
+}
+
+// The holder has the advisory lock once its migration is running.
+func (s testSchema) sleeping() bool {
+	var sleeping bool
+	err := s.conn.QueryRow(context.Background(),
+		"SELECT EXISTS (SELECT FROM pg_stat_activity WHERE query LIKE 'SELECT pg_sleep(3)%' AND pid <> pg_backend_pid())").Scan(&sleeping)
+	return err == nil && sleeping
 }
 
 func (s testSchema) tableExists(t *testing.T, table string) bool {
