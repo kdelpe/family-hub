@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +41,10 @@ func migrateUp(ctx context.Context, fsys fs.FS, databaseURL string) error {
 		return nil
 	}
 	defer func() { _, _ = m.Close() }()
+	last, err := lastVersion(fsys)
+	if err != nil {
+		return fmt.Errorf("migrate up: migrations source: %w", err)
+	}
 
 	// One step at a time, so a canceled ctx stops between migrations, never inside one.
 	// (golang-migrate's own GracefulStop is a data race.)
@@ -50,14 +53,34 @@ func migrateUp(ctx context.Context, fsys fs.FS, databaseURL string) error {
 			return fmt.Errorf("migrate up: stopped: %w", err)
 		}
 		err := m.Steps(1)
-		// The bare sentinel means every migration is applied; the unknown-version error wraps it instead.
-		if err == os.ErrNotExist {
-			return nil
+		// Past the last migration Steps reports "not exist"; so does an unknown version, which isn't at last.
+		if errors.Is(err, fs.ErrNotExist) {
+			if v, dirty, verr := m.Version(); verr == nil && !dirty && v == last {
+				return nil
+			}
 		}
 		if err != nil {
 			return fmt.Errorf("migrate up: %w", explain(err))
 		}
 	}
+}
+
+func lastVersion(fsys fs.FS) (uint, error) {
+	src, err := iofs.New(fsys, "migrations")
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = src.Close() }()
+	var last uint
+	v, err := src.First()
+	for err == nil {
+		last = v
+		v, err = src.Next(v)
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return 0, err
+	}
+	return last, nil
 }
 
 func newMigrate(fsys fs.FS, databaseURL string) (m *migrate.Migrate, err error) {
