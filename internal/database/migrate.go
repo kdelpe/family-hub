@@ -13,6 +13,7 @@ import (
 
 	"github.com/golang-migrate/migrate/v4"
 	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	"github.com/golang-migrate/migrate/v4/source"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -33,7 +34,7 @@ func MigrateUp(ctx context.Context, databaseURL string) error {
 }
 
 func migrateUp(ctx context.Context, fsys fs.FS, databaseURL string) error {
-	m, err := newMigrate(fsys, databaseURL)
+	m, last, err := newMigrate(fsys, databaseURL)
 	if err != nil {
 		return fmt.Errorf("migrate up: %w", err)
 	}
@@ -41,21 +42,21 @@ func migrateUp(ctx context.Context, fsys fs.FS, databaseURL string) error {
 		return nil
 	}
 	defer func() { _, _ = m.Close() }()
-	last, err := lastVersion(fsys)
-	if err != nil {
-		return fmt.Errorf("migrate up: migrations source: %w", err)
-	}
 
 	// One step at a time, so a canceled ctx stops between migrations, never inside one.
 	// (golang-migrate's own GracefulStop is a data race.)
 	for {
 		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("migrate up: stopped: %w", err)
+			return fmt.Errorf("migrate up: %w", err)
 		}
 		err := m.Steps(1)
 		// Past the last migration Steps reports "not exist"; so does an unknown version, which isn't at last.
 		if errors.Is(err, fs.ErrNotExist) {
-			if v, dirty, verr := m.Version(); verr == nil && !dirty && v == last {
+			v, dirty, verr := m.Version()
+			if verr != nil {
+				return fmt.Errorf("migrate up: read version: %w", verr)
+			}
+			if !dirty && v == last {
 				return nil
 			}
 		}
@@ -65,65 +66,62 @@ func migrateUp(ctx context.Context, fsys fs.FS, databaseURL string) error {
 	}
 }
 
-func lastVersion(fsys fs.FS) (uint, error) {
-	src, err := iofs.New(fsys, "migrations")
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = src.Close() }()
-	var last uint
+// ok is false when the source has no migrations.
+func lastVersion(src source.Driver) (last uint, ok bool, err error) {
 	v, err := src.First()
 	for err == nil {
-		last = v
+		last, ok = v, true
 		v, err = src.Next(v)
 	}
 	if !errors.Is(err, fs.ErrNotExist) {
-		return 0, err
+		return 0, false, err
 	}
-	return last, nil
+	return last, ok, nil
 }
 
-func newMigrate(fsys fs.FS, databaseURL string) (m *migrate.Migrate, err error) {
+// m is nil when nothing is embedded; last is the highest embedded version.
+func newMigrate(fsys fs.FS, databaseURL string) (m *migrate.Migrate, last uint, err error) {
 	src, err := iofs.New(fsys, "migrations")
 	if err != nil {
-		return nil, fmt.Errorf("migrations source: %w", err)
+		return nil, 0, fmt.Errorf("migrations source: %w", err)
 	}
 	defer func() {
 		if m == nil {
 			_ = src.Close()
 		}
 	}()
-	if _, err := src.First(); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("migrations source: %w", err)
+	last, ok, err := lastVersion(src)
+	if err != nil {
+		return nil, 0, fmt.Errorf("migrations source: %w", err)
+	}
+	if !ok {
+		return nil, 0, nil
 	}
 
 	connURL, err := withTimeouts(databaseURL)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	// pgx's redaction of the password is best effort, so its error is dropped.
 	cfg, err := pgx.ParseConfig(connURL)
 	if err != nil {
-		return nil, errInvalidConnString
+		return nil, 0, errInvalidConnString
 	}
 	// Opened here, not from a URL by the driver: it re-encodes the query, turning %20 into a + that pgx reads literally.
 	db := stdlib.OpenDB(*cfg)
 	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{})
 	if err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("init: %w", err)
+		return nil, 0, fmt.Errorf("init: %w", err)
 	}
 	m, err = migrate.NewWithInstance("iofs", src, "pgx5", driver)
 	if err != nil {
 		_ = driver.Close()
-		return nil, fmt.Errorf("init: %w", err)
+		return nil, 0, fmt.Errorf("init: %w", err)
 	}
 	// Postgres's lock_timeout is the real bound; this only has to outlast it, even when the URL raises it.
 	m.LockTimeout = 24 * time.Hour
-	return m, nil
+	return m, last, nil
 }
 
 func explain(err error) error {

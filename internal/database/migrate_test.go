@@ -242,7 +242,7 @@ func (s testSchema) exec(t *testing.T, sql string) {
 
 func (s testSchema) rollBackAll(t *testing.T) {
 	t.Helper()
-	m, err := newMigrate(embedded, s.url)
+	m, _, err := newMigrate(embedded, s.url)
 	require.NoError(t, err)
 	defer func() { _, _ = m.Close() }()
 
