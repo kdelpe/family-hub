@@ -111,6 +111,7 @@ func TestMigrateUpGivesUpOnAHeldLock(t *testing.T) {
 	}
 	holder := make(chan error, 1)
 	go func() { holder <- migrateUp(slow, db.url) }()
+	t.Cleanup(func() { assert.NoError(t, <-holder) })
 	require.Eventually(t, db.sleeping, 5*time.Second, 50*time.Millisecond)
 
 	start := time.Now()
@@ -119,7 +120,6 @@ func TestMigrateUpGivesUpOnAHeldLock(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "lock timeout")
 	assert.Less(t, time.Since(start), 2*time.Second)
-	require.NoError(t, <-holder)
 }
 
 func TestToMigrateURL(t *testing.T) {
