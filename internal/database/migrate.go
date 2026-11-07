@@ -66,7 +66,6 @@ func migrateUp(ctx context.Context, fsys fs.FS, databaseURL string) error {
 	}
 }
 
-// ok is false when the source has no migrations.
 func lastVersion(src source.Driver) (last uint, ok bool, err error) {
 	v, err := src.First()
 	for err == nil {
@@ -79,7 +78,7 @@ func lastVersion(src source.Driver) (last uint, ok bool, err error) {
 	return last, ok, nil
 }
 
-// m is nil when nothing is embedded; last is the highest embedded version.
+// m is nil when nothing is embedded.
 func newMigrate(ctx context.Context, fsys fs.FS, databaseURL string) (m *migrate.Migrate, last uint, err error) {
 	src, err := iofs.New(fsys, "migrations")
 	if err != nil {
@@ -111,11 +110,11 @@ func newMigrate(ctx context.Context, fsys fs.FS, databaseURL string) (m *migrate
 	db := stdlib.OpenDB(*cfg)
 	// WithInstance pings without a context, so connect here first where a signal can cancel it.
 	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
 		// database/sql's pgx adapter reports a canceled ping as ErrBadConn, hiding the cancellation.
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			err = ctxErr
 		}
-		_ = db.Close()
 		return nil, 0, fmt.Errorf("init: %w", err)
 	}
 	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{})
