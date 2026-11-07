@@ -1,17 +1,15 @@
 package router_test
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/kdelpe/family-hub/internal/handler"
 	"github.com/kdelpe/family-hub/internal/router"
+	"github.com/kdelpe/family-hub/internal/testdb"
 )
 
 func TestRoutes(t *testing.T) {
@@ -29,10 +27,7 @@ func TestRoutes(t *testing.T) {
 	}
 
 	// Unreachable, so /ready answers 503 without needing Postgres.
-	pool, err := pgxpool.New(context.Background(), "postgres://app@127.0.0.1:1/familyhub")
-	require.NoError(t, err)
-	t.Cleanup(pool.Close)
-	routes := router.New(router.Handlers{Health: handler.NewHealth(pool)})
+	routes := router.New(router.Handlers{Health: handler.NewHealth(testdb.UnreachablePool(t))})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

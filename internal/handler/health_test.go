@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/kdelpe/family-hub/internal/database"
 	"github.com/kdelpe/family-hub/internal/handler"
+	"github.com/kdelpe/family-hub/internal/testdb"
 )
 
 func TestHealth(t *testing.T) {
@@ -30,7 +30,7 @@ func TestHealth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pool := unreachablePool(t)
+			pool := testdb.UnreachablePool(t)
 			if tt.reachable {
 				pool = testPool(t)
 			}
@@ -44,25 +44,9 @@ func TestHealth(t *testing.T) {
 	}
 }
 
-// Nothing listens on port 1, so every ping is refused at once.
-func unreachablePool(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	pool, err := pgxpool.New(context.Background(), "postgres://app@127.0.0.1:1/familyhub")
-	require.NoError(t, err)
-	t.Cleanup(pool.Close)
-	return pool
-}
-
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		if os.Getenv("CI") != "" {
-			t.Fatal("TEST_DATABASE_URL must be set in CI")
-		}
-		t.Skip("TEST_DATABASE_URL not set; run `make up` and `make test`")
-	}
-	pool, err := database.NewPool(context.Background(), url)
+	pool, err := database.NewPool(context.Background(), testdb.URL(t))
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
 	return pool

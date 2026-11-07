@@ -1,0 +1,37 @@
+// Package testdb is for tests only: the shared test Postgres, and a database that is never there.
+package testdb
+
+import (
+	"context"
+	"os"
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// UnreachableURL refuses every connection at once: nothing listens on port 1.
+const UnreachableURL = "postgres://app@127.0.0.1:1/familyhub"
+
+// URL returns TEST_DATABASE_URL, skipping the test without it, except in CI where it must be set.
+func URL(t testing.TB) string {
+	t.Helper()
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		if os.Getenv("CI") != "" {
+			t.Fatal("TEST_DATABASE_URL must be set in CI")
+		}
+		t.Skip("TEST_DATABASE_URL not set; run `make up` and `make test`")
+	}
+	return url
+}
+
+// UnreachablePool connects lazily, so creating it succeeds and every use fails.
+func UnreachablePool(t testing.TB) *pgxpool.Pool {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), UnreachableURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
+}

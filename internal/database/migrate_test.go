@@ -16,6 +16,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kdelpe/family-hub/internal/testdb"
 )
 
 // testdata/migrations: 000001 creates widgets, 000002 adds widgets.name.
@@ -86,7 +88,7 @@ func TestMigrateUpRefusesUnsafeDatabase(t *testing.T) {
 func TestMigrateUpWithNoMigrationsDoesNotConnect(t *testing.T) {
 	empty := fstest.MapFS{"migrations/README.md": {Data: []byte("none yet")}}
 
-	require.NoError(t, migrateUp(empty, "postgres://app@127.0.0.1:1/unreachable"))
+	require.NoError(t, migrateUp(empty, testdb.UnreachableURL))
 }
 
 func TestEmbeddedMigrationsRoundTrip(t *testing.T) {
@@ -190,13 +192,7 @@ type testSchema struct {
 
 func newTestSchema(t *testing.T) testSchema {
 	t.Helper()
-	base := os.Getenv("TEST_DATABASE_URL")
-	if base == "" {
-		if os.Getenv("CI") != "" {
-			t.Fatal("TEST_DATABASE_URL must be set in CI")
-		}
-		t.Skip("TEST_DATABASE_URL not set; run `make up` and `make test`")
-	}
+	base := testdb.URL(t)
 
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, base)
