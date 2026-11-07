@@ -21,3 +21,15 @@ updates:
       # A Postgres major upgrade needs a dump and restore, so it's done by hand.
       - dependency-name: postgres
         update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      docker-images:
+        patterns: ["*"]
+    ignore:
+      # A new Go minor moves with go.mod and CI, by hand.
+      - dependency-name: golang
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
