@@ -42,6 +42,7 @@ A private, invite-only, multi-generational family archive: interactive family tr
 |---|---|---|
 | Language | Go 1.27 (`go 1.27` in `go.mod`) | 1.25 is the floor for `CrossOriginProtection` and `synctest`; `go tool` directives need ≥1.24. |
 | HTTP | chi v5 | stdlib `net/http` compatible |
+| Logs | zerolog | JSON on stderr; each request's logger travels in its context (`zerolog.Ctx`) |
 | DB access | pgx v5 pool + **sqlc** | Typed queries from `.sql` files; no runtime reflection |
 | Migrations | golang-migrate, embedded, pgx v5 driver | Auto-run gated by `AUTO_MIGRATE` |
 | Storage | S3 API via aws-sdk-go-v2 | Local server chosen at the start of Phase 5 (§9.5); R2 in prod |
@@ -49,7 +50,7 @@ A private, invite-only, multi-generational family archive: interactive family tr
 | Frontend | React 19 + TypeScript + Vite, TanStack Query | Focus-view family tree (§7); plain CSS + SVG connectors |
 | Jobs | Postgres queue (`FOR UPDATE SKIP LOCKED`) in-process | No Redis/SQS needed at this scale; added in Phase 6 |
 | Auth | Argon2id via `golang.org/x/crypto/argon2`; Google sign-in via `golang.org/x/oauth2` + `github.com/coreos/go-oidc/v3`; hidden password prompt for `admin create` via `golang.org/x/term` | The `x/` packages are maintained by the Go team |
-| Stdlib where nothing else is needed | `log/slog` (logs), `flag` (subcommands), `os.Getenv` + validation (config), `http.CrossOriginProtection` (CSRF, Go 1.25), `crypto/*` | No cobra, no config library |
+| Stdlib where nothing else is needed | `flag` (subcommands), `os.Getenv` + validation (config), `http.CrossOriginProtection` (CSRF, Go 1.25), `crypto/*` | No cobra, no config library |
 | Testing | `testing` + **testify** (assertions, mocks) + **mockery** (generated mocks) + `testing/synctest` (fake clock, Go 1.25) | Database is never mocked: real Postgres in integration tests (§13) |
 | Lint & security | golangci-lint, `govulncheck` | |
 | CI / releases | GitHub Actions | `.github/` (§13.1) |
@@ -622,14 +623,14 @@ type Middleware struct {
 
 func New(h Handlers, mw Middleware) http.Handler {
     r := chi.NewRouter()
-    r.Use(middleware.RequestID)
+    r.Use(httpx.RequestID)              // a fresh ID per request; the client's is ignored
     if mw.TrustedProxy {                // only when actually behind a proxy you control
         r.Use(middleware.RealIP)
     }
-    r.Use(httpx.RequestLogger)          // JSON logs via log/slog
-    r.Use(middleware.Recoverer)
-    r.Use(middleware.GetHead)           // HEAD answers like GET, for uptime monitors
     r.Use(httpx.SecurityHeaders)        // CSP, nosniff, Referrer-Policy, X-Robots-Tag: noindex
+    r.Use(httpx.RequestLogger("/health", "/ready")) // zerolog JSON; successful health probes left out
+    r.Use(httpx.Recover)                // logs the panic and its stack, answers 500 with only the headers above
+    r.Use(middleware.GetHead)           // HEAD answers like GET, for uptime monitors
 
     r.Get("/health", h.Health.Live)
     r.Get("/ready", h.Health.Ready)
@@ -992,12 +993,12 @@ For a "multi-decade" archive, this section matters more than any other.
 ## 12. Security & privacy checklist
 
 - Invite-only; enumeration-safe login, forgot-password and Google matching; Argon2id password hashes; single-use 256-bit emailed tokens; Google sign-in only links to an already-invited, verified email; server-side revocable sessions, revoked on password reset (§5).
-- Security headers: strict CSP (`default-src 'self'`; `img-src`/`media-src` allow the bucket host), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `X-Robots-Tag: noindex`, HSTS in prod.
+- Security headers: strict CSP (`default-src 'self'; frame-ancestors 'none'`; `img-src`/`media-src` allow the bucket host), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `X-Robots-Tag: noindex`, HSTS in prod.
 - All SQL via sqlc (parameterized). JSON body size limits. Upload MIME allowlist; keys never derived from user filenames.
 - Secrets only from env/secret manager; separate S3 credentials for app vs. backup jobs; the app's key can't delete from the backup bucket.
 - Contact info is private by default, filtered server-side per viewer (§5.2), excluded from the tree payload, search and logs, and never includes the login email.
 - Family photos include children and living people: HTTPS only, no public buckets, no search-engine indexing, short-lived presigned URLs.
-- Structured logs (slog) without tokens, cookies or presigned URLs.
+- Structured logs (zerolog JSON on stderr) without tokens, cookies or presigned URLs. Each request logs one line: method, path without its query (it can carry search terms), status, bytes, duration and a server-made request ID (also sent as `X-Request-Id`). Successful `/health` and `/ready` probes are left out.
 
 ## 13. Testing & CI
 

@@ -8,6 +8,12 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/kdelpe/family-hub/internal/handler"
+	"github.com/kdelpe/family-hub/internal/httpx"
+)
+
+const (
+	livePath  = "/health"
+	readyPath = "/ready"
 )
 
 type Handlers struct {
@@ -16,11 +22,16 @@ type Handlers struct {
 
 func New(h Handlers) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.Recoverer)
+	r.Use(httpx.RequestID)
+	// Outside Recover, which keeps the headers set before it on a 500.
+	r.Use(httpx.SecurityHeaders)
+	// Outside Recover, so a panic is logged with the 500 it got.
+	r.Use(httpx.RequestLogger(livePath, readyPath))
+	r.Use(httpx.Recover)
 	r.Use(middleware.GetHead)
 
-	r.Get("/health", h.Health.Live)
-	r.Get("/ready", h.Health.Ready)
+	r.Get(livePath, h.Health.Live)
+	r.Get(readyPath, h.Health.Ready)
 
 	return r
 }

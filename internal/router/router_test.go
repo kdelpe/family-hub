@@ -37,6 +37,7 @@ func TestRoutes(t *testing.T) {
 			routes.ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, nil))
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
+			assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"), "security headers on every response")
 		})
 	}
 }

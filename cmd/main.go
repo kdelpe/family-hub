@@ -9,6 +9,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/rs/zerolog"
+
 	"github.com/kdelpe/family-hub/internal/app"
 	"github.com/kdelpe/family-hub/internal/config"
 	"github.com/kdelpe/family-hub/internal/database"
@@ -19,6 +21,9 @@ var (
 	errMigrateUsage   = errors.New("usage: family-hub migrate up")
 )
 
+// Milliseconds, so lines from the same second keep their order.
+const logTimeFormat = "2006-01-02T15:04:05.000Z07:00"
+
 const usage = `Usage: family-hub [command]
 
 Commands:
@@ -28,6 +33,10 @@ Commands:
 `
 
 func main() {
+	zerolog.TimeFieldFormat = logTimeFormat
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	// What zerolog.Ctx returns for a context that carries no logger of its own.
+	zerolog.DefaultContextLogger = &logger
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	// After the first signal, a second one kills the process as usual.
 	context.AfterFunc(ctx, stop)
@@ -37,11 +46,11 @@ func main() {
 	stop()
 	// Stopped by a signal before the work finished: an ordinary stop, not a failure.
 	if signaled && errors.Is(err, context.Canceled) {
-		fmt.Fprintln(os.Stderr, "family-hub: stopped")
+		logger.Info().Msg("stopped")
 		return
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "family-hub:", err)
+		logger.Error().Err(err).Msg("failed")
 		os.Exit(1)
 	}
 }

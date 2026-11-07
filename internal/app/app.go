@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	"github.com/kdelpe/family-hub/internal/config"
 	"github.com/kdelpe/family-hub/internal/database"
@@ -42,7 +43,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
-	slog.InfoContext(ctx, "listening", "addr", ln.Addr().String())
+	zerolog.Ctx(ctx).Info().Str("addr", ln.Addr().String()).Msg("listening")
 	return serve(ctx, newServer(pool), ln, shutdownTimeout)
 }
 
@@ -79,6 +80,6 @@ func serve(ctx context.Context, srv *http.Server, ln net.Listener, grace time.Du
 	if err := <-served; !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("http: %w", err)
 	}
-	slog.Info("stopped")
+	zerolog.Ctx(ctx).Info().Msg("stopped")
 	return nil
 }

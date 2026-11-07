@@ -3,9 +3,10 @@ package handler
 import (
 	"context"
 	"io"
-	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 const readyTimeout = 2 * time.Second
@@ -30,7 +31,7 @@ func (h *Health) Ready(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), readyTimeout)
 	defer cancel()
 	if err := h.db.Ping(ctx); err != nil {
-		slog.WarnContext(r.Context(), "ready check failed", "err", err)
+		zerolog.Ctx(r.Context()).Warn().Err(err).Msg("ready check failed")
 		http.Error(w, "database unavailable", http.StatusServiceUnavailable)
 		return
 	}
