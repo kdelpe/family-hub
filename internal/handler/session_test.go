@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -30,14 +31,17 @@ func TestSessionGateRequire(t *testing.T) {
 		cookie       *http.Cookie
 		authenticate bool
 		authErr      error
+		canceled     bool
 		wantStatus   int
 		wantBody     string
 	}{
 		{name: "valid secure cookie", secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: "tok"}, authenticate: true, wantStatus: http.StatusOK},
 		{name: "valid local cookie", cookie: &http.Cookie{Name: "fh_session", Value: "tok"}, authenticate: true, wantStatus: http.StatusOK},
 		{name: "no cookie", secureCookie: true, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
+		{name: "secure cookie name in local dev", cookie: &http.Cookie{Name: "__Host-fh_session", Value: "tok"}, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
 		{name: "local cookie name when secure", secureCookie: true, cookie: &http.Cookie{Name: "fh_session", Value: "tok"}, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
 		{name: "no active session", secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: "tok"}, authenticate: true, authErr: auth.ErrNoSession, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
+		{name: "client gone", secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: "tok"}, authenticate: true, authErr: context.Canceled, canceled: true, wantStatus: http.StatusOK},
 		{name: "database error", secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: "tok"}, authenticate: true, authErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 	}
 
@@ -57,11 +61,20 @@ func TestSessionGateRequire(t *testing.T) {
 			if tt.cookie != nil {
 				req.AddCookie(tt.cookie)
 			}
+			if tt.canceled {
+				ctx, cancel := context.WithCancel(req.Context())
+				cancel()
+				req = req.WithContext(ctx)
+			}
 			rec := httptest.NewRecorder()
 
 			handler.NewSessionGate(sessions, tt.secureCookie).Require(next).ServeHTTP(rec, req)
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
+			if tt.canceled {
+				assert.Empty(t, rec.Body.String(), "nothing written for a client that left")
+				return
+			}
 			if tt.wantBody == "" {
 				assert.Equal(t, member, seen)
 				return

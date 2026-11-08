@@ -73,7 +73,8 @@ func (s *Sessions) Authenticate(ctx context.Context, token string) (Session, err
 	}
 	if row.Stale {
 		// The session is valid either way; a failed touch only delays sliding the idle window.
-		if err := s.q.TouchSession(ctx, gen.TouchSessionParams{IDHash: idHash, TouchAfter: sessionTouchAfter}); err != nil {
+		err := s.q.TouchSession(ctx, gen.TouchSessionParams{IDHash: idHash, TouchAfter: sessionTouchAfter})
+		if err != nil && !errors.Is(ctx.Err(), context.Canceled) {
 			zerolog.Ctx(ctx).Warn().Err(err).Msg("touch session")
 		}
 	}
