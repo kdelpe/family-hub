@@ -1033,7 +1033,7 @@ For a "multi-decade" archive, this section matters more than any other.
 | Job | Checks |
 |---|---|
 | go | `go mod tidy -diff`, golangci-lint (its `standard` linters include `go vet`, plus the gofmt formatter; `.golangci.yml`), `govulncheck`, `go test -race` (via `make test`) with a `postgres:18.6` service whose `POSTGRES_DB` is `familyhub_test`, `make build` |
-| generated | `go tool sqlc diff`: fails if the committed sqlc output differs from the queries (mockery joins once there are mocks) |
+| generated | Re-runs `sqlc generate`; fails if the working tree then differs, so stale or orphaned output is caught (mockery joins once there are mocks) |
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |
 

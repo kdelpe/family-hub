@@ -73,8 +73,10 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: sqlc output matches the queries
-        run: go tool sqlc diff
+      - name: Committed sqlc output matches the queries
+        run: |
+          go tool sqlc generate
+          test -z "$(git status --porcelain)" || { git status --porcelain; exit 1; }
 
   docker:
     runs-on: ubuntu-latest
