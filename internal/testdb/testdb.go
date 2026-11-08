@@ -3,10 +3,14 @@ package testdb
 
 import (
 	"context"
+	"crypto/rand"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -47,6 +51,36 @@ func Pool(t testing.TB) *pgxpool.Pool {
 func UnreachablePool(t testing.TB) *pgxpool.Pool {
 	t.Helper()
 	pool, err := pgxpool.New(t.Context(), UnreachableURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
+}
+
+// MigratedPool connects to a throwaway schema, dropped when the test ends, after running migrate on it.
+func MigratedPool(t testing.TB, migrate func(ctx context.Context, url string) error) *pgxpool.Pool {
+	t.Helper()
+	admin := Pool(t)
+	ctx := context.Background()
+	schema := pgx.Identifier{"test_" + strings.ToLower(rand.Text())}
+	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+schema.Sanitize()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = admin.Exec(ctx, "DROP SCHEMA "+schema.Sanitize()+" CASCADE") })
+
+	u, err := url.Parse(URL(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := u.Query()
+	q.Set("search_path", schema[0])
+	u.RawQuery = q.Encode()
+	if err := migrate(t.Context(), u.String()); err != nil {
+		t.Fatal(err)
+	}
+
+	pool, err := pgxpool.New(t.Context(), u.String())
 	if err != nil {
 		t.Fatal(err)
 	}
