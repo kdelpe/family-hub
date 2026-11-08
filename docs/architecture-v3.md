@@ -75,7 +75,7 @@ family-hub/
 │   ├── config/                   # env loader + validation
 │   ├── httpx/                    # JSON helpers, error type, pagination, security middleware
 │   ├── auth/                     # passwords, Google sign-in, emailed tokens, sessions, rate limits (Phase 2)
-│   ├── admin/                    # invites, roles, person linking                    (Phase 2)
+│   ├── admin/                    # invites, roles (Phase 2); person linking (Phase 3)
 │   ├── family/                   # persons, relationships, tree, ancestors, cycles   (Phase 3)
 │   ├── contacts/                 # contact methods, visibility, directory            (Phase 3)
 │   ├── event/                    #                                                   (Phase 5)
@@ -118,6 +118,8 @@ Why `family/` is one package: relationship writes need the ancestor walk (cycle 
 Conventions: **Postgres 18**. UUID PKs via the built-in `uuidv7()` (Postgres 18, no extension): time-ordered, so B-tree indexes stay compact. `uuidv7()` embeds the creation time. That's acceptable: IDs reach signed-in members, and media IDs also appear in presigned bucket URLs (§9), which can be forwarded. Those keys already carry the upload year (`media/<yyyy>/...`), and anyone holding the URL can see the photo itself, so the extra exposure is only the upload timestamp. **Postgres 18 everywhere:** local compose, the CI test service, production, and the `pg_dump` client used for backups (an older `pg_dump` refuses a newer server). Managed hosting (§14 Option B) is only an option on providers that offer 18. `TIMESTAMPTZ` everywhere. Partial dates are stored as a date plus a precision flag (`1950-01-01` + `year` means "1950"). Soft delete via `deleted_at` on people, events and media.
 
 ### 3.1 Full schema (written as one migration per phase, §6.2)
+
+Phase 2's migration (`000001_create_auth_tables`) holds `users`, `auth_tokens`, `sessions` and `oauth_flows`; `users.person_id`, its unique index and its foreign key arrive with `persons` in Phase 3, as do `pg_trgm` and `masked_birth_date`.
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- fuzzy name search for tagging autocomplete
@@ -406,7 +408,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/api/auth/me` | session | Current user, role, linked person |
 | POST | `/api/auth/logout` | session | Deletes the session row |
 | GET | `/api/admin/users` | admin | List users |
-| POST | `/api/admin/users` | admin | Invite: `{email, role, person_id}` (person required, §5.1) |
+| POST | `/api/admin/users` | admin | Invite: `{email, role}`; from Phase 3 also `person_id`, required (§5.1) |
 | PATCH | `/api/admin/users/{id}` | admin | Role, disable/enable, link person, change email (clears Google link and password, revokes sessions and tokens, re-invites; §5) |
 | GET | `/api/tree` | session | All non-deleted people + relationships (flat; see §10) |
 | GET | `/api/persons` | session | `?q=` trigram search for autocomplete |
@@ -490,7 +492,7 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
    - Otherwise show a generic "no invitation found for this account" page. Nothing is created. Relatives whose invited address isn't Gmail or Workspace simply use their password; the page says so.
 4. After linking, sign-in is by `sub`, so a later change to the Google account's email doesn't lock them out. A Google link is removed only as part of an admin email change (below).
 
-**Invites.** The admin invites `{email, role, person_id}`; the invite email says: *"Set a password, or sign in with Google if this is your Google address."* Admins can resend an invite or trigger a password reset from the users screen.
+**Invites.** The admin invites `{email, role}` (plus `person_id` from Phase 3, §5.1); the invite email says: *"Set a password, or sign in with Google if this is your Google address."* Admins can resend an invite or trigger a password reset from the users screen.
 
 **When an admin changes a user's email** (e.g. fixing a typo'd invite): the user's `google_sub` **and password** (`password_hash`, `password_changed_at`) are cleared, their sessions and outstanding tokens are deleted, and a fresh invite goes to the new address. Whoever received the old address loses all access, since the email itself isn't a secret and the old password must not keep working. The real person sets a new password from the fresh invite, or re-links Google. There is deliberately **no standalone "unlink Google"**: Google only auto-links addresses it owns (Gmail/Workspace), so an unlinked account would simply re-link on its next sign-in. An unwanted link can only come from a wrong email address, which an email change fixes (the old Google account no longer matches); disabling the user cuts off all access.
 
@@ -520,9 +522,9 @@ Honest limits of this: a determined attacker rotating IPs can, at worst, hit the
 
 ### 5.1 Linking a login to a person (so people land in the right spot)
 
-An admin decides who each login *is*; nobody claims a spot themselves.
+An admin decides who each login *is*; nobody claims a spot themselves. This lands in Phase 3 with the `persons` table; until then, invited logins are unlinked.
 
-- **Invite flow:** the admin picks the person first (trigram search over the tree), or creates the person in the same step, then enters the email and role. Searching before creating prevents duplicate nodes. A person is **required**: every invited login is linked at invite time. (Only the bootstrap admin from `admin create` may start unlinked; they link themselves from the admin screen.)
+- **Invite flow:** the admin picks the person first (trigram search over the tree), or creates the person in the same step, then enters the email and role. Searching before creating prevents duplicate nodes. From Phase 3, a person is **required**: every invited login is linked at invite time, and logins invited before then are linked from the admin screen. (Only the bootstrap admin from `admin create` may start unlinked; they link themselves from the admin screen.)
 - **Constraint:** `uq_users_person` allows at most one login per person. Couples who share an email address still need separate invites.
 - **Guard:** soft-deleting a person who has an active login is refused until the admin unlinks or disables that login.
 - **On login:** `/api/auth/me` returns `person_id`; the tree opens centered on that person with a "you" marker and a "back to me" button, and relationships are labelled from their point of view ("your aunt Rosa"). Labels are computed client-side from the already-loaded tree using the lowest common ancestor; build that as a pure function with a table-driven test (cousins once removed, half-siblings, step-relations).
@@ -953,7 +955,7 @@ MinIO was the V2 default. Its community edition is in maintenance mode and has b
 
 - **`GET /api/tree`** is two flat reads: all non-deleted `persons` (slim columns) and all `relationships` whose endpoints are both non-deleted. At family scale (hundreds to low thousands of people) this is a few hundred KB; no recursion needed. The client builds union nodes and runs the layout. Birth dates in this payload are masked per viewer (§5.2): non-admins get month/day for living people, never the year.
 - **Optional later:** `GET /api/persons/{id}/neighborhood?up=2&down=2` returns just the households around one person (same masking), if the full payload ever gets too large for phones. Not needed at family scale.
-- **One masked person read.** Every query that returns people to a browser (`/api/tree`, `/api/persons`, `/api/persons/{id}`, ancestors, descendants, directory, event and media tags) returns `masked_birth_date(p, $viewer_is_admin, $viewer_person_id)` (defined in the init migration, §3.1) and never selects `birth_date` or `p.*`. sqlc can't share column lists between queries, so the SQL function is the single place the rule lives, and a living person's birth year can't leak through an endpoint added later.
+- **One masked person read.** Every query that returns people to a browser (`/api/tree`, `/api/persons`, `/api/persons/{id}`, ancestors, descendants, directory, event and media tags) returns `masked_birth_date(p, $viewer_is_admin, $viewer_person_id)` (defined in Phase 3's migration with `persons`, §3.1) and never selects `birth_date` or `p.*`. sqlc can't share column lists between queries, so the SQL function is the single place the rule lives, and a living person's birth year can't leak through an endpoint added later.
 - **Ancestors / descendants** use recursive CTEs with a depth bound, over **family-parent links only** (`biological`, `adoptive`; §3.4), so foster links never appear as ancestors or descendants:
 
 ```sql
@@ -1061,8 +1063,8 @@ Real family data gets entered from Phase 4 onward, so the MVP ships (deploy + ba
 | Phase | Goal | Exit criteria |
 |---|---|---|
 | **1. Foundation** | Repo, compose, config, migrations, health, CI, `webui` embed + SPA handler, draft-release and release workflows | `make dev-api` runs (it starts compose itself); `/health` + `/ready` pass; CI green on a fresh clone (stub UI) |
-| **2. Auth** | Invite-only email + password (Argon2id), invite and forgot-password emails, change password, sessions, rate limits, `admin create`, admin user endpoints, person linking (§5.1). Then Continue with Google as a separate PR | Invite → set password via Mailpit → sign in; forgot/reset works and revokes sessions; Google sign-in links an invited account and refuses an uninvited one; enumeration, replay, expiry and disabled-user tests pass; one-login-per-person enforced |
-| **3. People, tree & contacts API** | Admin-only persons/relationships writes, `/api/tree`, ancestors/descendants, cycle validation, contact methods with visibility filtering, `/api/directory` | Integration tests incl. cycle rejection and the role/visibility matrix (§13); seed script loads a sample family |
+| **2. Auth** | Invite-only email + password (Argon2id), invite and forgot-password emails, change password, sessions, rate limits, `admin create`, admin user endpoints. Then Continue with Google as a separate PR | Invite → set password via Mailpit → sign in; forgot/reset works and revokes sessions; Google sign-in links an invited account and refuses an uninvited one; enumeration, replay, expiry and disabled-user tests pass |
+| **3. People, tree & contacts API** | Person linking (§5.1, moved from Phase 2 so it lands with the `persons` table), admin-only persons/relationships writes, `/api/tree`, ancestors/descendants, cycle validation, contact methods with visibility filtering, `/api/directory` | Integration tests incl. cycle rejection and the role/visibility matrix (§13); one-login-per-person enforced; seed script loads a sample family |
 | **4a. Frontend shell** | Login UI, onboarding + "My profile" (bio and contact visibility toggles; initials only, avatars arrive in Phase 5), person profile page, directory, upcoming-birthdays panel | Accept an invite via Mailpit, set a password, sign in and land on the home page; forgot-password works end to end; edit own bio and contact visibility; a member sees only visible contacts in profiles and the directory; works on desktop and phone |
 | **4b. Family tree** | **Mockup first:** a standalone clickable focus-view mockup (§7) with the real family shape, tried on the owner's phone, then by one non-technical relative. Then the real focus-view family tree centered on "you" (§7), "back to me", search-to-jump, admin add-parent/child/partner/sibling flows (§7) | Sample family can be navigated by clicking, with multiple marriages and step-children shown as households, on desktop and phone; an admin can build a branch without touching raw edges |
 | **4c Ship the MVP** | Deploy (§14), mail provider + domain with SPF/DKIM/DMARC, nightly backups + failure alert, restore drill, TLS, basic security headers | Deployed behind TLS; login email lands in Gmail and Outlook inboxes; restore drill passes; a deliberately failed backup triggers the alert; first real invites sent |
