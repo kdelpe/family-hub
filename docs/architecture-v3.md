@@ -14,7 +14,7 @@ A private, invite-only, multi-generational family archive: interactive family tr
 | 2 | Fresh clone fails `go build`/`go test` because `dist/` doesn't exist | `make ui-stub` writes a placeholder; `dist/` is git-ignored (§8.1) |
 | 3 | Makefile `POSTGRES_URL` garbled in the PDF | Rewritten; migrations also run via the binary itself (§8) |
 | 4 | 6-digit code: brute-forceable, replayable, bare SHA-256, no session storage | Email + password (Argon2id) or Google sign-in; 256-bit single-use invite/reset tokens; server-side sessions, rate limits, enumeration-safe (§5) |
-| 5 | `RealIP` trusted unconditionally | Only enabled behind a configured trusted proxy (§6) |
+| 5 | `RealIP` trusted unconditionally | Behind a configured trusted proxy only, and from the proxy's own `X-Forwarded-For` entry (§6) |
 | 6 | No way to *view* media; no write endpoints | Full endpoint table incl. presigned-GET and CRUD (§4) |
 | 7 | `confirm` trusted the client | `HeadObject` verify; Content-Length and Content-Type signed into the PUT; orphan cleanup (§9) |
 | 8 | HEVC `.mov` won't play in most browsers | Processing worker (ffmpeg) with poster + H.264 variant, phased in (§9.4, §15) |
@@ -74,7 +74,8 @@ family-hub/
 │   │   └── mocks/                # mockery mocks of those service interfaces
 │   ├── config/                   # env loader + validation
 │   ├── httpx/                    # JSON helpers, error type, pagination, security middleware
-│   ├── auth/                     # passwords, Google sign-in, emailed tokens, sessions, rate limits (Phase 2)
+│   ├── auth/                     # passwords, Google sign-in, emailed tokens, sessions, per-account limits (Phase 2)
+│   ├── ratelimit/                # in-memory token bucket per key, with refunds; no HTTP
 │   ├── admin/                    # invites, roles (Phase 2); person linking (Phase 3)
 │   ├── family/                   # persons, relationships, tree, ancestors, cycles   (Phase 3)
 │   ├── contacts/                 # contact methods, visibility, directory            (Phase 3)
@@ -504,11 +505,11 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
 
 **Auth cleanup job** (Phase 2, in-process, no extra infrastructure): a ticker runs every 15 minutes and deletes, in batches of 1,000, `oauth_flows` that are consumed or expired, `auth_tokens` consumed or expired more than 7 days ago, and `sessions` past their expiry. Expiry is already enforced on every read; the job only keeps the tables from growing. Each table has an index on its expiry column for this.
 
-**Rate limits** (in-memory `x/time/rate` is fine for a single instance). Two layers:
+**Rate limits** (in memory, fine for a single instance). `internal/ratelimit` is a small token bucket per key rather than `x/time/rate`, which can't give back a token granted at once; it drops a bucket only once it has refilled, so memory stays bounded and no penalty is forgiven early. Each limit is a bucket of N that refills evenly over the window ("5 per 15 min" is 5 at once, then one more every 3 minutes), so a sustained attacker gets N per window after the first burst. A blocked request gets `429 rate_limited` with `Retry-After`. Each endpoint's limits land with the endpoint. Two layers:
 
-- **Per IP, as router middleware** (it only needs the client address): `login` 20 per 15 min, `password/forgot` 20/hour, `password/reset` 10/minute, `google/*` 20/minute.
+- **Per IP, as router middleware** (it only needs the client address; IPv6 is counted per /64, since one household usually holds a whole /64): `login` 20 per 15 min, `password/forgot` 20/hour, `password/reset` 10/minute, `google/*` 20/minute.
 - **Per account, inside the auth service** (only the service knows the email and whether verification failed), counting **failures only**:
-  - `login`: 5 failures per 15 min per **email + IP** pair, and a backstop of 50 failures per hour per email across all IPs.
+  - `login`: 5 failures per 15 min per **email + IP** pair, and a backstop of 50 failures per hour per email across all IPs. Each attempt takes its slot *before* the Argon2 verify (so parallel guesses can't all pass an unspent limit) and gets it back unless the password was wrong; a right password refused because a credential changed mid-login isn't a failure. Emails over 254 characters are refused before they become limiter keys.
   - `password/change`: 5 wrong `current_password` attempts per 15 min per user.
   - `password/forgot`: 5 emails per hour per address.
 
@@ -627,7 +628,7 @@ func New(h Handlers, mw Middleware) http.Handler {
     r := chi.NewRouter()
     r.Use(httpx.RequestID)              // a fresh ID per request; the client's is ignored
     if mw.TrustedProxy {                // only when actually behind a proxy you control
-        r.Use(middleware.RealIP)
+        r.Use(httpx.ClientIPFromProxy)  // last X-Forwarded-For entry; chi's RealIP prefers headers a client can forge
     }
     r.Use(httpx.SecurityHeaders)        // CSP, nosniff, Referrer-Policy, X-Robots-Tag: noindex
     r.Use(httpx.RequestLogger("/health", "/ready")) // zerolog JSON; successful health probes left out
@@ -754,7 +755,7 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 | `HTTP_ADDR` | `:8080` | Default `:8080` |
 | `BASE_URL` | `http://localhost:5173` (dev), `https://family.example.com` | Used in email links and the Origin check |
 | `AUTO_MIGRATE` | `false` | Default `false`; `make dev-api` sets `true`. Booleans accept `true`/`false` in any case |
-| `TRUSTED_PROXY` | `false` | Enables `RealIP` |
+| `TRUSTED_PROXY` | `false` | Takes the client IP from the last `X-Forwarded-For` entry, the one the proxy appended |
 | `COOKIE_SECURE` | `true` | `false` for local http |
 | `SMTP_HOST/PORT/USER/PASS`, `MAIL_FROM` | `localhost:1025` (Mailpit) | Invites and password resets |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | from Google Cloud console | Optional: when unset, "Continue with Google" is hidden. Redirect URI is `<BASE_URL>/api/auth/google/callback` |

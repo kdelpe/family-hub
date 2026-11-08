@@ -24,11 +24,19 @@ type Handlers struct {
 
 type Middleware struct {
 	RequireSession func(http.Handler) http.Handler
+	LimitLogin     func(http.Handler) http.Handler
+	TrustedProxy   bool
 }
 
 func New(h Handlers, mw Middleware) http.Handler {
+	if mw.RequireSession == nil || mw.LimitLogin == nil {
+		panic("router: RequireSession and LimitLogin are required")
+	}
 	r := chi.NewRouter()
 	r.Use(httpx.RequestID)
+	if mw.TrustedProxy {
+		r.Use(httpx.ClientIPFromProxy)
+	}
 	// Both outside Recover: its 500 keeps the headers set before it, and the logger records that 500.
 	r.Use(httpx.SecurityHeaders)
 	r.Use(httpx.RequestLogger(livePath, readyPath))
@@ -46,7 +54,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 		r.NotFound(httpx.NotFound)
 		r.MethodNotAllowed(httpx.MethodNotAllowed)
 
-		r.Post("/auth/login", h.Auth.Login)
+		r.With(mw.LimitLogin).Post("/auth/login", h.Auth.Login)
 		// Outside the session group, so an expired session's cookie still gets cleared.
 		r.Post("/auth/logout", h.Auth.Logout)
 

@@ -15,6 +15,8 @@ import (
 	"github.com/kdelpe/family-hub/internal/config"
 	"github.com/kdelpe/family-hub/internal/database"
 	"github.com/kdelpe/family-hub/internal/handler"
+	"github.com/kdelpe/family-hub/internal/httpx"
+	"github.com/kdelpe/family-hub/internal/ratelimit"
 	"github.com/kdelpe/family-hub/internal/router"
 )
 
@@ -25,6 +27,9 @@ const (
 	idleTimeout       = 2 * time.Minute
 	// Under docker stop's default 10s grace before SIGKILL.
 	shutdownTimeout = 8 * time.Second
+
+	loginsPerIP       = 20
+	loginsPerIPWindow = 15 * time.Minute
 )
 
 // Run serves until ctx is canceled. The port opens only once the app can answer,
@@ -46,17 +51,21 @@ func Run(ctx context.Context, cfg config.Config) error {
 		return fmt.Errorf("listen: %w", err)
 	}
 	zerolog.Ctx(ctx).Info().Str("addr", ln.Addr().String()).Msg("listening")
-	return serve(ctx, newServer(pool, cfg.CookieSecure), ln, shutdownTimeout)
+	return serve(ctx, newServer(pool, cfg), ln, shutdownTimeout)
 }
 
-func newServer(pool *pgxpool.Pool, cookieSecure bool) *http.Server {
-	cookie := handler.NewSessionCookie(cookieSecure)
+func newServer(pool *pgxpool.Pool, cfg config.Config) *http.Server {
+	cookie := handler.NewSessionCookie(cfg.CookieSecure)
 	routes := router.New(
 		router.Handlers{
 			Health: handler.NewHealth(pool),
 			Auth:   handler.NewAuth(auth.NewService(pool, auth.NewHasher()), cookie),
 		},
-		router.Middleware{RequireSession: handler.NewSessionGate(auth.NewSessions(pool), cookie).Require},
+		router.Middleware{
+			RequireSession: handler.NewSessionGate(auth.NewSessions(pool), cookie).Require,
+			LimitLogin:     httpx.LimitByIP(ratelimit.New(loginsPerIP, loginsPerIPWindow)),
+			TrustedProxy:   cfg.TrustedProxy,
+		},
 	)
 	return &http.Server{
 		Handler:           routes,

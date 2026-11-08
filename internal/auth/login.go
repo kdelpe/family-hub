@@ -15,6 +15,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/kdelpe/family-hub/internal/database/gen"
+	"github.com/kdelpe/family-hub/internal/ratelimit"
 )
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
@@ -28,16 +29,39 @@ type User struct {
 const (
 	signInLockTimeout = 5 * time.Second
 	lockNotAvailable  = "55P03"
+
+	loginFailuresPerEmailAndIP       = 5
+	loginFailuresPerEmailAndIPWindow = 15 * time.Minute
+	loginFailuresPerEmail            = 50
+	loginFailuresPerEmailWindow      = time.Hour
+	// RFC 5321's limit; longer can't be a real address, and would pin big limiter keys.
+	maxEmailLen = 254
 )
+
+// The password was right but a credential changed meanwhile: refused, but not a failed guess.
+var errChangedDuringLogin = errors.New("credentials changed during login")
+
+type RateLimitedError struct {
+	RetryAfter time.Duration
+}
+
+func (e *RateLimitedError) Error() string { return "too many failed sign-ins" }
 
 type Service struct {
 	pool        *pgxpool.Pool
 	hasher      *Hasher
 	lockTimeout time.Duration
+
+	failuresByEmailAndIP *ratelimit.Limiter
+	failuresByEmail      *ratelimit.Limiter
 }
 
 func NewService(pool *pgxpool.Pool, hasher *Hasher) *Service {
-	return &Service{pool: pool, hasher: hasher, lockTimeout: signInLockTimeout}
+	return &Service{
+		pool: pool, hasher: hasher, lockTimeout: signInLockTimeout,
+		failuresByEmailAndIP: ratelimit.New(loginFailuresPerEmailAndIP, loginFailuresPerEmailAndIPWindow),
+		failuresByEmail:      ratelimit.New(loginFailuresPerEmail, loginFailuresPerEmailWindow),
+	}
 }
 
 func NormalizeEmail(email string) string {
@@ -48,17 +72,45 @@ type LoginInput struct {
 	Email         string
 	Password      string
 	UserAgent     string
+	ClientIP      string
 	ReplacesToken string
 }
 
 // Login returns a new session token. Every refusal is ErrInvalidCredentials after one Argon2
 // run, so the answer doesn't say why (timing differs only mid parameter migration, §5).
+// A key over its failure limit gets *RateLimitedError at once, without hashing.
 func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error) {
 	email := NormalizeEmail(in.Email)
 	// Postgres refuses NUL in text, which would turn this into a 500 instead of a refusal.
-	if strings.ContainsRune(email, 0) {
+	if len(email) > maxEmailLen || strings.ContainsRune(email, 0) {
 		return "", User{}, s.refuse(ctx, in.Password)
 	}
+	// Trimming can leave a short key that still holds the whole request body.
+	email = strings.Clone(email)
+
+	// Taken before the slow verify, so parallel guesses can't all pass an unspent limit.
+	pair := email + "\x00" + in.ClientIP
+	ok, wait := s.failuresByEmailAndIP.Take(pair)
+	if !ok {
+		return "", User{}, &RateLimitedError{RetryAfter: wait}
+	}
+	if ok, wait := s.failuresByEmail.Take(email); !ok {
+		s.failuresByEmailAndIP.Refund(pair)
+		return "", User{}, &RateLimitedError{RetryAfter: wait}
+	}
+
+	token, user, err := s.login(ctx, email, in)
+	if !errors.Is(err, ErrInvalidCredentials) {
+		s.failuresByEmailAndIP.Refund(pair)
+		s.failuresByEmail.Refund(email)
+	}
+	if errors.Is(err, errChangedDuringLogin) {
+		err = ErrInvalidCredentials
+	}
+	return token, user, err
+}
+
+func (s *Service) login(ctx context.Context, email string, in LoginInput) (string, User, error) {
 	found, err := gen.New(s.pool).GetLoginUser(ctx, email)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -99,12 +151,12 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error
 	case errors.As(err, &pgErr) && pgErr.Code == lockNotAvailable:
 		return "", User{}, ErrBusy
 	case errors.Is(err, pgx.ErrNoRows):
-		return "", User{}, ErrInvalidCredentials
+		return "", User{}, errChangedDuringLogin
 	case err != nil:
 		return "", User{}, fmt.Errorf("lock user: %w", err)
 	case locked.DisabledAt != nil || locked.Email != email ||
 		locked.PasswordChangedAt == nil || !locked.PasswordChangedAt.Equal(*found.PasswordChangedAt):
-		return "", User{}, ErrInvalidCredentials
+		return "", User{}, errChangedDuringLogin
 	}
 	if err := qtx.RecordLogin(ctx, gen.RecordLoginParams{ID: found.ID, NewPasswordHash: newHash}); err != nil {
 		return "", User{}, fmt.Errorf("record login: %w", err)

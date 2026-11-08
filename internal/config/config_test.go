@@ -57,6 +57,11 @@ func TestLoad(t *testing.T) {
 			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", CookieSecure: true},
 		},
 		{
+			name: "TRUSTED_PROXY behind Caddy",
+			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "TRUSTED_PROXY": "true"},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", CookieSecure: true, TrustedProxy: true},
+		},
+		{
 			name: "COOKIE_SECURE false for local http",
 			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "COOKIE_SECURE": "false"},
 			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080"},
@@ -145,6 +150,11 @@ func TestLoad(t *testing.T) {
 			name:        "AUTO_MIGRATE 1 is rejected",
 			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "AUTO_MIGRATE": "1"},
 			wantErrMsgs: []string{`AUTO_MIGRATE must be true or false, got "1"`},
+		},
+		{
+			name:        "TRUSTED_PROXY not a bool",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "TRUSTED_PROXY": "caddy"},
+			wantErrMsgs: []string{`TRUSTED_PROXY must be true or false, got "caddy"`},
 		},
 		{
 			name:        "COOKIE_SECURE not a bool",

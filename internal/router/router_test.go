@@ -4,11 +4,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/kdelpe/family-hub/internal/handler"
 	"github.com/kdelpe/family-hub/internal/handler/mocks"
+	"github.com/kdelpe/family-hub/internal/httpx"
+	"github.com/kdelpe/family-hub/internal/ratelimit"
 	"github.com/kdelpe/family-hub/internal/router"
 	"github.com/kdelpe/family-hub/internal/testdb"
 )
@@ -39,15 +43,7 @@ func TestRoutes(t *testing.T) {
 		{name: "the app is GET only", method: http.MethodPost, path: "/", wantStatus: http.StatusMethodNotAllowed},
 	}
 
-	cookie := handler.NewSessionCookie(true)
-	routes := router.New(
-		router.Handlers{
-			// Unreachable, so /ready answers 503 without needing Postgres.
-			Health: handler.NewHealth(testdb.UnreachablePool(t)),
-			Auth:   handler.NewAuth(mocks.NewAuthService(t), cookie),
-		},
-		router.Middleware{RequireSession: handler.NewSessionGate(mocks.NewSessionAuthenticator(t), cookie).Require},
-	)
+	routes := newRoutes(t, ratelimit.New(100, time.Minute), false)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -67,4 +63,53 @@ func TestRoutes(t *testing.T) {
 			assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"), "security headers on every response")
 		})
 	}
+}
+
+func TestLoginIsRateLimitedPerClientIP(t *testing.T) {
+	tests := []struct {
+		name         string
+		trustedProxy bool
+		secondFrom   http.Header
+		wantStatus   int
+	}{
+		{name: "same client", wantStatus: http.StatusTooManyRequests},
+		{name: "a spoofed X-Forwarded-For without a proxy", secondFrom: http.Header{"X-Forwarded-For": {"198.51.100.1"}}, wantStatus: http.StatusTooManyRequests},
+		{name: "another client behind the proxy", trustedProxy: true, secondFrom: http.Header{"X-Forwarded-For": {"198.51.100.1"}}, wantStatus: http.StatusUnsupportedMediaType},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			routes := newRoutes(t, ratelimit.New(1, time.Hour), tt.trustedProxy)
+			login := func(header http.Header) int {
+				req := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+				req.Header.Set("X-Forwarded-For", "203.0.113.7")
+				for k, v := range header {
+					req.Header[k] = v
+				}
+				rec := httptest.NewRecorder()
+				routes.ServeHTTP(rec, req)
+				return rec.Code
+			}
+
+			require.Equal(t, http.StatusUnsupportedMediaType, login(nil), "first attempt reaches the handler")
+			assert.Equal(t, tt.wantStatus, login(tt.secondFrom))
+		})
+	}
+}
+
+func newRoutes(t *testing.T, loginLimit *ratelimit.Limiter, trustedProxy bool) http.Handler {
+	t.Helper()
+	cookie := handler.NewSessionCookie(true)
+	return router.New(
+		router.Handlers{
+			// Unreachable, so /ready answers 503 without needing Postgres.
+			Health: handler.NewHealth(testdb.UnreachablePool(t)),
+			Auth:   handler.NewAuth(mocks.NewAuthService(t), cookie),
+		},
+		router.Middleware{
+			RequireSession: handler.NewSessionGate(mocks.NewSessionAuthenticator(t), cookie).Require,
+			LimitLogin:     httpx.LimitByIP(loginLimit),
+			TrustedProxy:   trustedProxy,
+		},
+	)
 }
