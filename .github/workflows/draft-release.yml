@@ -1,0 +1,52 @@
+name: Draft release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+# One run at a time, so back-to-back merges can't create two drafts. A newer queued run
+# replaces an older one, which is fine: it drafts from the newer commit.
+concurrency:
+  group: draft-release
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Create or update the draft release
+        run: |
+          set -euo pipefail
+
+          # The highest published vX.Y.Z; drafts, prereleases and other tags don't count.
+          prev=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1000 --json tagName --jq '.[].tagName' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)
+          draft=$(gh release list --limit 100 --json tagName,isDraft --jq '[.[] | select(.isDraft)][0].tagName // ""')
+
+          tag=$draft
+          if [ -z "$tag" ]; then
+            if [ -z "$prev" ]; then
+              tag=v0.1.0
+            else
+              IFS=. read -r major minor patch <<< "${prev#v}"
+              tag="v$major.$minor.$((patch + 1))"
+            fi
+          fi
+
+          args=(-f "tag_name=$tag" -f "target_commitish=$GITHUB_SHA")
+          if [ -n "$prev" ]; then args+=(-f "previous_tag_name=$prev"); fi
+          notes=$(gh api "repos/$GH_REPO/releases/generate-notes" "${args[@]}" --jq .body)
+
+          if [ -z "$draft" ]; then
+            gh release create "$tag" --draft --target "$GITHUB_SHA" --title "$tag" --notes "$notes"
+          # Re-checked just before editing, so a release the owner published meanwhile keeps their notes.
+          elif [ "$(gh release view "$draft" --json isDraft --jq .isDraft)" = true ]; then
+            # The draft's tag is kept, so a version the owner changed survives.
+            gh release edit "$draft" --target "$GITHUB_SHA" --notes "$notes"
+          fi
