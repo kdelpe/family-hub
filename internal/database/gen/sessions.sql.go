@@ -14,13 +14,13 @@ import (
 
 const createSession = `-- name: CreateSession :exec
 INSERT INTO sessions (id_hash, user_id, expires_at, user_agent)
-VALUES ($1, $2, $3, $4)
+VALUES ($1, $2, now() + $3::interval, $4)
 `
 
 type CreateSessionParams struct {
 	IDHash    []byte
 	UserID    uuid.UUID
-	ExpiresAt time.Time
+	Lifetime  time.Duration
 	UserAgent *string
 }
 
@@ -28,7 +28,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 	_, err := q.db.Exec(ctx, createSession,
 		arg.IDHash,
 		arg.UserID,
-		arg.ExpiresAt,
+		arg.Lifetime,
 		arg.UserAgent,
 	)
 	return err

@@ -20,23 +20,28 @@ func TestCreateSession(t *testing.T) {
 	agent := "test"
 
 	require.NoError(t, gen.New(tx).CreateSession(t.Context(), gen.CreateSessionParams{
-		IDHash: []byte{2}, UserID: userID, ExpiresAt: time.Now().Add(time.Hour), UserAgent: &agent,
+		IDHash: []byte{2}, UserID: userID, Lifetime: time.Hour, UserAgent: &agent,
 	}))
 
-	var got string
-	require.NoError(t, tx.QueryRow(t.Context(), `SELECT user_agent FROM sessions WHERE id_hash = '\x02'`).Scan(&got))
-	assert.Equal(t, agent, got)
+	var gotAgent string
+	var gotLifetime time.Duration
+	require.NoError(t, tx.QueryRow(t.Context(),
+		`SELECT user_agent, expires_at - now() FROM sessions WHERE id_hash = '\x02'`).Scan(&gotAgent, &gotLifetime))
+	assert.Equal(t, agent, gotAgent)
+	assert.Equal(t, time.Hour, gotLifetime)
 }
 
 func TestGetActiveSession(t *testing.T) {
 	db := authSchema(t)
 	tests := []struct {
 		name        string
+		idHash      []byte
 		setup       string
 		idleTimeout time.Duration
 		wantFound   bool
 	}{
 		{name: "an active session", idleTimeout: time.Hour, wantFound: true},
+		{name: "an unknown id", idHash: []byte{9}, idleTimeout: time.Hour},
 		{name: "idle too long", setup: `UPDATE sessions SET last_seen_at = now() - interval '2 hours'`, idleTimeout: time.Hour},
 		{name: "past its absolute expiry", setup: `UPDATE sessions SET expires_at = now() - interval '1 second'`, idleTimeout: time.Hour},
 		{name: "a disabled user", setup: `UPDATE users SET disabled_at = now()`, idleTimeout: time.Hour},
@@ -50,7 +55,12 @@ func TestGetActiveSession(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			row, err := gen.New(tx).GetActiveSession(t.Context(), gen.GetActiveSessionParams{IDHash: seededSessionHash, IdleTimeout: tt.idleTimeout})
+			idHash := seededSessionHash
+			if tt.idHash != nil {
+				idHash = tt.idHash
+			}
+
+			row, err := gen.New(tx).GetActiveSession(t.Context(), gen.GetActiveSessionParams{IDHash: idHash, IdleTimeout: tt.idleTimeout})
 
 			if !tt.wantFound {
 				require.ErrorIs(t, err, pgx.ErrNoRows)
@@ -59,6 +69,9 @@ func TestGetActiveSession(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, seededUserID(t, tx), row.UserID)
 			assert.Equal(t, "member", row.Role)
+			var lastSeen time.Time
+			require.NoError(t, tx.QueryRow(t.Context(), `SELECT last_seen_at FROM sessions`).Scan(&lastSeen))
+			assert.Equal(t, lastSeen, row.LastSeenAt)
 		})
 	}
 }

@@ -1,6 +1,6 @@
 -- name: CreateSession :exec
 INSERT INTO sessions (id_hash, user_id, expires_at, user_agent)
-VALUES (@id_hash, @user_id, @expires_at, @user_agent);
+VALUES (@id_hash, @user_id, now() + @lifetime::interval, @user_agent);
 
 -- name: GetActiveSession :one
 SELECT s.user_id, s.last_seen_at, u.role
