@@ -12,8 +12,7 @@ import (
 const (
 	// Vite fingerprints everything under assets/, so a changed file gets a new name.
 	assetsCache = "public, max-age=31536000, immutable"
-	// index.html is checked on every load, so a deploy shows up at once.
-	indexCache = "no-cache"
+	indexCache  = "no-cache"
 )
 
 //go:embed all:dist

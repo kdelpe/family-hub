@@ -44,7 +44,6 @@ func main() {
 	// Read before stop(), which cancels ctx itself.
 	signaled := ctx.Err() != nil
 	stop()
-	// Stopped by a signal before the work finished: an ordinary stop, not a failure.
 	if signaled && errors.Is(err, context.Canceled) {
 		logger.Info().Msg("stopped")
 		return
