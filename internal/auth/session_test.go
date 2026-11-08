@@ -47,7 +47,7 @@ func TestAuthenticateRefusesBadTokens(t *testing.T) {
 		{name: "not base64url", token: "not a token!"},
 		{name: "wrong length", token: token[:20]},
 		{name: "unknown", token: strings.Repeat("A", len(token))},
-		{name: "idle for 30 days", token: token, setup: `UPDATE sessions SET last_seen_at = now() - interval '30 days 1 second'`},
+		{name: "idle for 30 days", token: token, setup: `UPDATE sessions SET last_seen_at = now() - interval '720 hours 1 second'`},
 		{name: "past the 180-day cap", token: token, setup: `UPDATE sessions SET expires_at = now()`},
 		{name: "disabled user", token: token, setup: `UPDATE users SET disabled_at = now()`},
 	}
@@ -112,6 +112,34 @@ func TestCreateSetsTheAbsoluteCap(t *testing.T) {
 	require.NoError(t, pool.QueryRow(t.Context(), `SELECT expires_at - created_at FROM sessions`).Scan(&lifetime))
 	assert.Equal(t, auth.SessionLifetime, lifetime)
 }
+
+func TestCreateStoresABoundedValidUserAgent(t *testing.T) {
+	tests := []struct {
+		name      string
+		userAgent string
+		want      *string
+	}{
+		{name: "none", userAgent: ""},
+		{name: "ordinary", userAgent: "Mozilla/5.0", want: ptr("Mozilla/5.0")},
+		{name: "too long", userAgent: strings.Repeat("a", 600), want: ptr(strings.Repeat("a", 512))},
+		{name: "invalid UTF-8", userAgent: "agent\xff", want: ptr("agent")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool, userID := withMember(t)
+
+			_, err := auth.NewSessions(pool).Create(t.Context(), userID, tt.userAgent)
+			require.NoError(t, err)
+
+			var got *string
+			require.NoError(t, pool.QueryRow(t.Context(), `SELECT user_agent FROM sessions`).Scan(&got))
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func ptr(s string) *string { return &s }
 
 func withMember(t *testing.T) (*pgxpool.Pool, uuid.UUID) {
 	t.Helper()

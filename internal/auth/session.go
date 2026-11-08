@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +22,7 @@ const (
 	sessionIdleTimeout = 30 * 24 * time.Hour
 	sessionTouchAfter  = time.Hour
 	sessionTokenLen    = 32
+	maxUserAgentLen    = 512
 )
 
 var ErrNoSession = errors.New("no active session")
@@ -44,7 +46,9 @@ func (s *Sessions) Create(ctx context.Context, userID uuid.UUID, userAgent strin
 	_, _ = rand.Read(raw)
 	var agent *string
 	if userAgent != "" {
-		agent = &userAgent
+		// Postgres rejects invalid UTF-8, which a header can carry.
+		ua := strings.ToValidUTF8(userAgent[:min(len(userAgent), maxUserAgentLen)], "")
+		agent = &ua
 	}
 	if err := s.q.CreateSession(ctx, gen.CreateSessionParams{
 		IDHash: hashToken(raw), UserID: userID, Lifetime: SessionLifetime, UserAgent: agent,
@@ -60,15 +64,14 @@ func (s *Sessions) Authenticate(ctx context.Context, token string) (Session, err
 		return Session{}, ErrNoSession
 	}
 	idHash := hashToken(raw)
-	row, err := s.q.GetActiveSession(ctx, gen.GetActiveSessionParams{IDHash: idHash, IdleTimeout: sessionIdleTimeout})
+	row, err := s.q.GetActiveSession(ctx, gen.GetActiveSessionParams{IDHash: idHash, IdleTimeout: sessionIdleTimeout, TouchAfter: sessionTouchAfter})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Session{}, ErrNoSession
 	}
 	if err != nil {
 		return Session{}, fmt.Errorf("get session: %w", err)
 	}
-	// The query decides on the database clock; this only skips it for fresh sessions.
-	if time.Since(row.LastSeenAt) > sessionTouchAfter {
+	if row.Stale {
 		// The session is valid either way; a failed touch only delays sliding the idle window.
 		if err := s.q.TouchSession(ctx, gen.TouchSessionParams{IDHash: idHash, TouchAfter: sessionTouchAfter}); err != nil {
 			zerolog.Ctx(ctx).Warn().Err(err).Msg("touch session")
