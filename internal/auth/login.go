@@ -34,8 +34,8 @@ func NormalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-// Login returns a new session token. Every failure is ErrInvalidCredentials after
-// exactly one Argon2 run, so neither the answer nor its timing says why.
+// Login returns a new session token. Every refusal is ErrInvalidCredentials and costs the
+// same Argon2 work whatever the reason, so neither the answer nor its timing says why.
 func (s *Service) Login(ctx context.Context, email, password, userAgent string) (string, User, error) {
 	q := gen.New(s.pool)
 	found, err := q.GetLoginUser(ctx, NormalizeEmail(email))
@@ -80,7 +80,8 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent string) 
 		return "", User{}, ErrInvalidCredentials
 	case err != nil:
 		return "", User{}, fmt.Errorf("lock user: %w", err)
-	case locked.DisabledAt != nil || locked.PasswordHash == nil || *locked.PasswordHash != *found.PasswordHash:
+	case locked.DisabledAt != nil || locked.Email != NormalizeEmail(email) ||
+		locked.PasswordHash == nil || *locked.PasswordHash != *found.PasswordHash:
 		return "", User{}, ErrInvalidCredentials
 	}
 	if err := qtx.RecordLogin(ctx, gen.RecordLoginParams{ID: found.ID, NewPasswordHash: newHash}); err != nil {
@@ -102,6 +103,9 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 
 func (s *Service) User(ctx context.Context, id uuid.UUID) (User, error) {
 	u, err := gen.New(s.pool).GetUser(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return User{}, ErrNoSession
+	}
 	if err != nil {
 		return User{}, fmt.Errorf("get user: %w", err)
 	}

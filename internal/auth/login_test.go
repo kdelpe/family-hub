@@ -80,31 +80,52 @@ func TestLoginRehashesOutdatedParameters(t *testing.T) {
 	assert.False(t, rehash)
 }
 
-func TestLoginRefusedWhenThePasswordChangesBeforeTheSessionCommits(t *testing.T) {
-	svc, pool, userID := withAna(t)
-	reset, err := pool.Begin(t.Context())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = reset.Rollback(context.Background()) })
-	newHash, err := svc.hasher.Hash(t.Context(), "a brand new passphrase")
-	require.NoError(t, err)
-	_, err = reset.Exec(t.Context(), `UPDATE users SET password_hash = $1 WHERE id = $2`, newHash, userID)
+func TestLoginRefusedWhenACredentialChangesBeforeTheSessionCommits(t *testing.T) {
+	tests := []struct {
+		name   string
+		change string
+	}{
+		{name: "password reset", change: `UPDATE users SET password_hash = password_hash || 'x'`},
+		{name: "email change", change: `UPDATE users SET email = 'ana.new@example.com'`},
+		{name: "disabled", change: `UPDATE users SET disabled_at = now()`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, pool, _ := withAna(t)
+			change, err := pool.Begin(t.Context())
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = change.Rollback(context.Background()) })
+			_, err = change.Exec(t.Context(), tt.change)
+			require.NoError(t, err)
+
+			done := make(chan error, 1)
+			go func() {
+				_, _, err := svc.Login(t.Context(), anaEmail, anaPassword, "")
+				done <- err
+			}()
+			require.Eventually(t, func() bool {
+				var waiting bool
+				err := pool.QueryRow(context.Background(), `SELECT EXISTS (SELECT FROM pg_stat_activity
+					WHERE wait_event_type = 'Lock' AND query LIKE '-- name: LockUserForSignIn %')`).Scan(&waiting)
+				return err == nil && waiting
+			}, 10*time.Second, 10*time.Millisecond, "login waits on the change's row lock")
+			require.NoError(t, change.Commit(t.Context()))
+
+			assert.ErrorIs(t, <-done, ErrInvalidCredentials)
+			assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM sessions`))
+		})
+	}
+}
+
+func TestUserOfADeletedAccountIsNoSession(t *testing.T) {
+	svc, pool, id := withAna(t)
+	_, err := pool.Exec(t.Context(), `DELETE FROM users`)
 	require.NoError(t, err)
 
-	done := make(chan error, 1)
-	go func() {
-		_, _, err := svc.Login(t.Context(), anaEmail, anaPassword, "")
-		done <- err
-	}()
-	require.Eventually(t, func() bool {
-		var waiting bool
-		err := pool.QueryRow(context.Background(), `SELECT EXISTS (SELECT FROM pg_stat_activity
-			WHERE wait_event_type = 'Lock' AND query LIKE '-- name: LockUserForSignIn %')`).Scan(&waiting)
-		return err == nil && waiting
-	}, 10*time.Second, 10*time.Millisecond, "login waits on the reset's row lock")
-	require.NoError(t, reset.Commit(t.Context()))
+	_, err = svc.User(t.Context(), id)
 
-	assert.ErrorIs(t, <-done, ErrInvalidCredentials)
-	assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM sessions`))
+	assert.ErrorIs(t, err, ErrNoSession)
 }
 
 func TestLogout(t *testing.T) {
