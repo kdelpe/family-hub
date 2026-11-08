@@ -7,6 +7,11 @@ on:
 
 permissions: {}
 
+# Per tag and never canceled, so a second run for the same tag checks for the image only after the first pushed it.
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
 jobs:
   image:
     # A prerelease (e.g. v1.0.0-rc.1) never produces a deployable image; `released` already skips them.
@@ -37,9 +42,12 @@ jobs:
 
       - name: Build and push the image
         run: |
-          # A version's image never changes once pushed.
-          if docker manifest inspect "$IMAGE:$TAG" >/dev/null 2>&1; then
+          # A version's image never changes once pushed. Only a confirmed missing manifest goes ahead;
+          # any other lookup failure stops, since it can't rule out an existing image.
+          if out=$(docker manifest inspect "$IMAGE:$TAG" 2>&1); then
             echo "::error::$IMAGE:$TAG already exists"; exit 1
+          elif ! grep -qiE 'manifest unknown|no such manifest' <<< "$out"; then
+            echo "::error::could not check for $IMAGE:$TAG: $out"; exit 1
           fi
           docker build \
             --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
