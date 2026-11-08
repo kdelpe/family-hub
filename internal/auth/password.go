@@ -29,7 +29,11 @@ const (
 	maxStoredMemoryKiB  = 256 * 1024
 	maxStoredTime       = 10
 	maxStoredThreads    = 8
+	minStoredSaltLen    = 8
+	maxStoredSaltLen    = 64
+	minStoredKeyLen     = 16
 	maxStoredKeyLen     = 64
+	maxStoredHashLen    = 256
 )
 
 var currentParams = params{memory: 19 * 1024, time: 2, threads: 1}
@@ -182,6 +186,9 @@ func tooLong(password string) bool {
 }
 
 func parseHash(encoded string) (p params, salt, key []byte, err error) {
+	if len(encoded) > maxStoredHashLen {
+		return params{}, nil, nil, errMalformedHash
+	}
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 6 || parts[0] != "" || parts[1] != "argon2id" || parts[2] != fmt.Sprintf("v=%d", argon2.Version) {
 		return params{}, nil, nil, errMalformedHash
@@ -192,10 +199,10 @@ func parseHash(encoded string) (p params, salt, key []byte, err error) {
 		return params{}, nil, nil, errMalformedHash
 	}
 	enc := base64.RawStdEncoding
-	if salt, err = enc.DecodeString(parts[4]); err != nil {
+	if salt, err = enc.DecodeString(parts[4]); err != nil || len(salt) < minStoredSaltLen || len(salt) > maxStoredSaltLen {
 		return params{}, nil, nil, errMalformedHash
 	}
-	if key, err = enc.DecodeString(parts[5]); err != nil || len(key) == 0 || len(key) > maxStoredKeyLen {
+	if key, err = enc.DecodeString(parts[5]); err != nil || len(key) < minStoredKeyLen || len(key) > maxStoredKeyLen {
 		return params{}, nil, nil, errMalformedHash
 	}
 	return p, salt, key, nil

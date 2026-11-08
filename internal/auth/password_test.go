@@ -69,6 +69,10 @@ func TestHasherVerify(t *testing.T) {
 		{name: "another version", encoded: strings.Replace(encoded, "v=19", "v=16", 1), password: "x", wantErr: errMalformedHash},
 		{name: "trailing junk in the parameters", encoded: strings.Replace(encoded, "p=1", "p=1x", 1), password: "x", wantErr: errMalformedHash},
 		{name: "zero memory", encoded: strings.Replace(encoded, "m=19456", "m=0", 1), password: "x", wantErr: errMalformedHash},
+		{name: "a one-byte key", encoded: withPart(encoded, 5, "AA"), password: "x", wantErr: errMalformedHash},
+		{name: "a short salt", encoded: withPart(encoded, 4, "AAAA"), password: "x", wantErr: errMalformedHash},
+		{name: "a long salt", encoded: withPart(encoded, 4, strings.Repeat("A", 100)), password: "x", wantErr: errMalformedHash},
+		{name: "an oversized hash string", encoded: encoded + strings.Repeat("A", 256), password: "x", wantErr: errMalformedHash},
 		{name: "memory beyond the bound", encoded: strings.Replace(encoded, "m=19456", "m=4194304", 1), password: "x", wantErr: errMalformedHash},
 		{name: "a password longer than any stored one", encoded: encoded, password: strings.Repeat("a", 129)},
 	}
@@ -198,6 +202,12 @@ func TestHasherProceedsWhenASlotFrees(t *testing.T) {
 
 		require.NoError(t, err)
 	})
+}
+
+func withPart(encoded string, i int, value string) string {
+	parts := strings.Split(encoded, "$")
+	parts[i] = value
+	return strings.Join(parts, "$")
 }
 
 func hashWith(t *testing.T, p params, password string) string {
