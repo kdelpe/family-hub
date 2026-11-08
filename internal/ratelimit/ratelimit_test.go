@@ -84,3 +84,8 @@ func TestSweepDropsOnlyFullBuckets(t *testing.T) {
 		assert.Contains(t, l.buckets, "drained", "still owes time")
 	})
 }
+
+func TestNewRefusesNonsense(t *testing.T) {
+	assert.Panics(t, func() { New(0, time.Hour) })
+	assert.Panics(t, func() { New(10, 5*time.Nanosecond) })
+}

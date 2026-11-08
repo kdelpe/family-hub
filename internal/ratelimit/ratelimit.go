@@ -24,6 +24,9 @@ type bucket struct {
 }
 
 func New(n int, window time.Duration) *Limiter {
+	if n <= 0 || window < time.Duration(n) {
+		panic("ratelimit: need n > 0 and a window of at least n nanoseconds")
+	}
 	return &Limiter{
 		n:        float64(n),
 		perToken: window / time.Duration(n),

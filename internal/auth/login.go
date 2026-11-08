@@ -78,6 +78,7 @@ type LoginInput struct {
 
 // Login returns a new session token. Every refusal is ErrInvalidCredentials after one Argon2
 // run, so the answer doesn't say why (timing differs only mid parameter migration, §5).
+// A key over its failure limit gets *RateLimitedError at once, without hashing.
 func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error) {
 	email := NormalizeEmail(in.Email)
 	// Postgres refuses NUL in text, which would turn this into a 500 instead of a refusal.
