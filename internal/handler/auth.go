@@ -48,16 +48,17 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	token, user, err := a.svc.Login(r.Context(), in)
 	switch {
+	case err == nil:
+		// Even for a client that just left: the session exists and replaced the old one.
+		a.cookie.set(w, token)
+		httpx.JSON(w, http.StatusOK, toUserResponse(user))
 	case clientGone(r):
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		httpx.Error(w, http.StatusUnauthorized, "invalid_credentials", "email or password is incorrect")
 	case errors.Is(err, auth.ErrBusy):
 		httpx.Error(w, http.StatusServiceUnavailable, "busy", "try again in a moment")
-	case err != nil:
-		internalError(w, r, err, "login")
 	default:
-		a.cookie.set(w, token)
-		httpx.JSON(w, http.StatusOK, toUserResponse(user))
+		internalError(w, r, err, "login")
 	}
 }
 
@@ -79,7 +80,11 @@ func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
-	session, _ := CurrentSession(r.Context())
+	session, ok := CurrentSession(r.Context())
+	if !ok {
+		internalError(w, r, errors.New("no session in context"), "me mounted without RequireSession")
+		return
+	}
 	user, err := a.svc.User(r.Context(), session.UserID)
 	switch {
 	case clientGone(r):

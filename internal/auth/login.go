@@ -37,15 +37,14 @@ func NormalizeEmail(email string) string {
 }
 
 type LoginInput struct {
-	Email     string
-	Password  string
-	UserAgent string
-	// The browser's existing session token, ended in the same transaction as the new one starts.
+	Email         string
+	Password      string
+	UserAgent     string
 	ReplacesToken string
 }
 
-// Login returns a new session token. Every refusal is ErrInvalidCredentials and costs the
-// same Argon2 work whatever the reason, so neither the answer nor its timing says why.
+// Login returns a new session token. Every refusal is ErrInvalidCredentials after one Argon2
+// run, so the answer doesn't say why (timing differs only mid parameter migration, §5).
 func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error) {
 	email := NormalizeEmail(in.Email)
 	found, err := gen.New(s.pool).GetLoginUser(ctx, email)
@@ -113,7 +112,9 @@ func (s *Service) rehash(ctx context.Context, needed bool, password string) *str
 	}
 	h, err := s.hasher.Hash(ctx, password)
 	if err != nil {
-		zerolog.Ctx(ctx).Warn().Err(err).Msg("rehash password")
+		if !errors.Is(ctx.Err(), context.Canceled) {
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("rehash password")
+		}
 		return nil
 	}
 	return &h
