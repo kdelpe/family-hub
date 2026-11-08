@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"golang.org/x/text/unicode/norm"
@@ -23,13 +25,19 @@ type User struct {
 	Role  string
 }
 
+const (
+	signInLockTimeout = 5 * time.Second
+	lockNotAvailable  = "55P03"
+)
+
 type Service struct {
-	pool   *pgxpool.Pool
-	hasher *Hasher
+	pool        *pgxpool.Pool
+	hasher      *Hasher
+	lockTimeout time.Duration
 }
 
 func NewService(pool *pgxpool.Pool, hasher *Hasher) *Service {
-	return &Service{pool: pool, hasher: hasher}
+	return &Service{pool: pool, hasher: hasher, lockTimeout: signInLockTimeout}
 }
 
 func NormalizeEmail(email string) string {
@@ -47,6 +55,10 @@ type LoginInput struct {
 // run, so the answer doesn't say why (timing differs only mid parameter migration, §5).
 func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error) {
 	email := NormalizeEmail(in.Email)
+	// Postgres refuses NUL in text, which would turn this into a 500 instead of a refusal.
+	if strings.ContainsRune(email, 0) {
+		return "", User{}, s.refuse(ctx, in.Password)
+	}
 	found, err := gen.New(s.pool).GetLoginUser(ctx, email)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -75,11 +87,17 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	qtx := gen.New(tx)
+	if _, err := tx.Exec(ctx, `SELECT set_config('lock_timeout', $1, true)`, fmt.Sprintf("%dms", s.lockTimeout.Milliseconds())); err != nil {
+		return "", User{}, fmt.Errorf("set lock timeout: %w", err)
+	}
 
 	// A reset, email change or disable that committed since the verify wins. A concurrent
 	// login's rehash keeps password_changed_at, so it doesn't refuse this one.
 	locked, err := qtx.LockUserForSignIn(ctx, found.ID)
+	var pgErr *pgconn.PgError
 	switch {
+	case errors.As(err, &pgErr) && pgErr.Code == lockNotAvailable:
+		return "", User{}, ErrBusy
 	case errors.Is(err, pgx.ErrNoRows):
 		return "", User{}, ErrInvalidCredentials
 	case err != nil:

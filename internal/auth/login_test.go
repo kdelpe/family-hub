@@ -33,6 +33,7 @@ func TestLogin(t *testing.T) {
 		{name: "unknown email", email: "bo@example.com", password: anaPassword},
 		{name: "no password (Google only)", setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`, email: anaEmail, password: anaPassword},
 		{name: "disabled", setup: `UPDATE users SET disabled_at = now()`, email: anaEmail, password: anaPassword},
+		{name: "email with a NUL byte", email: "ana@example.com\x00", password: anaPassword},
 		{name: "broken stored hash", setup: `UPDATE users SET password_hash = 'nonsense'`, email: anaEmail, password: anaPassword},
 	}
 
@@ -124,6 +125,21 @@ func TestLoginRefusedWhenACredentialChangesBeforeTheSessionCommits(t *testing.T)
 			assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM sessions`))
 		})
 	}
+}
+
+func TestLoginIsBusyWhileTheUserRowStaysLocked(t *testing.T) {
+	svc, pool, _ := withAna(t)
+	svc.lockTimeout = 100 * time.Millisecond
+	holder, err := pool.Begin(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = holder.Rollback(context.Background()) })
+	_, err = holder.Exec(t.Context(), `SELECT 1 FROM users FOR UPDATE`)
+	require.NoError(t, err)
+
+	_, _, err = svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: anaPassword})
+
+	assert.ErrorIs(t, err, ErrBusy)
+	assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM sessions`))
 }
 
 func TestUserOfADeletedAccountIsNoSession(t *testing.T) {
