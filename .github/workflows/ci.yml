@@ -75,6 +75,7 @@ jobs:
 
       - name: Committed sqlc output matches the queries
         run: |
+          rm -rf internal/database/gen
           go tool sqlc generate
           git diff --exit-code
           test -z "$(git status --porcelain)" || { git status --porcelain; exit 1; }
