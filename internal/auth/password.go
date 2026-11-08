@@ -66,12 +66,12 @@ type params struct {
 }
 
 func CheckNewPassword(password, email string) error {
-	password = norm.NFC.String(password)
-	switch n := utf8.RuneCountInString(password); {
-	case n < minPasswordLen:
-		return ErrPasswordTooShort
-	case n > maxPasswordLen:
+	if tooLong(password) {
 		return ErrPasswordTooLong
+	}
+	password = norm.NFC.String(password)
+	if utf8.RuneCountInString(password) < minPasswordLen {
+		return ErrPasswordTooShort
 	}
 	lower := strings.ToLower(password)
 	email = strings.ToLower(strings.TrimSpace(norm.NFC.String(email)))
@@ -125,7 +125,9 @@ func (h *Hasher) Verify(ctx context.Context, encoded, password string) (ok, reha
 	p, salt, want, err := parseHash(encoded)
 	if err != nil {
 		// So a broken stored hash answers as slowly as any other failed login.
-		_, _ = h.derive(ctx, password, make([]byte, saltLen), currentParams, keyLen)
+		if _, derr := h.derive(ctx, password, make([]byte, saltLen), currentParams, keyLen); derr != nil {
+			return false, false, derr
+		}
 		return false, false, err
 	}
 	got, err := h.derive(ctx, password, salt, p, uint32(len(want)))
@@ -143,6 +145,9 @@ func (h *Hasher) derive(ctx context.Context, password string, salt []byte, p par
 		return nil, err
 	}
 	defer func() { <-h.slots }()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return argon2.IDKey([]byte(norm.NFC.String(password)), salt, p.time, p.memory, p.threads, n), nil
 }
 
@@ -165,7 +170,15 @@ func (h *Hasher) acquire(ctx context.Context) error {
 }
 
 func tooLong(password string) bool {
-	return len(password) > 4*maxPasswordLen || utf8.RuneCountInString(norm.NFC.String(password)) > maxPasswordLen
+	var it norm.Iter
+	it.InitString(norm.NFC, password)
+	n := 0
+	for !it.Done() {
+		if n += utf8.RuneCount(it.Next()); n > maxPasswordLen {
+			return true
+		}
+	}
+	return false
 }
 
 func parseHash(encoded string) (p params, salt, key []byte, err error) {

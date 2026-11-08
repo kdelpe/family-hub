@@ -96,6 +96,30 @@ func TestHashIsNFCNormalized(t *testing.T) {
 	assert.True(t, ok)
 }
 
+func TestLengthCountsNormalizedCharacters(t *testing.T) {
+	composed := strings.Repeat("\u1ed9", maxPasswordLen)
+	decomposed := strings.Repeat("o\u0323\u0302", maxPasswordLen)
+	require.Greater(t, len(decomposed), 4*maxPasswordLen)
+	h := NewHasher()
+	encoded, err := h.Hash(t.Context(), composed)
+	require.NoError(t, err)
+
+	ok, _, err := h.Verify(t.Context(), encoded, decomposed)
+
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.NoError(t, CheckNewPassword(decomposed, "ana@example.com"))
+}
+
+func TestACanceledRequestDoesNotHash(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := NewHasher().Hash(ctx, "rosa garden 1962")
+
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
 func TestHashRefusesATooLongPassword(t *testing.T) {
 	_, err := NewHasher().Hash(t.Context(), strings.Repeat("a", 129))
 
@@ -112,7 +136,7 @@ func TestVerifyRunsArgon2EvenForABrokenHash(t *testing.T) {
 
 		_, _, err := h.Verify(t.Context(), "plain", "rosa garden 1962")
 
-		require.ErrorIs(t, err, errMalformedHash)
+		require.ErrorIs(t, err, ErrBusy)
 		assert.Equal(t, hashWait, time.Since(start), "it waited for a slot, so it would have hashed")
 	})
 }
