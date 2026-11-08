@@ -22,7 +22,7 @@ make up      # Postgres and Mailpit in Docker
 make test    # tests with the race detector (needs `make up`)
 make lint    # golangci-lint, same version as CI
 make build   # bin/family-hub
-make generate # sqlc code from internal/database/queries; commit it, CI fails on stale output
+make generate # sqlc code and mockery mocks (mockery 3.8.1 release binary on PATH); commit them, CI fails on stale output
 make migrate-up   # apply pending migrations to the dev database
 make dev-api # start Docker, migrate and serve on :8080 (the app, /health, /ready)
 make run     # serve on :8080 against the dev database, without migrating
