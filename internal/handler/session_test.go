@@ -42,6 +42,7 @@ func TestSessionGateRequire(t *testing.T) {
 		{name: "local cookie name when secure", secureCookie: true, cookie: &http.Cookie{Name: "fh_session", Value: "tok"}, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
 		{name: "no active session", secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: "tok"}, authenticate: true, authErr: auth.ErrNoSession, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
 		{name: "client gone", secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: "tok"}, authenticate: true, authErr: context.Canceled, canceled: true, wantStatus: http.StatusOK},
+		{name: "client gone after a valid session", secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: "tok"}, authenticate: true, canceled: true, wantStatus: http.StatusOK},
 		{name: "database error", secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: "tok"}, authenticate: true, authErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 	}
 
@@ -73,6 +74,7 @@ func TestSessionGateRequire(t *testing.T) {
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			if tt.canceled {
 				assert.Empty(t, rec.Body.String(), "nothing written for a client that left")
+				assert.Zero(t, seen, "protected handler not run")
 				return
 			}
 			if tt.wantBody == "" {

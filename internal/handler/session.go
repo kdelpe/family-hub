@@ -42,14 +42,14 @@ func (g *SessionGate) Require(next http.Handler) http.Handler {
 			return
 		}
 		session, err := g.sessions.Authenticate(r.Context(), cookie.Value)
+		if errors.Is(r.Context().Err(), context.Canceled) {
+			return
+		}
 		if errors.Is(err, auth.ErrNoSession) {
 			unauthorized(w)
 			return
 		}
 		if err != nil {
-			if errors.Is(r.Context().Err(), context.Canceled) {
-				return
-			}
 			zerolog.Ctx(r.Context()).Error().Err(err).Msg("authenticate session")
 			httpx.Error(w, http.StatusInternalServerError, "internal", "internal error")
 			return
