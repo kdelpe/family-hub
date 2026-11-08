@@ -22,7 +22,7 @@ func TestServerAnswersReadyUntilCanceled(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- serve(ctx, newServer(pool, true), ln, time.Second) }()
+	go func() { done <- serve(ctx, newServer(pool, config.Config{CookieSecure: true}), ln, time.Second) }()
 
 	resp := waitForServer(t, "http://"+ln.Addr().String()+"/ready", done)
 	defer func() { _ = resp.Body.Close() }()
