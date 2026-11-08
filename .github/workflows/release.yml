@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  release:
+    # Published as a full release, or a prerelease promoted to one.
+    types: [released]
+
+permissions: {}
+
+jobs:
+  image:
+    # A prerelease (e.g. v1.0.0-rc.1) never produces a deployable image; `released` already skips them.
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      IMAGE: ghcr.io/${{ github.repository }}
+    steps:
+      # The release's tag, with full history so it can be checked against main.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: The tag is a version on main
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$TAG is not vX.Y.Z"; exit 1; }
+          git merge-base --is-ancestor HEAD origin/main || { echo "::error::$TAG is not on main"; exit 1; }
+
+      - name: Log in to the GitHub Container Registry
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      - name: Build and push the image
+        run: |
+          # A version's image never changes once pushed.
+          if docker manifest inspect "$IMAGE:$TAG" >/dev/null 2>&1; then
+            echo "::error::$IMAGE:$TAG already exists"; exit 1
+          fi
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.version=$TAG" \
+            -t "$IMAGE:$TAG" .
+          docker push "$IMAGE:$TAG"
