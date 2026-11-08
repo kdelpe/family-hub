@@ -1,0 +1,10 @@
+log-level: warn
+dir: '{{.InterfaceDir}}/mocks'
+filename: '{{.InterfaceName | snakecase}}.go'
+pkgname: mocks
+structname: '{{.InterfaceName}}'
+template: testify
+packages:
+  github.com/kdelpe/family-hub/internal/handler:
+    interfaces:
+      SessionAuthenticator: {}

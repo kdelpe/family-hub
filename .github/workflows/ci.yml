@@ -73,10 +73,22 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Committed sqlc output matches the queries
+      - name: Install mockery
+        env:
+          # Keep in sync with MOCKERY_VERSION in the Makefile.
+          VERSION: 3.8.1
+          SHA256: 953c7d38b58dd6398b1c595f27caf8bbf27e9b733b49c404d2e124e86d2ae72a
         run: |
-          rm -rf internal/database/gen
-          go tool sqlc generate
+          cd "$RUNNER_TEMP"
+          curl -fsSLo mockery.tar.gz "https://github.com/vektra/mockery/releases/download/v${VERSION}/mockery_${VERSION}_Linux_x86_64.tar.gz"
+          echo "${SHA256}  mockery.tar.gz" | sha256sum -c -
+          tar -xzf mockery.tar.gz mockery
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Committed sqlc output and mocks match their sources
+        run: |
+          rm -rf internal/database/gen internal/*/mocks
+          make generate
           git diff --exit-code
           test -z "$(git status --porcelain)" || { git status --porcelain; exit 1; }
 

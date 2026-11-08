@@ -39,8 +39,10 @@ func TestGetActiveSession(t *testing.T) {
 		setup       string
 		idleTimeout time.Duration
 		wantFound   bool
+		wantStale   bool
 	}{
 		{name: "an active session", idleTimeout: time.Hour, wantFound: true},
+		{name: "active but due a touch", setup: `UPDATE sessions SET last_seen_at = now() - interval '2 hours'`, idleTimeout: 3 * time.Hour, wantFound: true, wantStale: true},
 		{name: "an unknown id", idHash: []byte{9}, idleTimeout: time.Hour},
 		{name: "idle too long", setup: `UPDATE sessions SET last_seen_at = now() - interval '2 hours'`, idleTimeout: time.Hour},
 		{name: "past its absolute expiry", setup: `UPDATE sessions SET expires_at = now() - interval '1 second'`, idleTimeout: time.Hour},
@@ -60,7 +62,7 @@ func TestGetActiveSession(t *testing.T) {
 				idHash = tt.idHash
 			}
 
-			row, err := gen.New(tx).GetActiveSession(t.Context(), gen.GetActiveSessionParams{IDHash: idHash, IdleTimeout: tt.idleTimeout})
+			row, err := gen.New(tx).GetActiveSession(t.Context(), gen.GetActiveSessionParams{IDHash: idHash, IdleTimeout: tt.idleTimeout, TouchAfter: time.Hour})
 
 			if !tt.wantFound {
 				require.ErrorIs(t, err, pgx.ErrNoRows)
@@ -69,9 +71,7 @@ func TestGetActiveSession(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, seededUserID(t, tx), row.UserID)
 			assert.Equal(t, "member", row.Role)
-			var lastSeen time.Time
-			require.NoError(t, tx.QueryRow(t.Context(), `SELECT last_seen_at FROM sessions`).Scan(&lastSeen))
-			assert.Equal(t, lastSeen, row.LastSeenAt)
+			assert.Equal(t, tt.wantStale, row.Stale)
 		})
 	}
 }

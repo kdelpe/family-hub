@@ -19,41 +19,46 @@ func TestLoad(t *testing.T) {
 		{
 			name: "defaults",
 			env:  map[string]string{"DATABASE_URL": validDatabaseURL},
-			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080"},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", CookieSecure: true},
 		},
 		{
 			name: "all set",
 			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "HTTP_ADDR": "127.0.0.1:9000", "AUTO_MIGRATE": "true"},
-			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: "127.0.0.1:9000", AutoMigrate: true},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: "127.0.0.1:9000", AutoMigrate: true, CookieSecure: true},
 		},
 		{
 			name: "postgresql scheme",
 			env:  map[string]string{"DATABASE_URL": "postgresql://app@db/familyhub"},
-			want: Config{DatabaseURL: "postgresql://app@db/familyhub", HTTPAddr: ":8080"},
+			want: Config{DatabaseURL: "postgresql://app@db/familyhub", HTTPAddr: ":8080", CookieSecure: true},
 		},
 		{
 			name: "unix socket URL",
 			env:  map[string]string{"DATABASE_URL": "postgres:///familyhub?host=/var/run/postgresql"},
-			want: Config{DatabaseURL: "postgres:///familyhub?host=/var/run/postgresql", HTTPAddr: ":8080"},
+			want: Config{DatabaseURL: "postgres:///familyhub?host=/var/run/postgresql", HTTPAddr: ":8080", CookieSecure: true},
 		},
 		{
 			name: "values are trimmed",
 			env:  map[string]string{"DATABASE_URL": " " + validDatabaseURL + "\r", "HTTP_ADDR": " :9000 "},
-			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":9000"},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":9000", CookieSecure: true},
 		},
 		{
 			name: "AUTO_MIGRATE with surrounding spaces",
 			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "AUTO_MIGRATE": " true "},
-			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", AutoMigrate: true},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", AutoMigrate: true, CookieSecure: true},
 		},
 		{
 			name: "AUTO_MIGRATE any case",
 			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "AUTO_MIGRATE": "True"},
-			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", AutoMigrate: true},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", AutoMigrate: true, CookieSecure: true},
 		},
 		{
 			name: "AUTO_MIGRATE false",
 			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "AUTO_MIGRATE": "false"},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", CookieSecure: true},
+		},
+		{
+			name: "COOKIE_SECURE false for local http",
+			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "COOKIE_SECURE": "false"},
 			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080"},
 		},
 		{
@@ -140,6 +145,11 @@ func TestLoad(t *testing.T) {
 			name:        "AUTO_MIGRATE 1 is rejected",
 			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "AUTO_MIGRATE": "1"},
 			wantErrMsgs: []string{`AUTO_MIGRATE must be true or false, got "1"`},
+		},
+		{
+			name:        "COOKIE_SECURE not a bool",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "COOKIE_SECURE": "no"},
+			wantErrMsgs: []string{`COOKIE_SECURE must be true or false, got "no"`},
 		},
 		{
 			name:        "reports every problem at once",

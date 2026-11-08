@@ -499,7 +499,7 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
 **Sessions**
 
 - Cookie value: 32 random bytes, base64url. DB stores `SHA-256` of it (`sessions.id_hash`).
-- Cookie flags: `HttpOnly; Secure; SameSite=Lax; Path=/`. Name `__Host-fh_session` in prod. In local dev set `COOKIE_SECURE=false` and drop the prefix, because Safari doesn't accept `Secure` cookies on `http://localhost` **(verify)**.
+- Cookie flags: `HttpOnly; Secure; SameSite=Lax; Path=/`. Name `__Host-fh_session` in prod. With `COOKIE_SECURE=false` (set by `make dev-api` and `make run`) the cookie is `fh_session` without `Secure`: Safari doesn't accept `Secure` cookies on `http://localhost` (verified 2026-11: WebKit bugs 218980/232088 are still open), and the `__Host-` prefix requires `Secure`.
 - Lifetime: 30-day sliding window, 180-day absolute cap. `last_seen_at` is only rewritten when it's more than an hour stale, to avoid a DB write on every request. Logout and "disable user" delete rows, so revocation is immediate.
 
 **Auth cleanup job** (Phase 2, in-process, no extra infrastructure): a ticker runs every 15 minutes and deletes, in batches of 1,000, `oauth_flows` that are consumed or expired, `auth_tokens` consumed or expired more than 7 days ago, and `sessions` past their expiry. Expiry is already enforced on every read; the job only keeps the tables from growing. Each table has an index on its expiry column for this.
@@ -614,7 +614,7 @@ type Handlers struct {
 }
 
 type Middleware struct {
-    RequireSession func(http.Handler) http.Handler // from auth
+    RequireSession func(http.Handler) http.Handler // handler.SessionGate.Require; the auth service has no HTTP
     // per-IP limits only; per-account failure limits live in the auth service (§5)
     LimitLogin     func(http.Handler) http.Handler
     LimitForgot    func(http.Handler) http.Handler
@@ -810,14 +810,14 @@ ui-stub:
 	  (mkdir -p internal/webui/dist && printf '%s\n' '<!doctype html><title>Family Hub</title><p>The UI is not built yet.</p>' > internal/webui/dist/index.html)
 
 # sqlc output + mockery mocks; both committed, CI fails if they're stale
-generate:      ; go tool sqlc generate && mockery
+generate:      ; go tool sqlc generate && mockery   # after checking the mockery version, as lint does
 migrate-new:   ; go tool migrate create -ext sql -dir internal/database/migrations -seq $(name)
 migrate-up: ui-stub ; go run ./cmd migrate up
 seed: up migrate-up ; docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < internal/database/seed.sql
 
-dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd   # COOKIE_SECURE arrives in Phase 2
+dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 dev-ui:        ; cd web && npm run dev
-run: ui-stub   ; go run ./cmd $(ARGS)
+run: ui-stub   ; COOKIE_SECURE=false go run ./cmd $(ARGS)
 
 test: ui-stub ; env -u DATABASE_URL go test -race ./...   # tests can't reach the dev database
 lint: ui-stub ; golangci-lint run && cd web && npm run lint && npm run typecheck
@@ -828,7 +828,7 @@ build: ui-stub
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/family-hub ./cmd
 ```
 
-`sqlc`, `govulncheck` and the `migrate` CLI are pinned in `go.mod` via `go get -tool ...` (Go ≥1.24), so there's no `@latest`. mockery (v3) and golangci-lint are installed as pinned binaries instead, locally and in CI, because both projects advise against installing via `go get`/`go tool` (dependency conflicts) **(verify current guidance)**. `go tool migrate` is only used for `create`; `migrate up` goes through the app binary, so the CLI doesn't need database build tags **(verify)**.
+`sqlc`, `govulncheck` and the `migrate` CLI are pinned in `go.mod` via `go get -tool ...` (Go ≥1.24), so there's no `@latest`. mockery (v3) and golangci-lint are installed as pinned binaries instead, locally and in CI, because both projects advise against installing via `go get`/`go tool` (dependency conflicts; mockery's docs recommend the release binary, checked 2026-11). The Makefile's `lint` and `generate` refuse any other version; CI downloads mockery's release tarball and checks a pinned SHA-256. `go tool migrate` is only used for `create`; `migrate up` goes through the app binary, so the CLI doesn't need database build tags **(verify)**.
 
 ### 8.2 `compose.yaml` (shape)
 
@@ -1032,7 +1032,7 @@ For a "multi-decade" archive, this section matters more than any other.
 | Job | Checks |
 |---|---|
 | go | `go mod tidy -diff`, golangci-lint (its `standard` linters include `go vet`, plus the gofmt formatter; `.golangci.yml`), `govulncheck`, `go test -race` (via `make test`) with a `postgres:18.6` service whose `POSTGRES_DB` is `familyhub_test`, `make build` |
-| generated | Deletes `internal/database/gen` and re-runs `sqlc generate`; fails if the working tree then differs, so stale or orphaned output is caught (mockery joins once there are mocks) |
+| generated | Deletes `internal/database/gen` and every `mocks/` folder, then runs `make generate` (sqlc and mockery); fails if the working tree then differs, so stale or orphaned output is caught |
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |
 

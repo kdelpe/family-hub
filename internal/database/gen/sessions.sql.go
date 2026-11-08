@@ -7,9 +7,9 @@ package gen
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
+	"time"
 )
 
 const createSession = `-- name: CreateSession :exec
@@ -44,30 +44,31 @@ func (q *Queries) DeleteSession(ctx context.Context, idHash []byte) error {
 }
 
 const getActiveSession = `-- name: GetActiveSession :one
-SELECT s.user_id, s.last_seen_at, u.role
+SELECT s.user_id, u.role, s.last_seen_at < now() - $1::interval AS stale
 FROM sessions s
 JOIN users u ON u.id = s.user_id
-WHERE s.id_hash = $1
+WHERE s.id_hash = $2
   AND s.expires_at > now()
-  AND s.last_seen_at > now() - $2::interval
+  AND s.last_seen_at > now() - $3::interval
   AND u.disabled_at IS NULL
 `
 
 type GetActiveSessionParams struct {
+	TouchAfter  time.Duration
 	IDHash      []byte
 	IdleTimeout time.Duration
 }
 
 type GetActiveSessionRow struct {
-	UserID     uuid.UUID
-	LastSeenAt time.Time
-	Role       string
+	UserID uuid.UUID
+	Role   string
+	Stale  bool
 }
 
 func (q *Queries) GetActiveSession(ctx context.Context, arg GetActiveSessionParams) (GetActiveSessionRow, error) {
-	row := q.db.QueryRow(ctx, getActiveSession, arg.IDHash, arg.IdleTimeout)
+	row := q.db.QueryRow(ctx, getActiveSession, arg.TouchAfter, arg.IDHash, arg.IdleTimeout)
 	var i GetActiveSessionRow
-	err := row.Scan(&i.UserID, &i.LastSeenAt, &i.Role)
+	err := row.Scan(&i.UserID, &i.Role, &i.Stale)
 	return i, err
 }
 

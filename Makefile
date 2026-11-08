@@ -1,6 +1,8 @@
 BIN     := bin/family-hub
 # Keep in sync with the golangci-lint version in .github/workflows/ci.yml.
 GOLANGCI_LINT_VERSION := 2.15.0
+# Keep in sync with the mockery version and checksum in .github/workflows/ci.yml.
+MOCKERY_VERSION := 3.8.1
 
 DATABASE_URL      ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
@@ -22,17 +24,20 @@ ui-stub:
 	  (mkdir -p internal/webui/dist && printf '%s\n' '<!doctype html><title>Family Hub</title><p>The UI is not built yet.</p>' > internal/webui/dist/index.html)
 
 dev-api: up ui-stub
-	AUTO_MIGRATE=true go run ./cmd
+	AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 
 generate:
+	@v=$$(mockery version 2>/dev/null); \
+	  [ "$$v" = "v$(MOCKERY_VERSION)" ] || { echo "need mockery $(MOCKERY_VERSION), found '$$v'"; exit 1; }
 	go tool sqlc generate
+	mockery
 
 build: ui-stub
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN) ./cmd
 
 # Pass subcommand and flags via ARGS, e.g. `make run ARGS="migrate up"`.
 run: ui-stub
-	go run ./cmd $(ARGS)
+	COOKIE_SECURE=false go run ./cmd $(ARGS)
 
 # Unset so no test can reach the dev database; tests use TEST_DATABASE_URL.
 test: ui-stub
