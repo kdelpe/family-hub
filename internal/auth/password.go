@@ -78,7 +78,7 @@ func CheckNewPassword(password, email string) error {
 		return ErrPasswordTooShort
 	}
 	lower := strings.ToLower(password)
-	email = strings.ToLower(strings.TrimSpace(norm.NFC.String(email)))
+	email = NormalizeEmail(email)
 	local, _, _ := strings.Cut(email, "@")
 	if _, ok := commonPasswords()[lower]; ok || lower == email || lower == local || lettersOnly(lower) == "familyhub" {
 		return ErrPasswordTooCommon
@@ -142,6 +142,15 @@ func (h *Hasher) Verify(ctx context.Context, encoded, password string) (ok, reha
 		return false, false, nil
 	}
 	return true, p != currentParams || len(want) != keyLen, nil
+}
+
+// verifyNothing costs what a failed Verify does, for sign-ins with no usable hash.
+func (h *Hasher) verifyNothing(ctx context.Context, password string) error {
+	if tooLong(password) {
+		return nil
+	}
+	_, err := h.derive(ctx, password, make([]byte, saltLen), currentParams, keyLen)
+	return err
 }
 
 func (h *Hasher) derive(ctx context.Context, password string, salt []byte, p params, n uint32) ([]byte, error) {

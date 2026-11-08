@@ -1,9 +1,6 @@
 package httpx
 
-import (
-	"encoding/json"
-	"net/http"
-)
+import "net/http"
 
 type errorBody struct {
 	Error errorDetail `json:"error"`
@@ -15,12 +12,18 @@ type errorDetail struct {
 }
 
 func Error(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(errorBody{Error: errorDetail{Code: code, Message: message}})
+	JSON(w, status, errorBody{Error: errorDetail{Code: code, Message: message}})
 }
 
 // NotFound answers an unknown /api path with a JSON 404, never the app's index.html.
 func NotFound(w http.ResponseWriter, _ *http.Request) {
 	Error(w, http.StatusNotFound, "not_found", "not found")
+}
+
+func CrossOriginRefused(w http.ResponseWriter, _ *http.Request) {
+	Error(w, http.StatusForbidden, "forbidden", "cross-origin request refused")
+}
+
+func MethodNotAllowed(w http.ResponseWriter, _ *http.Request) {
+	Error(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 }

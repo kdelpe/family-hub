@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/config"
 	"github.com/kdelpe/family-hub/internal/database"
 	"github.com/kdelpe/family-hub/internal/handler"
@@ -44,12 +46,20 @@ func Run(ctx context.Context, cfg config.Config) error {
 		return fmt.Errorf("listen: %w", err)
 	}
 	zerolog.Ctx(ctx).Info().Str("addr", ln.Addr().String()).Msg("listening")
-	return serve(ctx, newServer(pool), ln, shutdownTimeout)
+	return serve(ctx, newServer(pool, cfg.CookieSecure), ln, shutdownTimeout)
 }
 
-func newServer(db handler.Pinger) *http.Server {
+func newServer(pool *pgxpool.Pool, cookieSecure bool) *http.Server {
+	cookie := handler.NewSessionCookie(cookieSecure)
+	routes := router.New(
+		router.Handlers{
+			Health: handler.NewHealth(pool),
+			Auth:   handler.NewAuth(auth.NewService(pool, auth.NewHasher()), cookie),
+		},
+		router.Middleware{RequireSession: handler.NewSessionGate(auth.NewSessions(pool), cookie).Require},
+	)
 	return &http.Server{
-		Handler:           router.New(router.Handlers{Health: handler.NewHealth(db)}),
+		Handler:           routes,
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,

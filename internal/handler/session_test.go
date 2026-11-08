@@ -69,7 +69,7 @@ func TestSessionGateRequire(t *testing.T) {
 			}
 			rec := httptest.NewRecorder()
 
-			handler.NewSessionGate(sessions, tt.secureCookie).Require(next).ServeHTTP(rec, req)
+			handler.NewSessionGate(sessions, handler.NewSessionCookie(tt.secureCookie)).Require(next).ServeHTTP(rec, req)
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			if tt.canceled {
