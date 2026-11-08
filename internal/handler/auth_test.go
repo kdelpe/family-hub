@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -37,6 +38,8 @@ func TestLogin(t *testing.T) {
 		{name: "replaces the session of an old cookie", body: `{"email":"ana@example.com","password":"pw"}`, wantLogin: true, oldCookie: true, wantStatus: http.StatusOK, wantBody: anaBody, wantCookie: true},
 		{name: "invalid credentials", body: `{"email":"ana@example.com","password":"pw"}`, wantLogin: true, loginErr: auth.ErrInvalidCredentials, wantStatus: http.StatusUnauthorized,
 			wantBody: `{"error":{"code":"invalid_credentials","message":"email or password is incorrect"}}`},
+		{name: "too many failures", body: `{"email":"ana@example.com","password":"pw"}`, wantLogin: true, loginErr: &auth.RateLimitedError{RetryAfter: 90 * time.Second}, wantStatus: http.StatusTooManyRequests,
+			wantBody: `{"error":{"code":"rate_limited","message":"too many attempts, try again later"}}`},
 		{name: "hashing busy", body: `{"email":"ana@example.com","password":"pw"}`, wantLogin: true, loginErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable,
 			wantBody: `{"error":{"code":"busy","message":"try again in a moment"}}`},
 		{name: "database error", body: `{"email":"ana@example.com","password":"pw"}`, wantLogin: true, loginErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
@@ -55,7 +58,7 @@ func TestLogin(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewAuthService(t)
 			if tt.wantLogin {
-				in := auth.LoginInput{Email: "ana@example.com", Password: "pw", UserAgent: "test-agent"}
+				in := auth.LoginInput{Email: "ana@example.com", Password: "pw", UserAgent: "test-agent", ClientIP: "192.0.2.1"}
 				if tt.oldCookie {
 					in.ReplacesToken = "old"
 				}
@@ -76,6 +79,9 @@ func TestLogin(t *testing.T) {
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			assert.JSONEq(t, tt.wantBody, rec.Body.String())
+			if tt.wantStatus == http.StatusTooManyRequests {
+				assert.Equal(t, "90", rec.Header().Get("Retry-After"))
+			}
 			cookies := rec.Result().Cookies()
 			if !tt.wantCookie {
 				assert.Empty(t, cookies)

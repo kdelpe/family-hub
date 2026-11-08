@@ -15,6 +15,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/kdelpe/family-hub/internal/database/gen"
+	"github.com/kdelpe/family-hub/internal/ratelimit"
 )
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
@@ -28,16 +29,34 @@ type User struct {
 const (
 	signInLockTimeout = 5 * time.Second
 	lockNotAvailable  = "55P03"
+
+	loginFailuresPerEmailAndIP       = 5
+	loginFailuresPerEmailAndIPWindow = 15 * time.Minute
+	loginFailuresPerEmail            = 50
+	loginFailuresPerEmailWindow      = time.Hour
 )
+
+type RateLimitedError struct {
+	RetryAfter time.Duration
+}
+
+func (e *RateLimitedError) Error() string { return "too many failed sign-ins" }
 
 type Service struct {
 	pool        *pgxpool.Pool
 	hasher      *Hasher
 	lockTimeout time.Duration
+
+	failuresByEmailAndIP *ratelimit.Limiter
+	failuresByEmail      *ratelimit.Limiter
 }
 
 func NewService(pool *pgxpool.Pool, hasher *Hasher) *Service {
-	return &Service{pool: pool, hasher: hasher, lockTimeout: signInLockTimeout}
+	return &Service{
+		pool: pool, hasher: hasher, lockTimeout: signInLockTimeout,
+		failuresByEmailAndIP: ratelimit.New(loginFailuresPerEmailAndIP, loginFailuresPerEmailAndIPWindow),
+		failuresByEmail:      ratelimit.New(loginFailuresPerEmail, loginFailuresPerEmailWindow),
+	}
 }
 
 func NormalizeEmail(email string) string {
@@ -48,6 +67,7 @@ type LoginInput struct {
 	Email         string
 	Password      string
 	UserAgent     string
+	ClientIP      string
 	ReplacesToken string
 }
 
@@ -55,6 +75,24 @@ type LoginInput struct {
 // run, so the answer doesn't say why (timing differs only mid parameter migration, §5).
 func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error) {
 	email := NormalizeEmail(in.Email)
+	pair := email + "\x00" + in.ClientIP
+	for _, check := range []struct {
+		limiter *ratelimit.Limiter
+		key     string
+	}{{s.failuresByEmailAndIP, pair}, {s.failuresByEmail, email}} {
+		if blocked, wait := check.limiter.Exhausted(check.key); blocked {
+			return "", User{}, &RateLimitedError{RetryAfter: wait}
+		}
+	}
+	token, user, err := s.login(ctx, email, in)
+	if errors.Is(err, ErrInvalidCredentials) {
+		s.failuresByEmailAndIP.Spend(pair)
+		s.failuresByEmail.Spend(email)
+	}
+	return token, user, err
+}
+
+func (s *Service) login(ctx context.Context, email string, in LoginInput) (string, User, error) {
 	// Postgres refuses NUL in text, which would turn this into a 500 instead of a refusal.
 	if strings.ContainsRune(email, 0) {
 		return "", User{}, s.refuse(ctx, in.Password)

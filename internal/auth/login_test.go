@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kdelpe/family-hub/internal/database"
+	"github.com/kdelpe/family-hub/internal/ratelimit"
 	"github.com/kdelpe/family-hub/internal/testdb"
 )
 
@@ -123,6 +125,71 @@ func TestLoginRefusedWhenACredentialChangesBeforeTheSessionCommits(t *testing.T)
 			}
 			assert.ErrorIs(t, err, ErrInvalidCredentials)
 			assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM sessions`))
+		})
+	}
+}
+
+func TestLoginFailureLimits(t *testing.T) {
+	tests := []struct {
+		name        string
+		failuresFor func(i int) LoginInput
+		thenTry     LoginInput
+		wantBlocked bool
+	}{
+		{
+			name:        "same email and IP is blocked, even with the right password",
+			failuresFor: func(int) LoginInput { return LoginInput{Email: anaEmail, Password: "wrong", ClientIP: "203.0.113.7"} },
+			thenTry:     LoginInput{Email: anaEmail, Password: anaPassword, ClientIP: "203.0.113.7"},
+			wantBlocked: true,
+		},
+		{
+			name:        "another IP still signs in below the backstop",
+			failuresFor: func(int) LoginInput { return LoginInput{Email: anaEmail, Password: "wrong", ClientIP: "203.0.113.7"} },
+			thenTry:     LoginInput{Email: anaEmail, Password: anaPassword, ClientIP: "198.51.100.1"},
+		},
+		{
+			name: "the per-email backstop spans IPs",
+			failuresFor: func(i int) LoginInput {
+				return LoginInput{Email: anaEmail, Password: "wrong", ClientIP: fmt.Sprintf("203.0.113.%d", i)}
+			},
+			thenTry:     LoginInput{Email: anaEmail, Password: anaPassword, ClientIP: "198.51.100.1"},
+			wantBlocked: true,
+		},
+		{
+			name: "unknown emails count too, so a block says nothing about accounts",
+			failuresFor: func(int) LoginInput {
+				return LoginInput{Email: "bo@example.com", Password: "wrong", ClientIP: "203.0.113.7"}
+			},
+			thenTry:     LoginInput{Email: "bo@example.com", Password: "wrong", ClientIP: "203.0.113.7"},
+			wantBlocked: true,
+		},
+		{
+			name: "successful sign-ins don't count",
+			failuresFor: func(int) LoginInput {
+				return LoginInput{Email: anaEmail, Password: anaPassword, ClientIP: "203.0.113.7"}
+			},
+			thenTry: LoginInput{Email: anaEmail, Password: anaPassword, ClientIP: "203.0.113.7"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, _, _ := withAna(t)
+			svc.failuresByEmailAndIP = ratelimit.New(2, time.Hour)
+			svc.failuresByEmail = ratelimit.New(3, time.Hour)
+			for i := range 3 {
+				_, _, _ = svc.Login(t.Context(), tt.failuresFor(i))
+			}
+
+			_, _, err := svc.Login(t.Context(), tt.thenTry)
+
+			var limited *RateLimitedError
+			if !tt.wantBlocked {
+				assert.NotErrorAs(t, err, &limited)
+				return
+			}
+			require.ErrorAs(t, err, &limited)
+			assert.Positive(t, limited.RetryAfter)
 		})
 	}
 }

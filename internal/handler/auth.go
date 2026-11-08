@@ -42,17 +42,20 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
-	in := auth.LoginInput{Email: req.Email, Password: req.Password, UserAgent: r.UserAgent()}
+	in := auth.LoginInput{Email: req.Email, Password: req.Password, UserAgent: r.UserAgent(), ClientIP: httpx.ClientIP(r)}
 	if c, err := r.Cookie(a.cookie.name); err == nil {
 		in.ReplacesToken = c.Value
 	}
 	token, user, err := a.svc.Login(r.Context(), in)
+	var limited *auth.RateLimitedError
 	switch {
 	case err == nil:
 		// Even for a client that just left: the session exists and replaced the old one.
 		a.cookie.set(w, token)
 		httpx.JSON(w, http.StatusOK, toUserResponse(user))
 	case clientGone(r):
+	case errors.As(err, &limited):
+		httpx.TooManyRequests(w, limited.RetryAfter)
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		httpx.Error(w, http.StatusUnauthorized, "invalid_credentials", "email or password is incorrect")
 	case errors.Is(err, auth.ErrBusy):
