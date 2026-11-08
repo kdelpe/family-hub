@@ -1,8 +1,6 @@
 package handler_test
 
 import (
-	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,14 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kdelpe/family-hub/internal/auth"
+	"github.com/kdelpe/family-hub/internal/database"
 	"github.com/kdelpe/family-hub/internal/handler"
+	"github.com/kdelpe/family-hub/internal/testdb"
 )
-
-type authenticatorFunc func(ctx context.Context, token string) (auth.Session, error)
-
-func (f authenticatorFunc) Authenticate(ctx context.Context, token string) (auth.Session, error) {
-	return f(ctx, token)
-}
 
 const (
 	unauthorizedBody = `{"error":{"code":"unauthorized","message":"sign in required"}}`
@@ -27,34 +21,28 @@ const (
 )
 
 func TestSessionGateRequire(t *testing.T) {
-	member := auth.Session{UserID: uuid.New(), Role: "member"}
-	acceptOnly := func(want string) authenticatorFunc {
-		return func(_ context.Context, token string) (auth.Session, error) {
-			if token != want {
-				return auth.Session{}, auth.ErrNoSession
-			}
-			return member, nil
-		}
-	}
+	pool := testdb.MigratedPool(t, database.MigrateUp)
+	var userID uuid.UUID
+	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email) VALUES ('ana@example.com') RETURNING id`).Scan(&userID))
+	sessions := auth.NewSessions(pool)
+	token, err := sessions.Create(t.Context(), userID, "")
+	require.NoError(t, err)
+	unreachable := auth.NewSessions(testdb.UnreachablePool(t))
 
 	tests := []struct {
 		name         string
+		sessions     handler.SessionAuthenticator
 		secureCookie bool
 		cookie       *http.Cookie
-		sessions     authenticatorFunc
 		wantStatus   int
 		wantBody     string
 	}{
-		{name: "valid secure cookie", secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: "tok"}, sessions: acceptOnly("tok"), wantStatus: http.StatusOK},
-		{name: "valid local cookie", cookie: &http.Cookie{Name: "fh_session", Value: "tok"}, sessions: acceptOnly("tok"), wantStatus: http.StatusOK},
-		{name: "no cookie", secureCookie: true, sessions: acceptOnly("tok"), wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
-		{name: "local cookie name when secure", secureCookie: true, cookie: &http.Cookie{Name: "fh_session", Value: "tok"}, sessions: acceptOnly("tok"), wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
-		{name: "no active session", secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: "old"}, sessions: acceptOnly("tok"), wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
-		{
-			name: "database error", secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: "tok"},
-			sessions:   func(context.Context, string) (auth.Session, error) { return auth.Session{}, errors.New("db down") },
-			wantStatus: http.StatusInternalServerError, wantBody: internalBody,
-		},
+		{name: "valid secure cookie", sessions: sessions, secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: token}, wantStatus: http.StatusOK},
+		{name: "valid local cookie", sessions: sessions, cookie: &http.Cookie{Name: "fh_session", Value: token}, wantStatus: http.StatusOK},
+		{name: "no cookie", sessions: sessions, secureCookie: true, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
+		{name: "local cookie name when secure", sessions: sessions, secureCookie: true, cookie: &http.Cookie{Name: "fh_session", Value: token}, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
+		{name: "unknown token", sessions: sessions, secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
+		{name: "database down", sessions: unreachable, secureCookie: true, cookie: &http.Cookie{Name: "__Host-fh_session", Value: token}, wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 	}
 
 	for _, tt := range tests {
@@ -75,7 +63,7 @@ func TestSessionGateRequire(t *testing.T) {
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			if tt.wantBody == "" {
-				assert.Equal(t, member, seen)
+				assert.Equal(t, auth.Session{UserID: userID, Role: "member"}, seen)
 				return
 			}
 			assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
