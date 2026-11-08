@@ -47,6 +47,9 @@ func (g *SessionGate) Require(next http.Handler) http.Handler {
 			return
 		}
 		if err != nil {
+			if r.Context().Err() != nil {
+				return
+			}
 			zerolog.Ctx(r.Context()).Error().Err(err).Msg("authenticate session")
 			httpx.Error(w, http.StatusInternalServerError, "internal", "internal error")
 			return
