@@ -858,12 +858,11 @@ volumes: { pgdata: {} }
 # The Go version must be at least the `go` line in go.mod.
 FROM golang:1.27.3-alpine3.24 AS build
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
 RUN apk add --no-cache make
 COPY . .
 # The Makefile's build, so the image and CI build the same way (with the placeholder UI until Phase 4a).
-RUN make build
+# No `go mod download`: it would also fetch the sqlc tool's large dependency tree.
+RUN --mount=type=cache,target=/go/pkg/mod make build
 
 # Phase 6 adds ffmpeg and vips here.
 FROM alpine:3.24.4
