@@ -85,6 +85,8 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error
 	if len(email) > maxEmailLen || strings.ContainsRune(email, 0) {
 		return "", User{}, s.refuse(ctx, in.Password)
 	}
+	// Trimming can leave a short key that still holds the whole request body.
+	email = strings.Clone(email)
 
 	// Taken before the slow verify, so parallel guesses can't all pass an unspent limit.
 	pair := email + "\x00" + in.ClientIP

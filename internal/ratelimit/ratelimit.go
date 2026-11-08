@@ -37,9 +37,10 @@ func New(n int, window time.Duration) *Limiter {
 
 // Take spends one event for key, or reports how long until one is available.
 func (l *Limiter) Take(key string) (bool, time.Duration) {
-	now := time.Now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	// Read under the lock, so a bucket never sees time go backwards.
+	now := time.Now()
 	l.sweep(now)
 	b := l.refilled(key, now)
 	if b.tokens < 1 {
@@ -51,9 +52,9 @@ func (l *Limiter) Take(key string) (bool, time.Duration) {
 
 // Refund gives back an event that turned out not to count.
 func (l *Limiter) Refund(key string) {
-	now := time.Now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	now := time.Now()
 	b := l.refilled(key, now)
 	b.tokens = min(l.n, b.tokens+1)
 }
