@@ -1,4 +1,4 @@
-// Package auth holds sign-in logic: passwords now, then tokens, sessions and Google sign-in (architecture §5).
+// Package auth handles sign-in (architecture §5).
 package auth
 
 import (
@@ -20,29 +20,25 @@ import (
 )
 
 const (
-	minPasswordLen = 8
-	maxPasswordLen = 128
-	// With the current 19 MiB per hash, this caps password work at about 76 MiB.
+	minPasswordLen      = 8
+	maxPasswordLen      = 128
 	maxConcurrentHashes = 4
 	hashWait            = 2 * time.Second
 	saltLen             = 16
 	keyLen              = 32
-	// Bounds on a stored hash's parameters, so no hash can make a verify take gigabytes or minutes.
-	maxMemoryKiB = 256 * 1024
-	maxTime      = 10
-	maxThreads   = 8
-	maxKeyLen    = 64
+	maxStoredMemoryKiB  = 256 * 1024
+	maxStoredTime       = 10
+	maxStoredThreads    = 8
+	maxStoredKeyLen     = 64
 )
 
-// OWASP's minimum for Argon2id: 19 MiB, 2 iterations, 1 thread.
 var currentParams = params{memory: 19 * 1024, time: 2, threads: 1}
 
 var (
 	ErrPasswordTooShort  = fmt.Errorf("password must be at least %d characters", minPasswordLen)
 	ErrPasswordTooLong   = fmt.Errorf("password must be at most %d characters", maxPasswordLen)
 	ErrPasswordTooCommon = errors.New("password is too common")
-	// ErrBusy means every hash slot stayed taken for hashWait; the caller answers 503.
-	ErrBusy = errors.New("too many password checks at once")
+	ErrBusy              = errors.New("too many password checks at once")
 
 	errMalformedHash = errors.New("malformed password hash")
 )
@@ -55,7 +51,7 @@ var commonPasswords = sync.OnceValue(func() map[string]struct{} {
 	header := true
 	for line := range strings.Lines(commonPasswordList) {
 		line = strings.TrimSuffix(line, "\n")
-		// Only the leading lines are comments; an entry may itself start with "# ".
+		// Only the leading lines are a header: an entry may itself start with "# ".
 		if header = header && strings.HasPrefix(line, "# "); !header && line != "" {
 			set[line] = struct{}{}
 		}
@@ -69,7 +65,6 @@ type params struct {
 	threads uint8
 }
 
-// CheckNewPassword applies the rules for a password being set; existing ones are only verified.
 func CheckNewPassword(password, email string) error {
 	password = norm.NFC.String(password)
 	switch n := utf8.RuneCountInString(password); {
@@ -87,7 +82,6 @@ func CheckNewPassword(password, email string) error {
 	return nil
 }
 
-// "Family-Hub", "family_hub" and "familyhub1" all count as the app's name.
 func lettersOnly(s string) string {
 	return strings.Map(func(r rune) rune {
 		if unicode.IsLetter(r) {
@@ -97,7 +91,6 @@ func lettersOnly(s string) string {
 	}, s)
 }
 
-// Hasher runs Argon2id, at most maxConcurrentHashes at a time.
 type Hasher struct {
 	slots chan struct{}
 }
@@ -106,7 +99,6 @@ func NewHasher() *Hasher {
 	return &Hasher{slots: make(chan struct{}, maxConcurrentHashes)}
 }
 
-// Hash returns a PHC string: $argon2id$v=19$m=…,t=…,p=…$salt$hash.
 func (h *Hasher) Hash(ctx context.Context, password string) (string, error) {
 	return h.hash(ctx, password, currentParams)
 }
@@ -126,16 +118,13 @@ func (h *Hasher) hash(ctx context.Context, password string, p params) (string, e
 		p.memory, p.time, p.threads, enc.EncodeToString(salt), enc.EncodeToString(key)), nil
 }
 
-// Verify reports whether password matches encoded, and whether encoded should be replaced
-// by a fresh Hash because it was made with other parameters.
 func (h *Hasher) Verify(ctx context.Context, encoded, password string) (ok, rehash bool, err error) {
-	// No stored password is longer, so it can't match; refused before it takes a slot.
 	if tooLong(password) {
 		return false, false, nil
 	}
 	p, salt, want, err := parseHash(encoded)
 	if err != nil {
-		// Still one Argon2 run, so a broken stored hash answers as slowly as any other failure.
+		// So a broken stored hash answers as slowly as any other failed login.
 		_, _ = h.derive(ctx, password, make([]byte, saltLen), currentParams, keyLen)
 		return false, false, err
 	}
@@ -175,7 +164,6 @@ func (h *Hasher) acquire(ctx context.Context) error {
 	}
 }
 
-// The byte check comes first, so megabytes are never normalized; 128 characters fit in 512 bytes.
 func tooLong(password string) bool {
 	return len(password) > 4*maxPasswordLen || utf8.RuneCountInString(norm.NFC.String(password)) > maxPasswordLen
 }
@@ -187,14 +175,14 @@ func parseHash(encoded string) (p params, salt, key []byte, err error) {
 	}
 	var rest string
 	if n, _ := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d%s", &p.memory, &p.time, &p.threads, &rest); n != 3 ||
-		p.memory == 0 || p.memory > maxMemoryKiB || p.time == 0 || p.time > maxTime || p.threads == 0 || p.threads > maxThreads {
+		p.memory == 0 || p.memory > maxStoredMemoryKiB || p.time == 0 || p.time > maxStoredTime || p.threads == 0 || p.threads > maxStoredThreads {
 		return params{}, nil, nil, errMalformedHash
 	}
 	enc := base64.RawStdEncoding
 	if salt, err = enc.DecodeString(parts[4]); err != nil {
 		return params{}, nil, nil, errMalformedHash
 	}
-	if key, err = enc.DecodeString(parts[5]); err != nil || len(key) == 0 || len(key) > maxKeyLen {
+	if key, err = enc.DecodeString(parts[5]); err != nil || len(key) == 0 || len(key) > maxStoredKeyLen {
 		return params{}, nil, nil, errMalformedHash
 	}
 	return p, salt, key, nil
