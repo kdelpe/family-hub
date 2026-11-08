@@ -53,7 +53,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error
 		return "", User{}, s.refuse(ctx, in.Password)
 	case err != nil:
 		return "", User{}, fmt.Errorf("find user: %w", err)
-	case found.PasswordHash == nil || found.DisabledAt != nil:
+	case found.PasswordHash == nil || found.PasswordChangedAt == nil || found.DisabledAt != nil:
 		return "", User{}, s.refuse(ctx, in.Password)
 	}
 
