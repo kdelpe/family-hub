@@ -15,6 +15,7 @@ type Config struct {
 	HTTPAddr     string
 	AutoMigrate  bool
 	CookieSecure bool
+	TrustedProxy bool
 }
 
 // Load reads settings through getenv (os.Getenv outside tests) and reports every problem at once.
@@ -48,6 +49,12 @@ func Load(getenv func(string) string) (Config, error) {
 		errs = append(errs, err)
 	}
 	cfg.CookieSecure = cookieSecure
+
+	trustedProxy, err := parseBool("TRUSTED_PROXY", getenv("TRUSTED_PROXY"), false)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	cfg.TrustedProxy = trustedProxy
 
 	if len(errs) > 0 {
 		return Config{}, fmt.Errorf("invalid config: %w", errors.Join(errs...))
