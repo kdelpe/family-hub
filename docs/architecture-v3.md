@@ -75,7 +75,7 @@ family-hub/
 │   ├── config/                   # env loader + validation
 │   ├── httpx/                    # JSON helpers, error type, pagination, security middleware
 │   ├── auth/                     # passwords, Google sign-in, emailed tokens, sessions, per-account limits (Phase 2)
-│   ├── ratelimit/                # in-memory token bucket per key (x/time/rate); no HTTP
+│   ├── ratelimit/                # in-memory token bucket per key, with refunds; no HTTP
 │   ├── admin/                    # invites, roles (Phase 2); person linking (Phase 3)
 │   ├── family/                   # persons, relationships, tree, ancestors, cycles   (Phase 3)
 │   ├── contacts/                 # contact methods, visibility, directory            (Phase 3)
@@ -505,11 +505,11 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
 
 **Auth cleanup job** (Phase 2, in-process, no extra infrastructure): a ticker runs every 15 minutes and deletes, in batches of 1,000, `oauth_flows` that are consumed or expired, `auth_tokens` consumed or expired more than 7 days ago, and `sessions` past their expiry. Expiry is already enforced on every read; the job only keeps the tables from growing. Each table has an index on its expiry column for this.
 
-**Rate limits** (in-memory `x/time/rate` is fine for a single instance; `internal/ratelimit` drops a key's bucket once it has sat a whole window unused, so memory stays bounded). A blocked request gets `429 rate_limited` with `Retry-After`. Each endpoint's limits land with the endpoint. Two layers:
+**Rate limits** (in memory, fine for a single instance). `internal/ratelimit` is a small token bucket per key rather than `x/time/rate`, which can't give back a token granted at once; it drops a bucket only once it has refilled, so memory stays bounded and no penalty is forgiven early. A blocked request gets `429 rate_limited` with `Retry-After`. Each endpoint's limits land with the endpoint. Two layers:
 
 - **Per IP, as router middleware** (it only needs the client address; IPv6 is counted per /64, since one household usually holds a whole /64): `login` 20 per 15 min, `password/forgot` 20/hour, `password/reset` 10/minute, `google/*` 20/minute.
 - **Per account, inside the auth service** (only the service knows the email and whether verification failed), counting **failures only**:
-  - `login`: 5 failures per 15 min per **email + IP** pair, and a backstop of 50 failures per hour per email across all IPs.
+  - `login`: 5 failures per 15 min per **email + IP** pair, and a backstop of 50 failures per hour per email across all IPs. Each attempt takes its slot *before* the Argon2 verify (so parallel guesses can't all pass an unspent limit) and gets it back unless the password was wrong; a right password refused because a credential changed mid-login isn't a failure. Emails over 254 characters are refused before they become limiter keys.
   - `password/change`: 5 wrong `current_password` attempts per 15 min per user.
   - `password/forgot`: 5 emails per hour per address.
 

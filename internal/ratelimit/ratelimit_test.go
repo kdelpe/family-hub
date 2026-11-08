@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -8,59 +9,78 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAllow(t *testing.T) {
+func TestTake(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		l := New(3, 15*time.Minute)
 
 		for range 3 {
-			ok, _ := l.Allow("a")
+			ok, _ := l.Take("a")
 			assert.True(t, ok)
 		}
-		ok, wait := l.Allow("a")
+		ok, wait := l.Take("a")
 		assert.False(t, ok, "fourth in the window")
 		assert.Equal(t, 5*time.Minute, wait, "one event refills every window/n")
 
-		ok, _ = l.Allow("b")
+		ok, _ = l.Take("b")
 		assert.True(t, ok, "keys are independent")
 
 		time.Sleep(5 * time.Minute)
-		ok, _ = l.Allow("a")
+		ok, _ = l.Take("a")
 		assert.True(t, ok, "refilled")
 	})
 }
 
-func TestExhaustedCountsOnlySpentEvents(t *testing.T) {
+func TestRefund(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		l := New(2, time.Hour)
+		l := New(1, time.Hour)
 
-		blocked, _ := l.Exhausted("a")
-		assert.False(t, blocked, "an unknown key")
-		for range 5 {
-			blocked, _ = l.Exhausted("a")
-		}
-		assert.False(t, blocked, "checking spends nothing")
+		ok, _ := l.Take("a")
+		assert.True(t, ok)
+		l.Refund("a")
+		ok, _ = l.Take("a")
+		assert.True(t, ok, "the refunded event is back")
 
-		l.Spend("a")
-		l.Spend("a")
-		blocked, wait := l.Exhausted("a")
-		assert.True(t, blocked)
-		assert.Equal(t, 30*time.Minute, wait)
-
-		time.Sleep(30 * time.Minute)
-		blocked, _ = l.Exhausted("a")
-		assert.False(t, blocked)
+		l.Refund("a")
+		l.Refund("a")
+		ok, _ = l.Take("a")
+		assert.True(t, ok)
+		ok, _ = l.Take("a")
+		assert.False(t, ok, "refunds never exceed n")
 	})
 }
 
-func TestIdleBucketsAreDropped(t *testing.T) {
+func TestConcurrentTakesNeverExceedN(t *testing.T) {
+	l := New(5, time.Hour)
+	var mu sync.Mutex
+	granted := 0
+	var wg sync.WaitGroup
+	for range 50 {
+		wg.Go(func() {
+			if ok, _ := l.Take("a"); ok {
+				mu.Lock()
+				granted++
+				mu.Unlock()
+			}
+		})
+	}
+	wg.Wait()
+
+	assert.Equal(t, 5, granted)
+}
+
+func TestSweepDropsOnlyFullBuckets(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		l := New(1, time.Minute)
-		l.Spend("old")
+		l := New(2, time.Minute)
+		l.Take("used once")
 
-		time.Sleep(time.Minute)
-		l.Spend("new")
+		time.Sleep(30 * time.Second)
+		l.Take("drained")
+		l.Take("drained")
 
-		assert.NotContains(t, l.buckets, "old")
-		assert.Contains(t, l.buckets, "new")
+		time.Sleep(30 * time.Second)
+		l.Take("trigger")
+
+		assert.NotContains(t, l.buckets, "used once", "refilled, so dropped")
+		assert.Contains(t, l.buckets, "drained", "still owes time")
 	})
 }

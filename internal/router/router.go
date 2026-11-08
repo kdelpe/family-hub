@@ -29,6 +29,9 @@ type Middleware struct {
 }
 
 func New(h Handlers, mw Middleware) http.Handler {
+	if mw.RequireSession == nil || mw.LimitLogin == nil {
+		panic("router: RequireSession and LimitLogin are required")
+	}
 	r := chi.NewRouter()
 	r.Use(httpx.RequestID)
 	if mw.TrustedProxy {

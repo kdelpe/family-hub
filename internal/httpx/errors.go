@@ -1,6 +1,11 @@
 package httpx
 
-import "net/http"
+import (
+	"math"
+	"net/http"
+	"strconv"
+	"time"
+)
 
 type errorBody struct {
 	Error errorDetail `json:"error"`
@@ -26,4 +31,9 @@ func CrossOriginRefused(w http.ResponseWriter, _ *http.Request) {
 
 func MethodNotAllowed(w http.ResponseWriter, _ *http.Request) {
 	Error(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+}
+
+func TooManyRequests(w http.ResponseWriter, retryAfter time.Duration) {
+	w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(retryAfter.Seconds()))))
+	Error(w, http.StatusTooManyRequests, "rate_limited", "too many attempts, try again later")
 }

@@ -2,7 +2,9 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +37,7 @@ func TestLogin(t *testing.T) {
 		{name: "unknown email", email: "bo@example.com", password: anaPassword},
 		{name: "no password (Google only)", setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`, email: anaEmail, password: anaPassword},
 		{name: "disabled", setup: `UPDATE users SET disabled_at = now()`, email: anaEmail, password: anaPassword},
+		{name: "email longer than any real address", email: strings.Repeat("a", 250) + "@example.com", password: anaPassword},
 		{name: "email with a NUL byte", email: "ana@example.com\x00", password: anaPassword},
 		{name: "broken stored hash", setup: `UPDATE users SET password_hash = 'nonsense'`, email: anaEmail, password: anaPassword},
 	}
@@ -98,6 +101,7 @@ func TestLoginRefusedWhenACredentialChangesBeforeTheSessionCommits(t *testing.T)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, pool, _ := withAna(t)
+			svc.failuresByEmailAndIP = ratelimit.New(1, time.Hour)
 			change, err := pool.Begin(t.Context())
 			require.NoError(t, err)
 			t.Cleanup(func() { _ = change.Rollback(context.Background()) })
@@ -125,8 +129,37 @@ func TestLoginRefusedWhenACredentialChangesBeforeTheSessionCommits(t *testing.T)
 			}
 			assert.ErrorIs(t, err, ErrInvalidCredentials)
 			assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM sessions`))
+			ok, _ := svc.failuresByEmailAndIP.Take(anaEmail + "\x00")
+			assert.True(t, ok, "the right password isn't counted as a failed guess")
 		})
 	}
+}
+
+func TestParallelGuessesCantOutrunTheLimit(t *testing.T) {
+	svc, _, _ := withAna(t)
+	svc.failuresByEmailAndIP = ratelimit.New(2, time.Hour)
+	errs := make(chan error, 6)
+	for range 6 {
+		go func() {
+			_, _, err := svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: "wrong", ClientIP: "203.0.113.7"})
+			errs <- err
+		}()
+	}
+
+	var guesses, limited int
+	for range 6 {
+		var rl *RateLimitedError
+		switch err := <-errs; {
+		case errors.Is(err, ErrInvalidCredentials):
+			guesses++
+		case errors.As(err, &rl):
+			limited++
+		default:
+			t.Errorf("unexpected: %v", err)
+		}
+	}
+	assert.Equal(t, 2, guesses)
+	assert.Equal(t, 4, limited)
 }
 
 func TestLoginFailureLimits(t *testing.T) {

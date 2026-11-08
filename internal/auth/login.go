@@ -34,7 +34,12 @@ const (
 	loginFailuresPerEmailAndIPWindow = 15 * time.Minute
 	loginFailuresPerEmail            = 50
 	loginFailuresPerEmailWindow      = time.Hour
+	// RFC 5321's limit; longer can't be a real address, and would pin big limiter keys.
+	maxEmailLen = 254
 )
+
+// The password was right but a credential changed meanwhile: refused, but not a failed guess.
+var errChangedDuringLogin = errors.New("credentials changed during login")
 
 type RateLimitedError struct {
 	RetryAfter time.Duration
@@ -75,28 +80,34 @@ type LoginInput struct {
 // run, so the answer doesn't say why (timing differs only mid parameter migration, §5).
 func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error) {
 	email := NormalizeEmail(in.Email)
-	pair := email + "\x00" + in.ClientIP
-	for _, check := range []struct {
-		limiter *ratelimit.Limiter
-		key     string
-	}{{s.failuresByEmailAndIP, pair}, {s.failuresByEmail, email}} {
-		if blocked, wait := check.limiter.Exhausted(check.key); blocked {
-			return "", User{}, &RateLimitedError{RetryAfter: wait}
-		}
+	// Postgres refuses NUL in text, which would turn this into a 500 instead of a refusal.
+	if len(email) > maxEmailLen || strings.ContainsRune(email, 0) {
+		return "", User{}, s.refuse(ctx, in.Password)
 	}
+
+	// Taken before the slow verify, so parallel guesses can't all pass an unspent limit.
+	pair := email + "\x00" + in.ClientIP
+	ok, wait := s.failuresByEmailAndIP.Take(pair)
+	if !ok {
+		return "", User{}, &RateLimitedError{RetryAfter: wait}
+	}
+	if ok, wait := s.failuresByEmail.Take(email); !ok {
+		s.failuresByEmailAndIP.Refund(pair)
+		return "", User{}, &RateLimitedError{RetryAfter: wait}
+	}
+
 	token, user, err := s.login(ctx, email, in)
-	if errors.Is(err, ErrInvalidCredentials) {
-		s.failuresByEmailAndIP.Spend(pair)
-		s.failuresByEmail.Spend(email)
+	if !errors.Is(err, ErrInvalidCredentials) {
+		s.failuresByEmailAndIP.Refund(pair)
+		s.failuresByEmail.Refund(email)
+	}
+	if errors.Is(err, errChangedDuringLogin) {
+		err = ErrInvalidCredentials
 	}
 	return token, user, err
 }
 
 func (s *Service) login(ctx context.Context, email string, in LoginInput) (string, User, error) {
-	// Postgres refuses NUL in text, which would turn this into a 500 instead of a refusal.
-	if strings.ContainsRune(email, 0) {
-		return "", User{}, s.refuse(ctx, in.Password)
-	}
 	found, err := gen.New(s.pool).GetLoginUser(ctx, email)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -137,12 +148,12 @@ func (s *Service) login(ctx context.Context, email string, in LoginInput) (strin
 	case errors.As(err, &pgErr) && pgErr.Code == lockNotAvailable:
 		return "", User{}, ErrBusy
 	case errors.Is(err, pgx.ErrNoRows):
-		return "", User{}, ErrInvalidCredentials
+		return "", User{}, errChangedDuringLogin
 	case err != nil:
 		return "", User{}, fmt.Errorf("lock user: %w", err)
 	case locked.DisabledAt != nil || locked.Email != email ||
 		locked.PasswordChangedAt == nil || !locked.PasswordChangedAt.Equal(*found.PasswordChangedAt):
-		return "", User{}, ErrInvalidCredentials
+		return "", User{}, errChangedDuringLogin
 	}
 	if err := qtx.RecordLogin(ctx, gen.RecordLoginParams{ID: found.ID, NewPasswordHash: newHash}); err != nil {
 		return "", User{}, fmt.Errorf("record login: %w", err)
