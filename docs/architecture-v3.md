@@ -43,7 +43,7 @@ A private, invite-only, multi-generational family archive: interactive family tr
 | Language | Go 1.27 (`go 1.27` in `go.mod`) | 1.25 is the floor for `CrossOriginProtection` and `synctest`; `go tool` directives need ≥1.24. |
 | HTTP | chi v5 | stdlib `net/http` compatible |
 | Logs | zerolog | JSON on stderr; each request's logger travels in its context (`zerolog.Ctx`) |
-| DB access | pgx v5 pool + **sqlc** | Typed queries from `.sql` files; no runtime reflection |
+| DB access | pgx v5 pool + **sqlc** | Typed queries from `.sql` files; no runtime reflection. Generated types are plain Go: `uuid.UUID` (`github.com/google/uuid`), `time.Time`, `time.Duration` for intervals, and pointers for nullable columns (`sqlc.yaml` overrides) |
 | Migrations | golang-migrate, embedded, pgx v5 driver | Auto-run gated by `AUTO_MIGRATE` |
 | Storage | S3 API via aws-sdk-go-v2 | Local server chosen at the start of Phase 5 (§9.5); R2 in prod |
 | Mail | SMTP (`net/smtp`) behind a `Mailer` interface | Mailpit local; Resend/SES/Postmark SMTP later |
@@ -858,12 +858,11 @@ volumes: { pgdata: {} }
 # The Go version must be at least the `go` line in go.mod.
 FROM golang:1.27.3-alpine3.24 AS build
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
 RUN apk add --no-cache make
 COPY . .
 # The Makefile's build, so the image and CI build the same way (with the placeholder UI until Phase 4a).
-RUN make build
+# No `go mod download`: it would also fetch the sqlc tool's large dependency tree.
+RUN --mount=type=cache,target=/go/pkg/mod make build
 
 # Phase 6 adds ffmpeg and vips here.
 FROM alpine:3.24.4
@@ -1033,7 +1032,7 @@ For a "multi-decade" archive, this section matters more than any other.
 | Job | Checks |
 |---|---|
 | go | `go mod tidy -diff`, golangci-lint (its `standard` linters include `go vet`, plus the gofmt formatter; `.golangci.yml`), `govulncheck`, `go test -race` (via `make test`) with a `postgres:18.6` service whose `POSTGRES_DB` is `familyhub_test`, `make build` |
-| generated | Re-runs `sqlc generate` and `mockery`; fails if the committed output differs |
+| generated | Deletes `internal/database/gen` and re-runs `sqlc generate`; fails if the working tree then differs, so stale or orphaned output is caught (mockery joins once there are mocks) |
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |
 
@@ -1041,7 +1040,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 **Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; `draft-release.yml` gets `contents: write`, the release job gets `contents: read` and `packages: write` (listing any permission sets the rest to none)); third-party actions pinned to commit SHAs; Dependabot keeps them current.
 
-**Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), the `go` and `docker` CI checks must pass on a branch that is up to date with `main` (add each new CI job here as it lands), no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
+**Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), the `go`, `generated` and `docker` CI checks must pass on a branch that is up to date with `main` (add each new CI job here as it lands), no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
 
 ## 14. Deployment (Phase 4c options)
 

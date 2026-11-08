@@ -6,7 +6,7 @@ DATABASE_URL      ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
 export DATABASE_URL TEST_DATABASE_URL
 
-.PHONY: up down ui-stub dev-api build run test lint vuln migrate-up
+.PHONY: up down ui-stub dev-api generate build run test lint vuln migrate-up
 
 up:
 	docker compose up -d --wait
@@ -23,6 +23,9 @@ ui-stub:
 
 dev-api: up ui-stub
 	AUTO_MIGRATE=true go run ./cmd
+
+generate:
+	go tool sqlc generate
 
 build: ui-stub
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN) ./cmd
