@@ -4,9 +4,7 @@ GOLANGCI_LINT_VERSION := 2.15.0
 
 DATABASE_URL      ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
-# Local dev is plain http, where Safari drops Secure cookies.
-COOKIE_SECURE     ?= false
-export DATABASE_URL TEST_DATABASE_URL COOKIE_SECURE
+export DATABASE_URL TEST_DATABASE_URL
 
 .PHONY: up down ui-stub dev-api generate build run test lint vuln migrate-up
 
@@ -24,7 +22,7 @@ ui-stub:
 	  (mkdir -p internal/webui/dist && printf '%s\n' '<!doctype html><title>Family Hub</title><p>The UI is not built yet.</p>' > internal/webui/dist/index.html)
 
 dev-api: up ui-stub
-	AUTO_MIGRATE=true go run ./cmd
+	AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 
 generate:
 	go tool sqlc generate
@@ -34,7 +32,7 @@ build: ui-stub
 
 # Pass subcommand and flags via ARGS, e.g. `make run ARGS="migrate up"`.
 run: ui-stub
-	go run ./cmd $(ARGS)
+	COOKIE_SECURE=false go run ./cmd $(ARGS)
 
 # Unset so no test can reach the dev database; tests use TEST_DATABASE_URL.
 test: ui-stub
