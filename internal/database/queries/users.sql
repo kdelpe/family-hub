@@ -1,0 +1,13 @@
+-- name: GetLoginUser :one
+SELECT id, password_hash, disabled_at FROM users WHERE email = @email;
+
+-- name: LockUserForSignIn :one
+SELECT email, role, password_hash, disabled_at FROM users WHERE id = @id FOR UPDATE;
+
+-- name: RecordLogin :exec
+UPDATE users
+SET last_login_at = now(), password_hash = coalesce(sqlc.narg(new_password_hash), password_hash)
+WHERE id = @id;
+
+-- name: GetUser :one
+SELECT id, email, role FROM users WHERE id = @id;
