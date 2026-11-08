@@ -1,6 +1,7 @@
 package auth_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -55,7 +56,7 @@ func TestAuthenticateRefusesBadTokens(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tx, err := pool.Begin(t.Context())
 			require.NoError(t, err)
-			t.Cleanup(func() { _ = tx.Rollback(t.Context()) })
+			t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
 			if tt.setup != "" {
 				_, err := tx.Exec(t.Context(), tt.setup)
 				require.NoError(t, err)

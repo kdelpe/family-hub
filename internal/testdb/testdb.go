@@ -61,21 +61,28 @@ func UnreachablePool(t testing.TB) *pgxpool.Pool {
 // MigratedPool connects to a throwaway schema, dropped when the test ends, after running migrate on it.
 func MigratedPool(t testing.TB, migrate func(ctx context.Context, url string) error) *pgxpool.Pool {
 	t.Helper()
-	admin := Pool(t)
+	base := URL(t)
 	ctx := context.Background()
-	schema := pgx.Identifier{"test_" + strings.ToLower(rand.Text())}
-	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+schema.Sanitize()); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _, _ = admin.Exec(ctx, "DROP SCHEMA "+schema.Sanitize()+" CASCADE") })
-
-	u, err := url.Parse(URL(t))
+	admin, err := pgx.Connect(ctx, base)
 	if err != nil {
 		t.Fatal(err)
 	}
-	q := u.Query()
-	q.Set("search_path", schema[0])
-	u.RawQuery = q.Encode()
+	t.Cleanup(func() { _ = admin.Close(ctx) })
+	schema := "test_" + strings.ToLower(rand.Text())
+	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = admin.Exec(ctx, "DROP SCHEMA "+schema+" CASCADE") })
+
+	// Appended raw: re-encoding the query turns %20 into +, which pgx reads literally.
+	u, err := url.Parse(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.RawQuery != "" {
+		u.RawQuery += "&"
+	}
+	u.RawQuery += "search_path=" + schema
 	if err := migrate(t.Context(), u.String()); err != nil {
 		t.Fatal(err)
 	}

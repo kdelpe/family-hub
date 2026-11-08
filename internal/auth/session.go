@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/rs/zerolog"
 
 	"github.com/kdelpe/family-hub/internal/database/gen"
 )
@@ -68,8 +69,9 @@ func (s *Sessions) Authenticate(ctx context.Context, token string) (Session, err
 	}
 	// The query decides on the database clock; this only skips it for fresh sessions.
 	if time.Since(row.LastSeenAt) > sessionTouchAfter {
+		// The session is valid either way; a failed touch only delays sliding the idle window.
 		if err := s.q.TouchSession(ctx, gen.TouchSessionParams{IDHash: idHash, TouchAfter: sessionTouchAfter}); err != nil {
-			return Session{}, fmt.Errorf("touch session: %w", err)
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("touch session")
 		}
 	}
 	return Session{UserID: row.UserID, Role: row.Role}, nil
