@@ -871,9 +871,9 @@ USER app
 WORKDIR /app
 COPY --from=build /src/bin/family-hub .
 EXPOSE 8080
-# The port from HTTP_ADDR (default :8080); the app must listen on all interfaces or loopback.
+# The port from HTTP_ADDR, trimmed and defaulted as config.Load does; the app must listen on all interfaces or loopback.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s \
-  CMD addr="${HTTP_ADDR:-:8080}"; wget -qO- "http://127.0.0.1:${addr##*:}/health" || exit 1
+  CMD addr=$(echo $HTTP_ADDR); addr="${addr:-:8080}"; wget -qO- "http://127.0.0.1:${addr##*:}/health" || exit 1
 ENTRYPOINT ["./family-hub"]
 ```
 
