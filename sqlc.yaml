@@ -12,6 +12,14 @@ sql:
         overrides:
           - db_type: uuid
             go_type: github.com/google/uuid.UUID
+          - db_type: uuid
+            nullable: true
+            go_type:
+              import: github.com/google/uuid
+              type: UUID
+              pointer: true
+          - db_type: pg_catalog.interval
+            go_type: time.Duration
           - db_type: timestamptz
             go_type: time.Time
           - db_type: timestamptz

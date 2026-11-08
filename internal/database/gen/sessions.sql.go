@@ -49,13 +49,13 @@ FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.id_hash = $1
   AND s.expires_at > now()
-  AND s.last_seen_at > $2
+  AND s.last_seen_at > now() - $2::interval
   AND u.disabled_at IS NULL
 `
 
 type GetActiveSessionParams struct {
-	IDHash    []byte
-	IdleSince time.Time
+	IDHash      []byte
+	IdleTimeout time.Duration
 }
 
 type GetActiveSessionRow struct {
@@ -65,7 +65,7 @@ type GetActiveSessionRow struct {
 }
 
 func (q *Queries) GetActiveSession(ctx context.Context, arg GetActiveSessionParams) (GetActiveSessionRow, error) {
-	row := q.db.QueryRow(ctx, getActiveSession, arg.IDHash, arg.IdleSince)
+	row := q.db.QueryRow(ctx, getActiveSession, arg.IDHash, arg.IdleTimeout)
 	var i GetActiveSessionRow
 	err := row.Scan(&i.UserID, &i.LastSeenAt, &i.Role)
 	return i, err
@@ -73,15 +73,15 @@ func (q *Queries) GetActiveSession(ctx context.Context, arg GetActiveSessionPara
 
 const touchSession = `-- name: TouchSession :exec
 UPDATE sessions SET last_seen_at = now()
-WHERE id_hash = $1 AND last_seen_at < $2
+WHERE id_hash = $1 AND last_seen_at < now() - $2::interval
 `
 
 type TouchSessionParams struct {
-	IDHash      []byte
-	StaleBefore time.Time
+	IDHash     []byte
+	TouchAfter time.Duration
 }
 
 func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) error {
-	_, err := q.db.Exec(ctx, touchSession, arg.IDHash, arg.StaleBefore)
+	_, err := q.db.Exec(ctx, touchSession, arg.IDHash, arg.TouchAfter)
 	return err
 }

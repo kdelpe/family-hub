@@ -8,12 +8,12 @@ FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.id_hash = @id_hash
   AND s.expires_at > now()
-  AND s.last_seen_at > @idle_since
+  AND s.last_seen_at > now() - @idle_timeout::interval
   AND u.disabled_at IS NULL;
 
 -- name: TouchSession :exec
 UPDATE sessions SET last_seen_at = now()
-WHERE id_hash = @id_hash AND last_seen_at < @stale_before;
+WHERE id_hash = @id_hash AND last_seen_at < now() - @touch_after::interval;
 
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE id_hash = @id_hash;
