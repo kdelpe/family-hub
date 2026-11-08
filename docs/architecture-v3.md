@@ -398,7 +398,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 |---|---|---|---|
 | GET | `/health` | internal only (blocked at Caddy) | Liveness: process is up |
 | GET | `/ready` | internal only (blocked at Caddy) | Readiness: database reachable |
-| POST | `/api/auth/login` | no session (sign-in flow), rate-limited | `{email, password}` → sets session cookie and returns the user as `/me` does; any failure is the same `401 invalid_credentials` (`503 busy` when the hash limit is full) |
+| POST | `/api/auth/login` | no session (sign-in flow), rate-limited | `{email, password}` → sets session cookie (ending the session the request's old cookie held, if any) and returns the user as `/me` does; any failure is the same `401 invalid_credentials` (`503 busy` when the hash limit is full) |
 | POST | `/api/auth/password/forgot` | no session (sign-in flow), rate-limited | `{email}` → always `202`; reset email sent only if user exists and is enabled |
 | POST | `/api/auth/password/reset` | no session (sign-in flow), rate-limited | `{token, password}` (invite or reset link) → sets password, revokes other sessions, signs in |
 | POST | `/api/auth/password/change` | session | `{current_password, new_password}` → revokes other sessions |
@@ -406,7 +406,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/api/auth/google/callback` | no session (sign-in flow), rate-limited | Verifies the ID token; signs in by `sub`, auto-links only Gmail/Workspace invited emails (§5); redirects into the app |
 | POST | `/api/admin/users/{id}/send-reset` | admin | Resend invite or send a password-reset email |
 | GET | `/api/auth/me` | session | Current user, role, linked person |
-| POST | `/api/auth/logout` | session | Deletes the session row |
+| POST | `/api/auth/logout` | none needed | Deletes the cookie's session row if there is one and always clears the cookie (`204`), so an expired session's cookie still goes away |
 | GET | `/api/admin/users` | admin | List users |
 | POST | `/api/admin/users` | admin | Invite: `{email, role}`; from Phase 3 also `person_id`, required (§5.1) |
 | PATCH | `/api/admin/users/{id}` | admin | Role, disable/enable, link person, change email (clears Google link and password, revokes sessions and tokens, re-invites; §5) |
@@ -638,7 +638,6 @@ func New(h Handlers, mw Middleware) http.Handler {
     r.Get("/ready", h.Health.Ready)
 
     r.Route("/api", func(r chi.Router) {
-        r.Use(middleware.Timeout(30 * time.Second))
         r.Use(http.NewCrossOriginProtection().Handler) // stdlib CSRF (Go 1.25)
         r.NotFound(httpx.NotFound)
         r.MethodNotAllowed(httpx.MethodNotAllowed)
@@ -648,11 +647,11 @@ func New(h Handlers, mw Middleware) http.Handler {
         r.With(mw.LimitReset).Post("/auth/password/reset", h.Auth.ResetPassword)
         r.With(mw.LimitGoogle).Get("/auth/google/start", h.Auth.GoogleStart)
         r.With(mw.LimitGoogle).Get("/auth/google/callback", h.Auth.GoogleCallback)
+        r.Post("/auth/logout", h.Auth.Logout)           // no session needed: always clears the cookie
 
         r.Group(func(r chi.Router) {
             r.Use(mw.RequireSession)
             r.Get("/auth/me", h.Auth.Me)
-            r.Post("/auth/logout", h.Auth.Logout)
             r.Post("/auth/password/change", h.Auth.ChangePassword)
 
             r.Get("/tree", h.Family.Tree)
@@ -697,7 +696,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 
 Role checks in the router (`RequireRole`) are the coarse gate; the fine-grained rules (a member may PATCH only their own person, only profile fields) live in the service, so they're enforced and tested regardless of routing.
 
-Changes vs V2: no CORS middleware (Vite proxies `/api`, so dev is same-origin too); no compression middleware (Caddy compresses in prod); timeout scoped to `/api`; CSRF via the stdlib instead of a hand-written guard; JSON 404s; security headers; a JSON decode helper (`httpx.DecodeJSON`) that requires `Content-Type: application/json` (415 otherwise), limits the body to 1 MiB via `http.MaxBytesReader` (413), and rejects unknown fields and trailing data (400).
+Changes vs V2: no CORS middleware (Vite proxies `/api`, so dev is same-origin too); no compression middleware (Caddy compresses in prod); no per-request timeout middleware yet (the `http.Server` timeouts bound each connection); CSRF via the stdlib instead of a hand-written guard; JSON 404s; security headers; a JSON decode helper (`httpx.DecodeJSON`) that requires `Content-Type: application/json` (415 otherwise), limits the body to 1 MiB via `http.MaxBytesReader` (413), and rejects unknown fields and trailing data (400).
 
 ### 6.2 Embedded migrations (`internal/database/migrate.go`)
 

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/httpx"
@@ -43,6 +44,9 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token, user, err := a.svc.Login(r.Context(), req.Email, req.Password, r.UserAgent())
+	if err == nil {
+		a.endPreviousSession(r)
+	}
 	switch {
 	case clientGone(r):
 	case errors.Is(err, auth.ErrInvalidCredentials):
@@ -58,11 +62,13 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
-	if err := a.svc.Logout(r.Context(), currentToken(r.Context())); err != nil {
-		if !clientGone(r) {
-			internalError(w, r, err, "logout")
+	if c, err := r.Cookie(a.cookie.name); err == nil {
+		if err := a.svc.Logout(r.Context(), c.Value); err != nil {
+			if !clientGone(r) {
+				internalError(w, r, err, "logout")
+			}
+			return
 		}
-		return
 	}
 	a.cookie.clear(w)
 	w.WriteHeader(http.StatusNoContent)
@@ -73,10 +79,23 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 	user, err := a.svc.User(r.Context(), session.UserID)
 	switch {
 	case clientGone(r):
+	case errors.Is(err, auth.ErrNoSession):
+		unauthorized(w)
 	case err != nil:
 		internalError(w, r, err, "get current user")
 	default:
 		httpx.JSON(w, http.StatusOK, toUserResponse(user))
+	}
+}
+
+// A new sign-in replaces the browser's cookie, so the old session must not outlive it.
+func (a *Auth) endPreviousSession(r *http.Request) {
+	c, err := r.Cookie(a.cookie.name)
+	if err != nil {
+		return
+	}
+	if err := a.svc.Logout(r.Context(), c.Value); err != nil && !clientGone(r) {
+		zerolog.Ctx(r.Context()).Warn().Err(err).Msg("end previous session")
 	}
 }
 

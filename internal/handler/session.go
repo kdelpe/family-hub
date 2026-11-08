@@ -76,26 +76,15 @@ func (g *SessionGate) Require(next http.Handler) http.Handler {
 			internalError(w, r, err, "authenticate session")
 			return
 		}
-		ctx := context.WithValue(r.Context(), sessionKey{}, sessionToken{Session: session, token: cookie.Value})
-		next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), sessionKey{}, session)))
 	})
 }
 
 type sessionKey struct{}
 
-type sessionToken struct {
-	auth.Session
-	token string
-}
-
 func CurrentSession(ctx context.Context) (auth.Session, bool) {
-	s, ok := ctx.Value(sessionKey{}).(sessionToken)
-	return s.Session, ok
-}
-
-func currentToken(ctx context.Context) string {
-	s, _ := ctx.Value(sessionKey{}).(sessionToken)
-	return s.token
+	s, ok := ctx.Value(sessionKey{}).(auth.Session)
+	return s, ok
 }
 
 func unauthorized(w http.ResponseWriter) {

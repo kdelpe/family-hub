@@ -38,17 +38,21 @@ func New(h Handlers, mw Middleware) http.Handler {
 	r.Get(livePath, h.Health.Live)
 	r.Get(readyPath, h.Health.Ready)
 
+	csrf := http.NewCrossOriginProtection()
+	csrf.SetDenyHandler(http.HandlerFunc(httpx.Forbidden))
+
 	r.Route("/api", func(r chi.Router) {
-		r.Use(http.NewCrossOriginProtection().Handler)
+		r.Use(csrf.Handler)
 		r.NotFound(httpx.NotFound)
 		r.MethodNotAllowed(httpx.MethodNotAllowed)
 
 		r.Post("/auth/login", h.Auth.Login)
+		// Outside the session group, so an expired session's cookie still gets cleared.
+		r.Post("/auth/logout", h.Auth.Logout)
 
 		r.Group(func(r chi.Router) {
 			r.Use(mw.RequireSession)
 			r.Get("/auth/me", h.Auth.Me)
-			r.Post("/auth/logout", h.Auth.Logout)
 		})
 	})
 
