@@ -93,9 +93,6 @@ func TestMigrateUpWithNoMigrationsDoesNotConnect(t *testing.T) {
 
 func TestEmbeddedMigrationsRoundTrip(t *testing.T) {
 	versions := embeddedVersions(t)
-	if len(versions) == 0 {
-		t.Skip("no embedded migrations yet; Phase 2 adds the first")
-	}
 	db := newTestSchema(t)
 
 	require.NoError(t, MigrateUp(t.Context(), db.url))

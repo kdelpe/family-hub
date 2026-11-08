@@ -25,8 +25,6 @@ const (
 	lockWait       = 5 * time.Minute
 )
 
-// The whole directory, so this compiles before the first .sql file exists.
-//
 //go:embed migrations
 var embedded embed.FS
 
