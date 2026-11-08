@@ -24,10 +24,12 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Fetched first, so a failed request stops the run instead of reading as "no releases".
+          releases=$(gh release list --limit 1000 --json tagName,isDraft,isPrerelease)
           # The highest published vX.Y.Z; drafts, prereleases and other tags don't count.
-          prev=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1000 --json tagName --jq '.[].tagName' \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)
-          draft=$(gh release list --limit 100 --json tagName,isDraft --jq '[.[] | select(.isDraft)][0].tagName // ""')
+          prev=$(jq -r '.[] | select((.isDraft or .isPrerelease) | not) | .tagName' <<< "$releases" \
+            | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sort -V | tail -n 1)
+          draft=$(jq -r '[.[] | select(.isDraft)][0].tagName // ""' <<< "$releases")
 
           tag=$draft
           if [ -z "$tag" ]; then
