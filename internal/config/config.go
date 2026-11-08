@@ -11,9 +11,10 @@ import (
 )
 
 type Config struct {
-	DatabaseURL string
-	HTTPAddr    string
-	AutoMigrate bool
+	DatabaseURL  string
+	HTTPAddr     string
+	AutoMigrate  bool
+	CookieSecure bool
 }
 
 // Load reads settings through getenv (os.Getenv outside tests) and reports every problem at once.
@@ -36,11 +37,17 @@ func Load(getenv func(string) string) (Config, error) {
 		errs = append(errs, fmt.Errorf("HTTP_ADDR must be host:port or :port with a port from 1 to 65535, got %q", cfg.HTTPAddr))
 	}
 
-	autoMigrate, err := parseBool("AUTO_MIGRATE", getenv("AUTO_MIGRATE"))
+	autoMigrate, err := parseBool("AUTO_MIGRATE", getenv("AUTO_MIGRATE"), false)
 	if err != nil {
 		errs = append(errs, err)
 	}
 	cfg.AutoMigrate = autoMigrate
+
+	cookieSecure, err := parseBool("COOKIE_SECURE", getenv("COOKIE_SECURE"), true)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	cfg.CookieSecure = cookieSecure
 
 	if len(errs) > 0 {
 		return Config{}, fmt.Errorf("invalid config: %w", errors.Join(errs...))
@@ -76,9 +83,11 @@ func validListenAddr(addr string) bool {
 	return err == nil && strconv.Itoa(n) == port && n >= 1 && n <= 65535
 }
 
-func parseBool(name, raw string) (bool, error) {
+func parseBool(name, raw string, unset bool) (bool, error) {
 	switch v := strings.ToLower(strings.TrimSpace(raw)); v {
-	case "", "false":
+	case "":
+		return unset, nil
+	case "false":
 		return false, nil
 	case "true":
 		return true, nil

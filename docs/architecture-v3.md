@@ -499,7 +499,7 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
 **Sessions**
 
 - Cookie value: 32 random bytes, base64url. DB stores `SHA-256` of it (`sessions.id_hash`).
-- Cookie flags: `HttpOnly; Secure; SameSite=Lax; Path=/`. Name `__Host-fh_session` in prod. In local dev set `COOKIE_SECURE=false` and drop the prefix, because Safari doesn't accept `Secure` cookies on `http://localhost` **(verify)**.
+- Cookie flags: `HttpOnly; Secure; SameSite=Lax; Path=/`. Name `__Host-fh_session` in prod. With `COOKIE_SECURE=false` (the Makefile's default for local dev) the cookie is `fh_session` without `Secure`: Safari doesn't accept `Secure` cookies on `http://localhost` (verified 2026-11: WebKit bugs 218980/232088 are still open), and the `__Host-` prefix requires `Secure`.
 - Lifetime: 30-day sliding window, 180-day absolute cap. `last_seen_at` is only rewritten when it's more than an hour stale, to avoid a DB write on every request. Logout and "disable user" delete rows, so revocation is immediate.
 
 **Auth cleanup job** (Phase 2, in-process, no extra infrastructure): a ticker runs every 15 minutes and deletes, in batches of 1,000, `oauth_flows` that are consumed or expired, `auth_tokens` consumed or expired more than 7 days ago, and `sessions` past their expiry. Expiry is already enforced on every read; the job only keeps the tables from growing. Each table has an index on its expiry column for this.
@@ -815,7 +815,7 @@ migrate-new:   ; go tool migrate create -ext sql -dir internal/database/migratio
 migrate-up: ui-stub ; go run ./cmd migrate up
 seed: up migrate-up ; docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < internal/database/seed.sql
 
-dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd   # COOKIE_SECURE arrives in Phase 2
+dev-api: up ui-stub ; AUTO_MIGRATE=true go run ./cmd   # COOKIE_SECURE=false is exported for every target
 dev-ui:        ; cd web && npm run dev
 run: ui-stub   ; go run ./cmd $(ARGS)
 

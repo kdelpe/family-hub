@@ -4,7 +4,9 @@ GOLANGCI_LINT_VERSION := 2.15.0
 
 DATABASE_URL      ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
-export DATABASE_URL TEST_DATABASE_URL
+# Local dev is plain http, where Safari drops Secure cookies.
+COOKIE_SECURE     ?= false
+export DATABASE_URL TEST_DATABASE_URL COOKIE_SECURE
 
 .PHONY: up down ui-stub dev-api generate build run test lint vuln migrate-up
 
