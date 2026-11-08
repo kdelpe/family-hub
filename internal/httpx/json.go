@@ -25,8 +25,12 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody))
 	dec.DisallowUnknownFields()
 	err := dec.Decode(dst)
-	if err == nil && dec.Decode(&struct{}{}) != io.EOF {
-		err = errors.New("more than one JSON value")
+	if err == nil {
+		if err = dec.Decode(&struct{}{}); err == nil {
+			err = errors.New("more than one JSON value")
+		} else if errors.Is(err, io.EOF) {
+			err = nil
+		}
 	}
 	var tooLarge *http.MaxBytesError
 	switch {

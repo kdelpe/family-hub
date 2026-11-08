@@ -20,6 +20,10 @@ func NotFound(w http.ResponseWriter, _ *http.Request) {
 	Error(w, http.StatusNotFound, "not_found", "not found")
 }
 
+func Forbidden(w http.ResponseWriter, _ *http.Request) {
+	Error(w, http.StatusForbidden, "forbidden", "cross-origin request refused")
+}
+
 func MethodNotAllowed(w http.ResponseWriter, _ *http.Request) {
 	Error(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 }
