@@ -8,3 +8,4 @@ packages:
   github.com/kdelpe/family-hub/internal/handler:
     interfaces:
       SessionAuthenticator: {}
+      AuthService: {}
