@@ -49,8 +49,8 @@ func (_m *AuthService) EXPECT() *AuthService_Expecter {
 }
 
 // Login provides a mock function for the type AuthService
-func (_mock *AuthService) Login(ctx context.Context, email string, password string, userAgent string) (string, auth.User, error) {
-	ret := _mock.Called(ctx, email, password, userAgent)
+func (_mock *AuthService) Login(ctx context.Context, in auth.LoginInput) (string, auth.User, error) {
+	ret := _mock.Called(ctx, in)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Login")
@@ -59,21 +59,21 @@ func (_mock *AuthService) Login(ctx context.Context, email string, password stri
 	var r0 string
 	var r1 auth.User
 	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string) (string, auth.User, error)); ok {
-		return returnFunc(ctx, email, password, userAgent)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, auth.LoginInput) (string, auth.User, error)); ok {
+		return returnFunc(ctx, in)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string) string); ok {
-		r0 = returnFunc(ctx, email, password, userAgent)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, auth.LoginInput) string); ok {
+		r0 = returnFunc(ctx, in)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, string) auth.User); ok {
-		r1 = returnFunc(ctx, email, password, userAgent)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, auth.LoginInput) auth.User); ok {
+		r1 = returnFunc(ctx, in)
 	} else {
 		r1 = ret.Get(1).(auth.User)
 	}
-	if returnFunc, ok := ret.Get(2).(func(context.Context, string, string, string) error); ok {
-		r2 = returnFunc(ctx, email, password, userAgent)
+	if returnFunc, ok := ret.Get(2).(func(context.Context, auth.LoginInput) error); ok {
+		r2 = returnFunc(ctx, in)
 	} else {
 		r2 = ret.Error(2)
 	}
@@ -87,36 +87,24 @@ type AuthService_Login_Call struct {
 
 // Login is a helper method to define mock.On call
 //   - ctx context.Context
-//   - email string
-//   - password string
-//   - userAgent string
-func (_e *AuthService_Expecter) Login(ctx any, email any, password any, userAgent any) *AuthService_Login_Call {
-	return &AuthService_Login_Call{Call: _e.mock.On("Login", ctx, email, password, userAgent)}
+//   - in auth.LoginInput
+func (_e *AuthService_Expecter) Login(ctx any, in any) *AuthService_Login_Call {
+	return &AuthService_Login_Call{Call: _e.mock.On("Login", ctx, in)}
 }
 
-func (_c *AuthService_Login_Call) Run(run func(ctx context.Context, email string, password string, userAgent string)) *AuthService_Login_Call {
+func (_c *AuthService_Login_Call) Run(run func(ctx context.Context, in auth.LoginInput)) *AuthService_Login_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 auth.LoginInput
 		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		var arg3 string
-		if args[3] != nil {
-			arg3 = args[3].(string)
+			arg1 = args[1].(auth.LoginInput)
 		}
 		run(
 			arg0,
 			arg1,
-			arg2,
-			arg3,
 		)
 	})
 	return _c
@@ -127,7 +115,7 @@ func (_c *AuthService_Login_Call) Return(s string, user auth.User, err error) *A
 	return _c
 }
 
-func (_c *AuthService_Login_Call) RunAndReturn(run func(ctx context.Context, email string, password string, userAgent string) (string, auth.User, error)) *AuthService_Login_Call {
+func (_c *AuthService_Login_Call) RunAndReturn(run func(ctx context.Context, in auth.LoginInput) (string, auth.User, error)) *AuthService_Login_Call {
 	_c.Call.Return(run)
 	return _c
 }

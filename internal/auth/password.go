@@ -78,7 +78,7 @@ func CheckNewPassword(password, email string) error {
 		return ErrPasswordTooShort
 	}
 	lower := strings.ToLower(password)
-	email = strings.ToLower(strings.TrimSpace(norm.NFC.String(email)))
+	email = NormalizeEmail(email)
 	local, _, _ := strings.Cut(email, "@")
 	if _, ok := commonPasswords()[lower]; ok || lower == email || lower == local || lettersOnly(lower) == "familyhub" {
 		return ErrPasswordTooCommon

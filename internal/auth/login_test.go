@@ -44,7 +44,7 @@ func TestLogin(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			token, user, err := svc.Login(t.Context(), tt.email, tt.password, "test")
+			token, user, err := svc.Login(t.Context(), LoginInput{Email: tt.email, Password: tt.password, UserAgent: "test"})
 
 			if !tt.wantOK {
 				require.ErrorIs(t, err, ErrInvalidCredentials)
@@ -68,7 +68,7 @@ func TestLoginRehashesOutdatedParameters(t *testing.T) {
 	_, err = pool.Exec(t.Context(), `UPDATE users SET password_hash = $1`, old)
 	require.NoError(t, err)
 
-	_, _, err = svc.Login(t.Context(), anaEmail, anaPassword, "")
+	_, _, err = svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: anaPassword})
 	require.NoError(t, err)
 
 	var stored string
@@ -84,10 +84,12 @@ func TestLoginRefusedWhenACredentialChangesBeforeTheSessionCommits(t *testing.T)
 	tests := []struct {
 		name   string
 		change string
+		wantOK bool
 	}{
-		{name: "password reset", change: `UPDATE users SET password_hash = password_hash || 'x'`},
+		{name: "password reset", change: `UPDATE users SET password_hash = password_hash || 'x', password_changed_at = now()`},
 		{name: "email change", change: `UPDATE users SET email = 'ana.new@example.com'`},
 		{name: "disabled", change: `UPDATE users SET disabled_at = now()`},
+		{name: "another login's rehash is not a change", change: `UPDATE users SET password_hash = password_hash || 'x'`, wantOK: true},
 	}
 
 	for _, tt := range tests {
@@ -101,7 +103,7 @@ func TestLoginRefusedWhenACredentialChangesBeforeTheSessionCommits(t *testing.T)
 
 			done := make(chan error, 1)
 			go func() {
-				_, _, err := svc.Login(t.Context(), anaEmail, anaPassword, "")
+				_, _, err := svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: anaPassword})
 				done <- err
 			}()
 			require.Eventually(t, func() bool {
@@ -112,7 +114,13 @@ func TestLoginRefusedWhenACredentialChangesBeforeTheSessionCommits(t *testing.T)
 			}, 10*time.Second, 10*time.Millisecond, "login waits on the change's row lock")
 			require.NoError(t, change.Commit(t.Context()))
 
-			assert.ErrorIs(t, <-done, ErrInvalidCredentials)
+			err = <-done
+			if tt.wantOK {
+				require.NoError(t, err)
+				assert.Equal(t, 1, count(t, pool, `SELECT count(*) FROM sessions`))
+				return
+			}
+			assert.ErrorIs(t, err, ErrInvalidCredentials)
 			assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM sessions`))
 		})
 	}
@@ -128,9 +136,24 @@ func TestUserOfADeletedAccountIsNoSession(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoSession)
 }
 
+func TestLoginEndsTheSessionItReplaces(t *testing.T) {
+	svc, pool, _ := withAna(t)
+	old, _, err := svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: anaPassword})
+	require.NoError(t, err)
+
+	token, _, err := svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: anaPassword, ReplacesToken: old})
+	require.NoError(t, err)
+
+	sessions := NewSessions(pool)
+	_, err = sessions.Authenticate(t.Context(), old)
+	assert.ErrorIs(t, err, ErrNoSession)
+	_, err = sessions.Authenticate(t.Context(), token)
+	assert.NoError(t, err)
+}
+
 func TestLogout(t *testing.T) {
 	svc, pool, _ := withAna(t)
-	token, _, err := svc.Login(t.Context(), anaEmail, anaPassword, "")
+	token, _, err := svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: anaPassword})
 	require.NoError(t, err)
 
 	require.NoError(t, svc.Logout(t.Context(), token))

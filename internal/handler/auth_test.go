@@ -55,10 +55,11 @@ func TestLogin(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewAuthService(t)
 			if tt.wantLogin {
-				svc.EXPECT().Login(mock.Anything, "ana@example.com", "pw", "test-agent").Return("tok", ana, tt.loginErr)
-			}
-			if tt.oldCookie {
-				svc.EXPECT().Logout(mock.Anything, "old").Return(nil)
+				in := auth.LoginInput{Email: "ana@example.com", Password: "pw", UserAgent: "test-agent"}
+				if tt.oldCookie {
+					in.ReplacesToken = "old"
+				}
+				svc.EXPECT().Login(mock.Anything, in).Return("tok", ana, tt.loginErr)
 			}
 			req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json; charset=utf-8")
@@ -103,7 +104,7 @@ func TestLogout(t *testing.T) {
 	}{
 		{name: "with a session cookie", cookie: true, wantStatus: http.StatusNoContent, wantClear: true},
 		{name: "without a cookie", wantStatus: http.StatusNoContent, wantClear: true},
-		{name: "database error", cookie: true, logoutErr: errors.New("db down"), wantStatus: http.StatusInternalServerError},
+		{name: "database error still clears", cookie: true, logoutErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantClear: true},
 	}
 
 	for _, tt := range tests {

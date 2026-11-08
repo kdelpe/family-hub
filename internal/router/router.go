@@ -39,7 +39,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 	r.Get(readyPath, h.Health.Ready)
 
 	csrf := http.NewCrossOriginProtection()
-	csrf.SetDenyHandler(http.HandlerFunc(httpx.Forbidden))
+	csrf.SetDenyHandler(http.HandlerFunc(httpx.CrossOriginRefused))
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(csrf.Handler)

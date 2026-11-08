@@ -13,19 +13,25 @@ import (
 )
 
 const getLoginUser = `-- name: GetLoginUser :one
-SELECT id, password_hash, disabled_at FROM users WHERE email = $1
+SELECT id, password_hash, password_changed_at, disabled_at FROM users WHERE email = $1
 `
 
 type GetLoginUserRow struct {
-	ID           uuid.UUID
-	PasswordHash *string
-	DisabledAt   *time.Time
+	ID                uuid.UUID
+	PasswordHash      *string
+	PasswordChangedAt *time.Time
+	DisabledAt        *time.Time
 }
 
 func (q *Queries) GetLoginUser(ctx context.Context, email string) (GetLoginUserRow, error) {
 	row := q.db.QueryRow(ctx, getLoginUser, email)
 	var i GetLoginUserRow
-	err := row.Scan(&i.ID, &i.PasswordHash, &i.DisabledAt)
+	err := row.Scan(
+		&i.ID,
+		&i.PasswordHash,
+		&i.PasswordChangedAt,
+		&i.DisabledAt,
+	)
 	return i, err
 }
 
@@ -47,14 +53,14 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (GetUserRow, error)
 }
 
 const lockUserForSignIn = `-- name: LockUserForSignIn :one
-SELECT email, role, password_hash, disabled_at FROM users WHERE id = $1 FOR UPDATE
+SELECT email, role, password_changed_at, disabled_at FROM users WHERE id = $1 FOR UPDATE
 `
 
 type LockUserForSignInRow struct {
-	Email        string
-	Role         string
-	PasswordHash *string
-	DisabledAt   *time.Time
+	Email             string
+	Role              string
+	PasswordChangedAt *time.Time
+	DisabledAt        *time.Time
 }
 
 func (q *Queries) LockUserForSignIn(ctx context.Context, id uuid.UUID) (LockUserForSignInRow, error) {
@@ -63,7 +69,7 @@ func (q *Queries) LockUserForSignIn(ctx context.Context, id uuid.UUID) (LockUser
 	err := row.Scan(
 		&i.Email,
 		&i.Role,
-		&i.PasswordHash,
+		&i.PasswordChangedAt,
 		&i.DisabledAt,
 	)
 	return i, err

@@ -398,7 +398,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 |---|---|---|---|
 | GET | `/health` | internal only (blocked at Caddy) | Liveness: process is up |
 | GET | `/ready` | internal only (blocked at Caddy) | Readiness: database reachable |
-| POST | `/api/auth/login` | no session (sign-in flow), rate-limited | `{email, password}` → sets session cookie (ending the session the request's old cookie held, if any) and returns the user as `/me` does; any failure is the same `401 invalid_credentials` (`503 busy` when the hash limit is full) |
+| POST | `/api/auth/login` | no session (sign-in flow), rate-limited | `{email, password}` → sets session cookie (the session the request's old cookie held, if any, is ended in the same transaction) and returns the user as `/me` does; any failure is the same `401 invalid_credentials` (`503 busy` when the hash limit is full) |
 | POST | `/api/auth/password/forgot` | no session (sign-in flow), rate-limited | `{email}` → always `202`; reset email sent only if user exists and is enabled |
 | POST | `/api/auth/password/reset` | no session (sign-in flow), rate-limited | `{token, password}` (invite or reset link) → sets password, revokes other sessions, signs in |
 | POST | `/api/auth/password/change` | session | `{current_password, new_password}` → revokes other sessions |
@@ -406,7 +406,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/api/auth/google/callback` | no session (sign-in flow), rate-limited | Verifies the ID token; signs in by `sub`, auto-links only Gmail/Workspace invited emails (§5); redirects into the app |
 | POST | `/api/admin/users/{id}/send-reset` | admin | Resend invite or send a password-reset email |
 | GET | `/api/auth/me` | session | Current user, role, linked person |
-| POST | `/api/auth/logout` | none needed | Deletes the cookie's session row if there is one and always clears the cookie (`204`), so an expired session's cookie still goes away |
+| POST | `/api/auth/logout` | none needed | Always clears the cookie, so an expired session's cookie still goes away; deletes the cookie's session row if there is one (`204`, or `500` if that delete failed) |
 | GET | `/api/admin/users` | admin | List users |
 | POST | `/api/admin/users` | admin | Invite: `{email, role}`; from Phase 3 also `person_id`, required (§5.1) |
 | PATCH | `/api/admin/users/{id}` | admin | Role, disable/enable, link person, change email (clears Google link and password, revokes sessions and tokens, re-invites; §5) |
@@ -464,7 +464,7 @@ A user may have a password, a linked Google account, or both (`password_hash` an
 
 **One lock for every credential change, and for every new session.** Token consumption, token issuance, password set/change, Google linking, admin email change, disabling, **and every successful sign-in** take the same `FOR UPDATE` lock on the user's row first and re-check eligibility under it. Concurrent requests for the same person run one after another instead of interleaving.
 
-- **Password sign-in:** Argon2 verification runs *before* the lock (it's slow). Then, inside the transaction, lock the row and confirm the user is still enabled and `password_hash` is still the exact hash that was verified. If it changed meanwhile (a reset or admin email change won the race), fail with the usual `401`. Only then write a rehash (if parameters changed) and create the session, so a stale login can never resurrect a revoked password or overwrite a new one.
+- **Password sign-in:** Argon2 verification runs *before* the lock (it's slow). Then, inside the transaction, lock the row and confirm the user is still enabled, still has the email signed in with, and `password_changed_at` is unchanged since the verify. If anything changed meanwhile (a reset or admin email change won the race), fail with the usual `401`. A rehash doesn't touch `password_changed_at`, so two logins at once don't refuse each other. Only then write a rehash (if parameters changed; computed before the lock, and skipped with a warning if it fails) and create the session, so a stale login can never resurrect a revoked password or overwrite a new one.
 - **Google sign-in by `sub`:** inside the transaction, lock the row and confirm the user is enabled and still has that `google_sub` before creating the session, so a concurrent email change or disable can't be raced. A flow started before an email change can't re-link either: the `sub` was cleared, and Google's (old) email no longer matches `users.email`.
 
 A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for high-entropy secrets.

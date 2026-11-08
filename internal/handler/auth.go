@@ -6,14 +6,13 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/httpx"
 )
 
 type AuthService interface {
-	Login(ctx context.Context, email, password, userAgent string) (string, auth.User, error)
+	Login(ctx context.Context, in auth.LoginInput) (string, auth.User, error)
 	Logout(ctx context.Context, token string) error
 	User(ctx context.Context, id uuid.UUID) (auth.User, error)
 }
@@ -43,10 +42,11 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
-	token, user, err := a.svc.Login(r.Context(), req.Email, req.Password, r.UserAgent())
-	if err == nil {
-		a.endPreviousSession(r)
+	in := auth.LoginInput{Email: req.Email, Password: req.Password, UserAgent: r.UserAgent()}
+	if c, err := r.Cookie(a.cookie.name); err == nil {
+		in.ReplacesToken = c.Value
 	}
+	token, user, err := a.svc.Login(r.Context(), in)
 	switch {
 	case clientGone(r):
 	case errors.Is(err, auth.ErrInvalidCredentials):
@@ -61,17 +61,21 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// The cookie is cleared even when deleting the session fails, so this browser is signed out either way.
 func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie(a.cookie.name); err == nil {
-		if err := a.svc.Logout(r.Context(), c.Value); err != nil {
-			if !clientGone(r) {
-				internalError(w, r, err, "logout")
-			}
-			return
-		}
-	}
 	a.cookie.clear(w)
-	w.WriteHeader(http.StatusNoContent)
+	c, err := r.Cookie(a.cookie.name)
+	if err != nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	switch err := a.svc.Logout(r.Context(), c.Value); {
+	case clientGone(r):
+	case err != nil:
+		internalError(w, r, err, "logout")
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
@@ -85,17 +89,6 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err, "get current user")
 	default:
 		httpx.JSON(w, http.StatusOK, toUserResponse(user))
-	}
-}
-
-// A new sign-in replaces the browser's cookie, so the old session must not outlive it.
-func (a *Auth) endPreviousSession(r *http.Request) {
-	c, err := r.Cookie(a.cookie.name)
-	if err != nil {
-		return
-	}
-	if err := a.svc.Logout(r.Context(), c.Value); err != nil && !clientGone(r) {
-		zerolog.Ctx(r.Context()).Warn().Err(err).Msg("end previous session")
 	}
 }
 
