@@ -1033,7 +1033,7 @@ For a "multi-decade" archive, this section matters more than any other.
 | Job | Checks |
 |---|---|
 | go | `go mod tidy -diff`, golangci-lint (its `standard` linters include `go vet`, plus the gofmt formatter; `.golangci.yml`), `govulncheck`, `go test -race` (via `make test`) with a `postgres:18.6` service whose `POSTGRES_DB` is `familyhub_test`, `make build` |
-| generated | Re-runs `sqlc generate` and `mockery`; fails if the committed output differs |
+| generated | `go tool sqlc diff`: fails if the committed sqlc output differs from the queries (mockery joins once there are mocks) |
 | web | Lint, typecheck, tests, build |
 | docker | `docker build` (no push) |
 
@@ -1041,7 +1041,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 **Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; `draft-release.yml` gets `contents: write`, the release job gets `contents: read` and `packages: write` (listing any permission sets the rest to none)); third-party actions pinned to commit SHAs; Dependabot keeps them current.
 
-**Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), the `go` and `docker` CI checks must pass on a branch that is up to date with `main` (add each new CI job here as it lands), no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
+**Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), the `go`, `generated` and `docker` CI checks must pass on a branch that is up to date with `main` (add each new CI job here as it lands), no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
 
 ## 14. Deployment (Phase 4c options)
 
