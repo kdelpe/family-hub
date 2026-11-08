@@ -1,6 +1,7 @@
 package auth_test
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -100,6 +102,31 @@ func TestAuthenticateSlidesTheIdleWindowOnlyWhenStale(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthenticateKeepsTheSessionWhenTheTouchFails(t *testing.T) {
+	pool, userID := withMember(t)
+	token, err := auth.NewSessions(pool).Create(t.Context(), userID, "")
+	require.NoError(t, err)
+	_, err = pool.Exec(t.Context(), `UPDATE sessions SET last_seen_at = now() - interval '2 hours'`)
+	require.NoError(t, err)
+	var before time.Time
+	require.NoError(t, pool.QueryRow(t.Context(), `SELECT last_seen_at FROM sessions`).Scan(&before))
+	readOnly, err := pool.BeginTx(t.Context(), pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = readOnly.Rollback(context.Background()) })
+	var logs bytes.Buffer
+	ctx := zerolog.New(&logs).WithContext(t.Context())
+
+	got, err := auth.NewSessions(readOnly).Authenticate(ctx, token)
+
+	require.NoError(t, err)
+	assert.Equal(t, auth.Session{UserID: userID, Role: "member"}, got)
+	assert.Contains(t, logs.String(), `"message":"touch session"`)
+	require.NoError(t, readOnly.Rollback(t.Context()))
+	var after time.Time
+	require.NoError(t, pool.QueryRow(t.Context(), `SELECT last_seen_at FROM sessions`).Scan(&after))
+	assert.Equal(t, before, after)
 }
 
 func TestCreateSetsTheAbsoluteCap(t *testing.T) {
