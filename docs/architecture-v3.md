@@ -614,7 +614,7 @@ type Handlers struct {
 }
 
 type Middleware struct {
-    RequireSession func(http.Handler) http.Handler // from auth
+    RequireSession func(http.Handler) http.Handler // handler.SessionGate.Require; the auth service has no HTTP
     // per-IP limits only; per-account failure limits live in the auth service (§5)
     LimitLogin     func(http.Handler) http.Handler
     LimitForgot    func(http.Handler) http.Handler
