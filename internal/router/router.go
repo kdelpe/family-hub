@@ -24,9 +24,8 @@ type Handlers struct {
 func New(h Handlers) http.Handler {
 	r := chi.NewRouter()
 	r.Use(httpx.RequestID)
-	// Outside Recover, which keeps the headers set before it on a 500.
+	// Both outside Recover: its 500 keeps the headers set before it, and the logger records that 500.
 	r.Use(httpx.SecurityHeaders)
-	// Outside Recover, so a panic is logged with the 500 it got.
 	r.Use(httpx.RequestLogger(livePath, readyPath))
 	r.Use(httpx.Recover)
 	r.Use(middleware.GetHead)

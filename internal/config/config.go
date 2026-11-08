@@ -10,7 +10,6 @@ import (
 	"strings"
 )
 
-// Config grows phase by phase; architecture §6.5 lists every planned variable.
 type Config struct {
 	DatabaseURL string
 	HTTPAddr    string
@@ -77,7 +76,6 @@ func validListenAddr(addr string) bool {
 	return err == nil && strconv.Itoa(n) == port && n >= 1 && n <= 65535
 }
 
-// parseBool takes true or false in any case; unset means false.
 func parseBool(name, raw string) (bool, error) {
 	switch v := strings.ToLower(strings.TrimSpace(raw)); v {
 	case "", "false":

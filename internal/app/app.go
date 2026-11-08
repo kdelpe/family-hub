@@ -57,7 +57,6 @@ func newServer(db handler.Pinger) *http.Server {
 	}
 }
 
-// serve lets in-flight requests finish, up to grace, once ctx is done.
 func serve(ctx context.Context, srv *http.Server, ln net.Listener, grace time.Duration) error {
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
