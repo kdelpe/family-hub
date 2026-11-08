@@ -76,6 +76,7 @@ jobs:
       - name: Committed sqlc output matches the queries
         run: |
           go tool sqlc generate
+          git diff --exit-code
           test -z "$(git status --porcelain)" || { git status --porcelain; exit 1; }
 
   docker:
