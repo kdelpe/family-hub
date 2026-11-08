@@ -43,7 +43,7 @@ A private, invite-only, multi-generational family archive: interactive family tr
 | Language | Go 1.27 (`go 1.27` in `go.mod`) | 1.25 is the floor for `CrossOriginProtection` and `synctest`; `go tool` directives need ≥1.24. |
 | HTTP | chi v5 | stdlib `net/http` compatible |
 | Logs | zerolog | JSON on stderr; each request's logger travels in its context (`zerolog.Ctx`) |
-| DB access | pgx v5 pool + **sqlc** | Typed queries from `.sql` files; no runtime reflection |
+| DB access | pgx v5 pool + **sqlc** | Typed queries from `.sql` files; no runtime reflection. Generated types are plain Go: `uuid.UUID` (`github.com/google/uuid`), `time.Time`, and pointers for nullable columns (`sqlc.yaml` overrides) |
 | Migrations | golang-migrate, embedded, pgx v5 driver | Auto-run gated by `AUTO_MIGRATE` |
 | Storage | S3 API via aws-sdk-go-v2 | Local server chosen at the start of Phase 5 (§9.5); R2 in prod |
 | Mail | SMTP (`net/smtp`) behind a `Mailer` interface | Mailpit local; Resend/SES/Postmark SMTP later |
