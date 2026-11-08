@@ -398,7 +398,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 |---|---|---|---|
 | GET | `/health` | internal only (blocked at Caddy) | Liveness: process is up |
 | GET | `/ready` | internal only (blocked at Caddy) | Readiness: database reachable |
-| POST | `/api/auth/login` | no session (sign-in flow), rate-limited | `{email, password}` → sets session cookie; any failure is the same `401 invalid_credentials` |
+| POST | `/api/auth/login` | no session (sign-in flow), rate-limited | `{email, password}` → sets session cookie and returns the user as `/me` does; any failure is the same `401 invalid_credentials` (`503 busy` when the hash limit is full) |
 | POST | `/api/auth/password/forgot` | no session (sign-in flow), rate-limited | `{email}` → always `202`; reset email sent only if user exists and is enabled |
 | POST | `/api/auth/password/reset` | no session (sign-in flow), rate-limited | `{token, password}` (invite or reset link) → sets password, revokes other sessions, signs in |
 | POST | `/api/auth/password/change` | session | `{current_password, new_password}` → revokes other sessions |
@@ -640,7 +640,6 @@ func New(h Handlers, mw Middleware) http.Handler {
     r.Route("/api", func(r chi.Router) {
         r.Use(middleware.Timeout(30 * time.Second))
         r.Use(http.NewCrossOriginProtection().Handler) // stdlib CSRF (Go 1.25)
-        r.Use(httpx.RequireJSON)                        // Content-Type check when a body exists
         r.NotFound(httpx.NotFound)
         r.MethodNotAllowed(httpx.MethodNotAllowed)
 
@@ -698,7 +697,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 
 Role checks in the router (`RequireRole`) are the coarse gate; the fine-grained rules (a member may PATCH only their own person, only profile fields) live in the service, so they're enforced and tested regardless of routing.
 
-Changes vs V2: no CORS middleware (Vite proxies `/api`, so dev is same-origin too); no compression middleware (Caddy compresses in prod); timeout scoped to `/api`; CSRF via the stdlib instead of a hand-written guard; JSON 404s; security headers; request body limits via `http.MaxBytesReader` in a JSON decode helper (1 MiB default).
+Changes vs V2: no CORS middleware (Vite proxies `/api`, so dev is same-origin too); no compression middleware (Caddy compresses in prod); timeout scoped to `/api`; CSRF via the stdlib instead of a hand-written guard; JSON 404s; security headers; a JSON decode helper (`httpx.DecodeJSON`) that requires `Content-Type: application/json` (415 otherwise), limits the body to 1 MiB via `http.MaxBytesReader` (413), and rejects unknown fields and trailing data (400).
 
 ### 6.2 Embedded migrations (`internal/database/migrate.go`)
 

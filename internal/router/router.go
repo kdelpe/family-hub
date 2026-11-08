@@ -19,9 +19,14 @@ const (
 
 type Handlers struct {
 	Health *handler.Health
+	Auth   *handler.Auth
 }
 
-func New(h Handlers) http.Handler {
+type Middleware struct {
+	RequireSession func(http.Handler) http.Handler
+}
+
+func New(h Handlers, mw Middleware) http.Handler {
 	r := chi.NewRouter()
 	r.Use(httpx.RequestID)
 	// Both outside Recover: its 500 keeps the headers set before it, and the logger records that 500.
@@ -34,7 +39,17 @@ func New(h Handlers) http.Handler {
 	r.Get(readyPath, h.Health.Ready)
 
 	r.Route("/api", func(r chi.Router) {
+		r.Use(http.NewCrossOriginProtection().Handler)
 		r.NotFound(httpx.NotFound)
+		r.MethodNotAllowed(httpx.MethodNotAllowed)
+
+		r.Post("/auth/login", h.Auth.Login)
+
+		r.Group(func(r chi.Router) {
+			r.Use(mw.RequireSession)
+			r.Get("/auth/me", h.Auth.Me)
+			r.Post("/auth/logout", h.Auth.Logout)
+		})
 	})
 
 	// Last, so any other GET is the app's, including its client-side routes.
