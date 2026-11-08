@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,15 +55,13 @@ func TestAuthenticateRefusesBadTokens(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tx, err := pool.Begin(t.Context())
-			require.NoError(t, err)
-			t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+			tx := begin(t, pool)
 			if tt.setup != "" {
 				_, err := tx.Exec(t.Context(), tt.setup)
 				require.NoError(t, err)
 			}
 
-			_, err = auth.NewSessions(tx).Authenticate(t.Context(), tt.token)
+			_, err := auth.NewSessions(tx).Authenticate(t.Context(), tt.token)
 
 			assert.ErrorIs(t, err, auth.ErrNoSession)
 		})
@@ -79,20 +78,21 @@ func TestAuthenticateSlidesTheIdleWindowOnlyWhenStale(t *testing.T) {
 		{name: "seen two hours ago", lastSeen: 2 * time.Hour, wantTouch: true},
 	}
 
+	pool, userID := withMember(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pool, userID := withMember(t)
-			sessions := auth.NewSessions(pool)
+			tx := begin(t, pool)
+			sessions := auth.NewSessions(tx)
 			token, err := sessions.Create(t.Context(), userID, "")
 			require.NoError(t, err)
-			_, err = pool.Exec(t.Context(), `UPDATE sessions SET last_seen_at = now() - $1::interval`, tt.lastSeen)
+			_, err = tx.Exec(t.Context(), `UPDATE sessions SET last_seen_at = now() - $1::interval`, tt.lastSeen)
 			require.NoError(t, err)
 
 			_, err = sessions.Authenticate(t.Context(), token)
 			require.NoError(t, err)
 
 			var age time.Duration
-			require.NoError(t, pool.QueryRow(t.Context(), `SELECT now() - last_seen_at FROM sessions`).Scan(&age))
+			require.NoError(t, tx.QueryRow(t.Context(), `SELECT now() - last_seen_at FROM sessions`).Scan(&age))
 			if tt.wantTouch {
 				assert.Less(t, age, time.Minute)
 			} else {
@@ -125,18 +125,27 @@ func TestCreateStoresABoundedValidUserAgent(t *testing.T) {
 		{name: "invalid UTF-8", userAgent: "agent\xff", want: ptr("agent")},
 	}
 
+	pool, userID := withMember(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pool, userID := withMember(t)
+			tx := begin(t, pool)
 
-			_, err := auth.NewSessions(pool).Create(t.Context(), userID, tt.userAgent)
+			_, err := auth.NewSessions(tx).Create(t.Context(), userID, tt.userAgent)
 			require.NoError(t, err)
 
 			var got *string
-			require.NoError(t, pool.QueryRow(t.Context(), `SELECT user_agent FROM sessions`).Scan(&got))
+			require.NoError(t, tx.QueryRow(t.Context(), `SELECT user_agent FROM sessions`).Scan(&got))
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func begin(t *testing.T, pool *pgxpool.Pool) pgx.Tx {
+	t.Helper()
+	tx, err := pool.Begin(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+	return tx
 }
 
 func ptr(s string) *string { return &s }

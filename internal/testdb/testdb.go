@@ -63,7 +63,9 @@ func MigratedPool(t testing.TB, migrate func(ctx context.Context, url string) er
 	t.Helper()
 	base := URL(t)
 	ctx := context.Background()
-	admin, err := pgx.Connect(ctx, base)
+	connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	admin, err := pgx.Connect(connectCtx, base)
 	if err != nil {
 		t.Fatal(err)
 	}
