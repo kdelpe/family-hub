@@ -12,6 +12,21 @@ import (
 	"github.com/google/uuid"
 )
 
+const createAdmin = `-- name: CreateAdmin :exec
+INSERT INTO users (email, role, password_hash, password_changed_at)
+VALUES ($1, 'admin', $2::text, now())
+`
+
+type CreateAdminParams struct {
+	Email        string
+	PasswordHash string
+}
+
+func (q *Queries) CreateAdmin(ctx context.Context, arg CreateAdminParams) error {
+	_, err := q.db.Exec(ctx, createAdmin, arg.Email, arg.PasswordHash)
+	return err
+}
+
 const getLoginUser = `-- name: GetLoginUser :one
 SELECT id, password_hash, password_changed_at, disabled_at FROM users WHERE email = $1
 `

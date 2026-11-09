@@ -9,3 +9,6 @@ packages:
     interfaces:
       SessionAuthenticator: {}
       AuthService: {}
+  github.com/kdelpe/family-hub/internal/admin:
+    interfaces:
+      Terminal: {}

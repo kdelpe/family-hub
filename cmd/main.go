@@ -11,15 +11,13 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/kdelpe/family-hub/internal/admin"
 	"github.com/kdelpe/family-hub/internal/app"
 	"github.com/kdelpe/family-hub/internal/config"
 	"github.com/kdelpe/family-hub/internal/database"
 )
 
-var (
-	errNotImplemented = errors.New("not implemented yet")
-	errMigrateUsage   = errors.New("usage: family-hub migrate up")
-)
+var errMigrateUsage = errors.New("usage: family-hub migrate up")
 
 // Milliseconds, so lines from the same second keep their order.
 const logTimeFormat = "2006-01-02T15:04:05.000Z07:00"
@@ -29,7 +27,7 @@ const usage = `Usage: family-hub [command]
 Commands:
   serve                       run the web server (default)
   migrate up                  apply all pending migrations
-  admin create --email ADDR   create the first admin (prompts for the password)
+  admin create --email ADDR   create an admin (prompts for the password)
 `
 
 func main() {
@@ -64,7 +62,7 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 	case "migrate":
 		return migrate(ctx, args[1:])
 	case "admin":
-		return admin(args[1:])
+		return adminCommand(ctx, args[1:], stdout)
 	case "-h", "--help", "help":
 		_, err := io.WriteString(stdout, usage)
 		return err
@@ -73,7 +71,15 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 }
 
-func admin(_ []string) error { return fmt.Errorf("admin: %w", errNotImplemented) }
+func adminCommand(ctx context.Context, args []string, stdout io.Writer) error {
+	if len(args) == 0 || args[0] != "create" {
+		return fmt.Errorf("admin: %w", admin.ErrCreateUsage)
+	}
+	if err := admin.RunCreate(ctx, args[1:], os.Getenv, admin.StdinTerminal(), stdout); err != nil {
+		return fmt.Errorf("admin create: %w", err)
+	}
+	return nil
+}
 
 func serve(ctx context.Context) error {
 	cfg, err := config.Load(os.Getenv)

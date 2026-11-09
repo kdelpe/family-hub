@@ -517,7 +517,7 @@ Honest limits of this: a determined attacker rotating IPs can, at worst, hit the
 
 **CSRF:** `SameSite=Lax` plus the stdlib `http.CrossOriginProtection` (Go 1.25), which rejects non-safe cross-origin browser requests using `Sec-Fetch-Site` and `Origin`; and require `Content-Type: application/json` when a body exists. **(verify it accepts the Vite-proxied dev origin without extra config; otherwise add `BASE_URL` with `AddTrustedOrigin`.)**
 
-**Bootstrap:** `family-hub admin create --email you@example.com` creates the first admin and **prompts for the password on the terminal** with hidden input (`golang.org/x/term`), twice. Nothing secret is printed, so nothing lands in Docker or journald logs, and the very first sign-in needs no working mail setup. The command refuses to run without an interactive terminal (no env-var backdoor).
+**Bootstrap:** `family-hub admin create --email you@example.com` creates the first admin and **prompts for the password on the terminal** with hidden input (`golang.org/x/term`), twice, checked against the password rules. It refuses an email that already belongs to a user rather than changing that account. It also works once admins exist, as the way back in while mail isn't set up; whoever can run it already has the database credentials. Nothing secret is printed, so nothing lands in Docker or journald logs, and the very first sign-in needs no working mail setup. The command refuses to run without an interactive terminal (no env-var backdoor).
 
 **Google callback and CSRF:** the callback is a top-level `GET` redirect from Google, which `SameSite=Lax` cookies and `CrossOriginProtection` both allow (it only blocks unsafe methods); the `state` check is what protects it.
 
