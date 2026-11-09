@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -34,8 +35,9 @@ const (
 	loginFailuresPerEmailAndIPWindow = 15 * time.Minute
 	loginFailuresPerEmail            = 50
 	loginFailuresPerEmailWindow      = time.Hour
-	// RFC 5321's limit; longer can't be a real address, and would pin big limiter keys.
-	maxEmailLen = 254
+	// RFC 5321's limits; longer can't be a real address, and would pin big limiter keys.
+	maxEmailLen     = 254
+	maxLocalPartLen = 64
 )
 
 // The password was right but a credential changed meanwhile: refused, but not a failed guess.
@@ -66,6 +68,21 @@ func NewService(pool *pgxpool.Pool, hasher *Hasher) *Service {
 
 func NormalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(norm.NFC.String(email)))
+}
+
+// ValidEmail reports whether a normalized email is a bare address, fit to store for a new user.
+func ValidEmail(email string) bool {
+	if len(email) > maxEmailLen {
+		return false
+	}
+	addr, err := mail.ParseAddress(email)
+	if err != nil || addr.Address != email {
+		return false
+	}
+	// RFC 5322 also allows hosts like "localhost" and "[127.0.0.1]", which no invite or reset mail would reach.
+	at := strings.LastIndex(email, "@")
+	domain := email[at+1:]
+	return at <= maxLocalPartLen && strings.Contains(domain, ".") && !strings.HasPrefix(domain, "[")
 }
 
 type LoginInput struct {

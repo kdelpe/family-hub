@@ -277,6 +277,36 @@ func TestLogout(t *testing.T) {
 	assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM sessions`))
 }
 
+func TestValidEmail(t *testing.T) {
+	tests := []struct {
+		name  string
+		email string
+		want  bool
+	}{
+		{name: "plain address", email: anaEmail, want: true},
+		{name: "subaddress", email: "ana+family@example.com", want: true},
+		{name: "longest allowed", email: strings.Repeat("a", 64) + "@" + strings.Repeat("b", 185) + ".com", want: true},
+		{name: "one too long", email: strings.Repeat("a", 64) + "@" + strings.Repeat("b", 186) + ".com"},
+		{name: "empty", email: ""},
+		{name: "no at sign", email: "ana.example.com"},
+		{name: "no local part", email: "@example.com"},
+		{name: "no domain", email: "ana@"},
+		{name: "display name", email: "Ana <ana@example.com>"},
+		{name: "two addresses", email: "ana@example.com, bo@example.com"},
+		{name: "inner space", email: "ana @example.com"},
+		{name: "NUL byte", email: "ana@example.com\x00"},
+		{name: "dotless domain", email: "ana@localhost"},
+		{name: "IP literal", email: "ana@[192.0.2.1]"},
+		{name: "quoted local part", email: `"ana@x"@example.com`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, ValidEmail(tt.email))
+		})
+	}
+}
+
 func withAna(t *testing.T) (*Service, *pgxpool.Pool, uuid.UUID) {
 	t.Helper()
 	pool := testdb.MigratedPool(t, database.MigrateUp)
