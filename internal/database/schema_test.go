@@ -22,8 +22,8 @@ func TestAuthSchemaConstraints(t *testing.T) {
 		wantCode string
 	}{
 		{name: "a lowercase email is accepted", sql: `INSERT INTO users (email) VALUES ('new@example.com')`},
-		{name: "an email must be lowercase", sql: `INSERT INTO users (email) VALUES ('Ana@example.com')`, wantCode: checkViolation},
-		{name: "emails are unique", sql: `INSERT INTO users (email) VALUES ('ana@example.com')`, wantCode: uniqueViolation},
+		{name: "an email must be lowercase", sql: `INSERT INTO users (email) VALUES ('Test@example.com')`, wantCode: checkViolation},
+		{name: "emails are unique", sql: `INSERT INTO users (email) VALUES ('test@example.com')`, wantCode: uniqueViolation},
 		{name: "a role is admin or member", sql: `INSERT INTO users (email, role) VALUES ('new@example.com', 'owner')`, wantCode: checkViolation},
 		{name: "a password hash needs its change time", sql: `INSERT INTO users (email, password_hash) VALUES ('new@example.com', 'x')`, wantCode: checkViolation},
 		{name: "a change time needs a password hash", sql: `INSERT INTO users (email, password_changed_at) VALUES ('new@example.com', now())`, wantCode: checkViolation},
@@ -65,13 +65,13 @@ func TestDeletingAUserDeletesTheirTokensAndSessions(t *testing.T) {
 	}
 }
 
-// Holds ana@example.com (Google sub-1), a token (hash \x01) and a session; the cases above collide with them.
+// Holds test@example.com (Google sub-1), a token (hash \x01) and a session; the cases above collide with them.
 func authSchema(t *testing.T) testSchema {
 	t.Helper()
 	db := newTestSchema(t)
 	require.NoError(t, MigrateUp(t.Context(), db.url))
 	db.exec(t, `
-		INSERT INTO users (email, google_sub) VALUES ('ana@example.com', 'sub-1');
+		INSERT INTO users (email, google_sub) VALUES ('test@example.com', 'sub-1');
 		INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at)
 			SELECT id, 'invite', '\x01', now() + interval '7 days' FROM users;
 		INSERT INTO sessions (id_hash, user_id, expires_at)

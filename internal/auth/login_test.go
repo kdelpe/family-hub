@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	anaEmail    = "ana@example.com"
-	anaPassword = "correct horse battery"
+	testEmail    = "test@example.com"
+	testPassword = "correct horse battery"
 )
 
 func TestLogin(t *testing.T) {
@@ -31,20 +31,20 @@ func TestLogin(t *testing.T) {
 		password string
 		wantOK   bool
 	}{
-		{name: "right password", email: anaEmail, password: anaPassword, wantOK: true},
-		{name: "email in another case with spaces", email: "  Ana@Example.COM ", password: anaPassword, wantOK: true},
-		{name: "wrong password", email: anaEmail, password: "wrong horse battery"},
-		{name: "unknown email", email: "bo@example.com", password: anaPassword},
-		{name: "no password (Google only)", setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`, email: anaEmail, password: anaPassword},
-		{name: "disabled", setup: `UPDATE users SET disabled_at = now()`, email: anaEmail, password: anaPassword},
-		{name: "email longer than any real address", email: strings.Repeat("a", 250) + "@example.com", password: anaPassword},
-		{name: "email with a NUL byte", email: "ana@example.com\x00", password: anaPassword},
-		{name: "broken stored hash", setup: `UPDATE users SET password_hash = 'nonsense'`, email: anaEmail, password: anaPassword},
+		{name: "right password", email: testEmail, password: testPassword, wantOK: true},
+		{name: "email in another case with spaces", email: "  Test@Example.COM ", password: testPassword, wantOK: true},
+		{name: "wrong password", email: testEmail, password: "wrong horse battery"},
+		{name: "unknown email", email: "other@example.com", password: testPassword},
+		{name: "no password (Google only)", setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`, email: testEmail, password: testPassword},
+		{name: "disabled", setup: `UPDATE users SET disabled_at = now()`, email: testEmail, password: testPassword},
+		{name: "email longer than any real address", email: strings.Repeat("a", 250) + "@example.com", password: testPassword},
+		{name: "email with a NUL byte", email: "test@example.com\x00", password: testPassword},
+		{name: "broken stored hash", setup: `UPDATE users SET password_hash = 'nonsense'`, email: testEmail, password: testPassword},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, pool, userID := withAna(t)
+			svc, pool, userID := withTestUser(t)
 			if tt.setup != "" {
 				_, err := pool.Exec(t.Context(), tt.setup)
 				require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestLogin(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, User{ID: userID, Email: anaEmail, Role: "member"}, user)
+			assert.Equal(t, User{ID: userID, Email: testEmail, Role: "member"}, user)
 			session, err := NewSessions(pool).Authenticate(t.Context(), token)
 			require.NoError(t, err)
 			assert.Equal(t, userID, session.UserID)
@@ -68,19 +68,19 @@ func TestLogin(t *testing.T) {
 }
 
 func TestLoginRehashesOutdatedParameters(t *testing.T) {
-	svc, pool, _ := withAna(t)
-	old, err := svc.hasher.hash(t.Context(), anaPassword, params{memory: 8 * 1024, time: 1, threads: 1})
+	svc, pool, _ := withTestUser(t)
+	old, err := svc.hasher.hash(t.Context(), testPassword, params{memory: 8 * 1024, time: 1, threads: 1})
 	require.NoError(t, err)
 	_, err = pool.Exec(t.Context(), `UPDATE users SET password_hash = $1`, old)
 	require.NoError(t, err)
 
-	_, _, err = svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: anaPassword})
+	_, _, err = svc.Login(t.Context(), LoginInput{Email: testEmail, Password: testPassword})
 	require.NoError(t, err)
 
 	var stored string
 	require.NoError(t, pool.QueryRow(t.Context(), `SELECT password_hash FROM users`).Scan(&stored))
 	assert.NotEqual(t, old, stored)
-	ok, rehash, err := svc.hasher.Verify(t.Context(), stored, anaPassword)
+	ok, rehash, err := svc.hasher.Verify(t.Context(), stored, testPassword)
 	require.NoError(t, err)
 	assert.True(t, ok)
 	assert.False(t, rehash)
@@ -93,14 +93,14 @@ func TestLoginRefusedWhenACredentialChangesBeforeTheSessionCommits(t *testing.T)
 		wantOK bool
 	}{
 		{name: "password reset", change: `UPDATE users SET password_hash = password_hash || 'x', password_changed_at = now()`},
-		{name: "email change", change: `UPDATE users SET email = 'ana.new@example.com'`},
+		{name: "email change", change: `UPDATE users SET email = 'test.new@example.com'`},
 		{name: "disabled", change: `UPDATE users SET disabled_at = now()`},
 		{name: "another login's rehash is not a change", change: `UPDATE users SET password_hash = password_hash || 'x'`, wantOK: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, pool, _ := withAna(t)
+			svc, pool, _ := withTestUser(t)
 			svc.failuresByEmailAndIP = ratelimit.New(1, time.Hour)
 			change, err := pool.Begin(t.Context())
 			require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestLoginRefusedWhenACredentialChangesBeforeTheSessionCommits(t *testing.T)
 
 			done := make(chan error, 1)
 			go func() {
-				_, _, err := svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: anaPassword})
+				_, _, err := svc.Login(t.Context(), LoginInput{Email: testEmail, Password: testPassword})
 				done <- err
 			}()
 			require.Eventually(t, func() bool {
@@ -129,19 +129,19 @@ func TestLoginRefusedWhenACredentialChangesBeforeTheSessionCommits(t *testing.T)
 			}
 			assert.ErrorIs(t, err, ErrInvalidCredentials)
 			assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM sessions`))
-			ok, _ := svc.failuresByEmailAndIP.Take(anaEmail + "\x00")
+			ok, _ := svc.failuresByEmailAndIP.Take(testEmail + "\x00")
 			assert.True(t, ok, "the right password isn't counted as a failed guess")
 		})
 	}
 }
 
 func TestParallelGuessesCantOutrunTheLimit(t *testing.T) {
-	svc, _, _ := withAna(t)
+	svc, _, _ := withTestUser(t)
 	svc.failuresByEmailAndIP = ratelimit.New(2, time.Hour)
 	errs := make(chan error, 6)
 	for range 6 {
 		go func() {
-			_, _, err := svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: "wrong", ClientIP: "203.0.113.7"})
+			_, _, err := svc.Login(t.Context(), LoginInput{Email: testEmail, Password: "wrong", ClientIP: "203.0.113.7"})
 			errs <- err
 		}()
 	}
@@ -171,43 +171,43 @@ func TestLoginFailureLimits(t *testing.T) {
 	}{
 		{
 			name:        "same email and IP is blocked, even with the right password",
-			failuresFor: func(int) LoginInput { return LoginInput{Email: anaEmail, Password: "wrong", ClientIP: "203.0.113.7"} },
-			thenTry:     LoginInput{Email: anaEmail, Password: anaPassword, ClientIP: "203.0.113.7"},
+			failuresFor: func(int) LoginInput { return LoginInput{Email: testEmail, Password: "wrong", ClientIP: "203.0.113.7"} },
+			thenTry:     LoginInput{Email: testEmail, Password: testPassword, ClientIP: "203.0.113.7"},
 			wantBlocked: true,
 		},
 		{
 			name:        "another IP still signs in below the backstop",
-			failuresFor: func(int) LoginInput { return LoginInput{Email: anaEmail, Password: "wrong", ClientIP: "203.0.113.7"} },
-			thenTry:     LoginInput{Email: anaEmail, Password: anaPassword, ClientIP: "198.51.100.1"},
+			failuresFor: func(int) LoginInput { return LoginInput{Email: testEmail, Password: "wrong", ClientIP: "203.0.113.7"} },
+			thenTry:     LoginInput{Email: testEmail, Password: testPassword, ClientIP: "198.51.100.1"},
 		},
 		{
 			name: "the per-email backstop spans IPs",
 			failuresFor: func(i int) LoginInput {
-				return LoginInput{Email: anaEmail, Password: "wrong", ClientIP: fmt.Sprintf("203.0.113.%d", i)}
+				return LoginInput{Email: testEmail, Password: "wrong", ClientIP: fmt.Sprintf("203.0.113.%d", i)}
 			},
-			thenTry:     LoginInput{Email: anaEmail, Password: anaPassword, ClientIP: "198.51.100.1"},
+			thenTry:     LoginInput{Email: testEmail, Password: testPassword, ClientIP: "198.51.100.1"},
 			wantBlocked: true,
 		},
 		{
 			name: "unknown emails count too, so a block says nothing about accounts",
 			failuresFor: func(int) LoginInput {
-				return LoginInput{Email: "bo@example.com", Password: "wrong", ClientIP: "203.0.113.7"}
+				return LoginInput{Email: "other@example.com", Password: "wrong", ClientIP: "203.0.113.7"}
 			},
-			thenTry:     LoginInput{Email: "bo@example.com", Password: "wrong", ClientIP: "203.0.113.7"},
+			thenTry:     LoginInput{Email: "other@example.com", Password: "wrong", ClientIP: "203.0.113.7"},
 			wantBlocked: true,
 		},
 		{
 			name: "successful sign-ins don't count",
 			failuresFor: func(int) LoginInput {
-				return LoginInput{Email: anaEmail, Password: anaPassword, ClientIP: "203.0.113.7"}
+				return LoginInput{Email: testEmail, Password: testPassword, ClientIP: "203.0.113.7"}
 			},
-			thenTry: LoginInput{Email: anaEmail, Password: anaPassword, ClientIP: "203.0.113.7"},
+			thenTry: LoginInput{Email: testEmail, Password: testPassword, ClientIP: "203.0.113.7"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, _, _ := withAna(t)
+			svc, _, _ := withTestUser(t)
 			svc.failuresByEmailAndIP = ratelimit.New(2, time.Hour)
 			svc.failuresByEmail = ratelimit.New(3, time.Hour)
 			for i := range 3 {
@@ -228,7 +228,7 @@ func TestLoginFailureLimits(t *testing.T) {
 }
 
 func TestLoginIsBusyWhileTheUserRowStaysLocked(t *testing.T) {
-	svc, pool, _ := withAna(t)
+	svc, pool, _ := withTestUser(t)
 	svc.lockTimeout = 100 * time.Millisecond
 	holder, err := pool.Begin(t.Context())
 	require.NoError(t, err)
@@ -236,14 +236,14 @@ func TestLoginIsBusyWhileTheUserRowStaysLocked(t *testing.T) {
 	_, err = holder.Exec(t.Context(), `SELECT 1 FROM users FOR UPDATE`)
 	require.NoError(t, err)
 
-	_, _, err = svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: anaPassword})
+	_, _, err = svc.Login(t.Context(), LoginInput{Email: testEmail, Password: testPassword})
 
 	assert.ErrorIs(t, err, ErrBusy)
 	assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM sessions`))
 }
 
 func TestUserOfADeletedAccountIsNoSession(t *testing.T) {
-	svc, pool, id := withAna(t)
+	svc, pool, id := withTestUser(t)
 	_, err := pool.Exec(t.Context(), `DELETE FROM users`)
 	require.NoError(t, err)
 
@@ -253,11 +253,11 @@ func TestUserOfADeletedAccountIsNoSession(t *testing.T) {
 }
 
 func TestLoginEndsTheSessionItReplaces(t *testing.T) {
-	svc, pool, _ := withAna(t)
-	old, _, err := svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: anaPassword})
+	svc, pool, _ := withTestUser(t)
+	old, _, err := svc.Login(t.Context(), LoginInput{Email: testEmail, Password: testPassword})
 	require.NoError(t, err)
 
-	token, _, err := svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: anaPassword, ReplacesToken: old})
+	token, _, err := svc.Login(t.Context(), LoginInput{Email: testEmail, Password: testPassword, ReplacesToken: old})
 	require.NoError(t, err)
 
 	sessions := NewSessions(pool)
@@ -268,8 +268,8 @@ func TestLoginEndsTheSessionItReplaces(t *testing.T) {
 }
 
 func TestLogout(t *testing.T) {
-	svc, pool, _ := withAna(t)
-	token, _, err := svc.Login(t.Context(), LoginInput{Email: anaEmail, Password: anaPassword})
+	svc, pool, _ := withTestUser(t)
+	token, _, err := svc.Login(t.Context(), LoginInput{Email: testEmail, Password: testPassword})
 	require.NoError(t, err)
 
 	require.NoError(t, svc.Logout(t.Context(), token))
@@ -283,21 +283,22 @@ func TestValidEmail(t *testing.T) {
 		email string
 		want  bool
 	}{
-		{name: "plain address", email: anaEmail, want: true},
+		{name: "plain address", email: testEmail, want: true},
 		{name: "subaddress", email: "ana+family@example.com", want: true},
 		{name: "longest allowed", email: strings.Repeat("a", 64) + "@" + strings.Repeat("b", 185) + ".com", want: true},
+		{name: "local part too long", email: strings.Repeat("a", 65) + "@example.com"},
 		{name: "one too long", email: strings.Repeat("a", 64) + "@" + strings.Repeat("b", 186) + ".com"},
 		{name: "empty", email: ""},
-		{name: "no at sign", email: "ana.example.com"},
+		{name: "no at sign", email: "test.example.com"},
 		{name: "no local part", email: "@example.com"},
-		{name: "no domain", email: "ana@"},
-		{name: "display name", email: "Ana <ana@example.com>"},
-		{name: "two addresses", email: "ana@example.com, bo@example.com"},
+		{name: "no domain", email: "test@"},
+		{name: "display name", email: "Test <test@example.com>"},
+		{name: "two addresses", email: "test@example.com, other@example.com"},
 		{name: "inner space", email: "ana @example.com"},
-		{name: "NUL byte", email: "ana@example.com\x00"},
-		{name: "dotless domain", email: "ana@localhost"},
-		{name: "IP literal", email: "ana@[192.0.2.1]"},
-		{name: "quoted local part", email: `"ana@x"@example.com`},
+		{name: "NUL byte", email: "test@example.com\x00"},
+		{name: "dotless domain", email: "test@localhost"},
+		{name: "IP literal", email: "test@[192.0.2.1]"},
+		{name: "quoted local part", email: `"test@x"@example.com`},
 	}
 
 	for _, tt := range tests {
@@ -307,15 +308,15 @@ func TestValidEmail(t *testing.T) {
 	}
 }
 
-func withAna(t *testing.T) (*Service, *pgxpool.Pool, uuid.UUID) {
+func withTestUser(t *testing.T) (*Service, *pgxpool.Pool, uuid.UUID) {
 	t.Helper()
 	pool := testdb.MigratedPool(t, database.MigrateUp)
 	hasher := NewHasher()
-	hash, err := hasher.Hash(t.Context(), anaPassword)
+	hash, err := hasher.Hash(t.Context(), testPassword)
 	require.NoError(t, err)
 	var id uuid.UUID
 	require.NoError(t, pool.QueryRow(t.Context(),
-		`INSERT INTO users (email, password_hash, password_changed_at) VALUES ($1, $2, now()) RETURNING id`, anaEmail, hash).Scan(&id))
+		`INSERT INTO users (email, password_hash, password_changed_at) VALUES ($1, $2, now()) RETURNING id`, testEmail, hash).Scan(&id))
 	return NewService(pool, hasher), pool, id
 }
 

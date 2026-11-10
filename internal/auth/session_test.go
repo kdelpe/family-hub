@@ -181,6 +181,6 @@ func withMember(t *testing.T) (*pgxpool.Pool, uuid.UUID) {
 	t.Helper()
 	pool := testdb.MigratedPool(t, database.MigrateUp)
 	var userID uuid.UUID
-	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email) VALUES ('ana@example.com') RETURNING id`).Scan(&userID))
+	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email) VALUES ('test@example.com') RETURNING id`).Scan(&userID))
 	return pool, userID
 }
