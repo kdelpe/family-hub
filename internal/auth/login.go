@@ -98,7 +98,8 @@ func printableASCII(s string) bool {
 // A dotted DNS name: the only kind of domain an invite or reset mail can reach.
 func hostname(domain string) bool {
 	labels := strings.Split(domain, ".")
-	if len(labels) < 2 {
+	// An all-digit top label makes it an IP address, not a name.
+	if len(labels) < 2 || strings.Trim(labels[len(labels)-1], "0123456789") == "" {
 		return false
 	}
 	for _, label := range labels {

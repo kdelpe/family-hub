@@ -308,6 +308,8 @@ func TestValidEmail(t *testing.T) {
 		{name: "underscore in the domain", email: "test@exa_mple.com"},
 		{name: "empty label", email: "test@example..com"},
 		{name: "trailing dot", email: "test@example.com."},
+		{name: "IP address without brackets", email: "test@192.0.2.1"},
+		{name: "digits in a label", email: "test@mail2.example.com", want: true},
 	}
 
 	for _, tt := range tests {
