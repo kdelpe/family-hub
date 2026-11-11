@@ -38,6 +38,7 @@ const (
 	// RFC 5321's limits; longer can't be a real address, and would pin big limiter keys.
 	maxEmailLen     = 254
 	maxLocalPartLen = 64
+	maxLabelLen     = 63
 )
 
 // The password was right but a credential changed meanwhile: refused, but not a failed guess.
@@ -81,8 +82,36 @@ func ValidEmail(email string) bool {
 	}
 	// RFC 5322 also allows hosts like "localhost" and "[127.0.0.1]", which no invite or reset mail would reach.
 	at := strings.LastIndex(email, "@")
-	domain := email[at+1:]
-	return at <= maxLocalPartLen && strings.Contains(domain, ".") && !strings.HasPrefix(domain, "[")
+	return at <= maxLocalPartLen && printableASCII(email[:at]) && hostname(email[at+1:])
+}
+
+// Keeps out invisible and lookalike characters, which would make a second account that looks the same.
+func printableASCII(s string) bool {
+	for _, c := range []byte(s) {
+		if c <= ' ' || c > '~' {
+			return false
+		}
+	}
+	return true
+}
+
+// A dotted DNS name: the only kind of domain an invite or reset mail can reach.
+func hostname(domain string) bool {
+	labels := strings.Split(domain, ".")
+	if len(labels) < 2 {
+		return false
+	}
+	for _, label := range labels {
+		if label == "" || len(label) > maxLabelLen || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, c := range []byte(label) {
+			if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 type LoginInput struct {
