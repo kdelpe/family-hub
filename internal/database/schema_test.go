@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	uniqueViolation = "23505"
-	checkViolation  = "23514"
+	checkViolation = "23514"
 )
 
 func TestAuthSchemaConstraints(t *testing.T) {
@@ -23,15 +22,15 @@ func TestAuthSchemaConstraints(t *testing.T) {
 	}{
 		{name: "a lowercase email is accepted", sql: `INSERT INTO users (email) VALUES ('new@example.com')`},
 		{name: "an email must be lowercase", sql: `INSERT INTO users (email) VALUES ('Test@example.com')`, wantCode: checkViolation},
-		{name: "emails are unique", sql: `INSERT INTO users (email) VALUES ('test@example.com')`, wantCode: uniqueViolation},
+		{name: "emails are unique", sql: `INSERT INTO users (email) VALUES ('test@example.com')`, wantCode: UniqueViolation},
 		{name: "a role is admin or member", sql: `INSERT INTO users (email, role) VALUES ('new@example.com', 'owner')`, wantCode: checkViolation},
 		{name: "a password hash needs its change time", sql: `INSERT INTO users (email, password_hash) VALUES ('new@example.com', 'x')`, wantCode: checkViolation},
 		{name: "a change time needs a password hash", sql: `INSERT INTO users (email, password_changed_at) VALUES ('new@example.com', now())`, wantCode: checkViolation},
-		{name: "a Google account links to one login", sql: `INSERT INTO users (email, google_sub) VALUES ('new@example.com', 'sub-1')`, wantCode: uniqueViolation},
+		{name: "a Google account links to one login", sql: `INSERT INTO users (email, google_sub) VALUES ('new@example.com', 'sub-1')`, wantCode: UniqueViolation},
 		{name: "a token purpose is invite or password_reset", sql: `INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at)
 			SELECT id, 'login', '\x02', now() FROM users`, wantCode: checkViolation},
 		{name: "a token hash is used once", sql: `INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at)
-			SELECT id, 'invite', '\x01', now() FROM users`, wantCode: uniqueViolation},
+			SELECT id, 'invite', '\x01', now() FROM users`, wantCode: UniqueViolation},
 	}
 
 	db := authSchema(t)

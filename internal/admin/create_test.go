@@ -12,6 +12,7 @@ import (
 	"github.com/kdelpe/family-hub/internal/admin/mocks"
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/database"
+	"github.com/kdelpe/family-hub/internal/database/gen"
 	"github.com/kdelpe/family-hub/internal/testdb"
 )
 
@@ -71,7 +72,7 @@ func TestRunCreate(t *testing.T) {
 		{name: "password is the email", email: testEmail, typed: []string{testEmail}, wantErr: auth.ErrPasswordTooCommon},
 		{name: "passwords differ", email: testEmail, typed: []string{testPassword, "correct horse battery!"}, wantErr: ErrPasswordMismatch},
 		{name: "read canceled", email: testEmail, typed: []string{""}, readErr: context.Canceled, wantErr: context.Canceled},
-		{name: "email taken", email: "TEST@example.com", existing: testEmail, typed: []string{testPassword, testPassword}, wantErr: ErrEmailTaken},
+		{name: "email taken", email: "TEST@example.com", existing: testEmail, wantErr: ErrEmailTaken},
 	}
 
 	for _, tt := range tests {
@@ -142,4 +143,14 @@ func TestRunCreateHelpPrintsUsage(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, ErrCreateUsage.Error()+"\n", stdout.String())
+}
+
+func TestCreateAdminRefusesATakenEmailOnInsert(t *testing.T) {
+	pool := testdb.MigratedPool(t, database.MigrateUp)
+	q := gen.New(pool)
+	require.NoError(t, createAdmin(t.Context(), q, testEmail, "hash"))
+
+	err := createAdmin(t.Context(), q, testEmail, "hash")
+
+	assert.ErrorIs(t, err, ErrEmailTaken)
 }

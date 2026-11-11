@@ -17,10 +17,7 @@ import (
 	"github.com/kdelpe/family-hub/internal/database/gen"
 )
 
-const (
-	uniqueViolation  = "23505"
-	uniqueEmailIndex = "users_email_key"
-)
+const uniqueEmailIndex = "users_email_key"
 
 var (
 	ErrCreateUsage      = errors.New("usage: family-hub admin create --email ADDR")
@@ -66,6 +63,14 @@ func RunCreate(ctx context.Context, args []string, getenv func(string) string, t
 		return err
 	}
 	defer pool.Close()
+	// Checked again by the insert; asking first spares typing a password for nothing.
+	taken, err := gen.New(pool).EmailTaken(ctx, email)
+	if err != nil {
+		return fmt.Errorf("check email: %w", err)
+	}
+	if taken {
+		return ErrEmailTaken
+	}
 
 	password, err := readNewPassword(ctx, term, email)
 	if err != nil {
@@ -103,7 +108,7 @@ func readNewPassword(ctx context.Context, term Terminal, email string) (string, 
 func createAdmin(ctx context.Context, q *gen.Queries, email, passwordHash string) error {
 	err := q.CreateAdmin(ctx, gen.CreateAdminParams{Email: email, PasswordHash: passwordHash})
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation && pgErr.ConstraintName == uniqueEmailIndex {
+	if errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation && pgErr.ConstraintName == uniqueEmailIndex {
 		return ErrEmailTaken
 	}
 	if err != nil {

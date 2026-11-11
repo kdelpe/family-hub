@@ -15,3 +15,6 @@ SELECT id, email, role FROM users WHERE id = @id;
 -- name: CreateAdmin :exec
 INSERT INTO users (email, role, password_hash, password_changed_at)
 VALUES (@email, 'admin', @password_hash::text, now());
+
+-- name: EmailTaken :one
+SELECT EXISTS (SELECT 1 FROM users WHERE email = @email);

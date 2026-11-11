@@ -9,6 +9,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// UniqueViolation is the SQLSTATE Postgres returns when an insert or update breaks a unique constraint.
+const UniqueViolation = "23505"
+
 var errInvalidConnString = errors.New("DATABASE_URL is not a valid connection string")
 
 // NewPool opens the app's connection pool and fails unless the database answers.
