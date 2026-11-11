@@ -18,9 +18,9 @@ import (
 	"github.com/kdelpe/family-hub/internal/handler/mocks"
 )
 
-var testUser = auth.User{ID: uuid.MustParse("01890000-0000-7000-8000-000000000001"), Email: "testUser@example.com", Role: "member"}
+var testUser = auth.User{ID: uuid.MustParse("01890000-0000-7000-8000-000000000001"), Email: "test@example.com", Role: "member"}
 
-const anaBody = `{"id":"01890000-0000-7000-8000-000000000001","email":"testUser@example.com","role":"member"}`
+const testUserBody = `{"id":"01890000-0000-7000-8000-000000000001","email":"test@example.com","role":"member"}`
 
 func TestLogin(t *testing.T) {
 	tests := []struct {
@@ -34,15 +34,15 @@ func TestLogin(t *testing.T) {
 		wantBody    string
 		wantCookie  bool
 	}{
-		{name: "signed in", body: `{"email":"testUser@example.com","password":"pw"}`, wantLogin: true, wantStatus: http.StatusOK, wantBody: anaBody, wantCookie: true},
-		{name: "replaces the session of an old cookie", body: `{"email":"testUser@example.com","password":"pw"}`, wantLogin: true, oldCookie: true, wantStatus: http.StatusOK, wantBody: anaBody, wantCookie: true},
-		{name: "invalid credentials", body: `{"email":"testUser@example.com","password":"pw"}`, wantLogin: true, loginErr: auth.ErrInvalidCredentials, wantStatus: http.StatusUnauthorized,
+		{name: "signed in", body: `{"email":"test@example.com","password":"pw"}`, wantLogin: true, wantStatus: http.StatusOK, wantBody: testUserBody, wantCookie: true},
+		{name: "replaces the session of an old cookie", body: `{"email":"test@example.com","password":"pw"}`, wantLogin: true, oldCookie: true, wantStatus: http.StatusOK, wantBody: testUserBody, wantCookie: true},
+		{name: "invalid credentials", body: `{"email":"test@example.com","password":"pw"}`, wantLogin: true, loginErr: auth.ErrInvalidCredentials, wantStatus: http.StatusUnauthorized,
 			wantBody: `{"error":{"code":"invalid_credentials","message":"email or password is incorrect"}}`},
-		{name: "too many failures", body: `{"email":"testUser@example.com","password":"pw"}`, wantLogin: true, loginErr: &auth.RateLimitedError{RetryAfter: 90 * time.Second}, wantStatus: http.StatusTooManyRequests,
+		{name: "too many failures", body: `{"email":"test@example.com","password":"pw"}`, wantLogin: true, loginErr: &auth.RateLimitedError{RetryAfter: 90 * time.Second}, wantStatus: http.StatusTooManyRequests,
 			wantBody: `{"error":{"code":"rate_limited","message":"too many attempts, try again later"}}`},
-		{name: "hashing busy", body: `{"email":"testUser@example.com","password":"pw"}`, wantLogin: true, loginErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable,
+		{name: "hashing busy", body: `{"email":"test@example.com","password":"pw"}`, wantLogin: true, loginErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable,
 			wantBody: `{"error":{"code":"busy","message":"try again in a moment"}}`},
-		{name: "database error", body: `{"email":"testUser@example.com","password":"pw"}`, wantLogin: true, loginErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+		{name: "database error", body: `{"email":"test@example.com","password":"pw"}`, wantLogin: true, loginErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 		{name: "not JSON", contentType: "text/plain", body: `{}`, wantStatus: http.StatusUnsupportedMediaType,
 			wantBody: `{"error":{"code":"unsupported_media_type","message":"send application/json"}}`},
 		{name: "malformed JSON", body: `{"email":`, wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"bad_request","message":"invalid JSON body"}}`},
@@ -58,7 +58,7 @@ func TestLogin(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewAuthService(t)
 			if tt.wantLogin {
-				in := auth.LoginInput{Email: "testUser@example.com", Password: "pw", UserAgent: "test-agent", ClientIP: "192.0.2.1"}
+				in := auth.LoginInput{Email: "test@example.com", Password: "pw", UserAgent: "test-agent", ClientIP: "192.0.2.1"}
 				if tt.oldCookie {
 					in.ReplacesToken = "old"
 				}
@@ -145,7 +145,7 @@ func TestMe(t *testing.T) {
 		wantStatus int
 		wantBody   string
 	}{
-		{name: "the signed-in user", wantStatus: http.StatusOK, wantBody: anaBody},
+		{name: "the signed-in user", wantStatus: http.StatusOK, wantBody: testUserBody},
 		{name: "user gone since the session check", userErr: auth.ErrNoSession, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
 		{name: "database error", userErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 	}
