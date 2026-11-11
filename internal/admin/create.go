@@ -17,7 +17,8 @@ import (
 	"github.com/kdelpe/family-hub/internal/database/gen"
 )
 
-const uniqueEmailIndex = "users_email_key"
+// Postgres names the constraint of the inline UNIQUE on users.email.
+const usersEmailKey = "users_email_key"
 
 var (
 	ErrCreateUsage      = errors.New("usage: family-hub admin create --email ADDR")
@@ -64,7 +65,8 @@ func RunCreate(ctx context.Context, args []string, getenv func(string) string, t
 	}
 	defer pool.Close()
 	// Checked again by the insert; asking first spares typing a password for nothing.
-	taken, err := gen.New(pool).EmailTaken(ctx, email)
+	q := gen.New(pool)
+	taken, err := q.EmailTaken(ctx, email)
 	if err != nil {
 		return fmt.Errorf("check email: %w", err)
 	}
@@ -80,7 +82,7 @@ func RunCreate(ctx context.Context, args []string, getenv func(string) string, t
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
-	if err := createAdmin(ctx, gen.New(pool), email, hash); err != nil {
+	if err := createAdmin(ctx, q, email, hash); err != nil {
 		return err
 	}
 	_, err = fmt.Fprintf(stdout, "Created admin %s\n", email)
@@ -108,7 +110,7 @@ func readNewPassword(ctx context.Context, term Terminal, email string) (string, 
 func createAdmin(ctx context.Context, q *gen.Queries, email, passwordHash string) error {
 	err := q.CreateAdmin(ctx, gen.CreateAdminParams{Email: email, PasswordHash: passwordHash})
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation && pgErr.ConstraintName == uniqueEmailIndex {
+	if errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation && pgErr.ConstraintName == usersEmailKey {
 		return ErrEmailTaken
 	}
 	if err != nil {
