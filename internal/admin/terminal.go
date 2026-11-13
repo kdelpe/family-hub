@@ -88,8 +88,8 @@ func (t *stdinTerminal) Restore() error {
 	return term.Restore(int(t.in.Fd()), state)
 }
 
-// lineReader keeps a Tab, which x/term's line editor drops though the web form sends it.
-// Other control keys, like arrows, are refused: they'd land in the hidden password unseen.
+// lineReader refuses editing keys like arrows, which would land in the hidden password unseen,
+// and is shared by both prompts so a pasted second line isn't lost.
 type lineReader struct {
 	r       *bufio.Reader
 	afterCR bool
@@ -105,7 +105,7 @@ func (l *lineReader) read() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		skipLF := l.afterCR && c == '\n' && len(line) == 0
+		skipLF := l.afterCR && c == '\n'
 		l.afterCR = c == '\r'
 		switch {
 		case skipLF:
