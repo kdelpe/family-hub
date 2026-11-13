@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"os"
+	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/term"
 )
@@ -17,7 +19,11 @@ const (
 	keyDelete    = 127
 )
 
-var errAborted = errors.New("aborted")
+var (
+	errAborted     = errors.New("aborted")
+	errEditingKey  = errors.New("only typing and Backspace work at the password prompt")
+	errInvalidUTF8 = errors.New("the terminal sent text that isn't UTF-8")
+)
 
 type stdinTerminal struct {
 	in  *os.File
@@ -58,15 +64,15 @@ func (t *stdinTerminal) ReadPassword(ctx context.Context, prompt string) (string
 	select {
 	case r = <-done:
 	case <-ctx.Done():
-		// Not ctx.Err(): main treats a canceled command as a clean stop, and no admin was created.
-		r.err = errAborted
+		r.err = ctx.Err()
 	}
 	_, _ = io.WriteString(t.out, "\r\n")
 	return r.password, r.err
 }
 
-// lineReader reads one line of raw-mode input. Unlike x/term's line editor, it keeps every
-// character, such as a Tab in a pasted password, which the web form would send too.
+// lineReader reads one line of raw-mode input. Unlike x/term's line editor, it keeps a Tab in a
+// pasted password, which the web form would send too. Other control keys, like arrows, are refused:
+// they would end up in the hidden password unseen.
 type lineReader struct {
 	r       *bufio.Reader
 	afterCR bool
@@ -75,7 +81,7 @@ type lineReader struct {
 func (l *lineReader) read() (string, error) {
 	var line []rune
 	for {
-		c, _, err := l.r.ReadRune()
+		c, size, err := l.r.ReadRune()
 		if errors.Is(err, io.EOF) {
 			return "", errAborted
 		}
@@ -94,6 +100,10 @@ func (l *lineReader) read() (string, error) {
 			if len(line) > 0 {
 				line = line[:len(line)-1]
 			}
+		case c == utf8.RuneError && size == 1:
+			return "", errInvalidUTF8
+		case c != '\t' && unicode.IsControl(c):
+			return "", errEditingKey
 		default:
 			line = append(line, c)
 		}

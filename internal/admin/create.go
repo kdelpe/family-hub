@@ -35,11 +35,17 @@ type Terminal interface {
 }
 
 // RunCreate parses the arguments of `admin create`, asks for the password twice and creates the admin.
-func RunCreate(ctx context.Context, args []string, getenv func(string) string, term Terminal, stdout io.Writer) error {
+func RunCreate(ctx context.Context, args []string, getenv func(string) string, term Terminal, stdout io.Writer) (err error) {
+	// Not context.Canceled: main treats that as a clean stop, but no admin was created.
+	defer func() {
+		if errors.Is(err, context.Canceled) {
+			err = errAborted
+		}
+	}()
 	flags := flag.NewFlagSet("admin create", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	rawEmail := flags.String("email", "", "")
-	err := flags.Parse(args)
+	err = flags.Parse(args)
 	if errors.Is(err, flag.ErrHelp) {
 		_, err = fmt.Fprintln(stdout, ErrCreateUsage)
 		return err

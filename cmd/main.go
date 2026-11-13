@@ -72,6 +72,10 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 }
 
 func adminCommand(ctx context.Context, args []string, stdout io.Writer) error {
+	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help") {
+		_, err := fmt.Fprintln(stdout, admin.ErrCreateUsage)
+		return err
+	}
 	if len(args) == 0 || args[0] != "create" {
 		return fmt.Errorf("admin: %w", admin.ErrCreateUsage)
 	}

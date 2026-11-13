@@ -24,6 +24,7 @@ func TestRun(t *testing.T) {
 		{name: "migrate bad args", args: []string{"migrate", "sideways"}, wantErr: errMigrateUsage, wantErrMsg: "migrate:"},
 		{name: "migrate down is not a command", args: []string{"migrate", "down"}, wantErr: errMigrateUsage, wantErrMsg: "migrate:"},
 		{name: "admin create bad args", args: []string{"admin", "create"}, wantErr: admin.ErrCreateUsage, wantErrMsg: "admin create:"},
+		{name: "admin -h prints usage", args: []string{"admin", "-h"}, wantStdout: "usage: family-hub admin create --email ADDR\n"},
 		{name: "admin without a subcommand", args: []string{"admin"}, wantErr: admin.ErrCreateUsage, wantErrMsg: "admin:"},
 		{name: "admin unknown subcommand", args: []string{"admin", "delete"}, wantErr: admin.ErrCreateUsage, wantErrMsg: "admin:"},
 		{name: "-h prints usage", args: []string{"-h"}, wantStdout: usage},

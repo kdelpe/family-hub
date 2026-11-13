@@ -27,6 +27,9 @@ func TestLineReader(t *testing.T) {
 		{name: "ctrl-c aborts", input: "pw\x03", wantErr: errAborted},
 		{name: "ctrl-d aborts", input: "\x04", wantErr: errAborted},
 		{name: "end of input aborts", input: "pw", wantErr: errAborted},
+		{name: "arrow key refused", input: "pwx\x1b[Dy\r", wantErr: errEditingKey},
+		{name: "ctrl-u refused", input: "pw\x15\r", wantErr: errEditingKey},
+		{name: "invalid UTF-8 refused", input: "p\xe4ss\r", wantErr: errInvalidUTF8},
 	}
 
 	for _, tt := range tests {
