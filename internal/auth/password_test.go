@@ -26,15 +26,15 @@ func TestCheckNewPassword(t *testing.T) {
 		{name: "129 characters", password: strings.Repeat("a", 128) + "b", wantErr: ErrPasswordTooLong},
 		{name: "a common password", password: "password1", wantErr: ErrPasswordTooCommon},
 		{name: "a common password in other case", password: "PassWord1", wantErr: ErrPasswordTooCommon},
-		{name: "the email", password: "Ana.Silva@Example.com", wantErr: ErrPasswordTooCommon},
-		{name: "the email's name part", password: "ana.silva", wantErr: ErrPasswordTooCommon},
+		{name: "the email", password: "Test.User@Example.com", wantErr: ErrPasswordTooCommon},
+		{name: "the email's name part", password: "test.user", wantErr: ErrPasswordTooCommon},
 		{name: "the app's name", password: "Family Hub", wantErr: ErrPasswordTooCommon},
 		{name: "the app's name with punctuation and digits", password: "Family-Hub_1", wantErr: ErrPasswordTooCommon},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.ErrorIs(t, CheckNewPassword(tt.password, " Ana.Silva@example.com "), tt.wantErr)
+			assert.ErrorIs(t, CheckNewPassword(tt.password, " Test.User@example.com "), tt.wantErr)
 		})
 	}
 }
@@ -112,7 +112,7 @@ func TestLengthCountsNormalizedCharacters(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, ok)
-	assert.NoError(t, CheckNewPassword(decomposed, "ana@example.com"))
+	assert.NoError(t, CheckNewPassword(decomposed, "test@example.com"))
 }
 
 func TestACanceledRequestDoesNotHash(t *testing.T) {

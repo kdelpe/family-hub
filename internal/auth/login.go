@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -34,8 +35,10 @@ const (
 	loginFailuresPerEmailAndIPWindow = 15 * time.Minute
 	loginFailuresPerEmail            = 50
 	loginFailuresPerEmailWindow      = time.Hour
-	// RFC 5321's limit; longer can't be a real address, and would pin big limiter keys.
-	maxEmailLen = 254
+	// RFC 5321's limits; longer can't be a real address, and would pin big limiter keys.
+	maxEmailLen     = 254
+	maxLocalPartLen = 64
+	maxLabelLen     = 63
 )
 
 // The password was right but a credential changed meanwhile: refused, but not a failed guess.
@@ -66,6 +69,50 @@ func NewService(pool *pgxpool.Pool, hasher *Hasher) *Service {
 
 func NormalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(norm.NFC.String(email)))
+}
+
+// ValidEmail reports whether a normalized email is a bare address, fit to store for a new user.
+func ValidEmail(email string) bool {
+	if len(email) > maxEmailLen {
+		return false
+	}
+	addr, err := mail.ParseAddress(email)
+	if err != nil || addr.Address != email {
+		return false
+	}
+	// RFC 5322 also allows hosts like "localhost" and "[127.0.0.1]", which no invite or reset mail would reach.
+	at := strings.LastIndex(email, "@")
+	return at <= maxLocalPartLen && printableASCII(email[:at]) && hostname(email[at+1:])
+}
+
+// Keeps out invisible and lookalike characters, which would make a second account that looks the same.
+func printableASCII(s string) bool {
+	for _, c := range []byte(s) {
+		if c <= ' ' || c > '~' {
+			return false
+		}
+	}
+	return true
+}
+
+// A dotted DNS name: the only kind of domain an invite or reset mail can reach.
+func hostname(domain string) bool {
+	labels := strings.Split(domain, ".")
+	// An all-digit top label makes it an IP address, not a name.
+	if len(labels) < 2 || strings.Trim(labels[len(labels)-1], "0123456789") == "" {
+		return false
+	}
+	for _, label := range labels {
+		if label == "" || len(label) > maxLabelLen || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, c := range []byte(label) {
+			if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 type LoginInput struct {
