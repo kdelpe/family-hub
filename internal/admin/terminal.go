@@ -85,7 +85,14 @@ func (t *stdinTerminal) Restore() error {
 	}
 	state := t.raw
 	t.raw = nil
-	return term.Restore(int(t.in.Fd()), state)
+	fd := int(t.in.Fd())
+	// Whatever is still queued, like the rest of a refused paste, would otherwise be echoed
+	// in clear text or run by the shell once the command exits.
+	if err := discardInput(fd); err != nil {
+		_ = term.Restore(fd, state)
+		return err
+	}
+	return term.Restore(fd, state)
 }
 
 // lineReader refuses editing keys like arrows, which would land in the hidden password unseen,
