@@ -76,7 +76,7 @@ family-hub/
 │   ├── httpx/                    # JSON helpers, error type, pagination, security middleware
 │   ├── auth/                     # passwords, Google sign-in, emailed tokens, sessions, per-account limits (Phase 2)
 │   ├── ratelimit/                # in-memory token bucket per key, with refunds; no HTTP
-│   ├── admin/                    # invites, roles (Phase 2); person linking (Phase 3)
+│   ├── admin/                    # `admin create` command; invites, roles (Phase 2); person linking (Phase 3)
 │   ├── family/                   # persons, relationships, tree, ancestors, cycles   (Phase 3)
 │   ├── contacts/                 # contact methods, visibility, directory            (Phase 3)
 │   ├── event/                    #                                                   (Phase 5)
@@ -525,7 +525,7 @@ Honest limits of this: a determined attacker rotating IPs can, at worst, hit the
 
 An admin decides who each login *is*; nobody claims a spot themselves. This lands in Phase 3 with the `persons` table; until then, invited logins are unlinked.
 
-- **Invite flow:** the admin picks the person first (trigram search over the tree), or creates the person in the same step, then enters the email and role. Searching before creating prevents duplicate nodes. From Phase 3, a person is **required**: every invited login is linked at invite time, and logins invited before then are linked from the admin screen. (Only the bootstrap admin from `admin create` may start unlinked; they link themselves from the admin screen.)
+- **Invite flow:** the admin picks the person first (trigram search over the tree), or creates the person in the same step, then enters the email and role. Searching before creating prevents duplicate nodes. From Phase 3, a person is **required**: every invited login is linked at invite time, and logins invited before then are linked from the admin screen. (Only admins made with `admin create` may start unlinked; they link themselves from the admin screen.)
 - **Constraint:** `uq_users_person` allows at most one login per person. Couples who share an email address still need separate invites.
 - **Guard:** soft-deleting a person who has an active login is refused until the admin unlinks or disables that login.
 - **On login:** `/api/auth/me` returns `person_id`; the tree opens centered on that person with a "you" marker and a "back to me" button, and relationships are labelled from their point of view ("your aunt Rosa"). Labels are computed client-side from the already-loaded tree using the lowest common ancestor; build that as a pure function with a table-driven test (cousins once removed, half-siblings, step-relations).

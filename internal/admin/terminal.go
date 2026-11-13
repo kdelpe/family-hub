@@ -15,6 +15,8 @@ import (
 const (
 	keyCtrlC     = 3
 	keyCtrlD     = 4
+	keyCtrlZ     = 26
+	keyCtrlQuit  = 28
 	keyBackspace = 8
 	keyDelete    = 127
 )
@@ -70,9 +72,8 @@ func (t *stdinTerminal) ReadPassword(ctx context.Context, prompt string) (string
 	return r.password, r.err
 }
 
-// lineReader reads one line of raw-mode input. Unlike x/term's line editor, it keeps a Tab in a
-// pasted password, which the web form would send too. Other control keys, like arrows, are refused:
-// they would end up in the hidden password unseen.
+// lineReader keeps a Tab, which x/term's line editor drops though the web form sends it.
+// Other control keys, like arrows, are refused: they'd land in the hidden password unseen.
 type lineReader struct {
 	r       *bufio.Reader
 	afterCR bool
@@ -94,7 +95,7 @@ func (l *lineReader) read() (string, error) {
 		case skipLF:
 		case c == '\r' || c == '\n':
 			return string(line), nil
-		case c == keyCtrlC || c == keyCtrlD:
+		case c == keyCtrlC || c == keyCtrlD || c == keyCtrlZ || c == keyCtrlQuit:
 			return "", errAborted
 		case c == keyBackspace || c == keyDelete:
 			if len(line) > 0 {

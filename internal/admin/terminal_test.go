@@ -26,6 +26,8 @@ func TestLineReader(t *testing.T) {
 		{name: "backspace on empty", input: "\x7fpw\r", wantLines: []string{"pw"}},
 		{name: "ctrl-c aborts", input: "pw\x03", wantErr: errAborted},
 		{name: "ctrl-d aborts", input: "\x04", wantErr: errAborted},
+		{name: "ctrl-z aborts", input: "pw\x1a", wantErr: errAborted},
+		{name: "ctrl-backslash aborts", input: "pw\x1c", wantErr: errAborted},
 		{name: "end of input aborts", input: "pw", wantErr: errAborted},
 		{name: "arrow key refused", input: "pwx\x1b[Dy\r", wantErr: errEditingKey},
 		{name: "ctrl-u refused", input: "pw\x15\r", wantErr: errEditingKey},
