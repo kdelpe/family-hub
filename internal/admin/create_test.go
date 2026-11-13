@@ -94,6 +94,7 @@ func TestRunCreate(t *testing.T) {
 			}
 			term := mocks.NewTerminal(t)
 			term.EXPECT().IsTerminal().Return(true).Once()
+			term.EXPECT().Restore().Return(nil)
 			for i, typed := range tt.typed {
 				var err error
 				if i == 0 {

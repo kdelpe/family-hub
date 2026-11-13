@@ -28,10 +28,11 @@ var (
 	ErrEmailTaken       = errors.New("a user with this email already exists")
 )
 
-// Terminal reads a password without echoing it.
+// Terminal reads passwords without echoing them; Restore undoes what reading changed.
 type Terminal interface {
 	IsTerminal() bool
 	ReadPassword(ctx context.Context, prompt string) (string, error)
+	Restore() error
 }
 
 // RunCreate parses the arguments of `admin create`, asks for the password twice and creates the admin.
@@ -60,6 +61,7 @@ func RunCreate(ctx context.Context, args []string, getenv func(string) string, t
 	if !term.IsTerminal() {
 		return ErrNoTerminal
 	}
+	defer func() { _ = term.Restore() }()
 
 	cfg, err := config.Load(getenv)
 	if err != nil {
@@ -83,6 +85,10 @@ func RunCreate(ctx context.Context, args []string, getenv func(string) string, t
 	password, err := readNewPassword(ctx, term, email)
 	if err != nil {
 		return err
+	}
+	// Before any output: raw mode doesn't turn "\n" into a new line.
+	if err := term.Restore(); err != nil {
+		return fmt.Errorf("restore terminal: %w", err)
 	}
 	hash, err := auth.NewHasher().Hash(ctx, password)
 	if err != nil {

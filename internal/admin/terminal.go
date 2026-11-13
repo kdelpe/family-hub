@@ -10,6 +10,8 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/term"
+
+	"github.com/kdelpe/family-hub/internal/auth"
 )
 
 const (
@@ -19,6 +21,8 @@ const (
 	keyCtrlQuit  = 28
 	keyBackspace = 8
 	keyDelete    = 127
+	// Far above the password limit, which CheckNewPassword applies; this only bounds a huge paste.
+	maxLineRunes = 1024
 )
 
 var (
@@ -32,6 +36,7 @@ type stdinTerminal struct {
 	out *os.File
 	// Shared by every prompt, so input typed or pasted past one line waits for the next.
 	lines *lineReader
+	raw   *term.State
 }
 
 // StdinTerminal reads from standard input and prompts on standard error, keeping stdout clean.
@@ -44,13 +49,15 @@ func (t *stdinTerminal) IsTerminal() bool {
 }
 
 func (t *stdinTerminal) ReadPassword(ctx context.Context, prompt string) (string, error) {
-	// Raw mode turns off echo and makes Ctrl-C a key, rather than a SIGINT main would only turn into a cancel.
-	fd := int(t.in.Fd())
-	state, err := term.MakeRaw(fd)
-	if err != nil {
-		return "", err
+	// Raw mode turns off echo and makes Ctrl-C a key. It stays on until Restore, so nothing typed
+	// between two prompts is echoed.
+	if t.raw == nil {
+		state, err := term.MakeRaw(int(t.in.Fd()))
+		if err != nil {
+			return "", err
+		}
+		t.raw = state
 	}
-	defer func() { _ = term.Restore(fd, state) }()
 	_, _ = io.WriteString(t.out, prompt)
 
 	type result struct {
@@ -70,6 +77,15 @@ func (t *stdinTerminal) ReadPassword(ctx context.Context, prompt string) (string
 	}
 	_, _ = io.WriteString(t.out, "\r\n")
 	return r.password, r.err
+}
+
+func (t *stdinTerminal) Restore() error {
+	if t.raw == nil {
+		return nil
+	}
+	state := t.raw
+	t.raw = nil
+	return term.Restore(int(t.in.Fd()), state)
 }
 
 // lineReader keeps a Tab, which x/term's line editor drops though the web form sends it.
@@ -105,6 +121,8 @@ func (l *lineReader) read() (string, error) {
 			return "", errInvalidUTF8
 		case c != '\t' && unicode.IsControl(c):
 			return "", errEditingKey
+		case len(line) >= maxLineRunes:
+			return "", auth.ErrPasswordTooLong
 		default:
 			line = append(line, c)
 		}

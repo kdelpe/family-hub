@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kdelpe/family-hub/internal/auth"
 )
 
 func TestLineReader(t *testing.T) {
@@ -31,6 +33,8 @@ func TestLineReader(t *testing.T) {
 		{name: "end of input aborts", input: "pw", wantErr: errAborted},
 		{name: "arrow key refused", input: "pwx\x1b[Dy\r", wantErr: errEditingKey},
 		{name: "ctrl-u refused", input: "pw\x15\r", wantErr: errEditingKey},
+		{name: "huge paste refused", input: strings.Repeat("a", maxLineRunes+1) + "\r", wantErr: auth.ErrPasswordTooLong},
+		{name: "longest line kept", input: strings.Repeat("a", maxLineRunes) + "\r", wantLines: []string{strings.Repeat("a", maxLineRunes)}},
 		{name: "invalid UTF-8 refused", input: "p\xe4ss\r", wantErr: errInvalidUTF8},
 	}
 
