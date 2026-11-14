@@ -1,0 +1,104 @@
+.page {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.brand {
+  flex: 1 1 480px;
+  padding: 56px;
+  background: var(--brand-panel);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+/* Side by side, the panel is exactly one window tall and the tree takes what the words leave. */
+@media (min-width: 960px) {
+  /* Never wrap here: a classic scrollbar can make the page narrower than the media query's 960px. */
+  .page {
+    flex-wrap: nowrap;
+  }
+
+  .brand {
+    position: sticky;
+    top: 0;
+    /* Room for the logo and words on a very short window; the page scrolls instead. */
+    min-height: 520px;
+    height: 100vh;
+    /* Phone browsers' 100vh counts the hidden address bar; dvh is the visible height. */
+    height: 100dvh;
+  }
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.logoGround {
+  fill: var(--accent-tint);
+  stroke: var(--accent);
+}
+
+.logoStem {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+}
+
+.logoTop {
+  fill: var(--accent);
+}
+
+.logoLeaf {
+  fill: var(--logo-leaf);
+}
+
+.names {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.familyName {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.hub {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.words {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  align-self: center;
+}
+
+.tagline {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 26px;
+  line-height: 1.3;
+}
+
+.proverb {
+  margin: 0;
+  color: var(--muted);
+  font-style: italic;
+}

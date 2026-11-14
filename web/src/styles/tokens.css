@@ -21,6 +21,23 @@
   --on-accent: #ffffff;
   --switch-off: #8a8070;
   --warning-tint: #f6e3d4;
+  --shadow-lift: rgba(43, 38, 32, 0.16);
+  --shadow-press: rgba(43, 38, 32, 0.12);
+
+  /* Illustration colors: the trees and the logo. Repeats point at the one color the mockups share. */
+  --tree-branch: #8c7b5e;
+  --tree-root: var(--leaf-7);
+  --mountain-back: #ded3bd;
+  --mountain-front: #c9bba0;
+  --grass: #a89878;
+  --logo-leaf: var(--leaf-2);
+  --leaf-1: var(--accent);
+  --leaf-2: #8a6f4a;
+  --leaf-3: #9db3a8;
+  --leaf-4: #b59a86;
+  --leaf-5: #8e9a86;
+  --leaf-6: #a7a08c;
+  --leaf-7: #c2b59b;
 
   --font-serif: Fraunces, Georgia, serif;
   --font-sans: 'Source Sans 3', system-ui, sans-serif;
