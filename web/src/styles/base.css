@@ -11,6 +11,13 @@ body {
   font-family: var(--font-sans);
   font-size: 17px;
   line-height: 1.5;
+  /* Only the bundled faces: no faux bold or italic. */
+  font-synthesis: none;
+}
+
+strong,
+b {
+  font-weight: 600;
 }
 
 a {

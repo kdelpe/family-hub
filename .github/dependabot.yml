@@ -41,5 +41,6 @@ updates:
       # A new Go minor moves with go.mod and CI, by hand.
       - dependency-name: golang
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
-      # Node moves with the web job's node-version in ci.yml, which Dependabot doesn't update, so by hand.
+      # A new Node minor moves with ci.yml's node-version, by hand. A patch PR needs that bumped too.
       - dependency-name: node
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

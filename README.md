@@ -15,7 +15,7 @@ Go (chi, pgx, sqlc) · Postgres · React + TypeScript + Vite · S3-compatible st
 
 ## Local setup
 
-Needs Xcode Command Line Tools (`xcode-select --install`; `go test -race` needs a C compiler), Go 1.27, Node 26, Docker Desktop and golangci-lint (`brew install go node golangci-lint`), then `cd web && npm ci` once. `make lint` requires the exact version in the Makefile's `GOLANGCI_LINT_VERSION`, which matches CI. If Homebrew has moved past it, bump that and the version in `ci.yml` together in a PR.
+Needs Xcode Command Line Tools (`xcode-select --install`; `go test -race` needs a C compiler), Go 1.27, Node 26, Docker Desktop and golangci-lint (`brew install go node@26 golangci-lint`), then `cd web && npm ci` once. `make lint` requires the exact version in the Makefile's `GOLANGCI_LINT_VERSION`, which matches CI. If Homebrew has moved past it, bump that and the version in `ci.yml` together in a PR.
 
 ```sh
 make up      # Postgres and Mailpit in Docker
