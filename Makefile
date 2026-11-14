@@ -9,7 +9,8 @@ TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=di
 TEST_MAILPIT_URL  ?= http://localhost:8025
 SMTP_HOST         ?= localhost
 SMTP_PORT         ?= 1025
-export DATABASE_URL TEST_DATABASE_URL TEST_MAILPIT_URL SMTP_HOST SMTP_PORT
+BASE_URL          ?= http://localhost:5173
+export DATABASE_URL TEST_DATABASE_URL TEST_MAILPIT_URL SMTP_HOST SMTP_PORT BASE_URL
 
 .PHONY: up down ui-stub dev-api generate build run test lint vuln migrate-up
 

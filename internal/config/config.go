@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	netmail "net/mail"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -20,14 +21,20 @@ const (
 	maxLabelLen     = 63
 )
 
+var (
+	defaultPorts = map[string]string{"http": "80", "https": "443"}
+	errBaseURL   = errors.New("BASE_URL must be an origin like https://family.example.com, without a path")
+)
+
 type Config struct {
 	DatabaseURL  string
 	HTTPAddr     string
 	AutoMigrate  bool
 	CookieSecure bool
 	TrustedProxy bool
-	// Only serve loads it (LoadSMTP), so a mail mistake never blocks migrate up or admin create.
-	SMTP mail.SMTPConfig
+	// Only serve loads these (LoadSMTP, LoadBaseURL), so a mistake in them never blocks migrate up or admin create.
+	SMTP    mail.SMTPConfig
+	BaseURL string
 }
 
 // Load reads settings through getenv (os.Getenv outside tests) and reports every problem at once.
@@ -133,6 +140,47 @@ func LoadSMTP(getenv func(string) string) (mail.SMTPConfig, error) {
 		return mail.SMTPConfig{}, fmt.Errorf("invalid mail config: %w", errors.Join(errs...))
 	}
 	return cfg, nil
+}
+
+// LoadBaseURL reads BASE_URL, the origin the app is reached at, for links in emails.
+func LoadBaseURL(getenv func(string) string) (string, error) {
+	raw := strings.TrimSpace(getenv("BASE_URL"))
+	if raw == "" {
+		return "", errors.New("BASE_URL is required")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", errBaseURL
+	}
+	host, port := strings.ToLower(u.Hostname()), u.Port()
+	ip, ipErr := netip.ParseAddr(host)
+	// Browsers rewrite these (an IPv4-mapped IPv6, or a name ending in a number) in Origin.
+	validHost := (ipErr == nil && !ip.Is4In6()) || (hostName(host) && !endsInNumber(host))
+	validPort := (port == "" && !strings.HasSuffix(u.Host, ":")) || (port != "" && validListenAddr(":"+port))
+	if (u.Scheme != "http" && u.Scheme != "https") || !validHost || !validPort || u.User != nil ||
+		(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return "", errBaseURL
+	}
+	// Browsers leave a default port out of Origin, so the origin must too.
+	if port == defaultPorts[u.Scheme] {
+		port = ""
+	}
+	if ipErr == nil {
+		host = ip.String()
+		if ip.Is6() {
+			host = "[" + host + "]"
+		}
+	}
+	origin := u.Scheme + "://" + host
+	if port != "" {
+		origin += ":" + port
+	}
+	return origin, nil
+}
+
+func endsInNumber(host string) bool {
+	last := host[strings.LastIndex(host, ".")+1:]
+	return strings.Trim(last, "0123456789") == "" || strings.HasPrefix(last, "0x")
 }
 
 // A DNS name (RFC 1123): dot-separated labels of lowercase letters, digits and inner hyphens.
