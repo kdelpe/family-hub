@@ -97,7 +97,7 @@ func TestInvite(t *testing.T) {
 
 func inviteToken(t *testing.T, body string) string {
 	t.Helper()
-	prefix := testBaseURL + setPasswordPath
+	prefix := testBaseURL + auth.SetPasswordPath
 	for line := range strings.Lines(body) {
 		if token, ok := strings.CutPrefix(strings.TrimSpace(line), prefix); ok {
 			return token

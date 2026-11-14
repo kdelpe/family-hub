@@ -29,9 +29,13 @@ const (
 	idleTimeout       = 2 * time.Minute
 	// Under docker stop's default 10s grace before SIGKILL.
 	shutdownTimeout = 8 * time.Second
+	// Short, so with shutdownTimeout and the unwinding after it, shutdown stays inside docker stop's grace.
+	resetsCloseGrace = 500 * time.Millisecond
 
 	loginsPerIP         = 20
 	loginsPerIPWindow   = 15 * time.Minute
+	forgotsPerIP        = 20
+	forgotsPerIPWindow  = time.Hour
 	resetsPerIP         = 10
 	resetsPerIPWindow   = time.Minute
 	previewsPerIP       = 10
@@ -66,32 +70,41 @@ func connectAndServe(ctx context.Context, cfg config.Config) error {
 		return fmt.Errorf("listen: %w", err)
 	}
 	zerolog.Ctx(ctx).Info().Str("addr", ln.Addr().String()).Msg("listening")
-	return serve(ctx, newServer(pool, cfg), ln, shutdownTimeout)
+	srv, resets := newServer(pool, cfg)
+	err = serve(ctx, srv, ln, shutdownTimeout)
+	// Before the pool closes: a reset still sending needs it.
+	resets.Close(resetsCloseGrace)
+	return err
 }
 
-func newServer(pool *pgxpool.Pool, cfg config.Config) *http.Server {
+func newServer(pool *pgxpool.Pool, cfg config.Config) (*http.Server, *auth.Resets) {
 	cookie := handler.NewSessionCookie(cfg.CookieSecure)
+	svc := auth.NewService(pool, auth.NewHasher())
+	mailer := mail.NewSMTP(cfg.SMTP)
+	resets := auth.NewResets(svc, mailer, cfg.BaseURL)
 	routes := router.New(
 		router.Handlers{
 			Health: handler.NewHealth(pool),
-			Auth:   handler.NewAuth(auth.NewService(pool, auth.NewHasher()), cookie),
-			Admin:  handler.NewAdmin(admin.NewInvites(pool, mail.NewSMTP(cfg.SMTP), cfg.BaseURL)),
+			Auth:   handler.NewAuth(svc, resets, cookie),
+			Admin:  handler.NewAdmin(admin.NewInvites(pool, mailer, cfg.BaseURL)),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(auth.NewSessions(pool), cookie).Require,
 			LimitLogin:     httpx.LimitByIP(ratelimit.New(loginsPerIP, loginsPerIPWindow)),
+			LimitForgot:    httpx.LimitByIP(ratelimit.New(forgotsPerIP, forgotsPerIPWindow)),
 			LimitReset:     httpx.LimitByIP(ratelimit.New(resetsPerIP, resetsPerIPWindow)),
 			LimitPreview:   httpx.LimitByIP(ratelimit.New(previewsPerIP, previewsPerIPWindow)),
 			TrustedProxy:   cfg.TrustedProxy,
 		},
 	)
-	return &http.Server{
+	srv := &http.Server{
 		Handler:           routes,
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
 	}
+	return srv, resets
 }
 
 func serve(ctx context.Context, srv *http.Server, ln net.Listener, grace time.Duration) error {

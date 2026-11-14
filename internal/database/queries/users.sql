@@ -24,3 +24,6 @@ UPDATE users SET password_hash = @password_hash::text, password_changed_at = clo
 
 -- name: CreateInvitedUser :one
 INSERT INTO users (email, role) VALUES (@email, @role) RETURNING id;
+
+-- name: LockEnabledUserByEmail :one
+SELECT id FROM users WHERE email = @email AND disabled_at IS NULL FOR UPDATE;

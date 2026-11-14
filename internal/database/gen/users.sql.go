@@ -94,6 +94,17 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (GetUserRow, error)
 	return i, err
 }
 
+const lockEnabledUserByEmail = `-- name: LockEnabledUserByEmail :one
+SELECT id FROM users WHERE email = $1 AND disabled_at IS NULL FOR UPDATE
+`
+
+func (q *Queries) LockEnabledUserByEmail(ctx context.Context, email string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockEnabledUserByEmail, email)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const lockUser = `-- name: LockUser :one
 SELECT email, role, password_changed_at, disabled_at FROM users WHERE id = $1 FOR UPDATE
 `

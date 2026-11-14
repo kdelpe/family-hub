@@ -226,14 +226,21 @@ func (s *Service) login(ctx context.Context, email string, in LoginInput) (strin
 // lockUser takes the row lock that every credential change and new session waits on (§5).
 // Its lock_timeout holds for the rest of tx, so callers map the tx's errors with busyIfContended.
 func (s *Service) lockUser(ctx context.Context, tx pgx.Tx, qtx *gen.Queries, id uuid.UUID) (gen.LockUserRow, error) {
-	if _, err := tx.Exec(ctx, `SELECT set_config('lock_timeout', $1, true)`, fmt.Sprintf("%dms", s.lockTimeout.Milliseconds())); err != nil {
-		return gen.LockUserRow{}, fmt.Errorf("set lock timeout: %w", err)
+	if err := s.setLockTimeout(ctx, tx); err != nil {
+		return gen.LockUserRow{}, err
 	}
 	locked, err := qtx.LockUser(ctx, id)
 	if err != nil {
 		return gen.LockUserRow{}, fmt.Errorf("lock user: %w", err)
 	}
 	return locked, nil
+}
+
+func (s *Service) setLockTimeout(ctx context.Context, tx pgx.Tx) error {
+	if _, err := tx.Exec(ctx, `SELECT set_config('lock_timeout', $1, true)`, fmt.Sprintf("%dms", s.lockTimeout.Milliseconds())); err != nil {
+		return fmt.Errorf("set lock timeout: %w", err)
+	}
+	return nil
 }
 
 // A lock timeout or deadlock is a contended row, not a fault: the client can just retry.

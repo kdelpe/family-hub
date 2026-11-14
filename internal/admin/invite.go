@@ -14,10 +14,9 @@ import (
 )
 
 const (
-	commitTimeout   = 10 * time.Second
-	setPasswordPath = "/auth/set-password#t="
-	inviteSubject   = "You're invited to the family hub"
-	inviteBody      = `Bonjou,
+	commitTimeout = 10 * time.Second
+	inviteSubject = "You're invited to the family hub"
+	inviteBody    = `Bonjou,
 
 You're invited to the family hub, a private place for our family's tree, photos and stories.
 
@@ -95,7 +94,7 @@ func (s *Invites) Invite(ctx context.Context, in InviteInput) (auth.User, error)
 }
 
 func (s *Invites) inviteMessage(email, token string) mail.Message {
-	link := s.baseURL + setPasswordPath + token
+	link := auth.SetPasswordLink(s.baseURL, token)
 	days := int(auth.InviteLifetime.Hours() / 24)
 	return mail.Message{To: email, Subject: inviteSubject, Body: fmt.Sprintf(inviteBody, link, days)}
 }

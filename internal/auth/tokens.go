@@ -15,6 +15,8 @@ import (
 
 const (
 	InviteLifetime       = 7 * 24 * time.Hour
+	ResetLifetime        = 30 * time.Minute
+	SetPasswordPath      = "/auth/set-password#t="
 	purposeInvite        = "invite"
 	purposePasswordReset = "password_reset"
 	// Google owns this domain outright; a Workspace domain needs the ID token's hd claim (§5).
@@ -25,10 +27,19 @@ var ErrInvalidToken = errors.New("link is invalid, used or expired")
 
 // CreateInvite stores an invite for a new user and returns the token for the link.
 func CreateInvite(ctx context.Context, db gen.DBTX, userID uuid.UUID) (string, error) {
+	return createToken(ctx, db, userID, purposeInvite, InviteLifetime)
+}
+
+// SetPasswordLink is the emailed link; the token goes in the fragment so it never reaches a server log (§5).
+func SetPasswordLink(baseURL, token string) string {
+	return baseURL + SetPasswordPath + token
+}
+
+func createToken(ctx context.Context, db gen.DBTX, userID uuid.UUID, purpose string, lifetime time.Duration) (string, error) {
 	raw, token := newToken()
-	err := gen.New(db).CreateToken(ctx, gen.CreateTokenParams{UserID: userID, Purpose: purposeInvite, TokenHash: hashToken(raw), Lifetime: InviteLifetime})
+	err := gen.New(db).CreateToken(ctx, gen.CreateTokenParams{UserID: userID, Purpose: purpose, TokenHash: hashToken(raw), Lifetime: lifetime})
 	if err != nil {
-		return "", fmt.Errorf("create invite: %w", err)
+		return "", fmt.Errorf("create %s token: %w", purpose, err)
 	}
 	return token, nil
 }
