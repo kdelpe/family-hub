@@ -116,7 +116,7 @@ func TestLoginRefusedWhenACredentialChangesBeforeTheSessionCommits(t *testing.T)
 			require.Eventually(t, func() bool {
 				var waiting bool
 				err := pool.QueryRow(context.Background(), `SELECT EXISTS (SELECT FROM pg_stat_activity
-					WHERE wait_event_type = 'Lock' AND query LIKE '-- name: LockUserForSignIn %')`).Scan(&waiting)
+					WHERE wait_event_type = 'Lock' AND query LIKE '-- name: LockUser %')`).Scan(&waiting)
 				return err == nil && waiting
 			}, 10*time.Second, 10*time.Millisecond, "login waits on the change's row lock")
 			require.NoError(t, change.Commit(t.Context()))

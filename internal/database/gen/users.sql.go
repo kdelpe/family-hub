@@ -78,20 +78,20 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (GetUserRow, error)
 	return i, err
 }
 
-const lockUserForSignIn = `-- name: LockUserForSignIn :one
+const lockUser = `-- name: LockUser :one
 SELECT email, role, password_changed_at, disabled_at FROM users WHERE id = $1 FOR UPDATE
 `
 
-type LockUserForSignInRow struct {
+type LockUserRow struct {
 	Email             string
 	Role              string
 	PasswordChangedAt *time.Time
 	DisabledAt        *time.Time
 }
 
-func (q *Queries) LockUserForSignIn(ctx context.Context, id uuid.UUID) (LockUserForSignInRow, error) {
-	row := q.db.QueryRow(ctx, lockUserForSignIn, id)
-	var i LockUserForSignInRow
+func (q *Queries) LockUser(ctx context.Context, id uuid.UUID) (LockUserRow, error) {
+	row := q.db.QueryRow(ctx, lockUser, id)
+	var i LockUserRow
 	err := row.Scan(
 		&i.Email,
 		&i.Role,
@@ -114,5 +114,19 @@ type RecordLoginParams struct {
 
 func (q *Queries) RecordLogin(ctx context.Context, arg RecordLoginParams) error {
 	_, err := q.db.Exec(ctx, recordLogin, arg.NewPasswordHash, arg.ID)
+	return err
+}
+
+const setPasswordAndRecordLogin = `-- name: SetPasswordAndRecordLogin :exec
+UPDATE users SET password_hash = $1::text, password_changed_at = clock_timestamp(), last_login_at = clock_timestamp() WHERE id = $2
+`
+
+type SetPasswordAndRecordLoginParams struct {
+	PasswordHash string
+	ID           uuid.UUID
+}
+
+func (q *Queries) SetPasswordAndRecordLogin(ctx context.Context, arg SetPasswordAndRecordLoginParams) error {
+	_, err := q.db.Exec(ctx, setPasswordAndRecordLogin, arg.PasswordHash, arg.ID)
 	return err
 }

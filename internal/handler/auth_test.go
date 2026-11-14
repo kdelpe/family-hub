@@ -100,6 +100,68 @@ func TestLogin(t *testing.T) {
 	}
 }
 
+func TestResetPassword(t *testing.T) {
+	const body = `{"token":"link-token","password":"purple staple orbit"}`
+	tests := []struct {
+		name       string
+		body       string
+		svcErr     error
+		wantCall   bool
+		oldCookie  bool
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "password set", body: body, wantCall: true, wantStatus: http.StatusOK, wantBody: testUserBody},
+		{name: "replaces the session of an old cookie", body: body, wantCall: true, oldCookie: true, wantStatus: http.StatusOK, wantBody: testUserBody},
+		{name: "invalid token", body: body, wantCall: true, svcErr: auth.ErrInvalidToken, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"invalid_token","message":"this link is invalid, used or expired; ask for a new one"}}`},
+		{name: "password too short", body: body, wantCall: true, svcErr: auth.ErrPasswordTooShort, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"password must be at least 8 characters"}}`},
+		{name: "password too long", body: body, wantCall: true, svcErr: auth.ErrPasswordTooLong, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"password must be at most 128 characters"}}`},
+		{name: "password too common", body: body, wantCall: true, svcErr: auth.ErrPasswordTooCommon, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"password is too common"}}`},
+		{name: "busy", body: body, wantCall: true, svcErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable,
+			wantBody: `{"error":{"code":"busy","message":"try again in a moment"}}`},
+		{name: "database error", body: body, wantCall: true, svcErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+		{name: "unknown field", body: `{"token":"a","password":"b","role":"admin"}`, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"bad_request","message":"invalid JSON body"}}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewAuthService(t)
+			if tt.wantCall {
+				in := auth.SetPasswordInput{Token: "link-token", Password: "purple staple orbit", UserAgent: "test-agent"}
+				if tt.oldCookie {
+					in.ReplacesToken = "old"
+				}
+				svc.EXPECT().SetPasswordWithToken(mock.Anything, in).Return("tok", testUser, tt.svcErr)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/auth/password/reset", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("User-Agent", "test-agent")
+			if tt.oldCookie {
+				req.AddCookie(&http.Cookie{Name: "__Host-fh_session", Value: "old"})
+			}
+			rec := httptest.NewRecorder()
+
+			handler.NewAuth(svc, handler.NewSessionCookie(true)).ResetPassword(rec, req)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			assert.JSONEq(t, tt.wantBody, rec.Body.String())
+			cookies := rec.Result().Cookies()
+			if tt.wantStatus != http.StatusOK {
+				assert.Empty(t, cookies)
+				return
+			}
+			require.Len(t, cookies, 1)
+			assert.Equal(t, "__Host-fh_session", cookies[0].Name)
+			assert.Equal(t, "tok", cookies[0].Value)
+		})
+	}
+}
+
 func TestLogout(t *testing.T) {
 	tests := []struct {
 		name       string

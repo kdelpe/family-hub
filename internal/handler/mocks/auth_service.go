@@ -177,6 +177,78 @@ func (_c *AuthService_Logout_Call) RunAndReturn(run func(ctx context.Context, to
 	return _c
 }
 
+// SetPasswordWithToken provides a mock function for the type AuthService
+func (_mock *AuthService) SetPasswordWithToken(ctx context.Context, in auth.SetPasswordInput) (string, auth.User, error) {
+	ret := _mock.Called(ctx, in)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetPasswordWithToken")
+	}
+
+	var r0 string
+	var r1 auth.User
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, auth.SetPasswordInput) (string, auth.User, error)); ok {
+		return returnFunc(ctx, in)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, auth.SetPasswordInput) string); ok {
+		r0 = returnFunc(ctx, in)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, auth.SetPasswordInput) auth.User); ok {
+		r1 = returnFunc(ctx, in)
+	} else {
+		r1 = ret.Get(1).(auth.User)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, auth.SetPasswordInput) error); ok {
+		r2 = returnFunc(ctx, in)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// AuthService_SetPasswordWithToken_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetPasswordWithToken'
+type AuthService_SetPasswordWithToken_Call struct {
+	*mock.Call
+}
+
+// SetPasswordWithToken is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in auth.SetPasswordInput
+func (_e *AuthService_Expecter) SetPasswordWithToken(ctx any, in any) *AuthService_SetPasswordWithToken_Call {
+	return &AuthService_SetPasswordWithToken_Call{Call: _e.mock.On("SetPasswordWithToken", ctx, in)}
+}
+
+func (_c *AuthService_SetPasswordWithToken_Call) Run(run func(ctx context.Context, in auth.SetPasswordInput)) *AuthService_SetPasswordWithToken_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 auth.SetPasswordInput
+		if args[1] != nil {
+			arg1 = args[1].(auth.SetPasswordInput)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *AuthService_SetPasswordWithToken_Call) Return(s string, user auth.User, err error) *AuthService_SetPasswordWithToken_Call {
+	_c.Call.Return(s, user, err)
+	return _c
+}
+
+func (_c *AuthService_SetPasswordWithToken_Call) RunAndReturn(run func(ctx context.Context, in auth.SetPasswordInput) (string, auth.User, error)) *AuthService_SetPasswordWithToken_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // User provides a mock function for the type AuthService
 func (_mock *AuthService) User(ctx context.Context, id uuid.UUID) (auth.User, error) {
 	ret := _mock.Called(ctx, id)

@@ -17,3 +17,6 @@ WHERE id_hash = @id_hash AND last_seen_at < now() - @touch_after::interval;
 
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE id_hash = @id_hash;
+
+-- name: DeleteUserSessions :exec
+DELETE FROM sessions WHERE user_id = @user_id;

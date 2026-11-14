@@ -43,6 +43,15 @@ func (q *Queries) DeleteSession(ctx context.Context, idHash []byte) error {
 	return err
 }
 
+const deleteUserSessions = `-- name: DeleteUserSessions :exec
+DELETE FROM sessions WHERE user_id = $1
+`
+
+func (q *Queries) DeleteUserSessions(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserSessions, userID)
+	return err
+}
+
 const getActiveSession = `-- name: GetActiveSession :one
 SELECT s.user_id, u.role, s.last_seen_at < now() - $1::interval AS stale
 FROM sessions s
