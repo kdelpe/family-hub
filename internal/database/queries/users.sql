@@ -18,3 +18,6 @@ VALUES (@email, 'admin', @password_hash::text, now());
 
 -- name: EmailTaken :one
 SELECT EXISTS (SELECT 1 FROM users WHERE email = @email);
+
+-- name: SetPassword :exec
+UPDATE users SET password_hash = @password_hash::text, password_changed_at = now() WHERE id = @id;
