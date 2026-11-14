@@ -95,10 +95,6 @@ func clientGone(r *http.Request) bool {
 	return errors.Is(r.Context().Err(), context.Canceled)
 }
 
-func busy(w http.ResponseWriter) {
-	httpx.Error(w, http.StatusServiceUnavailable, "busy", "try again in a moment")
-}
-
 func internalError(w http.ResponseWriter, r *http.Request, err error, msg string) {
 	zerolog.Ctx(r.Context()).Error().Err(err).Msg(msg)
 	httpx.Error(w, http.StatusInternalServerError, "internal", "internal error")

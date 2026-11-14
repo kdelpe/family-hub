@@ -129,6 +129,10 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func busy(w http.ResponseWriter) {
+	httpx.Error(w, http.StatusServiceUnavailable, "busy", "try again in a moment")
+}
+
 func (a *Auth) cookieToken(r *http.Request) string {
 	if c, err := r.Cookie(a.cookie.name); err == nil {
 		return c.Value
