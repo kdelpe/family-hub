@@ -19,18 +19,27 @@ type AuthService interface {
 	User(ctx context.Context, id uuid.UUID) (auth.User, error)
 }
 
+type ResetRequester interface {
+	Request(ctx context.Context, email string)
+}
+
 type Auth struct {
 	svc    AuthService
+	resets ResetRequester
 	cookie SessionCookie
 }
 
-func NewAuth(svc AuthService, cookie SessionCookie) *Auth {
-	return &Auth{svc: svc, cookie: cookie}
+func NewAuth(svc AuthService, resets ResetRequester, cookie SessionCookie) *Auth {
+	return &Auth{svc: svc, resets: resets, cookie: cookie}
 }
 
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type forgotPasswordRequest struct {
+	Email string `json:"email"`
 }
 
 type resetPasswordRequest struct {
@@ -82,6 +91,16 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	default:
 		internalError(w, r, err, "login")
 	}
+}
+
+// ForgotPassword answers the same whether or not the email has an account (§5).
+func (a *Auth) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var req forgotPasswordRequest
+	if !httpx.DecodeJSON(w, r, &req) {
+		return
+	}
+	a.resets.Request(r.Context(), req.Email)
+	w.WriteHeader(http.StatusAccepted)
 }
 
 // ResetPassword uses an invite or password-reset link's token to set the password and sign in.

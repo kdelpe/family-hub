@@ -76,7 +76,7 @@ func TestLogin(t *testing.T) {
 			}
 			rec := httptest.NewRecorder()
 
-			handler.NewAuth(svc, handler.NewSessionCookie(true)).Login(rec, req)
+			handler.NewAuth(svc, nil, handler.NewSessionCookie(true)).Login(rec, req)
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			assert.JSONEq(t, tt.wantBody, rec.Body.String())
@@ -147,7 +147,7 @@ func TestResetPassword(t *testing.T) {
 			}
 			rec := httptest.NewRecorder()
 
-			handler.NewAuth(svc, handler.NewSessionCookie(true)).ResetPassword(rec, req)
+			handler.NewAuth(svc, nil, handler.NewSessionCookie(true)).ResetPassword(rec, req)
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			assert.JSONEq(t, tt.wantBody, rec.Body.String())
@@ -186,7 +186,7 @@ func TestLogout(t *testing.T) {
 			}
 			rec := httptest.NewRecorder()
 
-			handler.NewAuth(svc, handler.NewSessionCookie(false)).Logout(rec, req)
+			handler.NewAuth(svc, nil, handler.NewSessionCookie(false)).Logout(rec, req)
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			cookies := rec.Result().Cookies()
@@ -224,7 +224,7 @@ func TestMe(t *testing.T) {
 			req.AddCookie(&http.Cookie{Name: "__Host-fh_session", Value: "tok"})
 			rec := httptest.NewRecorder()
 
-			handler.NewSessionGate(sessions, cookie).Require(http.HandlerFunc(handler.NewAuth(svc, cookie).Me)).ServeHTTP(rec, req)
+			handler.NewSessionGate(sessions, cookie).Require(http.HandlerFunc(handler.NewAuth(svc, nil, cookie).Me)).ServeHTTP(rec, req)
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			assert.JSONEq(t, tt.wantBody, rec.Body.String())
@@ -269,7 +269,7 @@ func TestPreviewLink(t *testing.T) {
 			}
 			rec := httptest.NewRecorder()
 
-			handler.NewAuth(svc, handler.NewSessionCookie(true)).PreviewLink(rec, req)
+			handler.NewAuth(svc, nil, handler.NewSessionCookie(true)).PreviewLink(rec, req)
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			if tt.wantBody == "" {
@@ -278,6 +278,41 @@ func TestPreviewLink(t *testing.T) {
 			}
 			assert.JSONEq(t, tt.wantBody, rec.Body.String())
 			assert.Empty(t, rec.Result().Cookies(), "previewing never signs in")
+		})
+	}
+}
+
+func TestForgotPassword(t *testing.T) {
+	tests := []struct {
+		name        string
+		body        string
+		wantRequest string
+		wantStatus  int
+		wantBody    string
+	}{
+		{name: "always accepted", body: `{"email":"test@example.com"}`, wantRequest: "test@example.com", wantStatus: http.StatusAccepted},
+		{name: "unknown field", body: `{"email":"test@example.com","admin":true}`, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"bad_request","message":"invalid JSON body"}}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resets := mocks.NewResetRequester(t)
+			if tt.wantRequest != "" {
+				resets.EXPECT().Request(mock.Anything, tt.wantRequest).Once()
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/auth/password/forgot", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			handler.NewAuth(mocks.NewAuthService(t), resets, handler.NewSessionCookie(true)).ForgotPassword(rec, req)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			if tt.wantBody == "" {
+				assert.Empty(t, rec.Body.String(), "the same empty answer for every address")
+				return
+			}
+			assert.JSONEq(t, tt.wantBody, rec.Body.String())
 		})
 	}
 }

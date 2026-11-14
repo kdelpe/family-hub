@@ -10,6 +10,7 @@ packages:
       SessionAuthenticator: {}
       AuthService: {}
       AdminService: {}
+      ResetRequester: {}
   github.com/kdelpe/family-hub/internal/admin:
     interfaces:
       Terminal: {}
