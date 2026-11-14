@@ -188,6 +188,8 @@ CREATE TABLE persons (
   middle_name           TEXT,
   last_name             TEXT,                           -- optional: older relatives' surnames are often unknown
   maiden_name           TEXT,
+  side                  TEXT CHECK (side IN ('first','second','both','married_in')),  -- People filter and card tint; labels from FAMILY_SIDES
+  birth_place           TEXT,                           -- "Jacmel"; shown on profiles and the People family strip
   gender                TEXT CHECK (gender IN ('male','female','other','unknown')),
   birth_date            DATE,
   birth_date_precision  TEXT CHECK (birth_date_precision IN ('day','month','year','circa')),
@@ -323,6 +325,7 @@ CREATE TABLE media (
   event_id          UUID REFERENCES events(id) ON DELETE SET NULL,
   uploader_id       UUID REFERENCES users(id)  ON DELETE SET NULL,
   kind              TEXT NOT NULL CHECK (kind IN ('photo','video','audio')),  -- audio for stories (Phase 5b)
+  for_story         BOOLEAN NOT NULL DEFAULT false,     -- a story's recording: private until a published story uses it (§9.6)
   storage_key       TEXT NOT NULL UNIQUE,               -- media/2026/<uuid>/original.<ext>
   original_filename TEXT,                               -- display only, never used in keys
   mime_type         TEXT NOT NULL,
@@ -497,7 +500,8 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | POST | `/api/me/suggestions` | session | A member suggests a relative: an access request with `source = member_suggestion`, `suggested_by` = the member |
 | PATCH | `/api/admin/users/{id}` | admin | Role, disable/enable, link person, change email (clears Google link and password, revokes sessions and tokens, re-invites; §5) |
 | GET | `/api/tree` | session | All non-deleted people + relationships (flat; see §10). No dates and no contacts; each person carries a short `bio_excerpt` for the quick look |
-| GET | `/api/persons` | session | `?q=` trigram search for autocomplete |
+| GET | `/api/persons` | session | `?q=` trigram search for autocomplete; without `q`, everyone A–Z for the People page, with `?side=&living=` filters |
+| GET | `/api/family/summary` | session | The People family strip: number of people, generations, and the earliest record (year and place of the earliest-born **deceased** person, so no living person's year leaks) |
 | POST | `/api/persons` | admin | Create |
 | GET | `/api/persons/{id}` | session | Profile, direct relations, tagged media, and **only the contact methods the viewer may see** (§5.2) |
 | PATCH | `/api/persons/{id}` | admin, or the linked user for their own profile fields | Update (members: bio and avatar only) |
@@ -521,7 +525,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | POST | `/api/events` | admin (members when `MEMBERS_CAN_CONTRIBUTE=true`) | Create (with `person_ids`) |
 | GET/PATCH | `/api/events/{id}` | GET: session; PATCH: admin, or the creator when contributions are enabled | Read / update |
 | DELETE | `/api/events/{id}` | owner/admin | Soft delete |
-| POST | `/api/media/upload-url` | admin (members when `MEMBERS_CAN_CONTRIBUTE=true`) | `{filename, mime_type, size_bytes, event_id?}` → `{media_id, url, headers}` |
+| POST | `/api/media/upload-url` | admin (members when `MEMBERS_CAN_CONTRIBUTE=true`) | `{filename, mime_type, size_bytes, event_id?, for_story?}` → `{media_id, url, headers}` (`for_story`: a story's recording, private until published, §9.6) |
 | POST | `/api/media/{id}/confirm` | uploader | `HeadObject` verify → `ready`; `{person_ids, caption, taken_on, taken_on_precision, width, height, duration_seconds}` (dimensions measured client-side; the worker overwrites them in Phase 6) |
 | GET | `/api/media` | session | `?event_id=&person_id=&cursor=` with short-lived thumbnail URLs |
 | GET | `/api/media/{id}` | session | Metadata |
@@ -532,7 +536,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | POST | `/api/stories` | admin (members when `MEMBERS_CAN_CONTRIBUTE=true`) | Create a draft (with `person_ids`, `media_id`) |
 | GET/PATCH | `/api/stories/{id}` | GET: session (drafts: their creator and admins); PATCH: admin, or the creator when contributions are enabled | Read / update, including chapters, transcript and publishing (requires `consent_confirmed_at`) |
 | DELETE | `/api/stories/{id}` | creator/admin | Soft delete |
-| GET | `/api/stories/{id}/captions.vtt` | session | WebVTT captions generated from the transcript |
+| GET | `/api/stories/{id}/captions.vtt` | as GET `/api/stories/{id}` | WebVTT captions generated from the transcript |
 
 ## 5. Authentication & sessions
 
@@ -606,6 +610,7 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
   - `password/change`: 5 wrong `current_password` attempts per 15 min per user.
   - `password/forgot`: 5 emails per hour per address.
 - **Per address, in the access-request service** (every request counts, not just failures): 5 per hour per email; over the limit it still answers `202` and stores nothing.
+- **Per requester, in the contacts service:** 20 contact requests per day per user (a repeat of an existing request is free, since it's idempotent).
 
 Honest limits of this: a determined attacker rotating IPs can, at worst, hit the 50/hour backstop and **delay password sign-in** for one account. They can never block that person's **Google sign-in or password reset**, both of which prove ownership another way, and the login error page links to both. There's no hard lockout.
 
@@ -632,11 +637,11 @@ Each person's contact details live in `contact_methods`, one row per phone/email
 | Rule | Behavior |
 |---|---|
 | Default | `hidden`. Nothing is shared until the person flips a toggle ("Visible to family"). |
-| Phones, WhatsApp, addresses | Never listed for the family: their visibility is `hidden` or `on_request`. A member can ask (`POST /api/persons/{id}/contact-requests {kind}`, idempotent, rate-limited per requester); the owner shares, declines (silently) or later revokes from My profile (`/api/me/contact-requests`). `GET /api/persons/{id}` and the directory return such a value **only to a viewer with a `shared` request**, otherwise `{kind, requestable: true, my_request_status}`. In-app notice only (a badge on My profile, a line on Home). People without logins can't approve, so theirs stay admin-only. |
+| Phones, WhatsApp, addresses | Never listed for the family: their visibility is `hidden` or `on_request`. A member can ask (`POST /api/persons/{id}/contact-requests {kind}`, idempotent, rate-limited per requester); the owner shares, declines (silently) or later revokes from My profile (`/api/me/contact-requests`). `GET /api/persons/{id}` and the directory return the person's `on_request` values of a kind **only to a viewer with a `shared` request for that kind** (all of them, if there are several), otherwise one `{kind, requestable: true, my_request_status}` per kind, where the status is `none`, `requested` or `shared`: a declined or revoked request also reads `requested`, so a decline stays silent. `hidden` rows produce nothing at all, not even the stub. In-app notice only (a badge on My profile, a line on Home). People without logins can't approve, so theirs stay admin-only. |
 | Social accounts | `kind = 'social'` with a `platform`; `hidden` or `family` like email. Links are built from the platform's known `https://` base (or accept only `https://` URLs on that platform's domain) and open with `rel="noopener noreferrer"`; arbitrary URLs are never rendered as links. WhatsApp counts as a phone. |
 | Who edits | The linked user edits their own rows via `/api/me/contacts`; admins can edit anyone's, including relatives with no login (admin-entered rows also default to `hidden`; the admin marks them `family` only with that person's consent). |
-| Who sees a row | The owner and admins: always. Any other signed-in user: only rows with `visibility = 'family'`. |
-| Enforcement | In the SQL/service layer (`WHERE visibility = 'family'` for non-owners), never in the frontend. Hidden values are not sent to the browser at all. |
+| Who sees a row | The owner and admins: always. Any other signed-in user: rows with `visibility = 'family'`, and `on_request` rows whose kind they hold a `shared` request for. |
+| Enforcement | In the SQL/service layer (`visibility = 'family' OR` a matching `shared` request, for non-owners), never in the frontend. Hidden values are not sent to the browser at all. |
 | Where contacts appear | `GET /api/persons/{id}` and `GET /api/directory` only. They are **not** in `/api/tree`, `/api/persons?q=` search results, logs, or error messages, and search never matches on contact values. |
 | Birthdays | **Month and day** are visible to every signed-in user. The birth **year** of a *living* person is visible only to admins and to that person themselves; for deceased people the full date is visible to all. Masking happens in SQL via the `masked_birth_date` function (§3.1), so the year never reaches a non-permitted browser. `/api/tree` carries no dates at all (§10). A living person with only a year or "circa" precision shows nothing to others. |
 | Login email | `users.email` is an authentication detail and is **never** exposed. A contact email is a separate, optional row the person chooses to add. |
@@ -886,7 +891,7 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 - Upload modal: request `upload-url`, `XMLHttpRequest`/`fetch` PUT with the returned headers (needed for progress events), then `confirm`. Compute width/height/duration client-side from the file for the confirm call.
 - Auth pages: `/auth/login` (email + password, "Continue with Google", "Forgot password?", "Request access"), `/auth/request-access`, `/auth/forgot`, `/auth/set-password` (reads `#t=`; used for both invites and resets; for an invite it shows the Welcome page from `invite/preview`, then first-time setup), and "Change password" in My profile. Large inputs, a show-password toggle, and plain-language errors.
 - **Member experience is read-mostly:** Home, the tree centered on "you", People, person profiles, a directory of visible contact info, Events, Stories, and a "My profile" page (bio, avatar, contact methods with visibility toggles, "Suggest a relative"). Tree-editing controls are not rendered for members.
-- **Home ("Hearth"):** a greeting by time of day in `APP_TIMEZONE`, **Coming up** (upcoming birthdays §5.3, and upcoming events from Phase 5) and **New in the family** (people added in the last 30 days). Built from existing queries, no new tables.
+- **Home ("Hearth"):** a greeting by time of day in `APP_TIMEZONE`, **Coming up** (upcoming birthdays §5.3, and upcoming events from Phase 5), **New in the family** (people added in the last 30 days), **Story of the week** (the latest featured published story, from Phase 5b) and a line for pending contact requests (§5.2). Built from existing queries, no new tables.
 - **Admin editing without raw edges:** admins never see "relationship type: parent_child, person A/B". From a person's card they choose "Add parent / child / partner / sibling", pick or create the other person, and the app maps that to a relationship (and, for "sibling", to shared parents). "Add parent" and "Add child" ask biological, adoptive or foster (default biological). "Add partner" asks **married or partner** and whether the relationship has **ended**; both can be changed later from the couple's card. Large icon buttons, plain-language labels, and undo (soft delete + restore) keep this safe for non-technical admins.
 
 ## 8. Tooling: Makefile, Compose, Dockerfile
@@ -1022,7 +1027,7 @@ The image builds its own `dist/` (the placeholder until Phase 4a, then the web s
 
 ### 9.1 Upload
 
-1. `POST /api/media/upload-url {filename, mime_type, size_bytes, event_id?}`. Server validates the MIME against an allowlist (`image/jpeg`, `image/png`, `image/webp`, `image/heic`, `image/tiff` for flatbed scans of old photos, `video/mp4`, `video/quicktime`, and for stories `audio/mpeg`, `audio/mp4`, `audio/wav` (old cassette transfers); TIFF and HEIC are shown through the Phase 6 JPEG variant, since browsers can't display TIFF) and `size_bytes <= MAX_UPLOAD_BYTES`; inserts a `pending` row with key `media/<yyyy>/<uuid>/original.<ext>` (extension derived from MIME, **never** from the filename); returns a presigned PUT (15 min) that signs `Content-Type` and `Content-Length`.
+1. `POST /api/media/upload-url {filename, mime_type, size_bytes, event_id?}`. Server validates the MIME against an allowlist (`image/jpeg`, `image/png`, `image/webp`, `image/heic`, `image/tiff` for flatbed scans of old photos, `video/mp4`, `video/quicktime`, and for stories `audio/mpeg`, `audio/mp4`, `audio/x-m4a` (voice memos), `audio/wav`, `audio/x-wav`, `audio/wave` (old cassette transfers; browsers report WAV and M4A under these different names); TIFF and HEIC are shown through the Phase 6 JPEG variant, since browsers can't display TIFF) and `size_bytes <= MAX_UPLOAD_BYTES`; inserts a `pending` row with key `media/<yyyy>/<uuid>/original.<ext>` (extension derived from MIME, **never** from the filename); returns a presigned PUT (15 min) that signs `Content-Type` and `Content-Length`.
 2. Browser PUTs directly to the bucket. The response's `headers` contain only `Content-Type`; browsers forbid scripts from setting `Content-Length` and send it automatically from the file body, which must equal the signed value. A SigV4-signed `Content-Length` makes the storage service reject mismatches, which is what enforces the size cap. **(verify on the chosen storage server and on R2 in the Phase 5 storage spike)**; the `HeadObject` size check in step 3 is the backstop either way.
 3. `POST /api/media/{id}/confirm` → server calls `HeadObject`, checks it exists and `ContentLength == size_bytes`, sets `status='ready'`, records tags/caption, and (Phase 6) sets `processing_status='queued'`.
 
@@ -1056,10 +1061,10 @@ MinIO was the V2 default. Its community edition is in maintenance mode and has b
 
 ### 9.6 Stories (Phase 5b)
 
-A story is a recorded video or audio of a relative telling something, with chapters and a transcript (design-notes §4.6–4.7b). Its file is an ordinary `media` row, uploaded the normal way (§9.1).
+A story is a recorded video or audio of a relative telling something, with chapters and a transcript (design-notes §4.6–4.7b). Its file is a `media` row uploaded the normal way (§9.1) but with `for_story: true` on `upload-url`, which sets `media.for_story`.
 
 - **Transcripts are typed or pasted by an editor** in the MVP, as timestamped lines; chapters likewise. Captions (`captions.vtt`, on by default in the player) are generated from the transcript. Machine transcription (self-hosted Whisper or a hosted speech-to-text API) is a later, separate decision: it's a new dependency, and Haitian Creole accuracy needs a human read-through anyway.
-- **Consent:** a story is published only once `consent_confirmed_at` is set; drafts are visible to their creator and admins. Its recording follows the story: media referenced by a story are left out of `GET /api/media` (Stories lists them, not Media), and `GET /api/media/{id}` and `/url` for them answer only to those who may see the story, so a draft's recording can't be reached before consent.
+- **Consent:** a story is published only once `consent_confirmed_at` is set; drafts are visible to their creator and admins. Its recording follows the story, from upload on: `for_story` media never appear in `GET /api/media` (Stories lists them, not Media), and `GET /api/media/{id}` and `/url` answer for them only to the uploader and admins, plus everyone once a **published, non-deleted** story uses them. So a recording whose draft was never saved, abandoned or deleted, or isn't consented yet, stays private. `DELETE /api/media/{id}` refuses media that a non-deleted story uses; delete the story first. The captions follow the same rule as the story.
 - **Search** covers what was said: the service keeps `search_tsv` (title, summary, transcript) current on every write; `q` uses it. People mentioned who aren't in the tree stay text in the transcript or summary; only tree people go in `story_persons`.
 - **Profiles** list "Stories <name> told" (`teller_person_id`) and "Stories about <name>" (`story_persons`). A story's year can appear on the Events timeline.
 - **Length:** long recordings can pass the 2 GiB single-PUT cap (§9.1). Until multipart uploads exist, the Add a story page says so and suggests a smaller export.

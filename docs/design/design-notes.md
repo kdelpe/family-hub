@@ -10,7 +10,7 @@ All names, dates, stories, phone numbers and addresses in the mockups are **made
 
 | Deferred | Where it shows | What the MVP does instead |
 |---|---|---|
-| **On this day** | Home | Home shows Coming up and New in the family only. |
+| **On this day** | Home | Home shows Coming up, New in the family and Story of the week, without the On this day card. |
 | **Record now**, and uploads that resume in parts | Add a story, step 2 | Upload a file only, up to the 2 GiB cap, said in plain words. |
 | Machine transcription and English translation | Add a story, step 4; the finish screen | The transcript is typed or pasted; no "Show English translation". The finish screen has no "Preparing the video" or "Making captions" steps and the story shows no "Processing…": it's ready when saved. |
 | Dark mode | everywhere | Light theme only (§1.1 keeps the variables ready). |
@@ -138,7 +138,7 @@ All five pages share a two-column layout: **left brand panel** (`--brand-panel`)
 ### 3.3 Welcome (from the invitation email)
 - Banner with the inviter's avatar: *"**Nadège Pluviose** invited you to the family hub."* (Shows who the invitation is **from**, §5.3.)
 - *"Welcome to the family, Darline"*; *"Choose a password to finish setting up your account for <email>."*
-- **Continue with Google instead** (only for Gmail/Workspace invitees) · "or choose a password" divider.
+- **Continue with Google instead** (only for Gmail invitees: a Workspace address can't be recognised before sign-in, so those invitees use Continue with Google on the sign-in page) · "or choose a password" divider.
 - New password with Show/Hide (shown by default here) and a 4-segment strength bar + label. No rules text up front; if the password is refused, show one plain-language error under the field (e.g. *"Use at least 8 characters"*, *"That password is too common — try a short phrase"*), linked with `aria-describedby`.
 - **Set password and continue** → First-time setup.
 - Small print: *"This link works for 7 days. Not Darline? Go to sign in."* (The "administrators can see everything" notice lives in the invitation email, First-time setup step 2 and My profile, not here.)
