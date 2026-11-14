@@ -538,7 +538,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/api/media/{id}/url` | session | `?variant=original\|poster\|mp4_720` → presigned GET (supports `Range`) |
 | PATCH | `/api/media/{id}` | uploader/admin | Caption, tags |
 | DELETE | `/api/media/{id}` | uploader/admin | Soft delete (object removal is deferred, §9) |
-| GET | `/api/stories` | session | Published stories; `?teller_id=&topic=&q=` (`q` searches title, summary and transcript); the featured one first |
+| GET | `/api/stories` | session | Published stories; `?teller_id=&topic=&q=` (`q` searches title, summary and transcript); the featured one first. `?status=draft` lists drafts instead: the caller's own, or everyone's for admins (the "Your drafts" row) |
 | POST | `/api/stories` | admin (members when `MEMBERS_CAN_CONTRIBUTE=true`) | Create a draft (with `person_ids`, `other_people`, `media_id`). `media_id` must be a `for_story` recording uploaded by the caller (admins may use anyone's), and not already used by another story |
 | GET/PATCH | `/api/stories/{id}` | GET: session (drafts: their creator and admins); PATCH: admin, or the creator when contributions are enabled | Read / update, including chapters, transcript and publishing (requires `consent_confirmed_at`) |
 | DELETE | `/api/stories/{id}` | creator/admin | Soft delete |
@@ -1075,7 +1075,8 @@ A story is a recorded video or audio of a relative telling something, with chapt
 - **Search** covers what was said: `search_tsv` is a generated column over title, summary and transcript, so no write path can leave it stale; `q` uses it. Tree people in a story go in `story_persons`; others ("Père Antoine") go in `other_people`, so "People in this story" can list both.
 - **Profiles** list "Stories <name> told" (`teller_person_id`) and "Stories about <name>" (`story_persons`). A story's year can appear on the Events timeline.
 - **Length:** long recordings can pass the 2 GiB single-PUT cap (§9.1). Until multipart uploads exist, the Add a story page says so and suggests a smaller export.
-- **Playback:** until the Phase 6 worker, stories must be H.264 MP4 or audio; an iPhone HEVC `.mov` won't play in Chrome or Firefox.
+- **Playback:** until the Phase 6 worker, stories must be H.264 MP4 or audio; an iPhone HEVC `.mov` won't play in Chrome or Firefox. So `upload-url` with `for_story` refuses `video/quicktime` until then, and Add a story says which files work before the upload starts (design-notes, Scope for the MVP).
+- **Drafts** are listed with `GET /api/stories?status=draft` (the caller's own; admins see all), so a draft saved at any step can be found again and continued.
 
 ## 10. Family-tree queries
 

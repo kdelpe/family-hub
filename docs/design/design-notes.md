@@ -12,6 +12,7 @@ All names, dates, stories, phone numbers and addresses in the mockups are **made
 |---|---|---|
 | **On this day** | Home | Home shows Coming up, New in the family and Story of the week, without the On this day card. |
 | **Record now**, and uploads that resume in parts | Add a story, step 2 | Upload a file only, up to the 2 GiB cap, said in plain words. |
+| Any phone video (needs the Phase 6 converter) | Add a story, step 2 | The drop zone says which files work before upload: *"MP4 videos and audio files (MP3, M4A, WAV). iPhone videos: share them as 'Most Compatible' or export as MP4."* A video the browser reports as HEVC/QuickTime is refused with that same line. |
 | Machine transcription and English translation | Add a story, step 4; the finish screen | The transcript is typed or pasted; no "Show English translation". The finish screen has no "Preparing the video" or "Making captions" steps and the story shows no "Processing…": it's ready when saved. |
 | Dark mode | everywhere | Light theme only (§1.1 keeps the variables ready). |
 
@@ -214,6 +215,7 @@ Title **Events**. Segmented **Timeline / Media**, plus two buttons shown to admi
 - **Story of the week** hero: large video still with play button and duration, title, storyteller (avatar, relation, recorded date), short summary, people/topic chips, **Watch the story**.
 - **Storytellers** row: filter by teller (shows count; older audio like "cassette, 1994" called out). Clicking again clears.
 - **All stories** grid: thumbnail, length, Video/Audio badge, title, teller · year, "About …". Topic chips. Search covers what was said, not just titles. **+ Add a story**.
+- **Your drafts** (only when you have some; admins see everyone's): a row above All stories with the same cards, a "Draft" chip and the step reached, each with **Continue editing**, which reopens Add a story at that step.
 
 ### 4.7 A story
 - Player: dark frame, big play/pause, progress bar, time, **Captions** (on by default, large 20px on dark), Full screen.
@@ -231,14 +233,14 @@ A five-step guide with a clickable step bar (Storyteller · Recording · Details
 Finish screen: *"Your story is on its way"* with steps ✓ Recording uploaded · … Preparing the video · … Making captions; **Back to Stories** / **Add another story**. The story shows as "Processing…" in the Stories list until ready.
 
 ### 4.8 My profile
-Photo + story editor · birthday shown with *"only you and admins see the year"* · contact rows (phone, email, address, WhatsApp, Instagram, Facebook, others) with switches: **Only me / Visible to family** for email and social accounts, **Only me / Family can ask** for phone, WhatsApp and address; a **"Requests for your details"** card at the top of the side column (*"Darline Monestime asked for your phone number." — Share / Not now*; sharing reveals it to that one person; declining is silent); add button reads *"+ Add a phone, email, address or social account"* · one quiet line under the contact list: *"Admins can see all information you enter."* · Sign-in (password set / Google linked, Change password, Sign out) · **"Know someone who should be here? Suggest a relative"** · **See me in the tree**.
+Photo + story editor · birthday shown with *"only you and admins see the year"* · contact rows (phone, email, address, WhatsApp, Instagram, Facebook, others) with switches: **Only me / Visible to family** for email and social accounts, **Only me / Family can ask** for phone, WhatsApp and address; a **"Requests for your details"** card at the top of the side column (*"Darline Monestime asked for your phone number." — Share / Not now*; sharing reveals it to that one person; declining is silent), and under it **Shared with**: one line per person you shared with (*"Darline Monestime · phone number"*) and a **Stop sharing** button that revokes it; add button reads *"+ Add a phone, email, address or social account"* · one quiet line under the contact list: *"Admins can see all information you enter."* · Sign-in (password set / Google linked, Change password, Sign out) · **"Know someone who should be here? Suggest a relative"** · **See me in the tree**.
 
 ### 4.9 Full profile (from "Open full profile" / "View profile")
 Back to the tree · portrait, relation, name, maiden name, birthday, place, story · **Center the tree on Nadège** and a dashed **Request phone number** button (never the number itself, unless she has shared it with you) · family grouped as Parents / Married to / Children / Step-children / Grandchildren · photos · moments (events + stories).
 
 ### 4.10 Members & invites (admins only)
 Tabs: **Requests (n)** · **Invite someone** · **Everyone (n)**.
-- **Requests:** name + email, side chip, source chip ("Asked on the sign-in page" / "Suggested by Stanley Jean-Louis"), **Related to** lines with a badge **✓ In the tree** or **Not found — check spelling**, their note, when. **Approve & invite** → Invite tab with that person preselected. **Not now** → quietly set aside (they're never told), with Undo.
+- **Requests:** name + email, side chip, source chip ("Asked on the sign-in page" / "Suggested by Stanley Jean-Louis"), **Related to** lines with a badge **✓ In the tree** or **Not found — check spelling**, their note, when. **Approve & invite** → Invite tab with that person preselected. **Not now** → quietly set aside (they're never told), with Undo for 90 days (declined requests are deleted after that).
 - **Invite someone:** 1) pick the person **in the tree first** ("Not in the tree yet? Add them first") · 2) email + role (Member / Admin, each with a one-line description) · 3) **Who is the invitation from?** (defaults to the member who suggested them, otherwise you; other admins selectable) · 4) live email preview. **Send invitation** → *"Invitation sent to Kervens, from Stanley Jean-Louis."*
 - **Email copy:** subject *"<From first name> invited you to the family hub"*; body *"Bonjou Kervens, <From full name> invited you to the Pluviose-Monestime Family Hub — a private place for our family's tree, photos and stories."*; if the sender isn't the admin who approved it, add *"Approved by <admin>, admin."*; button **Set up my account**; small print about Google, 7 days, admins seeing everything.
 - **Everyone:** table (scrolls sideways on small screens): name, sign-in email (admins only), role, status (Active · Invited · expires in N days · Invited · expired · Disabled), and one action (**Send password reset** / **Resend invitation**).
@@ -282,6 +284,9 @@ Generated once (seeded, deterministic) and embedded as inline SVG:
 - Tree-page re-centering slide (0.5s) and quick-look pop (0.16s).
 - Menu hover 150ms.
 - No looping motion anywhere else.
+
+### 6.4 Pausing the motion
+The swaying, the leaf colour cycle and the Home photo/caption cycle run longer than 5 seconds beside other content, so each tree gets a **Pause motion / Play motion** text button (a real `<button>` with `aria-pressed`, 13px `--muted` under the tree or its caption, 44px tall hit area). Pausing freezes the tree as it is and stops the photo cycle; the choice is remembered for the session. With reduced motion there is nothing to pause, so the button is hidden. (WCAG 2.2.2.)
 
 ---
 
