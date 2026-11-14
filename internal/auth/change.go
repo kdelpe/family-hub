@@ -81,6 +81,9 @@ func (s *Service) currentSessionAfterFailedVerify(ctx context.Context, userID uu
 	if err := activeOrNoSession(qtx.LockActiveSession(ctx, gen.LockActiveSessionParams(session))); err != nil {
 		return err
 	}
+	if err := activeOrNoSession(qtx.SessionActive(ctx, session)); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit failed password check: %w", err)
 	}
@@ -147,6 +150,9 @@ func (s *Service) changePassword(ctx context.Context, in ChangePasswordInput, se
 	}
 	// Signed out or expired since the session gate.
 	if err := activeOrNoSession(qtx.LockActiveSession(ctx, gen.LockActiveSessionParams(session))); err != nil {
+		return "", err
+	}
+	if err := activeOrNoSession(qtx.SessionActive(ctx, session)); err != nil {
 		return "", err
 	}
 	if err := qtx.SetPassword(ctx, gen.SetPasswordParams{ID: in.UserID, PasswordHash: hash}); err != nil {

@@ -198,6 +198,54 @@ func TestChangePasswordRefusedWhenALogoutWinsTheSessionLock(t *testing.T) {
 	assert.False(t, ok, "the new password wasn't set")
 }
 
+func TestChangePasswordRejectsSessionExpiredDuringLogoutWait(t *testing.T) {
+	tests := []struct {
+		name            string
+		currentPassword string
+	}{
+		{name: "correct password", currentPassword: testPassword},
+		{name: "wrong password", currentPassword: "wrong"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, pool, userID := withTestUser(t)
+			session, err := NewSessions(pool).Create(t.Context(), userID, "test")
+			require.NoError(t, err)
+			idHash := sessionHash(session)
+			_, err = pool.Exec(t.Context(), `UPDATE sessions SET expires_at = clock_timestamp() + interval '2 seconds' WHERE id_hash = $1`, idHash)
+			require.NoError(t, err)
+
+			logout, err := pool.Begin(t.Context())
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = logout.Rollback(context.Background()) })
+			_, err = logout.Exec(t.Context(), `DELETE FROM sessions WHERE id_hash = $1`, idHash)
+			require.NoError(t, err)
+
+			done := make(chan error, 1)
+			go func() {
+				_, err := svc.ChangePassword(t.Context(), ChangePasswordInput{UserID: userID, SessionToken: session, CurrentPassword: tt.currentPassword, NewPassword: newPassword})
+				done <- err
+			}()
+			require.Eventually(t, func() bool {
+				var waiting bool
+				err := pool.QueryRow(context.Background(), `SELECT EXISTS (SELECT FROM pg_stat_activity
+					WHERE wait_event_type = 'Lock' AND query LIKE '-- name: LockActiveSession %')`).Scan(&waiting)
+				return err == nil && waiting
+			}, 10*time.Second, 10*time.Millisecond, "waits on the logout's session lock")
+			require.Eventually(t, func() bool {
+				var expired bool
+				err := pool.QueryRow(context.Background(), `SELECT expires_at <= clock_timestamp() FROM sessions WHERE id_hash = $1`, idHash).Scan(&expired)
+				return err == nil && expired
+			}, 10*time.Second, 10*time.Millisecond, "session expires while the row lock is held")
+			require.NoError(t, logout.Rollback(t.Context()))
+
+			assert.ErrorIs(t, <-done, ErrNoSession)
+			assert.Equal(t, 1, count(t, pool, `SELECT count(*) FROM sessions`), "the expired session isn't replaced")
+		})
+	}
+}
+
 func TestChangePasswordWrongPasswordWaitsForReset(t *testing.T) {
 	svc, pool, userID := withTestUser(t)
 	session, err := NewSessions(pool).Create(t.Context(), userID, "test")
