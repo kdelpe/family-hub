@@ -112,9 +112,9 @@ func googleRefused(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, googleUnavailablePath, http.StatusSeeOther)
 }
 
-// googleFault logs a real failure, even when the client has left meanwhile, then refuses.
+// googleFault logs a real failure (anything but the client's own cancel), then refuses.
 func googleFault(w http.ResponseWriter, r *http.Request, err error, msg string) {
-	if !errors.Is(err, context.Canceled) {
+	if !clientGone(r) || !errors.Is(err, context.Canceled) {
 		zerolog.Ctx(r.Context()).Error().Err(err).Msg(msg)
 	}
 	googleRefused(w, r)

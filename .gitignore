@@ -16,6 +16,7 @@ coverage.out
 # Frontend
 node_modules/
 web/dist/
+*.tsbuildinfo
 
 # Embedded UI build output (stubbed by `make ui-stub`)
 internal/webui/dist/
