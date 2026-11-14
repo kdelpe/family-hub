@@ -21,6 +21,11 @@ import (
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
+const (
+	RoleAdmin  = "admin"
+	RoleMember = "member"
+)
+
 type User struct {
 	ID    uuid.UUID
 	Email string

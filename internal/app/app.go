@@ -11,11 +11,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/kdelpe/family-hub/internal/admin"
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/config"
 	"github.com/kdelpe/family-hub/internal/database"
 	"github.com/kdelpe/family-hub/internal/handler"
 	"github.com/kdelpe/family-hub/internal/httpx"
+	"github.com/kdelpe/family-hub/internal/mail"
 	"github.com/kdelpe/family-hub/internal/ratelimit"
 	"github.com/kdelpe/family-hub/internal/router"
 )
@@ -71,6 +73,7 @@ func newServer(pool *pgxpool.Pool, cfg config.Config) *http.Server {
 		router.Handlers{
 			Health: handler.NewHealth(pool),
 			Auth:   handler.NewAuth(auth.NewService(pool, auth.NewHasher()), cookie),
+			Admin:  handler.NewAdmin(admin.NewInvites(pool, mail.NewSMTP(cfg.SMTP), cfg.BaseURL)),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(auth.NewSessions(pool), cookie).Require,

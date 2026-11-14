@@ -8,3 +8,7 @@ WHERE t.token_hash = @token_hash AND t.consumed_at IS NULL AND t.expires_at > no
 -- name: UseToken :one
 WITH deleted AS (DELETE FROM auth_tokens WHERE user_id = @user_id RETURNING id, consumed_at, expires_at)
 SELECT EXISTS (SELECT 1 FROM deleted WHERE id = @id AND consumed_at IS NULL AND expires_at > clock_timestamp());
+
+-- name: CreateToken :exec
+INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at)
+VALUES (@user_id, @purpose, @token_hash, now() + @lifetime::interval);

@@ -77,6 +77,7 @@ func TestRunCutShortBySignal(t *testing.T) {
 			t.Setenv("DATABASE_URL", testdb.UnreachableURL)
 			t.Setenv("SMTP_HOST", "localhost")
 			t.Setenv("SMTP_PORT", "1025")
+			t.Setenv("BASE_URL", "http://localhost:5173")
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
 

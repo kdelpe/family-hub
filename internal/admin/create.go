@@ -115,12 +115,16 @@ func readNewPassword(ctx context.Context, term Terminal, email string) (string, 
 
 func createAdmin(ctx context.Context, q *gen.Queries, email, passwordHash string) error {
 	err := q.CreateAdmin(ctx, gen.CreateAdminParams{Email: email, PasswordHash: passwordHash})
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation && pgErr.ConstraintName == usersEmailKey {
+	if isEmailTaken(err) {
 		return ErrEmailTaken
 	}
 	if err != nil {
 		return fmt.Errorf("create admin: %w", err)
 	}
 	return nil
+}
+
+func isEmailTaken(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation && pgErr.ConstraintName == usersEmailKey
 }

@@ -371,3 +371,60 @@ func TestLoadSMTPNeverEchoesSecrets(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadBaseURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    string
+		wantErr string
+	}{
+		{name: "https origin", raw: "https://family.example.com", want: "https://family.example.com"},
+		{name: "local dev with a port", raw: "http://localhost:5173", want: "http://localhost:5173"},
+		{name: "trailing slash dropped", raw: " https://family.example.com/ ", want: "https://family.example.com"},
+		{name: "scheme and host lowercased", raw: "HTTPS://Family.Example.COM", want: "https://family.example.com"},
+		{name: "an IPv4 address", raw: "http://192.0.2.10:8080", want: "http://192.0.2.10:8080"},
+		{name: "an IPv6 address", raw: "http://[::1]:5173", want: "http://[::1]:5173"},
+		{name: "an IPv6 address without a port", raw: "https://[2001:DB8::1]", want: "https://[2001:db8::1]"},
+		{name: "an IPv6 address written the browser's way", raw: "http://[2001:db8:0:0::1]:8080", want: "http://[2001:db8::1]:8080"},
+		{name: "an IPv4-mapped IPv6 address", raw: "http://[::ffff:192.0.2.1]", wantErr: "BASE_URL must be an origin"},
+		{name: "an IPv4 address with leading zeros", raw: "http://192.168.001.010:8080", wantErr: "BASE_URL must be an origin"},
+		{name: "a hex IPv4 address", raw: "http://0x7f.0.0.1", wantErr: "BASE_URL must be an origin"},
+		{name: "a name that starts with 0x", raw: "http://0x-hub:5173", want: "http://0x-hub:5173"},
+		{name: "a scoped IPv6 address", raw: "http://[fe80::1%25eth0]", wantErr: "BASE_URL must be an origin"},
+		{name: "a short IPv4 address", raw: "http://1.2.3", wantErr: "BASE_URL must be an origin"},
+		{name: "default https port dropped", raw: "https://family.example.com:443", want: "https://family.example.com"},
+		{name: "default http port dropped", raw: "http://localhost:80/", want: "http://localhost"},
+		{name: "https on port 80 kept", raw: "https://family.example.com:80", want: "https://family.example.com:80"},
+		{name: "an empty port", raw: "https://family.example.com:", wantErr: "BASE_URL must be an origin"},
+		{name: "a port out of range", raw: "https://family.example.com:99999", wantErr: "BASE_URL must be an origin"},
+		{name: "not a host name", raw: "https://family_hub.example.com", wantErr: "BASE_URL must be an origin"},
+		{name: "unset", raw: "", wantErr: "BASE_URL is required"},
+		{name: "no scheme", raw: "family.example.com", wantErr: "BASE_URL must be an origin"},
+		{name: "other scheme", raw: "ftp://family.example.com", wantErr: "BASE_URL must be an origin"},
+		{name: "a path", raw: "https://family.example.com/app", wantErr: "BASE_URL must be an origin"},
+		{name: "a query", raw: "https://family.example.com/?x=1", wantErr: "BASE_URL must be an origin"},
+		{name: "a fragment", raw: "https://family.example.com/#top", wantErr: "BASE_URL must be an origin"},
+		{name: "credentials", raw: "https://user:hunter2@family.example.com", wantErr: "BASE_URL must be an origin"},
+		{name: "no host", raw: "https://:443", wantErr: "BASE_URL must be an origin"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := LoadBaseURL(func(key string) string {
+				if key == "BASE_URL" {
+					return tt.raw
+				}
+				return ""
+			})
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				assert.NotContains(t, err.Error(), "hunter2")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

@@ -21,3 +21,6 @@ SELECT EXISTS (SELECT 1 FROM users WHERE email = @email);
 
 -- name: SetPasswordAndRecordLogin :exec
 UPDATE users SET password_hash = @password_hash::text, password_changed_at = clock_timestamp(), last_login_at = clock_timestamp() WHERE id = @id;
+
+-- name: CreateInvitedUser :one
+INSERT INTO users (email, role) VALUES (@email, @role) RETURNING id;

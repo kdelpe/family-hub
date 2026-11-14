@@ -277,3 +277,14 @@ func insertToken(t *testing.T, pool *pgxpool.Pool, userID uuid.UUID, purpose str
 		userID, purpose, hashToken(raw))
 	return token, err
 }
+
+func TestCreateInvite(t *testing.T) {
+	svc, pool, userID := withTestUser(t)
+
+	invite, err := CreateInvite(t.Context(), pool, userID)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, count(t, pool, `SELECT count(*) FROM auth_tokens WHERE purpose = 'invite' AND expires_at BETWEEN now() + interval '7 days' - interval '1 minute' AND now() + interval '7 days'`))
+	_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: invite, Password: newPassword})
+	assert.NoError(t, err)
+}

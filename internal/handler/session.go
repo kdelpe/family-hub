@@ -80,6 +80,22 @@ func (g *SessionGate) Require(next http.Handler) http.Handler {
 	})
 }
 
+// RequireAdmin goes after SessionGate.Require, which reads the role afresh on every request.
+func RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, ok := CurrentSession(r.Context())
+		if !ok {
+			internalError(w, r, errors.New("no session in context"), "RequireAdmin mounted without RequireSession")
+			return
+		}
+		if session.Role != auth.RoleAdmin {
+			httpx.Error(w, http.StatusForbidden, "forbidden", "admins only")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 type sessionKey struct{}
 
 func CurrentSession(ctx context.Context) (auth.Session, bool) {

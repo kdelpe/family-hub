@@ -20,6 +20,7 @@ const (
 type Handlers struct {
 	Health *handler.Health
 	Auth   *handler.Auth
+	Admin  *handler.Admin
 }
 
 type Middleware struct {
@@ -63,6 +64,11 @@ func New(h Handlers, mw Middleware) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(mw.RequireSession)
 			r.Get("/auth/me", h.Auth.Me)
+
+			r.Group(func(r chi.Router) {
+				r.Use(handler.RequireAdmin)
+				r.Post("/admin/users", h.Admin.InviteUser)
+			})
 		})
 	})
 

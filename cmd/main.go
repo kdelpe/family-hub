@@ -82,10 +82,12 @@ func adminCommand(ctx context.Context, args []string, stdout io.Writer) error {
 func serve(ctx context.Context) error {
 	cfg, err := config.Load(os.Getenv)
 	smtp, smtpErr := config.LoadSMTP(os.Getenv)
-	if err := errors.Join(err, smtpErr); err != nil {
+	baseURL, baseURLErr := config.LoadBaseURL(os.Getenv)
+	if err := errors.Join(err, smtpErr, baseURLErr); err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
 	cfg.SMTP = smtp
+	cfg.BaseURL = baseURL
 	if err := app.Run(ctx, cfg); err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
