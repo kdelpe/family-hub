@@ -77,6 +77,22 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 	return err
 }
 
+const deleteExpiredSessions = `-- name: DeleteExpiredSessions :execrows
+WITH doomed AS (
+  SELECT id_hash FROM sessions WHERE expires_at <= clock_timestamp()
+  ORDER BY expires_at LIMIT $1 FOR UPDATE SKIP LOCKED
+)
+DELETE FROM sessions s USING doomed WHERE s.id_hash = doomed.id_hash
+`
+
+func (q *Queries) DeleteExpiredSessions(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredSessions, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteSession = `-- name: DeleteSession :exec
 DELETE FROM sessions WHERE id_hash = $1
 `
@@ -84,6 +100,23 @@ DELETE FROM sessions WHERE id_hash = $1
 func (q *Queries) DeleteSession(ctx context.Context, idHash []byte) error {
 	_, err := q.db.Exec(ctx, deleteSession, idHash)
 	return err
+}
+
+const deleteStaleOAuthFlows = `-- name: DeleteStaleOAuthFlows :execrows
+WITH doomed AS (
+  SELECT handle_hash FROM oauth_flows
+  WHERE consumed_at IS NOT NULL OR expires_at <= clock_timestamp()
+  ORDER BY expires_at LIMIT $1 FOR UPDATE SKIP LOCKED
+)
+DELETE FROM oauth_flows f USING doomed WHERE f.handle_hash = doomed.handle_hash
+`
+
+func (q *Queries) DeleteStaleOAuthFlows(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteStaleOAuthFlows, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteUserSessions = `-- name: DeleteUserSessions :exec

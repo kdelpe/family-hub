@@ -1,6 +1,11 @@
 package auth
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 
@@ -10,6 +15,17 @@ import (
 
 	"github.com/kdelpe/family-hub/internal/database/gen"
 )
+
+type googleVerifierFixture struct {
+	identity googleIdentity
+	err      error
+	gotToken string
+}
+
+func (v *googleVerifierFixture) Verify(_ context.Context, raw string) (googleIdentity, error) {
+	v.gotToken = raw
+	return v.identity, v.err
+}
 
 func TestGoogleSignInLinksOnlyInvitedAuthoritativeAccounts(t *testing.T) {
 	tests := []struct {
@@ -144,6 +160,95 @@ func TestGoogleStartStoresFlowSecretsAndWrongStateConsumesFlow(t *testing.T) {
 	assert.ErrorIs(t, err, ErrGoogleAccess)
 	_, _, err = google.Complete(t.Context(), GoogleCallbackInput{Handle: handle, State: state, Code: "code"})
 	assert.ErrorIs(t, err, ErrGoogleAccess, "the mismatched callback consumed the one-time flow")
+}
+
+func TestGoogleCompleteVerifiesExchangedIDTokenBeforeLinking(t *testing.T) {
+	tests := []struct {
+		name       string
+		tokenBody  string
+		rawIDToken string
+		identity   googleIdentity
+		verifyErr  error
+		wantAccess bool
+	}{
+		{
+			name:       "verified code exchange links invited Gmail account",
+			tokenBody:  `{"access_token":"access","token_type":"Bearer","expires_in":3600,"id_token":"signed-id-token"}`,
+			rawIDToken: "signed-id-token",
+			identity:   googleIdentity{Subject: "google-sub", Nonce: "flow-nonce", Email: "person@gmail.com", EmailVerified: true},
+		},
+		{
+			name:       "missing ID token",
+			tokenBody:  `{"access_token":"access","token_type":"Bearer","expires_in":3600}`,
+			wantAccess: true,
+		},
+		{
+			name:       "invalid ID token",
+			tokenBody:  `{"access_token":"access","token_type":"Bearer","expires_in":3600,"id_token":"invalid-id-token"}`,
+			rawIDToken: "invalid-id-token",
+			verifyErr:  errors.New("signature verification failed"),
+			wantAccess: true,
+		},
+		{
+			name:       "nonce mismatch",
+			tokenBody:  `{"access_token":"access","token_type":"Bearer","expires_in":3600,"id_token":"signed-id-token"}`,
+			rawIDToken: "signed-id-token",
+			identity:   googleIdentity{Subject: "google-sub", Nonce: "different-nonce", Email: "person@gmail.com", EmailVerified: true},
+			wantAccess: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, pool, userID := withTestUser(t)
+			_, err := pool.Exec(t.Context(), `UPDATE users SET email = 'person@gmail.com', password_hash = NULL, password_changed_at = NULL WHERE id = $1`, userID)
+			require.NoError(t, err)
+			_, err = insertToken(t, pool, userID, purposeInvite)
+			require.NoError(t, err)
+
+			var receivedVerifier string
+			tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				require.NoError(t, r.ParseForm())
+				receivedVerifier = r.Form.Get("code_verifier")
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = fmt.Fprint(w, tt.tokenBody)
+			}))
+			defer tokenServer.Close()
+
+			verifier := &googleVerifierFixture{identity: tt.identity, err: tt.verifyErr}
+			google := &GoogleAuth{
+				pool: pool,
+				oauth: &oauth2.Config{
+					ClientID: "client-id", ClientSecret: "client-secret", RedirectURL: "http://family.example.com/api/auth/google/callback",
+					Endpoint: oauth2.Endpoint{AuthURL: tokenServer.URL + "/authorize", TokenURL: tokenServer.URL + "/token"},
+				},
+				verifier: verifier,
+			}
+			handle, rawHandle, err := secureRandomToken()
+			require.NoError(t, err)
+			const state, nonce, pkceVerifier = "expected-state", "flow-nonce", "expected-pkce-verifier"
+			require.NoError(t, gen.New(pool).CreateOAuthFlow(t.Context(), gen.CreateOAuthFlowParams{
+				HandleHash: hashToken(rawHandle), State: state, Nonce: nonce, PkceVerifier: pkceVerifier, Lifetime: googleFlowLifetime,
+			}))
+
+			token, user, err := google.Complete(t.Context(), GoogleCallbackInput{Handle: handle, State: state, Code: "authorization-code", UserAgent: "browser"})
+			if tt.wantAccess {
+				require.ErrorIs(t, err, ErrGoogleAccess)
+				assert.Empty(t, token)
+				assert.Empty(t, user.ID)
+				assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM sessions`))
+				assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM users WHERE google_sub IS NOT NULL`))
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, userID, user.ID)
+				assert.NotEmpty(t, token)
+				assert.Equal(t, 1, count(t, pool, `SELECT count(*) FROM sessions`))
+				assert.Equal(t, 1, count(t, pool, `SELECT count(*) FROM users WHERE google_sub = 'google-sub'`))
+			}
+			assert.Equal(t, tt.rawIDToken, verifier.gotToken, "missing ID tokens are rejected before verifier invocation")
+			assert.Equal(t, pkceVerifier, receivedVerifier)
+		})
+	}
 }
 
 func TestGoogleOwnsEmail(t *testing.T) {

@@ -38,3 +38,18 @@ VALUES (@handle_hash, @state, @nonce, @pkce_verifier, now() + @lifetime::interva
 UPDATE oauth_flows SET consumed_at = clock_timestamp()
 WHERE handle_hash = @handle_hash AND consumed_at IS NULL AND expires_at > clock_timestamp()
 RETURNING state, nonce, pkce_verifier;
+
+-- name: DeleteStaleOAuthFlows :execrows
+WITH doomed AS (
+  SELECT handle_hash FROM oauth_flows
+  WHERE consumed_at IS NOT NULL OR expires_at <= clock_timestamp()
+  ORDER BY expires_at LIMIT @batch_size FOR UPDATE SKIP LOCKED
+)
+DELETE FROM oauth_flows f USING doomed WHERE f.handle_hash = doomed.handle_hash;
+
+-- name: DeleteExpiredSessions :execrows
+WITH doomed AS (
+  SELECT id_hash FROM sessions WHERE expires_at <= clock_timestamp()
+  ORDER BY expires_at LIMIT @batch_size FOR UPDATE SKIP LOCKED
+)
+DELETE FROM sessions s USING doomed WHERE s.id_hash = doomed.id_hash;

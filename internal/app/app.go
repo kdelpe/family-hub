@@ -66,6 +66,16 @@ func connectAndServe(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	defer pool.Close()
+	cleanupCtx, stopCleanup := context.WithCancel(ctx)
+	cleanupDone := make(chan struct{})
+	go func() {
+		defer close(cleanupDone)
+		auth.NewCleanup(pool).Run(cleanupCtx)
+	}()
+	defer func() {
+		stopCleanup()
+		<-cleanupDone
+	}()
 	var google *auth.GoogleAuth
 	if cfg.GoogleClientID != "" {
 		providerCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -88,14 +98,14 @@ func connectAndServe(ctx context.Context, cfg config.Config) error {
 	return err
 }
 
-func newServer(pool *pgxpool.Pool, cfg config.Config, google ...*auth.GoogleAuth) (*http.Server, *auth.Resets) {
+func newServer(pool *pgxpool.Pool, cfg config.Config, google *auth.GoogleAuth) (*http.Server, *auth.Resets) {
 	cookie := handler.NewSessionCookie(cfg.CookieSecure)
 	svc := auth.NewService(pool, auth.NewHasher())
 	mailer := mail.NewSMTP(cfg.SMTP)
 	resets := auth.NewResets(svc, mailer, cfg.BaseURL)
 	var googleService handler.GoogleAuthService
-	if len(google) > 0 {
-		googleService = google[0]
+	if google != nil {
+		googleService = google
 	}
 	routes := router.New(
 		router.Handlers{

@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -26,7 +27,38 @@ const (
 var ErrGoogleAccess = errors.New("google sign-in is unavailable for this account")
 
 type googleVerifier interface {
-	Verify(context.Context, string) (*oidc.IDToken, error)
+	Verify(context.Context, string) (googleIdentity, error)
+}
+
+type googleIdentity struct {
+	Subject       string
+	Nonce         string
+	Email         string
+	EmailVerified bool
+	HostedDomain  string
+}
+
+type oidcGoogleVerifier struct {
+	verifier *oidc.IDTokenVerifier
+}
+
+func (v oidcGoogleVerifier) Verify(ctx context.Context, raw string) (googleIdentity, error) {
+	token, err := v.verifier.Verify(ctx, raw)
+	if err != nil {
+		return googleIdentity{}, err
+	}
+	var claims struct {
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+		HostedDomain  string `json:"hd"`
+	}
+	if err := token.Claims(&claims); err != nil {
+		return googleIdentity{}, err
+	}
+	return googleIdentity{
+		Subject: token.Subject, Nonce: token.Nonce, Email: claims.Email,
+		EmailVerified: claims.EmailVerified, HostedDomain: claims.HostedDomain,
+	}, nil
 }
 
 type GoogleAuth struct {
@@ -37,7 +69,9 @@ type GoogleAuth struct {
 
 // NewGoogleAuth discovers Google's OIDC endpoints during startup and keeps the verifier for reuse.
 func NewGoogleAuth(ctx context.Context, pool *pgxpool.Pool, clientID, clientSecret, baseURL string) (*GoogleAuth, error) {
-	provider, err := oidc.NewProvider(ctx, googleIssuer)
+	client := &http.Client{Timeout: 10 * time.Second}
+	providerCtx := oidc.ClientContext(ctx, client)
+	provider, err := oidc.NewProvider(providerCtx, googleIssuer)
 	if err != nil {
 		return nil, fmt.Errorf("discover Google OIDC provider: %w", err)
 	}
@@ -47,7 +81,10 @@ func NewGoogleAuth(ctx context.Context, pool *pgxpool.Pool, clientID, clientSecr
 		RedirectURL: strings.TrimRight(baseURL, "/") + "/api/auth/google/callback",
 		Scopes:      []string{oidc.ScopeOpenID, oidc.ScopeEmail},
 	}
-	return &GoogleAuth{pool: pool, oauth: oauthConfig, verifier: provider.Verifier(&oidc.Config{ClientID: clientID})}, nil
+	return &GoogleAuth{
+		pool: pool, oauth: oauthConfig,
+		verifier: oidcGoogleVerifier{verifier: provider.VerifierContext(providerCtx, &oidc.Config{ClientID: clientID})},
+	}, nil
 }
 
 func (g *GoogleAuth) Start(ctx context.Context) (string, string, error) {
@@ -108,19 +145,14 @@ func (g *GoogleAuth) Complete(ctx context.Context, in GoogleCallbackInput) (stri
 	if !ok || rawIDToken == "" {
 		return "", User{}, ErrGoogleAccess
 	}
-	idToken, err := g.verifier.Verify(ctx, rawIDToken)
-	if err != nil || !constantTimeEqual(flow.Nonce, idTokenNonce(idToken)) {
+	identity, err := g.verifier.Verify(ctx, rawIDToken)
+	if err != nil || !constantTimeEqual(flow.Nonce, identity.Nonce) {
 		return "", User{}, ErrGoogleAccess
 	}
-	var claims struct {
-		Email         string `json:"email"`
-		EmailVerified bool   `json:"email_verified"`
-		HostedDomain  string `json:"hd"`
-	}
-	if err := idToken.Claims(&claims); err != nil || idToken.Subject == "" {
+	if identity.Subject == "" {
 		return "", User{}, ErrGoogleAccess
 	}
-	return g.signIn(ctx, idToken.Subject, NormalizeEmail(claims.Email), claims.EmailVerified, strings.ToLower(strings.TrimSpace(claims.HostedDomain)), in)
+	return g.signIn(ctx, identity.Subject, NormalizeEmail(identity.Email), identity.EmailVerified, strings.ToLower(strings.TrimSpace(identity.HostedDomain)), in)
 }
 
 func (g *GoogleAuth) signIn(ctx context.Context, subject, email string, emailVerified bool, hostedDomain string, in GoogleCallbackInput) (string, User, error) {
@@ -246,13 +278,6 @@ func secureRandomToken() (string, []byte, error) {
 
 func constantTimeEqual(a, b string) bool {
 	return len(a) == len(b) && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
-}
-
-func idTokenNonce(token *oidc.IDToken) string {
-	if token == nil {
-		return ""
-	}
-	return token.Nonce
 }
 
 func googleOwnsEmail(email, hostedDomain string) bool {
