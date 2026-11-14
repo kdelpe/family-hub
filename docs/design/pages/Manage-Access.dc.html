@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Family members &amp; invitations</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=Source+Sans+3:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+nav[aria-label="Main"] > div > a{transition:background-color .15s ease, box-shadow .15s ease}
+nav[aria-label="Main"] > div > a:hover, nav[aria-label="Main"] > div > a:focus-visible{background-color:#EFE7D8;box-shadow:0 1px 3px rgba(43,38,32,.12)}
+a{color:#2F5D50}a:hover{color:#1E3F36}
+.fh-hcard{transition:translate .2s ease, box-shadow .2s ease}
+.fh-hcard:hover,.fh-hcard:focus-within,.fh-hcard:focus-visible{translate:0 -4px;box-shadow:0 12px 26px rgba(43,38,32,.12)}
+.fh-btn{transition:box-shadow .15s ease, translate .15s ease}
+.fh-btn:hover,.fh-btn:focus-visible{box-shadow:0 4px 12px rgba(43,38,32,.16);translate:0 -1px}
+.fh-btn:active{translate:0 0;box-shadow:0 1px 3px rgba(43,38,32,.12)}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 1260px; box-sizing: border-box; background: #F6F1E7; color: #2B2620; font-family: 'Source Sans 3', system-ui, sans-serif; font-size: 17px; display: flex; flex-wrap: wrap">
+
+  <nav aria-label="Main" style="flex: 1 1 220px; max-width: 260px; box-sizing: border-box; padding: 32px 24px; border-right: 1px solid #E2D9C8; display: flex; flex-direction: column; gap: 28px">
+    <a href="Home-Hearth.dc.html" aria-label="Pluviose-Monestime Family Hub, home" style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; color: #2B2620; text-decoration: none">
+      <svg aria-hidden="true" width="52" height="52" viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="25" fill="#E6EEE9" stroke="#2F5D50" stroke-width="1.5"></circle>
+        <path d="M26 42 V24 M26 30 L17 22 M26 30 L35 22 M26 24 L26 15" fill="none" stroke="#2F5D50" stroke-width="2.4" stroke-linecap="round"></path>
+        <circle cx="26" cy="13" r="4" fill="#2F5D50"></circle>
+        <circle cx="16" cy="20" r="3.4" fill="#8A6F4A"></circle>
+        <circle cx="36" cy="20" r="3.4" fill="#8A6F4A"></circle>
+      </svg>
+      <span style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+        <span style="font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 600; line-height: 1.15">Pluviose-Monestime</span>
+        <span style="font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6358">Family Hub</span>
+      </span>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <a href="Home-Hearth.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Home</a>
+      <a href="Main.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Family tree</a>
+      <a href="People.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">People</a>
+      <a href="Directory.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Directory</a>
+      <a href="Events.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Events</a>
+      <a href="Stories.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Stories</a>
+      <a href="My-Profile.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">My profile</a>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 16px; border-top: 1px solid #E2D9C8">
+      <span style="padding: 0 14px 4px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6358">Admin</span>
+      <a href="Manage-Access.dc.html" aria-current="page" style="padding: 12px 14px; border-radius: 8px; background: #E9E0CF; color: #2B2620; text-decoration: none; font-weight: 600">Members &amp; invites</a>
+    </div>
+    <div style="margin-top: auto; font-size: 14px; color: #6B6358">Signed in as Maya</div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 32px 40px 48px; display: flex; flex-direction: column; gap: 24px">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 40px; font-weight: 500">Family members &amp; invitations</h1>
+      <span style="color: #6B6358">Only admins see this page.</span>
+    </div>
+
+    <div role="tablist" aria-label="Sections" style="display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid #E2D9C8">
+      <sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+        <button type="button" role="tab" aria-selected="{{t.on}}" onClick="{{t.pick}}" style="min-height: 48px; padding: 0 18px; border: 0; border-bottom: 3px solid {{t.bar}}; background: transparent; font: inherit; font-weight: {{t.weight}}; color: #2B2620">{{t.label}}</button>
+      </sc-for>
+    </div>
+
+    <sc-if value="{{tabRequests}}" hint-placeholder-val="{{true}}">
+      <section aria-label="Access requests" style="display: flex; flex-direction: column; gap: 14px">
+        <sc-for list="{{requests}}" as="r" hint-placeholder-count="2">
+          <article class="fh-hcard" style="padding: 22px; border-radius: 16px; background: #FFFDF8; border: 1px solid #E2D9C8; display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: flex-start">
+            <div style="flex: 1 1 360px; display: flex; flex-direction: column; gap: 8px">
+              <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px">
+                <h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 500">{{r.name}}</h2>
+                <span style="font-size: 14px; color: #6B6358">{{r.email}}</span>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                <span style="padding: 4px 12px; border-radius: 14px; background: #F1EADC; font-size: 14px">{{r.side}}</span>
+                <span style="padding: 4px 12px; border-radius: 14px; background: #E6EEE9; font-size: 14px">{{r.source}}</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 4px">
+                <strong style="font-size: 15px">Related to</strong>
+                <sc-for list="{{r.related}}" as="x" hint-placeholder-count="1">
+                  <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">{{x.text}}<span style="padding: 2px 10px; border-radius: 12px; background: {{x.badgeBg}}; font-size: 13px; font-weight: 600">{{x.badge}}</span></span>
+                </sc-for>
+              </div>
+              <p style="margin: 0; line-height: 1.5; color: #4A433A">“{{r.note}}”</p>
+              <span style="font-size: 14px; color: #6B6358">{{r.when}}</span>
+            </div>
+            <div style="flex: 0 1 260px; display: flex; flex-direction: column; gap: 10px">
+              <sc-if value="{{r.pending}}" hint-placeholder-val="{{true}}">
+                <div style="display: flex; flex-direction: column; gap: 10px">
+                  <button class="fh-btn" type="button" onClick="{{r.approve}}"  style="min-height: 48px; border: 0; border-radius: 24px; background: {{accent}}; color: #FFFFFF; font: inherit; font-weight: 600">Approve &amp; invite</button>
+                  <button class="fh-btn" type="button" onClick="{{r.decline}}"  style="min-height: 44px; border: 1px solid #CFC4AF; border-radius: 22px; background: transparent; font: inherit; color: #2B2620">Not now</button>
+                  <span style="font-size: 13px; color: #6B6358; line-height: 1.4">Approving takes you to the invite form so you can place them in the tree first.</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{r.declined}}" hint-placeholder-val="{{false}}">
+                <div style="padding: 12px 14px; border-radius: 12px; background: #F1EADC; display: flex; flex-direction: column; gap: 6px">
+                  <span style="font-weight: 600">Set aside</span>
+                  <span style="font-size: 14px; color: #6B6358">They won’t be told. You can come back to it any time.</span>
+                  <button type="button" onClick="{{r.undo}}" style="align-self: flex-start; min-height: 36px; border: 0; background: transparent; font: inherit; color: #2F5D50; text-decoration: underline; padding: 0">Undo</button>
+                </div>
+              </sc-if>
+            </div>
+          </article>
+        </sc-for>
+        <p style="margin: 0; font-size: 14px; color: #6B6358">Requests come from the “Request access” page and from members who suggest a relative from their profile.</p>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{tabInvite}}" hint-placeholder-val="{{false}}">
+      <section aria-label="Invite someone" style="display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start">
+        <div style="flex: 999 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+          <sc-if value="{{sent}}" hint-placeholder-val="{{false}}">
+            <div role="status" style="padding: 16px 18px; border-radius: 14px; background: #E6EEE9; border: 1px solid {{accent}}; display: flex; flex-direction: column; gap: 4px">
+              <strong>Invitation sent to {{inviteFirst}}, from {{fromName}}</strong>
+              <span style="font-size: 15px; color: #4A433A">It works for 7 days. You can resend it from the Everyone tab.</span>
+            </div>
+          </sc-if>
+
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 500">1. Who are you inviting?</h2>
+            <span style="color: #6B6358; font-size: 15px">Find them in the tree first so we don’t add them twice.</span>
+            <label for="ma-find" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Find a person in the tree</label>
+            <input id="ma-find" type="search" value="{{inviteName}}" readonly style="height: 52px; box-sizing: border-box; padding: 0 16px; border: 1px solid #CFC4AF; border-radius: 12px; background: #FFFDF8; font: inherit; color: #2B2620">
+            <div style="padding: 14px 16px; border-radius: 14px; background: #FFFDF8; border: 2px solid {{accent}}; display: flex; gap: 12px; align-items: center">
+              <span style="width: 44px; height: 44px; flex: none; border-radius: 50%; background: #D9CDB5; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif">{{inviteInitials}}</span>
+              <span style="display: flex; flex-direction: column; flex: 1"><span style="font-weight: 600">{{inviteName}}</span><span style="font-size: 14px; color: #6B6358">{{inviteRel}}</span></span>
+              <span style="font-size: 14px; font-weight: 600; color: #2F5D50">Selected</span>
+            </div>
+            <a href="Main.dc.html" style="font-size: 15px">Not in the tree yet? Add them first</a>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 500">2. Their email and role</h2>
+            <label for="ma-email" style="font-weight: 600; font-size: 15px">Email</label>
+            <input id="ma-email" type="email" value="{{inviteEmail}}" readonly style="height: 52px; box-sizing: border-box; padding: 0 16px; border: 1px solid #CFC4AF; border-radius: 12px; background: #FFFDF8; font: inherit; color: #2B2620">
+            <div role="group" aria-label="Role" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+              <sc-for list="{{roles}}" as="o" hint-placeholder-count="2">
+                <button type="button" aria-pressed="{{o.on}}" onClick="{{o.pick}}" style="min-height: 64px; padding: 10px 14px; border: {{o.border}}; border-radius: 12px; background: {{o.bg}}; font: inherit; color: #2B2620; text-align: left; display: flex; flex-direction: column; gap: 2px">
+                  <span style="font-weight: 600">{{o.label}}</span><span style="font-size: 13px; color: #6B6358">{{o.hint}}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 500">3. Who is the invitation from?</h2>
+            <span style="color: #6B6358; font-size: 15px">People are more likely to join when they see a name they know.</span>
+            <div role="group" aria-label="Invitation from" style="display: flex; flex-direction: column; gap: 8px">
+              <sc-for list="{{fromOptions}}" as="o" hint-placeholder-count="3">
+                <button type="button" aria-pressed="{{o.on}}" onClick="{{o.pick}}" style="min-height: 56px; padding: 10px 14px; border: {{o.border}}; border-radius: 12px; background: {{o.bg}}; font: inherit; color: #2B2620; text-align: left; display: flex; gap: 12px; align-items: center">
+                  <span style="width: 36px; height: 36px; flex: none; border-radius: 50%; background: #D9CDB5; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif; font-size: 14px">{{o.initials}}</span>
+                  <span style="display: flex; flex-direction: column"><span style="font-weight: 600">{{o.name}}</span><span style="font-size: 13px; color: #6B6358">{{o.hint}}</span></span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+
+          <button class="fh-btn" type="button" onClick="{{send}}"  style="height: 52px; border: 0; border-radius: 26px; background: {{accent}}; color: #FFFFFF; font: inherit; font-weight: 600; font-size: 18px">Send invitation</button>
+        </div>
+
+        <aside aria-label="Invitation preview" style="flex: 1 1 340px; max-width: 420px; display: flex; flex-direction: column; gap: 10px">
+          <h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 500">4. What they’ll receive</h2>
+          <div style="border-radius: 16px; background: #FFFDF8; border: 1px solid #E2D9C8; overflow: hidden">
+            <div style="padding: 12px 18px; border-bottom: 1px solid #EFE8DA; font-size: 14px; color: #6B6358; display: flex; flex-direction: column; gap: 2px">
+              <span><strong style="color: #2B2620">From:</strong> Pluviose-Monestime Family Hub</span>
+              <span><strong style="color: #2B2620">Subject:</strong> {{fromFirst}} invited you to the family hub</span>
+            </div>
+            <div style="padding: 22px 18px; display: flex; flex-direction: column; gap: 14px; line-height: 1.55">
+              <span style="font-family: Fraunces, Georgia, serif; font-size: 22px">Bonjou {{inviteFirst}},</span>
+              <span>{{fromName}} invited you to the Pluviose-Monestime Family Hub — a private place for our family’s tree, photos and stories.</span>
+              <sc-if value="{{showApprover}}" hint-placeholder-val="{{false}}"><span style="font-size: 14px; color: #6B6358">Approved by Maya Pluviose, admin.</span></sc-if>
+              <span style="align-self: flex-start; padding: 12px 22px; border-radius: 24px; background: {{accent}}; color: #FFFFFF; font-weight: 600">Set up my account</span>
+              <span style="font-size: 14px; color: #6B6358">Set a password, or sign in with Google if this is your Google address. The link works for 7 days. Administrators can see all information you enter.</span>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{tabEveryone}}" hint-placeholder-val="{{false}}">
+      <section aria-label="Everyone with access" style="display: flex; flex-direction: column; gap: 12px">
+        <div style="overflow-x: auto; border-radius: 16px; background: #FFFDF8; border: 1px solid #E2D9C8">
+          <table style="width: 100%; min-width: 760px; border-collapse: collapse; font-size: 15px">
+            <thead>
+              <tr style="text-align: left; color: #6B6358; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase">
+                <th scope="col" style="padding: 14px 18px; font-weight: 600">Name</th>
+                <th scope="col" style="padding: 14px 18px; font-weight: 600">Sign-in email</th>
+                <th scope="col" style="padding: 14px 18px; font-weight: 600">Role</th>
+                <th scope="col" style="padding: 14px 18px; font-weight: 600">Status</th>
+                <th scope="col" style="padding: 14px 18px; font-weight: 600"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{users}}" as="u" hint-placeholder-count="6">
+                <tr style="border-top: 1px solid #EFE8DA">
+                  <td style="padding: 14px 18px; font-weight: 600">{{u.name}}</td>
+                  <td style="padding: 14px 18px; color: #4A433A">{{u.email}}</td>
+                  <td style="padding: 14px 18px">{{u.role}}</td>
+                  <td style="padding: 14px 18px"><span style="padding: 4px 10px; border-radius: 12px; background: {{u.badgeBg}}; font-size: 14px">{{u.status}}</span></td>
+                  <td style="padding: 10px 18px; text-align: right"><button class="fh-btn" type="button"  style="min-height: 40px; padding: 0 14px; border: 1px solid #CFC4AF; border-radius: 20px; background: transparent; font: inherit; font-size: 14px; color: #2B2620">{{u.action}}</button></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+        <span style="font-size: 14px; color: #6B6358">Sign-in emails are only shown to admins.</span>
+      </section>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2F5D50","options":["#2F5D50","#8A4B2A","#3D4F7A"]},"$preview":{"width":1280,"height":1260}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'requests', status: {}, role: 'member', invitee: 'kervens', from: 'maya', sent: false };
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#2F5D50';
+    const s = this.state;
+    const invitees = {
+      kervens: { name: 'Kervens Pluviose', initials: 'KP', rel: 'In the tree as Fritz and Fabienne’s son', email: 'kervens.p@example.com', suggestedBy: null },
+      darline: { name: 'Darline Monestime', initials: 'DM', rel: 'In the tree as Frantz and Mirlande’s daughter', email: 'darline.monestime@example.com', suggestedBy: null },
+      wesner: { name: 'Wesner Jean-Louis', initials: 'WJ', rel: 'New — will be added as Stanley’s brother', email: 'wesner.jl@example.com', suggestedBy: 'stanley' }
+    };
+    const reqs = [
+      { id: 'darline', name: 'Darline Monestime', email: 'darline.monestime@example.com', side: 'Monestime side', source: 'Asked on the sign-in page', who: '', related: [['Daughter of Frantz Monestime', true], ['Daughter of Mirlande Monestime', true]], note: 'Cousin Maya told me about the site at Thanksgiving.', when: 'Requested 2 days ago' },
+      { id: 'wesner', name: 'Wesner Jean-Louis', email: 'wesner.jl@example.com', side: 'Married into the family', source: 'Suggested by Stanley Jean-Louis', who: '', related: [['Brother of Stanley Jean-Louis', true], ['Uncle of Naïka and Mackenson Jean-Louis', true]], note: 'He has a box of old photos from Cap-Haïtien he wants to share.', when: 'Suggested yesterday' }
+    ];
+    const requests = reqs.map((r) => {
+      const st = s.status[r.id] || 'pending';
+      return {
+        ...r, related: r.related.map(([text, found]) => ({ text, badge: found ? '✓ In the tree' : 'Not found — check spelling', badgeBg: found ? '#E6EEE9' : '#F6E3D4' })),
+        pending: st === 'pending', declined: st === 'declined',
+        approve: () => this.setState({ tab: 'invite', invitee: r.id, from: invitees[r.id].suggestedBy || 'maya', sent: false, status: { ...s.status, [r.id]: 'approved' } }),
+        decline: () => this.setState({ status: { ...s.status, [r.id]: 'declined' } }),
+        undo: () => this.setState({ status: { ...s.status, [r.id]: 'pending' } })
+      };
+    }).filter((r) => (s.status[r.id] || 'pending') !== 'approved');
+    const open = reqs.filter((r) => (s.status[r.id] || 'pending') === 'pending').length;
+    const tabs = [['requests', 'Requests (' + open + ')'], ['invite', 'Invite someone'], ['everyone', 'Everyone (31)']].map(([id, label]) => {
+      const on = s.tab === id;
+      return { label, on, bar: on ? accent : 'transparent', weight: on ? 600 : 400, pick: () => this.setState({ tab: id, sent: false }) };
+    });
+    const roles = [['member', 'Member', 'Sees the family, edits their own profile'], ['admin', 'Admin', 'Can also edit the tree and invite people']].map(([id, label, hint]) => {
+      const on = s.role === id;
+      return { label, hint, on, bg: on ? '#E6EEE9' : '#FFFDF8', border: on ? '2px solid ' + accent : '1px solid #CFC4AF', pick: () => this.setState({ role: id }) };
+    });
+    const inv = invitees[s.invitee];
+    const people = {
+      maya: { name: 'Maya Pluviose', initials: 'MP' },
+      nadege: { name: 'Nadège Pluviose', initials: 'NP' },
+      stanley: { name: 'Stanley Jean-Louis', initials: 'SJ' }
+    };
+    const fromIds = [];
+    if (inv.suggestedBy) fromIds.push(inv.suggestedBy);
+    fromIds.push('maya', 'nadege');
+    const fromOptions = fromIds.map((id) => {
+      const on = id === s.from;
+      const hint = id === inv.suggestedBy ? 'Suggested ' + inv.name.split(' ')[0] : id === 'maya' ? 'You' : 'Admin';
+      return { ...people[id], hint, on, bg: on ? '#E6EEE9' : '#FFFDF8', border: on ? '2px solid ' + accent : '1px solid #CFC4AF', pick: () => this.setState({ from: id }) };
+    });
+    const from = people[s.from] || people.maya;
+    const users = [
+      { name: 'Maya Pluviose', email: 'maya.pluviose@example.com', role: 'Admin', status: 'Active', badgeBg: '#E6EEE9', action: 'Send password reset' },
+      { name: 'Nadège Pluviose', email: 'nadege.p@example.com', role: 'Admin', status: 'Active', badgeBg: '#E6EEE9', action: 'Send password reset' },
+      { name: 'Fritz Pluviose', email: 'fritz.p@example.com', role: 'Member', status: 'Active', badgeBg: '#E6EEE9', action: 'Send password reset' },
+      { name: 'Naïka Jean-Louis', email: 'naika@example.com', role: 'Member', status: 'Active', badgeBg: '#E6EEE9', action: 'Send password reset' },
+      { name: 'Sabine Pluviose', email: 'sabine.p@example.com', role: 'Member', status: 'Invited · expires in 5 days', badgeBg: '#F1EADC', action: 'Resend invitation' },
+      { name: 'Rose Monestime', email: 'rose.monestime@example.com', role: 'Member', status: 'Invited · expired', badgeBg: '#F1EADC', action: 'Resend invitation' }
+    ];
+    return {
+      accent, tabs, requests, roles, users,
+      tabRequests: s.tab === 'requests', tabInvite: s.tab === 'invite', tabEveryone: s.tab === 'everyone',
+      inviteName: inv.name, inviteFirst: inv.name.split(' ')[0], inviteInitials: inv.initials, inviteRel: inv.rel, inviteEmail: inv.email,
+      fromOptions, fromName: from.name, fromFirst: from.name.split(' ')[0], showApprover: s.from !== 'maya',
+      sent: s.sent, send: () => this.setState({ sent: true })
+    };
+  }
+}
+</script>
+</body>
+</html>

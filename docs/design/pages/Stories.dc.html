@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Family stories</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=Source+Sans+3:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+nav[aria-label="Main"] > div > a{transition:background-color .15s ease, box-shadow .15s ease}
+nav[aria-label="Main"] > div > a:hover, nav[aria-label="Main"] > div > a:focus-visible{background-color:#EFE7D8;box-shadow:0 1px 3px rgba(43,38,32,.12)}
+a{color:#2F5D50}a:hover{color:#1E3F36}
+.fh-hcard{transition:translate .2s ease, box-shadow .2s ease}
+.fh-hcard:hover,.fh-hcard:focus-within,.fh-hcard:focus-visible{translate:0 -4px;box-shadow:0 12px 26px rgba(43,38,32,.12)}
+.fh-btn{transition:box-shadow .15s ease, translate .15s ease}
+.fh-btn:hover,.fh-btn:focus-visible{box-shadow:0 4px 12px rgba(43,38,32,.16);translate:0 -1px}
+.fh-btn:active{translate:0 0;box-shadow:0 1px 3px rgba(43,38,32,.12)}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 1260px; box-sizing: border-box; background: #F6F1E7; color: #2B2620; font-family: 'Source Sans 3', system-ui, sans-serif; font-size: 17px; display: flex; flex-wrap: wrap">
+
+  <nav aria-label="Main" style="flex: 1 1 220px; max-width: 260px; box-sizing: border-box; padding: 32px 24px; border-right: 1px solid #E2D9C8; display: flex; flex-direction: column; gap: 28px">
+    <a href="Home-Hearth.dc.html" aria-label="Pluviose-Monestime Family Hub, home" style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; color: #2B2620; text-decoration: none">
+      <svg aria-hidden="true" width="52" height="52" viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="25" fill="#E6EEE9" stroke="#2F5D50" stroke-width="1.5"></circle>
+        <path d="M26 42 V24 M26 30 L17 22 M26 30 L35 22 M26 24 L26 15" fill="none" stroke="#2F5D50" stroke-width="2.4" stroke-linecap="round"></path>
+        <circle cx="26" cy="13" r="4" fill="#2F5D50"></circle>
+        <circle cx="16" cy="20" r="3.4" fill="#8A6F4A"></circle>
+        <circle cx="36" cy="20" r="3.4" fill="#8A6F4A"></circle>
+      </svg>
+      <span style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+        <span style="font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 600; line-height: 1.15">Pluviose-Monestime</span>
+        <span style="font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6358">Family Hub</span>
+      </span>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <a href="Home-Hearth.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Home</a>
+      <a href="Main.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Family tree</a>
+      <a href="People.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">People</a>
+      <a href="Directory.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Directory</a>
+      <a href="Events.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Events</a>
+      <a href="Stories.dc.html" aria-current="page" style="padding: 12px 14px; border-radius: 8px; background: #E9E0CF; color: #2B2620; text-decoration: none; font-weight: 600">Stories</a>
+      <a href="My-Profile.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">My profile</a>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 16px; border-top: 1px solid #E2D9C8">
+      <span style="padding: 0 14px 4px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6358">Admin</span>
+      <a href="Manage-Access.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Members &amp; invites</a>
+    </div>
+    <div style="margin-top: auto; font-size: 14px; color: #6B6358">Signed in as Maya</div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 32px 40px 48px; display: flex; flex-direction: column; gap: 32px">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+      <div style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px">
+        <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 40px; font-weight: 500">Family stories</h1>
+        <span style="color: #6B6358">In their own words · 14 recordings from 6 storytellers</span>
+      </div>
+      <label for="s-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search stories and transcripts</label>
+      <input id="s-search" type="search" placeholder="Search stories and what was said…" style="height: 48px; width: 300px; max-width: 100%; box-sizing: border-box; padding: 0 16px; border: 1px solid #CFC4AF; border-radius: 24px; background: #FFFDF8; font: inherit; color: #2B2620">
+      <a href="Add-Story.dc.html" class="fh-btn" style="height: 48px; padding: 0 22px; display: flex; align-items: center; border-radius: 24px; background: {{accent}}; color: #FFFFFF; text-decoration: none; font-weight: 600">+ Add a story</a>
+    </div>
+
+    <section class="fh-hcard" aria-label="Featured story" style="display: flex; flex-wrap: wrap; border-radius: 20px; overflow: hidden; background: #FFFDF8; border: 1px solid #E2D9C8">
+      <a href="Story-Detail.dc.html" aria-label="Watch How we came to Brooklyn" style="flex: 1 1 440px; min-height: 300px; position: relative; background: #5B5044; display: flex; align-items: center; justify-content: center; text-decoration: none">
+        <span style="position: absolute; top: 16px; left: 16px; font-size: 13px; color: #FFFDF8; background: #2B2620; padding: 4px 10px; border-radius: 10px">[Video still · Rose at her kitchen table]</span>
+        <span style="width: 84px; height: 84px; border-radius: 50%; background: #FFFDF8; display: flex; align-items: center; justify-content: center">
+          <svg aria-hidden="true" width="30" height="30" viewBox="0 0 24 24"><path d="M8 5 L19 12 L8 19 Z" fill="#2B2620"></path></svg>
+        </span>
+        <span style="position: absolute; bottom: 16px; right: 16px; font-size: 14px; color: #FFFDF8; background: #2B2620; padding: 4px 10px; border-radius: 10px">38 min</span>
+      </a>
+      <div style="flex: 1 1 340px; box-sizing: border-box; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+        <span style="font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #6B6358">Story of the week</span>
+        <h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 34px; font-weight: 500; line-height: 1.1">How we came to Brooklyn</h2>
+        <div style="display: flex; gap: 12px; align-items: center">
+          <span style="width: 44px; height: 44px; flex: none; border-radius: 50%; background: #D9CDB5; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif">RM</span>
+          <span style="display: flex; flex-direction: column"><span style="font-weight: 600">Told by Rose Monestime</span><span style="font-size: 14px; color: #6B6358">Your grandmother · recorded October 2026</span></span>
+        </div>
+        <p style="margin: 0; line-height: 1.55; color: #4A433A">Rose remembers growing up in Jacmel, the night Lucien finally asked her to dance, and the cold January in 1972 when the family landed at JFK.</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px">
+          <span style="padding: 4px 12px; border-radius: 14px; background: #F1EADC; font-size: 14px">Lucien Monestime</span>
+          <span style="padding: 4px 12px; border-radius: 14px; background: #F1EADC; font-size: 14px">Nadège Pluviose</span>
+          <span style="padding: 4px 12px; border-radius: 14px; background: #F1EADC; font-size: 14px">Moving &amp; immigration</span>
+        </div>
+        <a class="fh-btn" href="Story-Detail.dc.html"  style="align-self: flex-start; margin-top: 6px; height: 48px; padding: 0 24px; display: flex; align-items: center; border-radius: 24px; background: {{accent}}; color: #FFFFFF; text-decoration: none; font-weight: 600">Watch the story</a>
+      </div>
+    </section>
+
+    <section aria-labelledby="s-tellers" style="display: flex; flex-direction: column; gap: 14px">
+      <h2 id="s-tellers" style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 500">Storytellers</h2>
+      <div role="group" aria-label="Filter by storyteller" style="display: flex; flex-wrap: wrap; gap: 14px">
+        <sc-for list="{{tellers}}" as="t" hint-placeholder-count="6">
+          <button class="fh-hcard" type="button" aria-pressed="{{t.on}}" onClick="{{t.pick}}" style="width: 120px; padding: 14px 8px; border-radius: 14px; background: {{t.bg}}; border: {{t.border}}; font: inherit; color: #2B2620; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center">
+            <span style="width: 60px; height: 60px; border-radius: 50%; background: #D9CDB5; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif; font-size: 20px">{{t.initials}}</span>
+            <span style="font-weight: 600; font-size: 15px">{{t.name}}</span>
+            <span style="font-size: 13px; color: #6B6358">{{t.count}}</span>
+          </button>
+        </sc-for>
+      </div>
+    </section>
+
+    <section aria-labelledby="s-all" style="display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px">
+        <h2 id="s-all" style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 500; flex: 1 1 auto">{{listTitle}}</h2>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px">
+          <span style="padding: 6px 12px; border-radius: 16px; border: 1px solid #CFC4AF; font-size: 14px">Growing up</span>
+          <span style="padding: 6px 12px; border-radius: 16px; border: 1px solid #CFC4AF; font-size: 14px">Weddings</span>
+          <span style="padding: 6px 12px; border-radius: 16px; border: 1px solid #CFC4AF; font-size: 14px">Work</span>
+          <span style="padding: 6px 12px; border-radius: 16px; border: 1px solid #CFC4AF; font-size: 14px">Recipes</span>
+          <span style="padding: 6px 12px; border-radius: 16px; border: 1px solid #CFC4AF; font-size: 14px">Holidays</span>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px">
+        <sc-for list="{{stories}}" as="s" hint-placeholder-count="6">
+          <a class="fh-hcard" href="Story-Detail.dc.html" style="border-radius: 16px; overflow: hidden; background: #FFFDF8; border: 1px solid #E2D9C8; color: #2B2620; text-decoration: none; display: flex; flex-direction: column">
+            <span style="height: 150px; position: relative; background: {{s.tone}}; display: flex; align-items: center; justify-content: center">
+              <span style="width: 52px; height: 52px; border-radius: 50%; background: #FFFDF8; display: flex; align-items: center; justify-content: center">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M8 5 L19 12 L8 19 Z" fill="#2B2620"></path></svg>
+              </span>
+              <span style="position: absolute; bottom: 10px; right: 10px; font-size: 13px; color: #FFFDF8; background: #2B2620; padding: 3px 8px; border-radius: 8px">{{s.length}}</span>
+              <span style="position: absolute; top: 10px; left: 10px; font-size: 12px; color: #2B2620; background: #FFFDF8; padding: 3px 8px; border-radius: 8px">{{s.kind}}</span>
+            </span>
+            <span style="padding: 16px; display: flex; flex-direction: column; gap: 6px">
+              <span style="font-family: Fraunces, Georgia, serif; font-size: 20px; line-height: 1.2">{{s.title}}</span>
+              <span style="font-size: 14px; color: #6B6358">{{s.teller}} · {{s.recorded}}</span>
+              <span style="font-size: 14px; color: #4A433A">About {{s.about}}</span>
+            </span>
+          </a>
+        </sc-for>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2F5D50","options":["#2F5D50","#8A4B2A","#3D4F7A"]},"$preview":{"width":1280,"height":1260}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { teller: null };
+  }
+  renderVals() {
+    const accent = this.props.accent ?? "#2F5D50";
+    const tellers = [
+      { id: "rosa", initials: "RM", name: "Rose Monestime", count: "5 stories" },
+      { id: "daniel", initials: "JP", name: "Jean-Robert Pluviose", count: "3 stories" },
+      { id: "elena", initials: "NP", name: "Nadège Pluviose", count: "3 stories" },
+      { id: "lucia", initials: "MP", name: "Marie-Claire Pluviose", count: "2 · from 2009" },
+      { id: "hector", initials: "LM", name: "Lucien Monestime", count: "1 · cassette, 1994" }
+    ];
+    const all = [
+      { t: "rosa", title: "Rose’s pen patat, start to finish", teller: "Rose Monestime", recorded: "Nov 2026", length: "22 min", kind: "Video", about: "the pen patat and who taught her", tone: "#8C7B5E" },
+      { t: "daniel", title: "The night the band bus broke down", teller: "Jean-Robert Pluviose", recorded: "Sep 2026", length: "14 min", kind: "Video", about: "1991 state finals", tone: "#6E7D72" },
+      { t: "elena", title: "Thirty years of third grade", teller: "Nadège Pluviose", recorded: "Aug 2026", length: "31 min", kind: "Video", about: "teaching, and her first classroom", tone: "#7D6A5A" },
+      { t: "rosa", title: "Meeting Lucien", teller: "Rose Monestime", recorded: "Oct 2026", length: "12 min", kind: "Video", about: "the church dance, 1956", tone: "#6B5D4F" },
+      { t: "lucia", title: "Joseph and the yellow cab", teller: "Marie-Claire Pluviose", recorded: "2009", length: "18 min", kind: "Video", about: "Joseph’s 30 years behind the wheel", tone: "#5E6B66" },
+      { t: "hector", title: "Building the house on Rue Sainte-Anne", teller: "Lucien Monestime", recorded: "1994", length: "26 min", kind: "Audio", about: "the house he built by hand", tone: "#7A6E5C" }
+    ];
+    const f = this.state.teller;
+    const stories = all.filter((s) => !f || s.t === f);
+    return {
+      accent,
+      tellers: tellers.map((t) => {
+        const on = t.id === f;
+        return { ...t, on, bg: on ? "#E6EEE9" : "#FFFDF8", border: on ? "2px solid " + accent : "1px solid #E2D9C8", pick: () => this.setState({ teller: on ? null : t.id }) };
+      }),
+      stories,
+      listTitle: f ? "Stories told by " + tellers.find((t) => t.id === f).name : "All stories"
+    };
+  }
+}
+</script>
+</body>
+</html>
