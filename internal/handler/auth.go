@@ -64,7 +64,7 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		httpx.Error(w, http.StatusUnauthorized, "invalid_credentials", "email or password is incorrect")
 	case errors.Is(err, auth.ErrBusy):
-		httpx.Error(w, http.StatusServiceUnavailable, "busy", "try again in a moment")
+		busy(w)
 	default:
 		internalError(w, r, err, "login")
 	}
@@ -88,7 +88,7 @@ func (a *Auth) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, auth.ErrPasswordTooShort), errors.Is(err, auth.ErrPasswordTooLong), errors.Is(err, auth.ErrPasswordTooCommon):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, auth.ErrBusy):
-		httpx.Error(w, http.StatusServiceUnavailable, "busy", "try again in a moment")
+		busy(w)
 	default:
 		internalError(w, r, err, "reset password")
 	}
