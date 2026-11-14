@@ -11,4 +11,5 @@ export default defineConfig([
     extends: [js.configs.recommended, tseslint.configs.recommended, reactHooks.configs.flat.recommended],
     languageOptions: { globals: globals.browser },
   },
+  { files: ['*.config.{ts,js}'], languageOptions: { globals: globals.node } },
 ])

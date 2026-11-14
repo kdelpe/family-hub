@@ -40,10 +40,13 @@ generate:
 	go tool sqlc generate
 	mockery
 
-build: ui build-go
+# In order, not as two prerequisites: under `make -j` the Go build could embed the placeholder.
+build: ui
+	$(MAKE) build-go
 
+# Run `cd web && npm ci` once first; CI and the Docker image do their own clean install.
 ui:
-	cd web && npm ci && npm run build
+	cd web && npm run build
 
 # Embeds whatever internal/webui/dist holds: the built UI, or the placeholder.
 build-go: ui-stub

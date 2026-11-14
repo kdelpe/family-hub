@@ -1,4 +1,4 @@
-/* The design's tokens (docs/design/design-notes.md §1). Colors only from here, so dark mode is a swap. */
+/* Colors and font families (design-notes §1.1–1.2) come only from here, so dark mode is a swap. Sizes stay literal, as in the mockups. */
 :root {
   --bg: #f6f1e7;
   --surface: #fffdf8;

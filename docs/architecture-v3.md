@@ -897,7 +897,7 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 - **The design is set: `docs/design/`.** The mockup pages are the visual target and the build matches them as closely as the browser allows (layout, copy, colors, type, sizes, spacing, radii, motion); `docs/design/design-notes.md` is the behaviour spec and wins where the two disagree. Each page is compared side by side with its mockup before it's done, and a deliberate deviation is agreed with the owner first. The points below are the engineering side.
 - **Look ("Heirloom"):** colors as CSS variables from day one (design-notes §1.1), so the deferred dark mode is a swap. Fraunces and Source Sans 3 (both SIL Open Font License) are **bundled as `woff2` files** and served by the app, not loaded from Google Fonts: the strict CSP (§12) and privacy both want same-origin fonts. Every animation is off under `prefers-reduced-motion`.
 - React 19 + TypeScript + Vite; TanStack Query for server state; React Router.
-- **Code layout** (§2), mirroring the Go side: imports point one way, pages → components → `api`/`lib`, and components never import pages; routes are wired only in `app/routes.tsx`. Each page folder is named after its mockup (`docs/design/pages/<Name>.dc.html` → `pages/<Name>/`), so every page can be compared side by side with its mockup. Styles are **CSS Modules** (`<Name>.module.css`, built into Vite, no dependency): plain CSS with class names local to the file, so two pages can't clash on `.title`. Colors, type and spacing come only from the variables in `styles/tokens.css`. Each file's styles and test sit next to it.
+- **Code layout** (§2), mirroring the Go side: imports point one way, pages → components → `api`/`lib`, and components never import pages; routes are wired only in `app/routes.tsx`. Each page folder is named after its mockup (`docs/design/pages/<Name>.dc.html` → `pages/<Name>/`), so every page can be compared side by side with its mockup. Styles are **CSS Modules** (`<Name>.module.css`, built into Vite, no dependency): plain CSS with class names local to the file, so two pages can't clash on `.title`. Colors and font families come only from the variables in `styles/tokens.css`; sizes and spacing are written as the mockups give them, so each page can be checked against its mockup value by value. Each file's styles and test sit next to it.
 - `vite.config.ts`: `server.proxy['/api'] = 'http://localhost:8080'`; `build.outDir = '../internal/webui/dist'`, `emptyOutDir: true`.
 - Typed client: generate from an OpenAPI file later if the API grows; hand-written fetch wrapper for now with one error type.
 - **Family tree view: a Workday-style focus view, not a canvas of the whole family.** The screen shows one **focus person** with their parents' household above, their own household beside them, and their children below: about two generations up and down. Siblings sit next to the focus person.
@@ -955,8 +955,8 @@ lint: ui-stub ; golangci-lint run
 web-check:     ; cd web && npm run lint && npm run typecheck && npm test
 vuln: ui-stub  ; go tool govulncheck ./...
 
-build: ui build-go
-ui:            ; cd web && npm ci && npm run build      # into internal/webui/dist
+build: ui ; $(MAKE) build-go                        # in order, so `make -j` can't embed the placeholder
+ui:            ; cd web && npm run build                # into internal/webui/dist; `npm ci` once first
 build-go: ui-stub ; CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/family-hub ./cmd
 ```
 
