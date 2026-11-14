@@ -30,6 +30,10 @@ func CreateInvite(ctx context.Context, db gen.DBTX, userID uuid.UUID) (string, e
 	return createToken(ctx, db, userID, purposeInvite, InviteLifetime)
 }
 
+func CreatePasswordReset(ctx context.Context, db gen.DBTX, userID uuid.UUID) (string, error) {
+	return createToken(ctx, db, userID, purposePasswordReset, ResetLifetime)
+}
+
 // SetPasswordLink is the emailed link; the token goes in the fragment so it never reaches a server log (§5).
 func SetPasswordLink(baseURL, token string) string {
 	return baseURL + SetPasswordPath + token
@@ -89,7 +93,7 @@ type SetPasswordInput struct {
 // the password, drops the user's other tokens and sessions, and returns a new session (§5).
 func (s *Service) SetPasswordWithToken(ctx context.Context, in SetPasswordInput) (string, User, error) {
 	token, user, err := s.setPasswordWithToken(ctx, in)
-	return token, user, busyIfContended(err)
+	return token, user, BusyIfContended(err)
 }
 
 func (s *Service) setPasswordWithToken(ctx context.Context, in SetPasswordInput) (string, User, error) {

@@ -12,6 +12,34 @@ import (
 	"github.com/google/uuid"
 )
 
+const changeEmail = `-- name: ChangeEmail :exec
+UPDATE users SET email = $1, password_hash = NULL, password_changed_at = NULL, google_sub = NULL WHERE id = $2
+`
+
+type ChangeEmailParams struct {
+	Email string
+	ID    uuid.UUID
+}
+
+// The old address's password and Google link mustn't carry over to whoever owns the new one (§5).
+func (q *Queries) ChangeEmail(ctx context.Context, arg ChangeEmailParams) error {
+	_, err := q.db.Exec(ctx, changeEmail, arg.Email, arg.ID)
+	return err
+}
+
+const countUsableAdmins = `-- name: CountUsableAdmins :one
+SELECT count(*) FROM users
+WHERE role = 'admin' AND disabled_at IS NULL AND (password_hash IS NOT NULL OR google_sub IS NOT NULL)
+`
+
+// Only admins who can sign in: an invited admin who never set up can't manage anyone.
+func (q *Queries) CountUsableAdmins(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsableAdmins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAdmin = `-- name: CreateAdmin :exec
 INSERT INTO users (email, role, password_hash, password_changed_at)
 VALUES ($1, 'admin', $2::text, now())
@@ -52,6 +80,45 @@ func (q *Queries) EmailTaken(ctx context.Context, email string) (bool, error) {
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const getAccount = `-- name: GetAccount :one
+SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
+  (u.password_hash IS NOT NULL OR u.google_sub IS NOT NULL)::boolean AS set_up,
+  (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
+FROM users u
+LEFT JOIN auth_tokens t ON t.user_id = u.id AND t.purpose = 'invite' AND t.consumed_at IS NULL
+WHERE u.id = $1
+GROUP BY u.id
+`
+
+type GetAccountRow struct {
+	ID              uuid.UUID
+	Email           string
+	Role            string
+	DisabledAt      *time.Time
+	LastLoginAt     *time.Time
+	CreatedAt       time.Time
+	SetUp           bool
+	HasInvite       bool
+	InviteExpiresAt time.Time
+}
+
+func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (GetAccountRow, error) {
+	row := q.db.QueryRow(ctx, getAccount, id)
+	var i GetAccountRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Role,
+		&i.DisabledAt,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.SetUp,
+		&i.HasInvite,
+		&i.InviteExpiresAt,
+	)
+	return i, err
 }
 
 const getGoogleUserBySub = `-- name: GetGoogleUserBySub :one
@@ -154,6 +221,67 @@ func (q *Queries) LinkGoogleAndRecordLogin(ctx context.Context, arg LinkGoogleAn
 	return err
 }
 
+const listUsers = `-- name: ListUsers :many
+SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
+  (u.password_hash IS NOT NULL OR u.google_sub IS NOT NULL)::boolean AS set_up,
+  -- sqlc can't type a nullable max(), so has_invite says whether invite_expires_at is real.
+  (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
+FROM users u
+LEFT JOIN auth_tokens t ON t.user_id = u.id AND t.purpose = 'invite' AND t.consumed_at IS NULL
+WHERE $1::text = '' OR (u.email, u.id) > ($1::text, $2::uuid)
+GROUP BY u.id
+ORDER BY u.email, u.id
+LIMIT $3
+`
+
+type ListUsersParams struct {
+	AfterEmail string
+	AfterID    uuid.UUID
+	PageSize   int32
+}
+
+type ListUsersRow struct {
+	ID              uuid.UUID
+	Email           string
+	Role            string
+	DisabledAt      *time.Time
+	LastLoginAt     *time.Time
+	CreatedAt       time.Time
+	SetUp           bool
+	HasInvite       bool
+	InviteExpiresAt time.Time
+}
+
+func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error) {
+	rows, err := q.db.Query(ctx, listUsers, arg.AfterEmail, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUsersRow
+	for rows.Next() {
+		var i ListUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Role,
+			&i.DisabledAt,
+			&i.LastLoginAt,
+			&i.CreatedAt,
+			&i.SetUp,
+			&i.HasInvite,
+			&i.InviteExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockEnabledUserByEmail = `-- name: LockEnabledUserByEmail :one
 SELECT id FROM users WHERE email = $1 AND disabled_at IS NULL FOR UPDATE
 `
@@ -166,7 +294,9 @@ func (q *Queries) LockEnabledUserByEmail(ctx context.Context, email string) (uui
 }
 
 const lockUser = `-- name: LockUser :one
-SELECT email, role, password_changed_at, disabled_at, google_sub FROM users WHERE id = $1 FOR UPDATE
+SELECT email, role, password_changed_at, disabled_at, google_sub,
+  (password_hash IS NOT NULL OR google_sub IS NOT NULL)::boolean AS set_up
+FROM users WHERE id = $1 FOR UPDATE
 `
 
 type LockUserRow struct {
@@ -175,6 +305,7 @@ type LockUserRow struct {
 	PasswordChangedAt *time.Time
 	DisabledAt        *time.Time
 	GoogleSub         *string
+	SetUp             bool
 }
 
 func (q *Queries) LockUser(ctx context.Context, id uuid.UUID) (LockUserRow, error) {
@@ -186,6 +317,7 @@ func (q *Queries) LockUser(ctx context.Context, id uuid.UUID) (LockUserRow, erro
 		&i.PasswordChangedAt,
 		&i.DisabledAt,
 		&i.GoogleSub,
+		&i.SetUp,
 	)
 	return i, err
 }
@@ -240,5 +372,22 @@ type SetPasswordAndRecordLoginParams struct {
 
 func (q *Queries) SetPasswordAndRecordLogin(ctx context.Context, arg SetPasswordAndRecordLoginParams) error {
 	_, err := q.db.Exec(ctx, setPasswordAndRecordLogin, arg.PasswordHash, arg.ID)
+	return err
+}
+
+const setRoleAndDisabled = `-- name: SetRoleAndDisabled :exec
+UPDATE users
+SET role = $1, disabled_at = CASE WHEN $2::boolean THEN coalesce(disabled_at, clock_timestamp()) END
+WHERE id = $3
+`
+
+type SetRoleAndDisabledParams struct {
+	Role     string
+	Disabled bool
+	ID       uuid.UUID
+}
+
+func (q *Queries) SetRoleAndDisabled(ctx context.Context, arg SetRoleAndDisabledParams) error {
+	_, err := q.db.Exec(ctx, setRoleAndDisabled, arg.Role, arg.Disabled, arg.ID)
 	return err
 }

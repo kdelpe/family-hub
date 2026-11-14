@@ -37,11 +37,11 @@ func (s *Service) ChangePassword(ctx context.Context, in ChangePasswordInput) (s
 	}
 	session := gen.SessionActiveParams{IDHash: idHash, UserID: in.UserID, IdleTimeout: sessionIdleTimeout}
 	token, err := s.changePassword(ctx, in, session)
-	err = busyIfContended(err)
+	err = BusyIfContended(err)
 	if errors.Is(err, ErrInvalidCredentials) {
 		// Serialize with resets and logout before deciding this was only a wrong password.
 		if checkErr := s.currentSessionAfterFailedVerify(ctx, in.UserID, session); checkErr != nil {
-			err = busyIfContended(checkErr)
+			err = BusyIfContended(checkErr)
 		}
 	}
 	if !errors.Is(err, ErrInvalidCredentials) {

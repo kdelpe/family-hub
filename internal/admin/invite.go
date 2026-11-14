@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/database/gen"
@@ -14,7 +11,6 @@ import (
 )
 
 const (
-	commitTimeout = 10 * time.Second
 	inviteSubject = "You're invited to the family hub"
 	inviteBody    = `Bonjou,
 
@@ -30,19 +26,9 @@ Admins can see all the information you enter.
 
 var (
 	ErrInvalidRole = errors.New("role must be admin or member")
-	// ErrInviteNotSent means the email failed, so nothing was saved.
-	ErrInviteNotSent = errors.New("invitation email could not be sent")
+	// ErrEmailNotSent: Invite and Update then save nothing; SendReset keeps the link, so it can just be sent again.
+	ErrEmailNotSent = errors.New("email could not be sent")
 )
-
-type Invites struct {
-	pool    *pgxpool.Pool
-	mailer  mail.Mailer
-	baseURL string
-}
-
-func NewInvites(pool *pgxpool.Pool, mailer mail.Mailer, baseURL string) *Invites {
-	return &Invites{pool: pool, mailer: mailer, baseURL: baseURL}
-}
 
 type InviteInput struct {
 	Email string
@@ -51,7 +37,7 @@ type InviteInput struct {
 
 // Invite creates a user without a password and emails them a link to set one. The email goes
 // out before the commit, so a failed send leaves no user behind.
-func (s *Invites) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
+func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 	email := auth.NormalizeEmail(in.Email)
 	if !auth.ValidEmail(email) {
 		return auth.User{}, ErrInvalidEmail
@@ -77,23 +63,16 @@ func (s *Invites) Invite(ctx context.Context, in InviteInput) (auth.User, error)
 	if err != nil {
 		return auth.User{}, err
 	}
-	// Not canceled if the admin leaves: the server may already have the email, so the link must stay valid.
-	err = s.mailer.Send(context.WithoutCancel(ctx), s.inviteMessage(email, token))
-	switch {
-	case errors.Is(err, mail.ErrInvalidMessage):
-		return auth.User{}, fmt.Errorf("build invite: %w", err)
-	case err != nil:
-		return auth.User{}, fmt.Errorf("%w: %w", ErrInviteNotSent, err)
+	if err := s.send(ctx, s.inviteMessage(email, token)); err != nil {
+		return auth.User{}, err
 	}
-	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
-	defer cancel()
-	if err := tx.Commit(commitCtx); err != nil {
-		return auth.User{}, fmt.Errorf("commit invite: %w", err)
+	if err := commit(ctx, tx, "invite"); err != nil {
+		return auth.User{}, err
 	}
 	return auth.User{ID: id, Email: email, Role: in.Role}, nil
 }
 
-func (s *Invites) inviteMessage(email, token string) mail.Message {
+func (s *Users) inviteMessage(email, token string) mail.Message {
 	link := auth.SetPasswordLink(s.baseURL, token)
 	days := int(auth.InviteLifetime.Hours() / 24)
 	return mail.Message{To: email, Subject: inviteSubject, Body: fmt.Sprintf(inviteBody, link, days)}
