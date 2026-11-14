@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -24,14 +25,25 @@ type ChangePasswordInput struct {
 // ChangePassword needs the current password even with a session, which may be old or stolen (§5).
 // It signs out every session, a stolen copy of this one included, and returns a new one for this device.
 func (s *Service) ChangePassword(ctx context.Context, in ChangePasswordInput) (string, error) {
+	idHash := sessionHash(in.SessionToken)
+	if idHash == nil {
+		return "", ErrNoSession
+	}
 	// Per session, not per user: a stolen cookie's guesses mustn't lock the owner out of the fix.
-	key := string(sessionHash(in.SessionToken))
+	key := string(idHash)
 	// Taken before the slow verify, so parallel guesses can't all pass an unspent limit.
 	if ok, wait := s.failuresBySession.Take(key); !ok {
 		return "", &RateLimitedError{RetryAfter: wait}
 	}
-	token, err := s.changePassword(ctx, in)
+	session := gen.SessionActiveParams{IDHash: idHash, UserID: in.UserID, IdleTimeout: sessionIdleTimeout}
+	token, err := s.changePassword(ctx, in, session)
 	err = busyIfContended(err)
+	if errors.Is(err, ErrInvalidCredentials) {
+		// Serialize with resets and logout before deciding this was only a wrong password.
+		if checkErr := s.currentSessionAfterFailedVerify(ctx, in.UserID, session); checkErr != nil {
+			err = busyIfContended(checkErr)
+		}
+	}
 	if !errors.Is(err, ErrInvalidCredentials) {
 		s.failuresBySession.Refund(key)
 	}
@@ -42,7 +54,47 @@ func (s *Service) ChangePassword(ctx context.Context, in ChangePasswordInput) (s
 	return token, err
 }
 
-func (s *Service) changePassword(ctx context.Context, in ChangePasswordInput) (string, error) {
+func (s *Service) currentSessionAfterFailedVerify(ctx context.Context, userID uuid.UUID, session gen.SessionActiveParams) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin failed password check: %w", err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	qtx := gen.New(tx)
+
+	found, err := qtx.GetUserPassword(ctx, userID)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return ErrNoSession
+	case err != nil:
+		return fmt.Errorf("find user after failed password check: %w", err)
+	}
+	locked, err := s.lockUser(ctx, tx, qtx, userID)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return ErrNoSession
+	case err != nil:
+		return err
+	case locked.DisabledAt != nil || locked.Email != found.Email || !samePasswordChangeTime(locked.PasswordChangedAt, found.PasswordChangedAt):
+		return ErrNoSession
+	}
+	if err := activeOrNoSession(qtx.LockActiveSession(ctx, gen.LockActiveSessionParams(session))); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit failed password check: %w", err)
+	}
+	return nil
+}
+
+func samePasswordChangeTime(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return a.Equal(*b)
+}
+
+func (s *Service) changePassword(ctx context.Context, in ChangePasswordInput, session gen.SessionActiveParams) (string, error) {
 	found, err := gen.New(s.pool).GetUserPassword(ctx, in.UserID)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -94,12 +146,8 @@ func (s *Service) changePassword(ctx context.Context, in ChangePasswordInput) (s
 		return "", errCredentialsChanged
 	}
 	// Signed out or expired since the session gate.
-	active, err := qtx.SessionActive(ctx, gen.SessionActiveParams{IDHash: sessionHash(in.SessionToken), UserID: in.UserID, IdleTimeout: sessionIdleTimeout})
-	switch {
-	case err != nil:
-		return "", fmt.Errorf("check session: %w", err)
-	case !active:
-		return "", ErrNoSession
+	if err := activeOrNoSession(qtx.LockActiveSession(ctx, gen.LockActiveSessionParams(session))); err != nil {
+		return "", err
 	}
 	if err := qtx.SetPassword(ctx, gen.SetPasswordParams{ID: in.UserID, PasswordHash: hash}); err != nil {
 		return "", fmt.Errorf("set password: %w", err)
@@ -118,4 +166,14 @@ func (s *Service) changePassword(ctx context.Context, in ChangePasswordInput) (s
 		return "", fmt.Errorf("commit change password: %w", err)
 	}
 	return token, nil
+}
+
+func activeOrNoSession(active bool, err error) error {
+	switch {
+	case err != nil:
+		return fmt.Errorf("check session: %w", err)
+	case !active:
+		return ErrNoSession
+	}
+	return nil
 }

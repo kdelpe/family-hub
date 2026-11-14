@@ -69,6 +69,7 @@ func (g *SessionGate) Require(next http.Handler) http.Handler {
 			return
 		}
 		if errors.Is(err, auth.ErrNoSession) {
+			// Not cleared: a request still in flight with an old cookie would wipe a newer one just set.
 			unauthorized(w)
 			return
 		}

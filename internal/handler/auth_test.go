@@ -321,14 +321,13 @@ func TestChangePassword(t *testing.T) {
 	const body = `{"current_password":"old pw","new_password":"new pw"}`
 
 	tests := []struct {
-		name        string
-		session     bool
-		body        string
-		changeErr   error
-		wantChange  bool
-		wantStatus  int
-		wantBody    string
-		wantCleared bool
+		name       string
+		session    bool
+		body       string
+		changeErr  error
+		wantChange bool
+		wantStatus int
+		wantBody   string
 	}{
 		{name: "changed", session: true, body: body, wantChange: true, wantStatus: http.StatusNoContent},
 		{name: "wrong current password", session: true, body: body, wantChange: true, changeErr: auth.ErrInvalidCredentials, wantStatus: http.StatusBadRequest,
@@ -337,7 +336,7 @@ func TestChangePassword(t *testing.T) {
 			wantBody: `{"error":{"code":"validation_error","message":"` + auth.ErrPasswordTooShort.Error() + `"}}`},
 		{name: "too many wrong attempts", session: true, body: body, wantChange: true, changeErr: &auth.RateLimitedError{RetryAfter: time.Minute}, wantStatus: http.StatusTooManyRequests,
 			wantBody: `{"error":{"code":"rate_limited","message":"too many attempts, try again later"}}`},
-		{name: "signed out meanwhile", session: true, body: body, wantChange: true, changeErr: auth.ErrNoSession, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody, wantCleared: true},
+		{name: "signed out meanwhile", session: true, body: body, wantChange: true, changeErr: auth.ErrNoSession, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody},
 		{name: "busy", session: true, body: body, wantChange: true, changeErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable,
 			wantBody: `{"error":{"code":"busy","message":"try again in a moment"}}`},
 		{name: "database error", session: true, body: body, wantChange: true, changeErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
@@ -376,12 +375,7 @@ func TestChangePassword(t *testing.T) {
 				assert.Equal(t, "fresh", cookies[0].Value)
 				return
 			}
-			if tt.wantCleared {
-				require.Len(t, cookies, 1)
-				assert.Negative(t, cookies[0].MaxAge, "the dead session's cookie is cleared")
-			} else {
-				assert.Empty(t, cookies)
-			}
+			assert.Empty(t, cookies)
 			assert.JSONEq(t, tt.wantBody, rec.Body.String())
 		})
 	}

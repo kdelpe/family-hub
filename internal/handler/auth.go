@@ -151,7 +151,7 @@ func (a *Auth) PreviewLink(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ChangePassword keeps this session and signs out every other one.
+// ChangePassword answers with a new session cookie: every old session, this one included, is gone.
 func (a *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	session, ok := CurrentSession(r.Context())
 	if !ok {
@@ -180,7 +180,7 @@ func (a *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	case passwordRefused(err):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, auth.ErrNoSession):
-		a.cookie.clear(w)
+		// Not cleared: a double-submit's winner may have just set a newer cookie.
 		unauthorized(w)
 	case errors.Is(err, auth.ErrBusy):
 		busy(w)

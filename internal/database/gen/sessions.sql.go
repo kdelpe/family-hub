@@ -81,6 +81,25 @@ func (q *Queries) GetActiveSession(ctx context.Context, arg GetActiveSessionPara
 	return i, err
 }
 
+const lockActiveSession = `-- name: LockActiveSession :one
+SELECT EXISTS (SELECT 1 FROM sessions WHERE id_hash = $1 AND user_id = $2
+  AND expires_at > clock_timestamp() AND last_seen_at > clock_timestamp() - $3::interval FOR UPDATE)
+`
+
+type LockActiveSessionParams struct {
+	IDHash      []byte
+	UserID      uuid.UUID
+	IdleTimeout time.Duration
+}
+
+// Waits out a logout deleting the row, which takes no user lock.
+func (q *Queries) LockActiveSession(ctx context.Context, arg LockActiveSessionParams) (bool, error) {
+	row := q.db.QueryRow(ctx, lockActiveSession, arg.IDHash, arg.UserID, arg.IdleTimeout)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const sessionActive = `-- name: SessionActive :one
 SELECT EXISTS (SELECT 1 FROM sessions WHERE id_hash = $1 AND user_id = $2
   AND expires_at > clock_timestamp() AND last_seen_at > clock_timestamp() - $3::interval)
