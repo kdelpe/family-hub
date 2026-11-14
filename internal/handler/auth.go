@@ -14,6 +14,7 @@ import (
 type AuthService interface {
 	Login(ctx context.Context, in auth.LoginInput) (string, auth.User, error)
 	SetPasswordWithToken(ctx context.Context, in auth.SetPasswordInput) (string, auth.User, error)
+	PreviewLink(ctx context.Context, token string) (auth.LinkPreview, error)
 	Logout(ctx context.Context, token string) error
 	User(ctx context.Context, id uuid.UUID) (auth.User, error)
 }
@@ -35,6 +36,19 @@ type loginRequest struct {
 type resetPasswordRequest struct {
 	Token    string `json:"token"`
 	Password string `json:"password"`
+}
+
+type previewRequest struct {
+	Token string `json:"token"`
+}
+
+// The names are null until Phase 3 brings persons.
+type previewResponse struct {
+	Purpose          string  `json:"purpose"`
+	InviteeEmail     string  `json:"invitee_email"`
+	InviteeFirstName *string `json:"invitee_first_name"`
+	FromName         *string `json:"from_name"`
+	GoogleEligible   bool    `json:"google_eligible"`
 }
 
 type userResponse struct {
@@ -84,13 +98,31 @@ func (a *Auth) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, http.StatusOK, toUserResponse(user))
 	case clientGone(r):
 	case errors.Is(err, auth.ErrInvalidToken):
-		httpx.Error(w, http.StatusBadRequest, "invalid_token", "this link is invalid, used or expired; ask for a new one")
+		invalidToken(w)
 	case errors.Is(err, auth.ErrPasswordTooShort), errors.Is(err, auth.ErrPasswordTooLong), errors.Is(err, auth.ErrPasswordTooCommon):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, auth.ErrBusy):
 		busy(w)
 	default:
 		internalError(w, r, err, "reset password")
+	}
+}
+
+// PreviewLink tells the set-password page whether its link is an invite or a reset; the token is in the URL fragment, so the page can't GET it.
+func (a *Auth) PreviewLink(w http.ResponseWriter, r *http.Request) {
+	var req previewRequest
+	if !httpx.DecodeJSON(w, r, &req) {
+		return
+	}
+	preview, err := a.svc.PreviewLink(r.Context(), req.Token)
+	switch {
+	case err == nil:
+		httpx.JSON(w, http.StatusOK, previewResponse{Purpose: preview.Purpose, InviteeEmail: preview.Email, GoogleEligible: preview.GoogleEligible})
+	case clientGone(r):
+	case errors.Is(err, auth.ErrInvalidToken):
+		invalidToken(w)
+	default:
+		internalError(w, r, err, "preview link")
 	}
 }
 
@@ -127,6 +159,10 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 	default:
 		httpx.JSON(w, http.StatusOK, toUserResponse(user))
 	}
+}
+
+func invalidToken(w http.ResponseWriter) {
+	httpx.Error(w, http.StatusBadRequest, "invalid_token", "this link is invalid, used or expired; ask for a new one")
 }
 
 func busy(w http.ResponseWriter) {

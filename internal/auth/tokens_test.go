@@ -24,14 +24,14 @@ func TestSetPasswordWithToken(t *testing.T) {
 		// A refused password mustn't burn the link.
 		linkStillWorks bool
 	}{
-		{name: "invite for a user without a password", purpose: "invite", setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`},
-		{name: "password reset", purpose: "password_reset"},
-		{name: "malformed token", purpose: "password_reset", token: func(string) string { return "not-a-token" }, wantErr: ErrInvalidToken},
-		{name: "unknown token", purpose: "password_reset", token: func(string) string { _, t := newToken(); return t }, wantErr: ErrInvalidToken},
-		{name: "expired", purpose: "password_reset", setup: `UPDATE auth_tokens SET expires_at = now() - interval '1 second'`, wantErr: ErrInvalidToken},
-		{name: "disabled user", purpose: "invite", setup: `UPDATE users SET disabled_at = now()`, wantErr: ErrInvalidToken},
-		{name: "password too short", purpose: "password_reset", password: "short", wantErr: ErrPasswordTooShort, linkStillWorks: true},
-		{name: "password is the email", purpose: "password_reset", password: testEmail, wantErr: ErrPasswordTooCommon, linkStillWorks: true},
+		{name: "invite for a user without a password", purpose: purposeInvite, setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`},
+		{name: "password reset", purpose: purposePasswordReset},
+		{name: "malformed token", purpose: purposePasswordReset, token: func(string) string { return "not-a-token" }, wantErr: ErrInvalidToken},
+		{name: "unknown token", purpose: purposePasswordReset, token: func(string) string { _, tok := newToken(); return tok }, wantErr: ErrInvalidToken},
+		{name: "expired", purpose: purposePasswordReset, setup: `UPDATE auth_tokens SET expires_at = now() - interval '1 second'`, wantErr: ErrInvalidToken},
+		{name: "disabled user", purpose: purposeInvite, setup: `UPDATE users SET disabled_at = now()`, wantErr: ErrInvalidToken},
+		{name: "password too short", purpose: purposePasswordReset, password: "short", wantErr: ErrPasswordTooShort, linkStillWorks: true},
+		{name: "password is the email", purpose: purposePasswordReset, password: testEmail, wantErr: ErrPasswordTooCommon, linkStillWorks: true},
 	}
 
 	for _, tt := range tests {
@@ -78,7 +78,7 @@ func TestSetPasswordWithToken(t *testing.T) {
 
 func TestSetPasswordWithTokenWorksOnce(t *testing.T) {
 	svc, pool, userID := withTestUser(t)
-	token, err := insertToken(t, pool, userID, "password_reset")
+	token, err := insertToken(t, pool, userID, purposePasswordReset)
 	require.NoError(t, err)
 	_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword})
 	require.NoError(t, err)
@@ -94,11 +94,11 @@ func TestSetPasswordWithTokenRevokesOtherCredentials(t *testing.T) {
 	svc, pool, userID := withTestUser(t)
 	oldSession, _, err := svc.Login(t.Context(), LoginInput{Email: testEmail, Password: testPassword})
 	require.NoError(t, err)
-	otherReset, err := insertToken(t, pool, userID, "password_reset")
+	otherReset, err := insertToken(t, pool, userID, purposePasswordReset)
 	require.NoError(t, err)
-	invite, err := insertToken(t, pool, userID, "invite")
+	invite, err := insertToken(t, pool, userID, purposeInvite)
 	require.NoError(t, err)
-	token, err := insertToken(t, pool, userID, "password_reset")
+	token, err := insertToken(t, pool, userID, purposePasswordReset)
 	require.NoError(t, err)
 
 	newSession, _, err := svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword})
@@ -123,7 +123,7 @@ func TestSetPasswordWithTokenEndsTheSessionItReplaces(t *testing.T) {
 	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email) VALUES ('other@example.com') RETURNING id`).Scan(&otherID))
 	othersSession, err := NewSessions(pool).Create(t.Context(), otherID, "")
 	require.NoError(t, err)
-	token, err := insertToken(t, pool, userID, "invite")
+	token, err := insertToken(t, pool, userID, purposeInvite)
 	require.NoError(t, err)
 
 	_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword, ReplacesToken: othersSession})
@@ -135,9 +135,9 @@ func TestSetPasswordWithTokenEndsTheSessionItReplaces(t *testing.T) {
 
 func TestSetPasswordWithTokenIsAllOrNothing(t *testing.T) {
 	svc, pool, userID := withTestUser(t)
-	_, err := insertToken(t, pool, userID, "invite")
+	_, err := insertToken(t, pool, userID, purposeInvite)
 	require.NoError(t, err)
-	token, err := insertToken(t, pool, userID, "password_reset")
+	token, err := insertToken(t, pool, userID, purposePasswordReset)
 	require.NoError(t, err)
 	_, _, err = svc.Login(t.Context(), LoginInput{Email: testEmail, Password: testPassword})
 	require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestSetPasswordWithTokenIsAllOrNothing(t *testing.T) {
 
 func TestSetPasswordWithTokenConcurrently(t *testing.T) {
 	svc, pool, userID := withTestUser(t)
-	token, err := insertToken(t, pool, userID, "password_reset")
+	token, err := insertToken(t, pool, userID, purposePasswordReset)
 	require.NoError(t, err)
 
 	errs := make(chan error, 4)
@@ -200,7 +200,7 @@ func TestSetPasswordWithTokenRefusedWhenAChangeWinsTheLock(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, pool, userID := withTestUser(t)
-			token, err := insertToken(t, pool, userID, "password_reset")
+			token, err := insertToken(t, pool, userID, purposePasswordReset)
 			require.NoError(t, err)
 			change, err := pool.Begin(t.Context())
 			require.NoError(t, err)
@@ -243,7 +243,7 @@ func TestSetPasswordWithTokenIsBusyWhileARowStaysLocked(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, pool, userID := withTestUser(t)
 			svc.lockTimeout = 100 * time.Millisecond
-			token, err := insertToken(t, pool, userID, "password_reset")
+			token, err := insertToken(t, pool, userID, purposePasswordReset)
 			require.NoError(t, err)
 			holder, err := pool.Begin(t.Context())
 			require.NoError(t, err)
@@ -287,4 +287,57 @@ func TestCreateInvite(t *testing.T) {
 	assert.Equal(t, 1, count(t, pool, `SELECT count(*) FROM auth_tokens WHERE purpose = 'invite' AND expires_at BETWEEN now() + interval '7 days' - interval '1 minute' AND now() + interval '7 days'`))
 	_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: invite, Password: newPassword})
 	assert.NoError(t, err)
+}
+
+func TestPreviewLink(t *testing.T) {
+	tests := []struct {
+		name    string
+		purpose string
+		email   string
+		setup   string
+		token   func(issued string) string
+		want    LinkPreview
+		wantErr error
+	}{
+		{name: "invite", purpose: purposeInvite, want: LinkPreview{Purpose: purposeInvite, Email: testEmail}},
+		{name: "password reset", purpose: purposePasswordReset, want: LinkPreview{Purpose: purposePasswordReset, Email: testEmail}},
+		{name: "a Gmail address can use Google", purpose: purposeInvite, email: "test@gmail.com", want: LinkPreview{Purpose: purposeInvite, Email: "test@gmail.com", GoogleEligible: true}},
+		{name: "a Googlemail address can't", purpose: purposeInvite, email: "test@googlemail.com", want: LinkPreview{Purpose: purposeInvite, Email: "test@googlemail.com"}},
+		{name: "a look-alike domain can't", purpose: purposeInvite, email: "test@notgmail.com", want: LinkPreview{Purpose: purposeInvite, Email: "test@notgmail.com"}},
+		{name: "malformed token", purpose: purposeInvite, token: func(string) string { return "not-a-token" }, wantErr: ErrInvalidToken},
+		{name: "unknown token", purpose: purposeInvite, token: func(string) string { _, tok := newToken(); return tok }, wantErr: ErrInvalidToken},
+		{name: "expired", purpose: purposeInvite, setup: `UPDATE auth_tokens SET expires_at = now() - interval '1 second'`, wantErr: ErrInvalidToken},
+		{name: "disabled user", purpose: purposeInvite, setup: `UPDATE users SET disabled_at = now()`, wantErr: ErrInvalidToken},
+		{name: "used", purpose: purposeInvite, setup: `UPDATE auth_tokens SET consumed_at = now()`, wantErr: ErrInvalidToken},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, pool, userID := withTestUser(t)
+			if tt.email != "" {
+				_, err := pool.Exec(t.Context(), `UPDATE users SET email = $1`, tt.email)
+				require.NoError(t, err)
+			}
+			token, err := insertToken(t, pool, userID, tt.purpose)
+			require.NoError(t, err)
+			if tt.setup != "" {
+				_, err := pool.Exec(t.Context(), tt.setup)
+				require.NoError(t, err)
+			}
+			if tt.token != nil {
+				token = tt.token(token)
+			}
+
+			got, err := svc.PreviewLink(t.Context(), token)
+
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+			_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword})
+			assert.NoError(t, err, "previewing doesn't use the link")
+		})
+	}
 }

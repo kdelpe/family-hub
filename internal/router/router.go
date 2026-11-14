@@ -27,12 +27,13 @@ type Middleware struct {
 	RequireSession func(http.Handler) http.Handler
 	LimitLogin     func(http.Handler) http.Handler
 	LimitReset     func(http.Handler) http.Handler
+	LimitPreview   func(http.Handler) http.Handler
 	TrustedProxy   bool
 }
 
 func New(h Handlers, mw Middleware) http.Handler {
-	if mw.RequireSession == nil || mw.LimitLogin == nil || mw.LimitReset == nil {
-		panic("router: RequireSession, LimitLogin and LimitReset are required")
+	if mw.RequireSession == nil || mw.LimitLogin == nil || mw.LimitReset == nil || mw.LimitPreview == nil {
+		panic("router: RequireSession, LimitLogin, LimitReset and LimitPreview are required")
 	}
 	r := chi.NewRouter()
 	r.Use(httpx.RequestID)
@@ -58,6 +59,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 
 		r.With(mw.LimitLogin).Post("/auth/login", h.Auth.Login)
 		r.With(mw.LimitReset).Post("/auth/password/reset", h.Auth.ResetPassword)
+		r.With(mw.LimitPreview).Post("/auth/invite/preview", h.Auth.PreviewLink)
 		// Outside the session group, so an expired session's cookie still gets cleared.
 		r.Post("/auth/logout", h.Auth.Logout)
 

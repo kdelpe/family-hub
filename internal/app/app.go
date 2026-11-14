@@ -30,10 +30,12 @@ const (
 	// Under docker stop's default 10s grace before SIGKILL.
 	shutdownTimeout = 8 * time.Second
 
-	loginsPerIP       = 20
-	loginsPerIPWindow = 15 * time.Minute
-	resetsPerIP       = 10
-	resetsPerIPWindow = time.Minute
+	loginsPerIP         = 20
+	loginsPerIPWindow   = 15 * time.Minute
+	resetsPerIP         = 10
+	resetsPerIPWindow   = time.Minute
+	previewsPerIP       = 10
+	previewsPerIPWindow = time.Minute
 )
 
 // Run serves until ctx is canceled: a clean stop even before the port opens, but not during
@@ -79,6 +81,7 @@ func newServer(pool *pgxpool.Pool, cfg config.Config) *http.Server {
 			RequireSession: handler.NewSessionGate(auth.NewSessions(pool), cookie).Require,
 			LimitLogin:     httpx.LimitByIP(ratelimit.New(loginsPerIP, loginsPerIPWindow)),
 			LimitReset:     httpx.LimitByIP(ratelimit.New(resetsPerIP, resetsPerIPWindow)),
+			LimitPreview:   httpx.LimitByIP(ratelimit.New(previewsPerIP, previewsPerIPWindow)),
 			TrustedProxy:   cfg.TrustedProxy,
 		},
 	)

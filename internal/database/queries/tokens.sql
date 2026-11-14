@@ -1,5 +1,5 @@
 -- name: GetUsableToken :one
-SELECT t.id, t.user_id, u.email
+SELECT t.id, t.user_id, t.purpose, u.email
 FROM auth_tokens t JOIN users u ON u.id = t.user_id
 WHERE t.token_hash = @token_hash AND t.consumed_at IS NULL AND t.expires_at > now() AND u.disabled_at IS NULL;
 

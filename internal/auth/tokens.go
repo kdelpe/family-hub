@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,8 +14,11 @@ import (
 )
 
 const (
-	InviteLifetime = 7 * 24 * time.Hour
-	purposeInvite  = "invite"
+	InviteLifetime       = 7 * 24 * time.Hour
+	purposeInvite        = "invite"
+	purposePasswordReset = "password_reset"
+	// Google owns this domain outright; a Workspace domain needs the ID token's hd claim (§5).
+	gmailDomain = "@gmail.com"
 )
 
 var ErrInvalidToken = errors.New("link is invalid, used or expired")
@@ -27,6 +31,37 @@ func CreateInvite(ctx context.Context, db gen.DBTX, userID uuid.UUID) (string, e
 		return "", fmt.Errorf("create invite: %w", err)
 	}
 	return token, nil
+}
+
+type LinkPreview struct {
+	Purpose        string
+	Email          string
+	GoogleEligible bool
+}
+
+// PreviewLink says what an invite or reset link is for, without using it.
+func (s *Service) PreviewLink(ctx context.Context, token string) (LinkPreview, error) {
+	found, err := s.usableToken(ctx, token)
+	if err != nil {
+		return LinkPreview{}, err
+	}
+	return LinkPreview{Purpose: found.Purpose, Email: found.Email, GoogleEligible: strings.HasSuffix(found.Email, gmailDomain)}, nil
+}
+
+// usableToken finds a link that works now; using it re-checks under the user's row lock.
+func (s *Service) usableToken(ctx context.Context, token string) (gen.GetUsableTokenRow, error) {
+	raw, ok := decodeToken(token)
+	if !ok {
+		return gen.GetUsableTokenRow{}, ErrInvalidToken
+	}
+	found, err := gen.New(s.pool).GetUsableToken(ctx, hashToken(raw))
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return gen.GetUsableTokenRow{}, ErrInvalidToken
+	case err != nil:
+		return gen.GetUsableTokenRow{}, fmt.Errorf("find token: %w", err)
+	}
+	return found, nil
 }
 
 type SetPasswordInput struct {
@@ -44,16 +79,9 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, in SetPasswordInput)
 }
 
 func (s *Service) setPasswordWithToken(ctx context.Context, in SetPasswordInput) (string, User, error) {
-	raw, ok := decodeToken(in.Token)
-	if !ok {
-		return "", User{}, ErrInvalidToken
-	}
-	found, err := gen.New(s.pool).GetUsableToken(ctx, hashToken(raw))
-	switch {
-	case errors.Is(err, pgx.ErrNoRows):
-		return "", User{}, ErrInvalidToken
-	case err != nil:
-		return "", User{}, fmt.Errorf("find token: %w", err)
+	found, err := s.usableToken(ctx, in.Token)
+	if err != nil {
+		return "", User{}, err
 	}
 	if err := CheckNewPassword(in.Password, found.Email); err != nil {
 		return "", User{}, err
