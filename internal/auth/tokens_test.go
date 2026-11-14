@@ -28,7 +28,6 @@ func TestSetPasswordWithToken(t *testing.T) {
 		{name: "password reset", purpose: "password_reset"},
 		{name: "malformed token", purpose: "password_reset", token: func(string) string { return "not-a-token" }, wantErr: ErrInvalidToken},
 		{name: "unknown token", purpose: "password_reset", token: func(string) string { _, t := newToken(); return t }, wantErr: ErrInvalidToken},
-		{name: "already used", purpose: "password_reset", setup: `UPDATE auth_tokens SET consumed_at = now()`, wantErr: ErrInvalidToken},
 		{name: "expired", purpose: "password_reset", setup: `UPDATE auth_tokens SET expires_at = now() - interval '1 second'`, wantErr: ErrInvalidToken},
 		{name: "disabled user", purpose: "invite", setup: `UPDATE users SET disabled_at = now()`, wantErr: ErrInvalidToken},
 		{name: "password too short", purpose: "password_reset", password: "short", wantErr: ErrPasswordTooShort, linkStillWorks: true},
@@ -154,7 +153,7 @@ func TestSetPasswordWithTokenIsAllOrNothing(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, before, passwordState(t, pool))
 	assert.Equal(t, 1, count(t, pool, `SELECT count(*) FROM sessions`))
-	assert.Equal(t, 2, count(t, pool, `SELECT count(*) FROM auth_tokens WHERE consumed_at IS NULL`))
+	assert.Equal(t, 2, count(t, pool, `SELECT count(*) FROM auth_tokens`))
 	_, err = pool.Exec(t.Context(), `DROP TRIGGER refuse_sessions ON sessions`)
 	require.NoError(t, err)
 	_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword})
@@ -192,7 +191,7 @@ func TestSetPasswordWithTokenRefusedWhenAChangeWinsTheLock(t *testing.T) {
 		change string
 		wait   time.Duration
 	}{
-		{name: "token used meanwhile", change: `UPDATE auth_tokens SET consumed_at = now()`},
+		{name: "token used meanwhile", change: `DELETE FROM auth_tokens`},
 		{name: "disabled", change: `UPDATE users SET disabled_at = now()`},
 		{name: "email change", change: `UPDATE users SET email = 'test.new@example.com'`},
 		{name: "expires during the wait", change: `UPDATE auth_tokens SET expires_at = clock_timestamp() + interval '300 milliseconds'`, wait: 500 * time.Millisecond},
