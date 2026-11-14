@@ -73,9 +73,10 @@ func TestResetsRequest(t *testing.T) {
 func TestResetsRequestKeepsEarlierLinksAndLimitsPerEmail(t *testing.T) {
 	svc, pool, _ := withTestUser(t)
 	mailer := mailmocks.NewMailer(t)
-	var bodies []string
+	// The workers send concurrently.
+	bodies := make(chan string, resetsPerEmail)
 	mailer.EXPECT().Send(mock.Anything, mock.Anything).Run(func(_ context.Context, msg mail.Message) {
-		bodies = append(bodies, msg.Body)
+		bodies <- msg.Body
 	}).Return(nil).Times(resetsPerEmail)
 	resets := NewResets(svc, mailer, testBaseURL)
 
@@ -86,7 +87,7 @@ func TestResetsRequestKeepsEarlierLinksAndLimitsPerEmail(t *testing.T) {
 
 	assert.Equal(t, resetsPerEmail, count(t, pool, `SELECT count(*) FROM auth_tokens`), "the request over the limit sends nothing")
 	require.Len(t, bodies, resetsPerEmail)
-	_, _, err := svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: linkToken(t, bodies[0]), Password: newPassword})
+	_, _, err := svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: linkToken(t, <-bodies), Password: newPassword})
 	assert.NoError(t, err, "a newer request doesn't cancel the first link")
 }
 
