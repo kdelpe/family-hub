@@ -1,10 +1,14 @@
 package config
 
 import (
+	netmail "net/mail"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kdelpe/family-hub/internal/mail"
 )
 
 const validDatabaseURL = "postgres://app:secret@localhost:5432/familyhub?sslmode=disable"
@@ -206,6 +210,161 @@ func TestLoadNeverEchoesDatabaseURL(t *testing.T) {
 				}
 				return ""
 			})
+
+			require.Error(t, err)
+			assert.NotContains(t, err.Error(), "hunter2")
+		})
+	}
+}
+
+func TestLoadSMTP(t *testing.T) {
+	defaultFrom := netmail.Address{Name: "Family Hub", Address: "noreply@family.example.com"}
+	tests := []struct {
+		name        string
+		env         map[string]string
+		want        mail.SMTPConfig
+		wantErrMsgs []string
+	}{
+		{
+			name: "local Mailpit",
+			env:  map[string]string{"SMTP_HOST": "localhost", "SMTP_PORT": "1025"},
+			want: mail.SMTPConfig{Host: "localhost", Port: "1025", From: defaultFrom},
+		},
+		{
+			name: "a provider",
+			env: map[string]string{
+				"SMTP_HOST": " smtp.example.com ", "SMTP_PORT": "587",
+				"SMTP_USER": "resend", "SMTP_PASS": " pass with spaces ", "MAIL_FROM": "Family <hello@family.example.com>",
+			},
+			want: mail.SMTPConfig{
+				Host: "smtp.example.com", Port: "587", Username: "resend", Password: " pass with spaces ",
+				From: netmail.Address{Name: "Family", Address: "hello@family.example.com"},
+			},
+		},
+		{
+			name: "host in capitals is lowercased",
+			env:  map[string]string{"SMTP_HOST": "LocalHost", "SMTP_PORT": "1025"},
+			want: mail.SMTPConfig{Host: "localhost", Port: "1025", From: defaultFrom},
+		},
+		{
+			name: "IPv6 literal",
+			env:  map[string]string{"SMTP_HOST": "::1", "SMTP_PORT": "1025"},
+			want: mail.SMTPConfig{Host: "::1", Port: "1025", From: defaultFrom},
+		},
+		{
+			name:        "nothing set",
+			env:         map[string]string{},
+			wantErrMsgs: []string{"SMTP_HOST is required", "SMTP_PORT is required"},
+		},
+		{
+			name:        "user without password",
+			env:         map[string]string{"SMTP_HOST": "localhost", "SMTP_PORT": "1025", "SMTP_USER": "resend"},
+			wantErrMsgs: []string{"SMTP_USER and SMTP_PASS must be set together"},
+		},
+		{
+			name:        "password without user",
+			env:         map[string]string{"SMTP_HOST": "localhost", "SMTP_PORT": "1025", "SMTP_PASS": "x"},
+			wantErrMsgs: []string{"SMTP_USER and SMTP_PASS must be set together"},
+		},
+		{
+			name:        "port not a number",
+			env:         map[string]string{"SMTP_HOST": "localhost", "SMTP_PORT": "smtp"},
+			wantErrMsgs: []string{"SMTP_PORT must be a port"},
+		},
+		{
+			name:        "port 465",
+			env:         map[string]string{"SMTP_HOST": "smtp.example.com", "SMTP_PORT": "465"},
+			wantErrMsgs: []string{"SMTP_PORT 465 (implicit TLS) isn't supported"},
+		},
+		{
+			name:        "host is a URL",
+			env:         map[string]string{"SMTP_HOST": "smtp://smtp.example.com", "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name:        "host with a port",
+			env:         map[string]string{"SMTP_HOST": "smtp.example.com:587", "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name:        "host with an underscore",
+			env:         map[string]string{"SMTP_HOST": "smtp_example", "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name:        "host of dots",
+			env:         map[string]string{"SMTP_HOST": "..", "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name: "longest host",
+			env:  map[string]string{"SMTP_HOST": strings.Repeat("a", 63) + "." + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 61), "SMTP_PORT": "587"},
+			want: mail.SMTPConfig{Host: strings.Repeat("a", 63) + "." + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 61), Port: "587", From: defaultFrom},
+		},
+		{
+			name:        "host one too long",
+			env:         map[string]string{"SMTP_HOST": strings.Repeat("a", 63) + "." + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 62), "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name:        "label too long",
+			env:         map[string]string{"SMTP_HOST": strings.Repeat("a", 64) + ".example.com", "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name:        "label starting with a hyphen",
+			env:         map[string]string{"SMTP_HOST": "-smtp.example.com", "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name:        "label ending with a hyphen",
+			env:         map[string]string{"SMTP_HOST": "smtp-.example.com", "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name:        "host with an empty label",
+			env:         map[string]string{"SMTP_HOST": "smtp..example.com", "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name:        "MAIL_FROM not an address",
+			env:         map[string]string{"SMTP_HOST": "localhost", "SMTP_PORT": "1025", "MAIL_FROM": "Family Hub"},
+			wantErrMsgs: []string{"MAIL_FROM must be an address"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := LoadSMTP(func(key string) string { return tt.env[key] })
+
+			if len(tt.wantErrMsgs) == 0 {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got)
+				return
+			}
+			require.Error(t, err)
+			for _, msg := range tt.wantErrMsgs {
+				assert.Contains(t, err.Error(), msg)
+			}
+			assert.Equal(t, mail.SMTPConfig{}, got)
+		})
+	}
+}
+
+func TestLoadSMTPNeverEchoesSecrets(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+	}{
+		{name: "credentials pasted into SMTP_HOST", env: map[string]string{"SMTP_HOST": "resend:hunter2@smtp.example.com", "SMTP_PORT": "587"}},
+		{name: "password with a bad port", env: map[string]string{"SMTP_HOST": "localhost", "SMTP_USER": "resend", "SMTP_PASS": "hunter2", "SMTP_PORT": "x"}},
+		{name: "password without user", env: map[string]string{"SMTP_HOST": "localhost", "SMTP_PORT": "1025", "SMTP_PASS": "hunter2"}},
+		{name: "password pasted into MAIL_FROM", env: map[string]string{"SMTP_HOST": "localhost", "SMTP_PORT": "1025", "MAIL_FROM": "hunter2"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := LoadSMTP(func(key string) string { return tt.env[key] })
 
 			require.Error(t, err)
 			assert.NotContains(t, err.Error(), "hunter2")

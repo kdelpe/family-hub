@@ -707,7 +707,7 @@ Changes vs V2: no CORS middleware (Vite proxies `/api`, so dev is same-origin to
 
 **One migration per phase:** each phase adds the tables its code uses, starting with the auth tables in Phase 2. §3.1 shows the full schema as one file for reading; it's split by phase when written.
 
-**Tests** run against `TEST_DATABASE_URL`, each in a throwaway schema (`search_path`), using small migrations in `internal/database/testdata/`. `make test` always sets it, so run `make up` first; a plain `go test` without it skips them locally, and CI fails instead of skipping.
+**Tests** run against `TEST_DATABASE_URL`, each in a throwaway schema (`search_path`), using small migrations in `internal/database/testdata/`; the mail tests send to Mailpit and read the result back through its API at `TEST_MAILPIT_URL`. `make test` always sets both, so run `make up` first; a plain `go test` without them skips those tests locally, and CI (which runs Postgres and Mailpit as services) fails instead of skipping.
 
 ### 6.3 SPA handler (`internal/webui`)
 
@@ -757,7 +757,7 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 | `AUTO_MIGRATE` | `false` | Default `false`; `make dev-api` sets `true`. Booleans accept `true`/`false` in any case |
 | `TRUSTED_PROXY` | `false` | Takes the client IP from the last `X-Forwarded-For` entry, the one the proxy appended |
 | `COOKIE_SECURE` | `true` | `false` for local http |
-| `SMTP_HOST/PORT/USER/PASS`, `MAIL_FROM` | `localhost:1025` (Mailpit) | Invites and password resets |
+| `SMTP_HOST/PORT/USER/PASS`, `MAIL_FROM` | `localhost:1025` (Mailpit, set by the Makefile), `Family Hub <noreply@family.example.com>` | Invites and password resets. Host and port are required by `serve` (no default, so a deploy without mail fails at startup) and ignored by `migrate up` and `admin create`. STARTTLS (port 587) is required for any non-loopback host; `SMTP_USER` and `SMTP_PASS` go together |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | from Google Cloud console | Optional: when unset, "Continue with Google" is hidden. Redirect URI is `<BASE_URL>/api/auth/google/callback` |
 | `S3_ENDPOINT` | `http://storage:9000` | What the **server** uses |
 | `S3_PUBLIC_ENDPOINT` | `http://localhost:9000` | What the **browser** uses; presigned URLs are signed against this host |
@@ -796,7 +796,10 @@ The end state after Phase 1. Each target lands in the PR that needs it, so the r
 ```make
 DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
-export DATABASE_URL TEST_DATABASE_URL
+TEST_MAILPIT_URL  ?= http://localhost:8025
+SMTP_HOST         ?= localhost
+SMTP_PORT         ?= 1025
+export DATABASE_URL TEST_DATABASE_URL TEST_MAILPIT_URL SMTP_HOST SMTP_PORT
 
 .PHONY: up down run dev-api dev-ui ui-stub generate test lint vuln build migrate-up migrate-new seed
 
@@ -843,7 +846,7 @@ services:
     healthcheck:                            # over TCP, so first-run setup doesn't count as ready
       { test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""], start_period: 30s, interval: 2s, retries: 15 }
   mailpit:                       # catches outgoing mail; UI on :8025
-    image: axllent/mailpit:v1.33.0
+    image: axllent/mailpit:v1.33.1
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
   storage:                       # added in Phase 5: S3-compatible server chosen then (see §9.5)
     # image: ...

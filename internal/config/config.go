@@ -5,9 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	netmail "net/mail"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/kdelpe/family-hub/internal/mail"
+)
+
+const (
+	defaultMailFrom = "Family Hub <noreply@family.example.com>"
+	implicitTLSPort = "465"
+	maxHostLen      = 253
+	maxLabelLen     = 63
 )
 
 type Config struct {
@@ -16,6 +26,8 @@ type Config struct {
 	AutoMigrate  bool
 	CookieSecure bool
 	TrustedProxy bool
+	// Only serve loads it (LoadSMTP), so a mail mistake never blocks migrate up or admin create.
+	SMTP mail.SMTPConfig
 }
 
 // Load reads settings through getenv (os.Getenv outside tests) and reports every problem at once.
@@ -78,6 +90,63 @@ func isPostgresURL(raw string) bool {
 		return false
 	}
 	return u.Hostname() != "" || query.Get("host") != ""
+}
+
+// LoadSMTP reads the mail settings. Host and port have no default, so a server deployed without
+// them fails at startup, not at its first invite. Errors never quote a value: it may hold a secret.
+func LoadSMTP(getenv func(string) string) (mail.SMTPConfig, error) {
+	cfg := mail.SMTPConfig{
+		Host:     strings.ToLower(strings.TrimSpace(getenv("SMTP_HOST"))),
+		Port:     strings.TrimSpace(getenv("SMTP_PORT")),
+		Username: strings.TrimSpace(getenv("SMTP_USER")),
+		Password: getenv("SMTP_PASS"),
+	}
+	var errs []error
+	switch {
+	case cfg.Host == "":
+		errs = append(errs, errors.New("SMTP_HOST is required"))
+	case net.ParseIP(cfg.Host) == nil && !hostName(cfg.Host):
+		errs = append(errs, errors.New("SMTP_HOST must be a bare host name or IP address, without scheme, credentials or port"))
+	}
+	switch {
+	case cfg.Port == "":
+		errs = append(errs, errors.New("SMTP_PORT is required"))
+	case cfg.Port == implicitTLSPort:
+		errs = append(errs, errors.New("SMTP_PORT 465 (implicit TLS) isn't supported; use the provider's STARTTLS port, usually 587"))
+	case !validListenAddr(":" + cfg.Port):
+		errs = append(errs, errors.New("SMTP_PORT must be a port from 1 to 65535"))
+	}
+	if (cfg.Username == "") != (cfg.Password == "") {
+		errs = append(errs, errors.New("SMTP_USER and SMTP_PASS must be set together"))
+	}
+	rawFrom := strings.TrimSpace(getenv("MAIL_FROM"))
+	if rawFrom == "" {
+		rawFrom = defaultMailFrom
+	}
+	from, err := netmail.ParseAddress(rawFrom)
+	if err != nil {
+		errs = append(errs, errors.New(`MAIL_FROM must be an address like "Family Hub <noreply@family.example.com>"`))
+	} else {
+		cfg.From = *from
+	}
+	if len(errs) > 0 {
+		return mail.SMTPConfig{}, fmt.Errorf("invalid mail config: %w", errors.Join(errs...))
+	}
+	return cfg, nil
+}
+
+// A DNS name (RFC 1123): dot-separated labels of lowercase letters, digits and inner hyphens.
+func hostName(host string) bool {
+	if len(host) > maxHostLen {
+		return false
+	}
+	for label := range strings.SplitSeq(host, ".") {
+		if label == "" || len(label) > maxLabelLen || label[0] == '-' || label[len(label)-1] == '-' ||
+			strings.Trim(label, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func validListenAddr(addr string) bool {
