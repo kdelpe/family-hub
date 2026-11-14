@@ -155,7 +155,7 @@ func LoadBaseURL(getenv func(string) string) (string, error) {
 	host, port := strings.ToLower(u.Hostname()), u.Port()
 	ip, ipErr := netip.ParseAddr(host)
 	// Browsers rewrite these (an IPv4-mapped IPv6, or a name ending in a number) in Origin.
-	validHost := (ipErr == nil && !ip.Is4In6()) || (hostName(host) && !endsInNumber(host))
+	validHost := (ipErr == nil && !ip.Is4In6() && ip.Zone() == "") || (hostName(host) && !endsInNumber(host))
 	validPort := (port == "" && !strings.HasSuffix(u.Host, ":")) || (port != "" && validListenAddr(":"+port))
 	if (u.Scheme != "http" && u.Scheme != "https") || !validHost || !validPort || u.User != nil ||
 		(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
@@ -180,7 +180,8 @@ func LoadBaseURL(getenv func(string) string) (string, error) {
 
 func endsInNumber(host string) bool {
 	last := host[strings.LastIndex(host, ".")+1:]
-	return strings.Trim(last, "0123456789") == "" || strings.HasPrefix(last, "0x")
+	hex, isHex := strings.CutPrefix(last, "0x")
+	return strings.Trim(last, "0123456789") == "" || (isHex && strings.Trim(hex, "0123456789abcdef") == "")
 }
 
 // A DNS name (RFC 1123): dot-separated labels of lowercase letters, digits and inner hyphens.

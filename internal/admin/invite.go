@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -13,6 +14,7 @@ import (
 )
 
 const (
+	commitTimeout   = 10 * time.Second
 	setPasswordPath = "/auth/set-password#t="
 	inviteSubject   = "You're invited to the family hub"
 	inviteBody      = `Bonjou,
@@ -84,7 +86,9 @@ func (s *Invites) Invite(ctx context.Context, in InviteInput) (auth.User, error)
 	case err != nil:
 		return auth.User{}, fmt.Errorf("%w: %w", ErrInviteNotSent, err)
 	}
-	if err := tx.Commit(context.WithoutCancel(ctx)); err != nil {
+	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
+	defer cancel()
+	if err := tx.Commit(commitCtx); err != nil {
 		return auth.User{}, fmt.Errorf("commit invite: %w", err)
 	}
 	return auth.User{ID: id, Email: email, Role: in.Role}, nil

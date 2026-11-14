@@ -390,6 +390,8 @@ func TestLoadBaseURL(t *testing.T) {
 		{name: "an IPv4-mapped IPv6 address", raw: "http://[::ffff:192.0.2.1]", wantErr: "BASE_URL must be an origin"},
 		{name: "an IPv4 address with leading zeros", raw: "http://192.168.001.010:8080", wantErr: "BASE_URL must be an origin"},
 		{name: "a hex IPv4 address", raw: "http://0x7f.0.0.1", wantErr: "BASE_URL must be an origin"},
+		{name: "a name that starts with 0x", raw: "http://0x-hub:5173", want: "http://0x-hub:5173"},
+		{name: "a scoped IPv6 address", raw: "http://[fe80::1%25eth0]", wantErr: "BASE_URL must be an origin"},
 		{name: "a short IPv4 address", raw: "http://1.2.3", wantErr: "BASE_URL must be an origin"},
 		{name: "default https port dropped", raw: "https://family.example.com:443", want: "https://family.example.com"},
 		{name: "default http port dropped", raw: "http://localhost:80/", want: "http://localhost"},
