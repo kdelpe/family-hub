@@ -20,3 +20,7 @@ DELETE FROM sessions WHERE id_hash = @id_hash;
 
 -- name: DeleteUserSessions :exec
 DELETE FROM sessions WHERE user_id = @user_id;
+
+-- name: SessionActive :one
+SELECT EXISTS (SELECT 1 FROM sessions WHERE id_hash = @id_hash AND user_id = @user_id
+  AND expires_at > clock_timestamp() AND last_seen_at > clock_timestamp() - @idle_timeout::interval);

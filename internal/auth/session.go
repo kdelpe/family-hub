@@ -58,11 +58,10 @@ func (s *Sessions) Create(ctx context.Context, userID uuid.UUID, userAgent strin
 }
 
 func (s *Sessions) Authenticate(ctx context.Context, token string) (Session, error) {
-	raw, ok := decodeToken(token)
-	if !ok {
+	idHash := sessionHash(token)
+	if idHash == nil {
 		return Session{}, ErrNoSession
 	}
-	idHash := hashToken(raw)
 	row, err := s.q.GetActiveSession(ctx, gen.GetActiveSessionParams{IDHash: idHash, IdleTimeout: sessionIdleTimeout, TouchAfter: sessionTouchAfter})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Session{}, ErrNoSession
@@ -81,11 +80,11 @@ func (s *Sessions) Authenticate(ctx context.Context, token string) (Session, err
 }
 
 func (s *Sessions) Delete(ctx context.Context, token string) error {
-	raw, ok := decodeToken(token)
-	if !ok {
+	idHash := sessionHash(token)
+	if idHash == nil {
 		return nil
 	}
-	if err := s.q.DeleteSession(ctx, hashToken(raw)); err != nil {
+	if err := s.q.DeleteSession(ctx, idHash); err != nil {
 		return fmt.Errorf("delete session: %w", err)
 	}
 	return nil
@@ -96,6 +95,15 @@ func newToken() (raw []byte, encoded string) {
 	raw = make([]byte, tokenLen)
 	_, _ = rand.Read(raw)
 	return raw, base64.RawURLEncoding.EncodeToString(raw)
+}
+
+// sessionHash is the stored id of a session token, or nil for a malformed one, which matches no session.
+func sessionHash(token string) []byte {
+	raw, ok := decodeToken(token)
+	if !ok {
+		return nil
+	}
+	return hashToken(raw)
 }
 
 func decodeToken(token string) ([]byte, bool) {

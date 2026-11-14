@@ -316,3 +316,73 @@ func TestForgotPassword(t *testing.T) {
 		})
 	}
 }
+
+func TestChangePassword(t *testing.T) {
+	const body = `{"current_password":"old pw","new_password":"new pw"}`
+
+	tests := []struct {
+		name        string
+		session     bool
+		body        string
+		changeErr   error
+		wantChange  bool
+		wantStatus  int
+		wantBody    string
+		wantCleared bool
+	}{
+		{name: "changed", session: true, body: body, wantChange: true, wantStatus: http.StatusNoContent},
+		{name: "wrong current password", session: true, body: body, wantChange: true, changeErr: auth.ErrInvalidCredentials, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"wrong_password","message":"current password is incorrect"}}`},
+		{name: "new password refused", session: true, body: body, wantChange: true, changeErr: auth.ErrPasswordTooShort, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"` + auth.ErrPasswordTooShort.Error() + `"}}`},
+		{name: "too many wrong attempts", session: true, body: body, wantChange: true, changeErr: &auth.RateLimitedError{RetryAfter: time.Minute}, wantStatus: http.StatusTooManyRequests,
+			wantBody: `{"error":{"code":"rate_limited","message":"too many attempts, try again later"}}`},
+		{name: "signed out meanwhile", session: true, body: body, wantChange: true, changeErr: auth.ErrNoSession, wantStatus: http.StatusUnauthorized, wantBody: unauthorizedBody, wantCleared: true},
+		{name: "busy", session: true, body: body, wantChange: true, changeErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable,
+			wantBody: `{"error":{"code":"busy","message":"try again in a moment"}}`},
+		{name: "database error", session: true, body: body, wantChange: true, changeErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+		{name: "unknown field", session: true, body: `{"current_password":"a","new_password":"b","user_id":"x"}`, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"bad_request","message":"invalid JSON body"}}`},
+		{name: "mounted without a session gate", body: body, wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewAuthService(t)
+			if tt.wantChange {
+				in := auth.ChangePasswordInput{UserID: testUser.ID, SessionToken: "tok", CurrentPassword: "old pw", NewPassword: "new pw", UserAgent: "test-agent"}
+				svc.EXPECT().ChangePassword(mock.Anything, in).Return("fresh", tt.changeErr)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/auth/password/change", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("User-Agent", "test-agent")
+			req.AddCookie(&http.Cookie{Name: "__Host-fh_session", Value: "tok"})
+			h := http.HandlerFunc(handler.NewAuth(svc, nil, handler.NewSessionCookie(true)).ChangePassword)
+			rec := httptest.NewRecorder()
+
+			if tt.session {
+				sessions := mocks.NewSessionAuthenticator(t)
+				sessions.EXPECT().Authenticate(mock.Anything, "tok").Return(auth.Session{UserID: testUser.ID, Role: auth.RoleMember}, nil)
+				handler.NewSessionGate(sessions, handler.NewSessionCookie(true)).Require(h).ServeHTTP(rec, req)
+			} else {
+				h.ServeHTTP(rec, req)
+			}
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			cookies := rec.Result().Cookies()
+			if tt.wantBody == "" {
+				assert.Empty(t, rec.Body.String())
+				require.Len(t, cookies, 1, "the new session replaces the old cookie")
+				assert.Equal(t, "fresh", cookies[0].Value)
+				return
+			}
+			if tt.wantCleared {
+				require.Len(t, cookies, 1)
+				assert.Negative(t, cookies[0].MaxAge, "the dead session's cookie is cleared")
+			} else {
+				assert.Empty(t, cookies)
+			}
+			assert.JSONEq(t, tt.wantBody, rec.Body.String())
+		})
+	}
+}

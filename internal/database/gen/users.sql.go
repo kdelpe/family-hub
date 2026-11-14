@@ -94,6 +94,29 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (GetUserRow, error)
 	return i, err
 }
 
+const getUserPassword = `-- name: GetUserPassword :one
+SELECT email, password_hash, password_changed_at, disabled_at FROM users WHERE id = $1
+`
+
+type GetUserPasswordRow struct {
+	Email             string
+	PasswordHash      *string
+	PasswordChangedAt *time.Time
+	DisabledAt        *time.Time
+}
+
+func (q *Queries) GetUserPassword(ctx context.Context, id uuid.UUID) (GetUserPasswordRow, error) {
+	row := q.db.QueryRow(ctx, getUserPassword, id)
+	var i GetUserPasswordRow
+	err := row.Scan(
+		&i.Email,
+		&i.PasswordHash,
+		&i.PasswordChangedAt,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
 const lockEnabledUserByEmail = `-- name: LockEnabledUserByEmail :one
 SELECT id FROM users WHERE email = $1 AND disabled_at IS NULL FOR UPDATE
 `
@@ -141,6 +164,20 @@ type RecordLoginParams struct {
 
 func (q *Queries) RecordLogin(ctx context.Context, arg RecordLoginParams) error {
 	_, err := q.db.Exec(ctx, recordLogin, arg.NewPasswordHash, arg.ID)
+	return err
+}
+
+const setPassword = `-- name: SetPassword :exec
+UPDATE users SET password_hash = $1::text, password_changed_at = clock_timestamp() WHERE id = $2
+`
+
+type SetPasswordParams struct {
+	PasswordHash string
+	ID           uuid.UUID
+}
+
+func (q *Queries) SetPassword(ctx context.Context, arg SetPasswordParams) error {
+	_, err := q.db.Exec(ctx, setPassword, arg.PasswordHash, arg.ID)
 	return err
 }
 

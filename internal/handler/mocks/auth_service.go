@@ -48,6 +48,72 @@ func (_m *AuthService) EXPECT() *AuthService_Expecter {
 	return &AuthService_Expecter{mock: &_m.Mock}
 }
 
+// ChangePassword provides a mock function for the type AuthService
+func (_mock *AuthService) ChangePassword(ctx context.Context, in auth.ChangePasswordInput) (string, error) {
+	ret := _mock.Called(ctx, in)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ChangePassword")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, auth.ChangePasswordInput) (string, error)); ok {
+		return returnFunc(ctx, in)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, auth.ChangePasswordInput) string); ok {
+		r0 = returnFunc(ctx, in)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, auth.ChangePasswordInput) error); ok {
+		r1 = returnFunc(ctx, in)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// AuthService_ChangePassword_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ChangePassword'
+type AuthService_ChangePassword_Call struct {
+	*mock.Call
+}
+
+// ChangePassword is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in auth.ChangePasswordInput
+func (_e *AuthService_Expecter) ChangePassword(ctx any, in any) *AuthService_ChangePassword_Call {
+	return &AuthService_ChangePassword_Call{Call: _e.mock.On("ChangePassword", ctx, in)}
+}
+
+func (_c *AuthService_ChangePassword_Call) Run(run func(ctx context.Context, in auth.ChangePasswordInput)) *AuthService_ChangePassword_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 auth.ChangePasswordInput
+		if args[1] != nil {
+			arg1 = args[1].(auth.ChangePasswordInput)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *AuthService_ChangePassword_Call) Return(s string, err error) *AuthService_ChangePassword_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *AuthService_ChangePassword_Call) RunAndReturn(run func(ctx context.Context, in auth.ChangePasswordInput) (string, error)) *AuthService_ChangePassword_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Login provides a mock function for the type AuthService
 func (_mock *AuthService) Login(ctx context.Context, in auth.LoginInput) (string, auth.User, error) {
 	ret := _mock.Called(ctx, in)
