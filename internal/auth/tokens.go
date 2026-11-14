@@ -17,10 +17,9 @@ const (
 	InviteLifetime       = 7 * 24 * time.Hour
 	purposeInvite        = "invite"
 	purposePasswordReset = "password_reset"
+	// Google owns this domain outright; a Workspace domain needs the ID token's hd claim (§5).
+	gmailDomain = "@gmail.com"
 )
-
-// Google owns these domains outright; a Workspace domain needs the ID token's hd claim (§5).
-var googleMailDomains = []string{"@gmail.com", "@googlemail.com"}
 
 var ErrInvalidToken = errors.New("link is invalid, used or expired")
 
@@ -46,7 +45,7 @@ func (s *Service) PreviewLink(ctx context.Context, token string) (LinkPreview, e
 	if err != nil {
 		return LinkPreview{}, err
 	}
-	return LinkPreview{Purpose: found.Purpose, Email: found.Email, GoogleEligible: googleMail(found.Email)}, nil
+	return LinkPreview{Purpose: found.Purpose, Email: found.Email, GoogleEligible: strings.HasSuffix(found.Email, gmailDomain)}, nil
 }
 
 // usableToken finds a link that works now; using it re-checks under the user's row lock.
@@ -63,15 +62,6 @@ func (s *Service) usableToken(ctx context.Context, token string) (gen.GetUsableT
 		return gen.GetUsableTokenRow{}, fmt.Errorf("find token: %w", err)
 	}
 	return found, nil
-}
-
-func googleMail(email string) bool {
-	for _, domain := range googleMailDomains {
-		if strings.HasSuffix(email, domain) {
-			return true
-		}
-	}
-	return false
 }
 
 type SetPasswordInput struct {
