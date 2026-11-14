@@ -72,6 +72,7 @@ func TestSessionGateRequire(t *testing.T) {
 			handler.NewSessionGate(sessions, handler.NewSessionCookie(tt.secureCookie)).Require(next).ServeHTTP(rec, req)
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
+			assert.Empty(t, rec.Result().Cookies(), "a cookie the browser may since have replaced is left alone")
 			if tt.canceled {
 				assert.Empty(t, rec.Body.String(), "nothing written for a client that left")
 				assert.Zero(t, seen, "protected handler not run")

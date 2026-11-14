@@ -34,6 +34,15 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) error 
 	return err
 }
 
+const deleteUserTokens = `-- name: DeleteUserTokens :exec
+DELETE FROM auth_tokens WHERE user_id = $1
+`
+
+func (q *Queries) DeleteUserTokens(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserTokens, userID)
+	return err
+}
+
 const getUsableToken = `-- name: GetUsableToken :one
 SELECT t.id, t.user_id, t.purpose, u.email
 FROM auth_tokens t JOIN users u ON u.id = t.user_id

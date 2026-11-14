@@ -4,12 +4,12 @@ A private, invite-only family archive. The design lives in `docs/architecture-v3
 
 ## Current stage
 
-**Phase 1 (foundation) in progress.** Planning is done; code is written one small PR at a time, in the order below.
+**Phase 2 (auth) in progress.** Planning is done; code is written one small PR at a time, in the order below.
 
 Planned order:
 1. Repo structure: settled (architecture §2).
-2. Backend first: Phase 1 (foundation), 2 (auth), 3 (people/tree/contacts API on the §3 schema).
-3. Then frontend; the clickable tree mockup opens Phase 4b. Code phase by phase (architecture §15), one short-lived branch and PR at a time.
+2. Backend first: Phase 1 (foundation), 2 (auth).
+3. Then the frontend shell and the five pages before sign-in (start of Phase 4a), then Phase 3 (people/tree/contacts API on the §3 schema), then the rest of the frontend; the clickable tree mockup opens Phase 4b. Code phase by phase (architecture §15), one short-lived branch and PR at a time.
 
 ## Guiding principle
 

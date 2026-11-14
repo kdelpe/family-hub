@@ -27,3 +27,9 @@ INSERT INTO users (email, role) VALUES (@email, @role) RETURNING id;
 
 -- name: LockEnabledUserByEmail :one
 SELECT id FROM users WHERE email = @email AND disabled_at IS NULL FOR UPDATE;
+
+-- name: GetUserPassword :one
+SELECT email, password_hash, password_changed_at, disabled_at FROM users WHERE id = @id;
+
+-- name: SetPassword :exec
+UPDATE users SET password_hash = @password_hash::text, password_changed_at = clock_timestamp() WHERE id = @id;

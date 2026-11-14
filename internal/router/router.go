@@ -68,6 +68,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(mw.RequireSession)
 			r.Get("/auth/me", h.Auth.Me)
+			r.Post("/auth/password/change", h.Auth.ChangePassword)
 
 			r.Group(func(r chi.Router) {
 				r.Use(handler.RequireAdmin)

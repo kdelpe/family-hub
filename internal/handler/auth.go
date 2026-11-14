@@ -15,6 +15,7 @@ type AuthService interface {
 	Login(ctx context.Context, in auth.LoginInput) (string, auth.User, error)
 	SetPasswordWithToken(ctx context.Context, in auth.SetPasswordInput) (string, auth.User, error)
 	PreviewLink(ctx context.Context, token string) (auth.LinkPreview, error)
+	ChangePassword(ctx context.Context, in auth.ChangePasswordInput) (string, error)
 	Logout(ctx context.Context, token string) error
 	User(ctx context.Context, id uuid.UUID) (auth.User, error)
 }
@@ -45,6 +46,11 @@ type forgotPasswordRequest struct {
 type resetPasswordRequest struct {
 	Token    string `json:"token"`
 	Password string `json:"password"`
+}
+
+type changePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
 }
 
 type previewRequest struct {
@@ -118,7 +124,7 @@ func (a *Auth) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	case clientGone(r):
 	case errors.Is(err, auth.ErrInvalidToken):
 		invalidToken(w)
-	case errors.Is(err, auth.ErrPasswordTooShort), errors.Is(err, auth.ErrPasswordTooLong), errors.Is(err, auth.ErrPasswordTooCommon):
+	case passwordRefused(err):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, auth.ErrBusy):
 		busy(w)
@@ -142,6 +148,44 @@ func (a *Auth) PreviewLink(w http.ResponseWriter, r *http.Request) {
 		invalidToken(w)
 	default:
 		internalError(w, r, err, "preview link")
+	}
+}
+
+// ChangePassword answers with a new session cookie: every old session, this one included, is gone.
+func (a *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	session, ok := CurrentSession(r.Context())
+	if !ok {
+		internalError(w, r, errors.New("no session in context"), "change password mounted without RequireSession")
+		return
+	}
+	var req changePasswordRequest
+	if !httpx.DecodeJSON(w, r, &req) {
+		return
+	}
+	in := auth.ChangePasswordInput{
+		UserID: session.UserID, SessionToken: a.cookieToken(r), CurrentPassword: req.CurrentPassword, NewPassword: req.NewPassword, UserAgent: r.UserAgent(),
+	}
+	token, err := a.svc.ChangePassword(r.Context(), in)
+	var limited *auth.RateLimitedError
+	switch {
+	case err == nil:
+		// Even for a client that just left: its old session is gone either way.
+		a.cookie.set(w, token)
+		w.WriteHeader(http.StatusNoContent)
+	case clientGone(r):
+	case errors.As(err, &limited):
+		httpx.TooManyRequests(w, limited.RetryAfter)
+	case errors.Is(err, auth.ErrInvalidCredentials):
+		httpx.Error(w, http.StatusBadRequest, "wrong_password", "current password is incorrect")
+	case passwordRefused(err):
+		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
+	case errors.Is(err, auth.ErrNoSession):
+		// Not cleared: a double-submit's winner may have just set a newer cookie.
+		unauthorized(w)
+	case errors.Is(err, auth.ErrBusy):
+		busy(w)
+	default:
+		internalError(w, r, err, "change password")
 	}
 }
 
@@ -178,6 +222,10 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 	default:
 		httpx.JSON(w, http.StatusOK, toUserResponse(user))
 	}
+}
+
+func passwordRefused(err error) bool {
+	return errors.Is(err, auth.ErrPasswordTooShort) || errors.Is(err, auth.ErrPasswordTooLong) || errors.Is(err, auth.ErrPasswordTooCommon)
 }
 
 func invalidToken(w http.ResponseWriter) {

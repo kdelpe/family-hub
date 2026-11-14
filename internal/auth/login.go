@@ -37,10 +37,12 @@ const (
 	lockNotAvailable  = "55P03"
 	deadlockDetected  = "40P01"
 
-	loginFailuresPerEmailAndIP       = 5
-	loginFailuresPerEmailAndIPWindow = 15 * time.Minute
-	loginFailuresPerEmail            = 50
-	loginFailuresPerEmailWindow      = time.Hour
+	loginFailuresPerEmailAndIP             = 5
+	loginFailuresPerEmailAndIPWindow       = 15 * time.Minute
+	loginFailuresPerEmail                  = 50
+	loginFailuresPerEmailWindow            = time.Hour
+	passwordChangeFailuresPerSession       = 5
+	passwordChangeFailuresPerSessionWindow = 15 * time.Minute
 	// RFC 5321's limits; longer can't be a real address, and would pin big limiter keys.
 	maxEmailLen     = 254
 	maxLocalPartLen = 64
@@ -48,13 +50,13 @@ const (
 )
 
 // The password was right but a credential changed meanwhile: refused, but not a failed guess.
-var errChangedDuringLogin = errors.New("credentials changed during login")
+var errCredentialsChanged = errors.New("credentials changed meanwhile")
 
 type RateLimitedError struct {
 	RetryAfter time.Duration
 }
 
-func (e *RateLimitedError) Error() string { return "too many failed sign-ins" }
+func (e *RateLimitedError) Error() string { return "too many failed attempts" }
 
 type Service struct {
 	pool        *pgxpool.Pool
@@ -63,6 +65,7 @@ type Service struct {
 
 	failuresByEmailAndIP *ratelimit.Limiter
 	failuresByEmail      *ratelimit.Limiter
+	failuresBySession    *ratelimit.Limiter
 }
 
 func NewService(pool *pgxpool.Pool, hasher *Hasher) *Service {
@@ -70,6 +73,7 @@ func NewService(pool *pgxpool.Pool, hasher *Hasher) *Service {
 		pool: pool, hasher: hasher, lockTimeout: signInLockTimeout,
 		failuresByEmailAndIP: ratelimit.New(loginFailuresPerEmailAndIP, loginFailuresPerEmailAndIPWindow),
 		failuresByEmail:      ratelimit.New(loginFailuresPerEmail, loginFailuresPerEmailWindow),
+		failuresBySession:    ratelimit.New(passwordChangeFailuresPerSession, passwordChangeFailuresPerSessionWindow),
 	}
 }
 
@@ -158,7 +162,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error
 		s.failuresByEmailAndIP.Refund(pair)
 		s.failuresByEmail.Refund(email)
 	}
-	if errors.Is(err, errChangedDuringLogin) {
+	if errors.Is(err, errCredentialsChanged) {
 		err = ErrInvalidCredentials
 	}
 	return token, user, err
@@ -199,12 +203,12 @@ func (s *Service) login(ctx context.Context, email string, in LoginInput) (strin
 	locked, err := s.lockUser(ctx, tx, qtx, found.ID)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return "", User{}, errChangedDuringLogin
+		return "", User{}, errCredentialsChanged
 	case err != nil:
 		return "", User{}, err
 	case locked.DisabledAt != nil || locked.Email != email ||
 		locked.PasswordChangedAt == nil || !locked.PasswordChangedAt.Equal(*found.PasswordChangedAt):
-		return "", User{}, errChangedDuringLogin
+		return "", User{}, errCredentialsChanged
 	}
 	if err := qtx.RecordLogin(ctx, gen.RecordLoginParams{ID: found.ID, NewPasswordHash: newHash}); err != nil {
 		return "", User{}, fmt.Errorf("record login: %w", err)
