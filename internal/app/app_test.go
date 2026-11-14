@@ -46,7 +46,7 @@ func TestRunCanceledBeforeListening(t *testing.T) {
 		wantErr     bool
 	}{
 		{name: "is a clean stop", autoMigrate: false},
-		{name: "fails if it cuts migrations short", autoMigrate: true, wantErr: true},
+		{name: "fails during AUTO_MIGRATE", autoMigrate: true, wantErr: true},
 	}
 
 	for _, tt := range tests {

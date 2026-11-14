@@ -32,24 +32,32 @@ const (
 	loginsPerIPWindow = 15 * time.Minute
 )
 
-// Run serves until ctx is canceled, which is a clean stop even before the port opens, except
-// during migrations: cut short, they fail. The port opens only once the app can answer,
-// so callers get "connection refused" during migrations rather than a hang.
+// Run serves until ctx is canceled: a clean stop even before the port opens, but not during
+// AUTO_MIGRATE. The port opens only once the app can answer, so callers never hang on it.
 func Run(ctx context.Context, cfg config.Config) error {
 	if cfg.AutoMigrate {
 		if err := database.MigrateUp(ctx, cfg.DatabaseURL); err != nil {
 			return err
 		}
 	}
+	err := connectAndServe(ctx, cfg)
+	if ctx.Err() != nil && errors.Is(err, context.Canceled) {
+		zerolog.Ctx(ctx).Info().Msg("stopped")
+		return nil
+	}
+	return err
+}
+
+func connectAndServe(ctx context.Context, cfg config.Config) error {
 	pool, err := database.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
-		return stoppedOr(ctx, err)
+		return err
 	}
 	defer pool.Close()
 
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddr)
 	if err != nil {
-		return stoppedOr(ctx, fmt.Errorf("listen: %w", err))
+		return fmt.Errorf("listen: %w", err)
 	}
 	zerolog.Ctx(ctx).Info().Str("addr", ln.Addr().String()).Msg("listening")
 	return serve(ctx, newServer(pool, cfg), ln, shutdownTimeout)
@@ -101,12 +109,4 @@ func serve(ctx context.Context, srv *http.Server, ln net.Listener, grace time.Du
 	}
 	zerolog.Ctx(ctx).Info().Msg("stopped")
 	return nil
-}
-
-func stoppedOr(ctx context.Context, err error) error {
-	if ctx.Err() != nil && errors.Is(err, context.Canceled) {
-		zerolog.Ctx(ctx).Info().Msg("stopped")
-		return nil
-	}
-	return err
 }
