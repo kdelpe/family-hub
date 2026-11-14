@@ -107,7 +107,7 @@ family-hub/
 │       ├── components/           # pieces used by 2+ pages: Button, TextField, Avatar, Chip, SignInTree…
 │       ├── api/                  # fetch client (JSON, error shape) + one file per backend area: auth.ts, admin.ts…
 │       ├── styles/               # tokens.css (design-notes §1.1 variables), base.css, fonts.css
-│       ├── assets/fonts/         # the bundled woff2 files
+│       ├── assets/fonts/         # the bundled woff2 files (their OFL licenses ship from public/licenses/)
 │       └── lib/                  # small pure helpers (e.g. date + precision formatting)
 ├── deploy/                       # Caddyfile, compose.prod.yaml, backup + restore scripts (Phase 4c)
 ├── docs/
