@@ -13,9 +13,10 @@ import (
 
 const consumeToken = `-- name: ConsumeToken :execrows
 UPDATE auth_tokens SET consumed_at = now()
-WHERE id = $1 AND consumed_at IS NULL AND expires_at > now()
+WHERE id = $1 AND consumed_at IS NULL AND expires_at > clock_timestamp()
 `
 
+// clock_timestamp, not now(): now() is when the transaction began, before its wait for the user lock.
 func (q *Queries) ConsumeToken(ctx context.Context, id uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, consumeToken, id)
 	if err != nil {
@@ -24,17 +25,12 @@ func (q *Queries) ConsumeToken(ctx context.Context, id uuid.UUID) (int64, error)
 	return result.RowsAffected(), nil
 }
 
-const deleteOtherTokens = `-- name: DeleteOtherTokens :exec
-DELETE FROM auth_tokens WHERE user_id = $1 AND id <> $2
+const deleteUserTokens = `-- name: DeleteUserTokens :exec
+DELETE FROM auth_tokens WHERE user_id = $1
 `
 
-type DeleteOtherTokensParams struct {
-	UserID uuid.UUID
-	KeepID uuid.UUID
-}
-
-func (q *Queries) DeleteOtherTokens(ctx context.Context, arg DeleteOtherTokensParams) error {
-	_, err := q.db.Exec(ctx, deleteOtherTokens, arg.UserID, arg.KeepID)
+func (q *Queries) DeleteUserTokens(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserTokens, userID)
 	return err
 }
 

@@ -184,10 +184,12 @@ func TestSetPasswordWithTokenRefusedWhenAChangeWinsTheLock(t *testing.T) {
 	tests := []struct {
 		name   string
 		change string
+		wait   time.Duration
 	}{
 		{name: "token used meanwhile", change: `UPDATE auth_tokens SET consumed_at = now()`},
 		{name: "disabled", change: `UPDATE users SET disabled_at = now()`},
 		{name: "email change", change: `UPDATE users SET email = 'test.new@example.com'`},
+		{name: "expires during the wait", change: `UPDATE auth_tokens SET expires_at = clock_timestamp() + interval '300 milliseconds'`, wait: 500 * time.Millisecond},
 	}
 
 	for _, tt := range tests {
@@ -213,6 +215,7 @@ func TestSetPasswordWithTokenRefusedWhenAChangeWinsTheLock(t *testing.T) {
 					WHERE wait_event_type = 'Lock' AND query LIKE '-- name: LockUser %')`).Scan(&waiting)
 				return err == nil && waiting
 			}, 10*time.Second, 10*time.Millisecond, "waits on the change's row lock")
+			time.Sleep(tt.wait)
 			require.NoError(t, change.Commit(t.Context()))
 
 			assert.ErrorIs(t, <-done, ErrInvalidToken)

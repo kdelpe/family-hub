@@ -71,14 +71,12 @@ func (s *Service) setPasswordWithToken(ctx context.Context, in SetPasswordInput)
 	case consumed == 0:
 		return "", User{}, ErrInvalidToken
 	}
-	if err := qtx.SetPassword(ctx, gen.SetPasswordParams{ID: found.UserID, PasswordHash: hash}); err != nil {
+	if err := qtx.SetPasswordAndRecordLogin(ctx, gen.SetPasswordAndRecordLoginParams{ID: found.UserID, PasswordHash: hash}); err != nil {
 		return "", User{}, fmt.Errorf("set password: %w", err)
 	}
-	if err := qtx.RecordLogin(ctx, gen.RecordLoginParams{ID: found.UserID}); err != nil {
-		return "", User{}, fmt.Errorf("record login: %w", err)
-	}
-	if err := qtx.DeleteOtherTokens(ctx, gen.DeleteOtherTokensParams{UserID: found.UserID, KeepID: found.ID}); err != nil {
-		return "", User{}, fmt.Errorf("delete other tokens: %w", err)
+	// The consumed token too: a consumed row has nothing left to guard.
+	if err := qtx.DeleteUserTokens(ctx, found.UserID); err != nil {
+		return "", User{}, fmt.Errorf("delete tokens: %w", err)
 	}
 	if err := qtx.DeleteUserSessions(ctx, found.UserID); err != nil {
 		return "", User{}, fmt.Errorf("delete sessions: %w", err)

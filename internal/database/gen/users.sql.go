@@ -117,16 +117,16 @@ func (q *Queries) RecordLogin(ctx context.Context, arg RecordLoginParams) error 
 	return err
 }
 
-const setPassword = `-- name: SetPassword :exec
-UPDATE users SET password_hash = $1::text, password_changed_at = now() WHERE id = $2
+const setPasswordAndRecordLogin = `-- name: SetPasswordAndRecordLogin :exec
+UPDATE users SET password_hash = $1::text, password_changed_at = now(), last_login_at = now() WHERE id = $2
 `
 
-type SetPasswordParams struct {
+type SetPasswordAndRecordLoginParams struct {
 	PasswordHash string
 	ID           uuid.UUID
 }
 
-func (q *Queries) SetPassword(ctx context.Context, arg SetPasswordParams) error {
-	_, err := q.db.Exec(ctx, setPassword, arg.PasswordHash, arg.ID)
+func (q *Queries) SetPasswordAndRecordLogin(ctx context.Context, arg SetPasswordAndRecordLoginParams) error {
+	_, err := q.db.Exec(ctx, setPasswordAndRecordLogin, arg.PasswordHash, arg.ID)
 	return err
 }
