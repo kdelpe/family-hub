@@ -111,7 +111,7 @@ func newServer(pool *pgxpool.Pool, cfg config.Config, google *auth.GoogleAuth) (
 		router.Handlers{
 			Health: handler.NewHealth(pool),
 			Auth:   handler.NewAuth(svc, resets, cookie, googleService),
-			Admin:  handler.NewAdmin(admin.NewInvites(pool, mailer, cfg.BaseURL)),
+			Admin:  handler.NewAdmin(admin.NewUsers(pool, mailer, cfg.BaseURL)),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(auth.NewSessions(pool), cookie).Require,

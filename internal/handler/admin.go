@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
 	"github.com/kdelpe/family-hub/internal/admin"
@@ -14,6 +17,7 @@ import (
 
 type AdminService interface {
 	Invite(ctx context.Context, in admin.InviteInput) (auth.User, error)
+	List(ctx context.Context, in admin.ListInput) (admin.Page, error)
 }
 
 type Admin struct {
@@ -27,6 +31,63 @@ func NewAdmin(svc AdminService) *Admin {
 type inviteRequest struct {
 	Email string `json:"email"`
 	Role  string `json:"role"`
+}
+
+type accountResponse struct {
+	ID              uuid.UUID  `json:"id"`
+	Email           string     `json:"email"`
+	Role            string     `json:"role"`
+	Status          string     `json:"status"`
+	InviteExpiresAt *time.Time `json:"invite_expires_at"`
+	DisabledAt      *time.Time `json:"disabled_at"`
+	LastLoginAt     *time.Time `json:"last_login_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+type pageResponse struct {
+	Users      []accountResponse `json:"users"`
+	NextCursor *string           `json:"next_cursor"`
+}
+
+func (a *Admin) ListUsers(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	in := admin.ListInput{Cursor: query.Get("cursor")}
+	if raw := query.Get("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil || limit == 0 {
+			httpx.Error(w, http.StatusBadRequest, "validation_error", admin.ErrInvalidPageSize.Error())
+			return
+		}
+		in.Limit = limit
+	}
+	page, err := a.svc.List(r.Context(), in)
+	switch {
+	case err == nil:
+		httpx.JSON(w, http.StatusOK, toPageResponse(page))
+	case clientGone(r):
+	case errors.Is(err, admin.ErrInvalidPageSize), errors.Is(err, admin.ErrInvalidCursor):
+		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
+	default:
+		internalError(w, r, err, "list users")
+	}
+}
+
+func toPageResponse(page admin.Page) pageResponse {
+	resp := pageResponse{Users: make([]accountResponse, 0, len(page.Accounts))}
+	if page.NextCursor != "" {
+		resp.NextCursor = &page.NextCursor
+	}
+	for _, acc := range page.Accounts {
+		resp.Users = append(resp.Users, toAccountResponse(acc))
+	}
+	return resp
+}
+
+func toAccountResponse(acc admin.Account) accountResponse {
+	return accountResponse{
+		ID: acc.ID, Email: acc.Email, Role: acc.Role, Status: acc.Status, InviteExpiresAt: acc.InviteExpiresAt,
+		DisabledAt: acc.DisabledAt, LastLoginAt: acc.LastLoginAt, CreatedAt: acc.CreatedAt,
+	}
 }
 
 func (a *Admin) InviteUser(w http.ResponseWriter, r *http.Request) {

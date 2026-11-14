@@ -46,3 +46,15 @@ SELECT email, password_hash, password_changed_at, disabled_at FROM users WHERE i
 
 -- name: SetPassword :exec
 UPDATE users SET password_hash = @password_hash::text, password_changed_at = clock_timestamp() WHERE id = @id;
+
+-- name: ListUsers :many
+SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
+  (u.password_hash IS NOT NULL OR u.google_sub IS NOT NULL)::boolean AS set_up,
+  -- sqlc can't type a nullable max(), so has_invite says whether invite_expires_at is real.
+  (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
+FROM users u
+LEFT JOIN auth_tokens t ON t.user_id = u.id AND t.purpose = 'invite' AND t.consumed_at IS NULL
+WHERE @after_email::text = '' OR (u.email, u.id) > (@after_email::text, @after_id::uuid)
+GROUP BY u.id
+ORDER BY u.email, u.id
+LIMIT @page_size;

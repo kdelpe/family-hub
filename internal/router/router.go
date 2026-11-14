@@ -75,6 +75,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 
 			r.Group(func(r chi.Router) {
 				r.Use(handler.RequireAdmin)
+				r.Get("/admin/users", h.Admin.ListUsers)
 				r.Post("/admin/users", h.Admin.InviteUser)
 			})
 		})

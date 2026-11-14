@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/database/gen"
 	"github.com/kdelpe/family-hub/internal/mail"
@@ -34,16 +32,6 @@ var (
 	ErrInviteNotSent = errors.New("invitation email could not be sent")
 )
 
-type Invites struct {
-	pool    *pgxpool.Pool
-	mailer  mail.Mailer
-	baseURL string
-}
-
-func NewInvites(pool *pgxpool.Pool, mailer mail.Mailer, baseURL string) *Invites {
-	return &Invites{pool: pool, mailer: mailer, baseURL: baseURL}
-}
-
 type InviteInput struct {
 	Email string
 	Role  string
@@ -51,7 +39,7 @@ type InviteInput struct {
 
 // Invite creates a user without a password and emails them a link to set one. The email goes
 // out before the commit, so a failed send leaves no user behind.
-func (s *Invites) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
+func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 	email := auth.NormalizeEmail(in.Email)
 	if !auth.ValidEmail(email) {
 		return auth.User{}, ErrInvalidEmail
@@ -93,7 +81,7 @@ func (s *Invites) Invite(ctx context.Context, in InviteInput) (auth.User, error)
 	return auth.User{ID: id, Email: email, Role: in.Role}, nil
 }
 
-func (s *Invites) inviteMessage(email, token string) mail.Message {
+func (s *Users) inviteMessage(email, token string) mail.Message {
 	link := auth.SetPasswordLink(s.baseURL, token)
 	days := int(auth.InviteLifetime.Hours() / 24)
 	return mail.Message{To: email, Subject: inviteSubject, Body: fmt.Sprintf(inviteBody, link, days)}

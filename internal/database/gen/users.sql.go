@@ -154,6 +154,67 @@ func (q *Queries) LinkGoogleAndRecordLogin(ctx context.Context, arg LinkGoogleAn
 	return err
 }
 
+const listUsers = `-- name: ListUsers :many
+SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
+  (u.password_hash IS NOT NULL OR u.google_sub IS NOT NULL)::boolean AS set_up,
+  -- sqlc can't type a nullable max(), so has_invite says whether invite_expires_at is real.
+  (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
+FROM users u
+LEFT JOIN auth_tokens t ON t.user_id = u.id AND t.purpose = 'invite' AND t.consumed_at IS NULL
+WHERE $1::text = '' OR (u.email, u.id) > ($1::text, $2::uuid)
+GROUP BY u.id
+ORDER BY u.email, u.id
+LIMIT $3
+`
+
+type ListUsersParams struct {
+	AfterEmail string
+	AfterID    uuid.UUID
+	PageSize   int32
+}
+
+type ListUsersRow struct {
+	ID              uuid.UUID
+	Email           string
+	Role            string
+	DisabledAt      *time.Time
+	LastLoginAt     *time.Time
+	CreatedAt       time.Time
+	SetUp           bool
+	HasInvite       bool
+	InviteExpiresAt time.Time
+}
+
+func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error) {
+	rows, err := q.db.Query(ctx, listUsers, arg.AfterEmail, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUsersRow
+	for rows.Next() {
+		var i ListUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Role,
+			&i.DisabledAt,
+			&i.LastLoginAt,
+			&i.CreatedAt,
+			&i.SetUp,
+			&i.HasInvite,
+			&i.InviteExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockEnabledUserByEmail = `-- name: LockEnabledUserByEmail :one
 SELECT id FROM users WHERE email = $1 AND disabled_at IS NULL FOR UPDATE
 `

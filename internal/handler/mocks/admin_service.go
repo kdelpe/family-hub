@@ -113,3 +113,69 @@ func (_c *AdminService_Invite_Call) RunAndReturn(run func(ctx context.Context, i
 	_c.Call.Return(run)
 	return _c
 }
+
+// List provides a mock function for the type AdminService
+func (_mock *AdminService) List(ctx context.Context, in admin.ListInput) (admin.Page, error) {
+	ret := _mock.Called(ctx, in)
+
+	if len(ret) == 0 {
+		panic("no return value specified for List")
+	}
+
+	var r0 admin.Page
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, admin.ListInput) (admin.Page, error)); ok {
+		return returnFunc(ctx, in)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, admin.ListInput) admin.Page); ok {
+		r0 = returnFunc(ctx, in)
+	} else {
+		r0 = ret.Get(0).(admin.Page)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, admin.ListInput) error); ok {
+		r1 = returnFunc(ctx, in)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// AdminService_List_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'List'
+type AdminService_List_Call struct {
+	*mock.Call
+}
+
+// List is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in admin.ListInput
+func (_e *AdminService_Expecter) List(ctx any, in any) *AdminService_List_Call {
+	return &AdminService_List_Call{Call: _e.mock.On("List", ctx, in)}
+}
+
+func (_c *AdminService_List_Call) Run(run func(ctx context.Context, in admin.ListInput)) *AdminService_List_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 admin.ListInput
+		if args[1] != nil {
+			arg1 = args[1].(admin.ListInput)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *AdminService_List_Call) Return(page admin.Page, err error) *AdminService_List_Call {
+	_c.Call.Return(page, err)
+	return _c
+}
+
+func (_c *AdminService_List_Call) RunAndReturn(run func(ctx context.Context, in admin.ListInput) (admin.Page, error)) *AdminService_List_Call {
+	_c.Call.Return(run)
+	return _c
+}

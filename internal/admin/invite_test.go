@@ -64,7 +64,7 @@ func TestInvite(t *testing.T) {
 				}).Return(tt.sendErr).Once()
 			}
 
-			user, err := NewInvites(pool, mailer, testBaseURL).Invite(ctx, tt.in)
+			user, err := NewUsers(pool, mailer, testBaseURL).Invite(ctx, tt.in)
 
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
