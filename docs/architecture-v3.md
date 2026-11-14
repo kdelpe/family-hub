@@ -377,7 +377,8 @@ CREATE TABLE stories (
   topics                TEXT[] NOT NULL DEFAULT '{}',
   other_people          TEXT[] NOT NULL DEFAULT '{}', -- people in the story who aren't in the tree ("Père Antoine")
   search_tsv            TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple',
-                          title || ' ' || coalesce(summary, '') || ' ' || transcript::text)) STORED,  -- 'simple': the stories mix Creole, French and English
+                          title || ' ' || coalesce(summary, '') || ' ' ||
+                          jsonb_path_query_array(transcript, '$[*].text')::text)) STORED,  -- line texts only, not keys or timestamps; 'simple' because the stories mix Creole, French and English
   featured_at           TIMESTAMPTZ,                  -- "Story of the week": the latest featured one
   created_by            UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -388,6 +389,7 @@ CREATE TABLE stories (
 );
 CREATE INDEX idx_stories_search ON stories USING gin (search_tsv) WHERE deleted_at IS NULL;
 CREATE INDEX idx_stories_teller ON stories(teller_person_id) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX uq_stories_media ON stories(media_id) WHERE deleted_at IS NULL;  -- one story per recording
 
 CREATE TABLE story_persons (            -- tree people mentioned in or appearing in a story
   story_id  UUID NOT NULL REFERENCES stories(id)  ON DELETE CASCADE,
@@ -488,7 +490,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | POST | `/api/auth/password/forgot` | no session (sign-in flow), rate-limited | `{email}` → always `202`; reset email sent only if user exists and is enabled |
 | POST | `/api/auth/password/reset` | no session (sign-in flow), rate-limited | `{token, password}` (invite or reset link) → sets password, revokes all the user's sessions and other tokens, signs in (ending the old cookie's session, as login does) and returns the user as `/me` does; `400 invalid_token` for a malformed, unknown, used or expired token or a disabled user, `400 validation_error` for a password the rules refuse, `503 busy` as for login |
 | POST | `/api/auth/invite/preview` | no session (sign-in flow), rate-limited | `{token}` → `{invitee_first_name, invitee_email, from_name, google_eligible}` for the Welcome page (`google_eligible` is true for `@gmail.com` and `@googlemail.com` only: a Workspace domain is proven only by the ID token's `hd` claim, so those invitees use "Continue with Google" from the sign-in page; `from_name` is null when the invite has no "from" person), which can't GET the token because it lives in the URL fragment (§5). Consumes nothing; the same `400 invalid_token` as `password/reset` for a malformed, unknown, used or expired token. Phase 2 returns the invitee's email and Google eligibility; names arrive with persons in Phase 3 |
-| POST | `/api/access-requests` | no session (sign-in flow), rate-limited | `{full_name, email, side, relationship, related_names, note}` → always `202` with the same body, whether or not the email has an account or a pending request. A repeat while one is pending updates that request instead of adding another. A honeypot field; lengths capped; email normalized. Never creates an account (§5) |
+| POST | `/api/access-requests` | no session (sign-in flow), rate-limited | `{full_name, email, side, relationship, related_names, note}` → always `202` with the same body, whether or not the email has an account or a pending request. While any request for that email is pending, a new one (from the form or a member's suggestion) is dropped and the pending one is left as it was, so a stranger can't rewrite a suggestion or the reverse. A honeypot field; lengths capped; email normalized. Never creates an account (§5) |
 | POST | `/api/auth/password/change` | session | `{current_password, new_password}` → revokes other sessions |
 | GET | `/api/auth/google/start` | no session (sign-in flow), rate-limited | Redirects to Google (state, nonce, PKCE) |
 | GET | `/api/auth/google/callback` | no session (sign-in flow), rate-limited | Verifies the ID token; signs in by `sub`, auto-links only Gmail/Workspace invited emails (§5); redirects into the app |
@@ -499,8 +501,8 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | POST | `/api/admin/users` | admin | Invite: `{email, role}`; from Phase 3 also `person_id` (required, §5.1), `from_person_id` (optional; a person linked to an active user; defaults to the suggesting member's person, else the sending admin's) and `access_request_id` (optional; marks that request `approved` in the same transaction) |
 | GET | `/api/admin/access-requests` | admin | Pending first. Each `related_names` entry comes with its best trigram match among non-deleted persons, so the UI can show "In the tree" or "Not found — check spelling". Matching happens only here, never for the public form |
 | POST | `/api/admin/access-requests/{id}/decline` | admin | Quietly sets `declined`; no email is sent |
-| POST | `/api/admin/access-requests/{id}/reopen` | admin | Undo a decline |
-| POST | `/api/me/suggestions` | session | A member suggests a relative: an access request with `source = member_suggestion`, `suggested_by` = the member |
+| POST | `/api/admin/access-requests/{id}/reopen` | admin | Undo a decline; `409 conflict` if another request for that email is pending meanwhile (decline or approve that one instead) |
+| POST | `/api/me/suggestions` | session | A member suggests a relative: an access request with `source = member_suggestion`, `suggested_by` = the member. Always `202` with the same body, like the public form (no account or request enumeration); 20 per day per member |
 | PATCH | `/api/admin/users/{id}` | admin | Role, disable/enable, link person, change email (clears Google link and password, revokes sessions and tokens, re-invites; §5) |
 | GET | `/api/tree` | session | All non-deleted people + relationships (flat; see §10). No dates and no contacts; each person carries a short `bio_excerpt` for the quick look |
 | GET | `/api/persons` | session | `?q=` trigram search for autocomplete; without `q`, everyone A–Z for the People page, with `?side=&living=` filters |
@@ -646,7 +648,7 @@ Each person's contact details live in `contact_methods`, one row per phone/email
 | Who edits | The linked user edits their own rows via `/api/me/contacts`; admins can edit anyone's, including relatives with no login (admin-entered rows also default to `hidden`; the admin marks them `family` only with that person's consent). |
 | Who sees a row | The owner and admins: always. Any other signed-in user: rows with `visibility = 'family'`, and `on_request` rows whose kind they hold a `shared` request for. |
 | Enforcement | In the SQL/service layer (`visibility = 'family' OR` a matching `shared` request, for non-owners), never in the frontend. Hidden values are not sent to the browser at all. |
-| Where contacts appear | `GET /api/persons/{id}` and `GET /api/directory` only. They are **not** in `/api/tree`, `/api/persons?q=` search results, logs, or error messages, and search never matches on contact values. |
+| Where contacts appear | `GET /api/persons/{id}`, `GET /api/persons/{id}/contacts` and `GET /api/directory` only, all filtered by the rules above. They are **not** in `/api/tree`, `/api/persons?q=` search results, logs, or error messages, and search never matches on contact values. |
 | Birthdays | **Month and day** are visible to every signed-in user. The birth **year** of a *living* person is visible only to admins and to that person themselves; for deceased people the full date is visible to all. Masking happens in SQL via the `masked_birth_date` function (§3.1), so the year never reaches a non-permitted browser. `/api/tree` carries no dates at all (§10). A living person with only a year or "circa" precision shows nothing to others. |
 | Login email | `users.email` is an authentication detail and is **never** exposed. A contact email is a separate, optional row the person chooses to add. |
 | Admin visibility | Admins can see everything, and the profile settings page says so ("Administrators can see all information"). |
@@ -774,6 +776,8 @@ func New(h Handlers, mw Middleware) http.Handler {
                 r.Delete("/{cid}", h.Contacts.DeleteMine)
             })
 
+            r.Get("/persons/{id}/contacts", h.Contacts.ListFor) // filtered per viewer (§5.2)
+
             r.Group(func(r chi.Router) {             // admin-only writes
                 r.Use(auth.RequireRole("admin"))
                 r.Post("/persons", h.Family.CreatePerson)
@@ -782,7 +786,6 @@ func New(h Handlers, mw Middleware) http.Handler {
                 r.Post("/relationships", h.Family.CreateRelationship)
                 r.Patch("/relationships/{id}", h.Family.UpdateRelationship)
                 r.Delete("/relationships/{id}", h.Family.DeleteRelationship)
-                r.Get("/persons/{id}/contacts", h.Contacts.ListFor)
                 r.Post("/persons/{id}/contacts", h.Contacts.CreateFor)
                 r.Patch("/persons/{id}/contacts/{cid}", h.Contacts.UpdateFor)
                 r.Delete("/persons/{id}/contacts/{cid}", h.Contacts.DeleteFor)
@@ -1076,9 +1079,9 @@ A story is a recorded video or audio of a relative telling something, with chapt
 
 ## 10. Family-tree queries
 
-- **`GET /api/tree`** is two flat reads: all non-deleted `persons` (slim columns) and all `relationships` whose endpoints are both non-deleted. At family scale (hundreds to low thousands of people) this is a few hundred KB; no recursion needed. The client builds union nodes and runs the layout. The payload carries **no birth or death dates** (the tree never shows them; `is_deceased` stays for labels), which also removes one place the §5.2 masking could leak, and **no contacts**. Each person has a `bio_excerpt` (the first ~140 characters of `bio`) for the quick look; contacts come from `GET /api/persons/{id}` (§7).
+- **`GET /api/tree`** is two flat reads: all non-deleted `persons` (slim columns) and all `relationships` whose endpoints are both non-deleted. At family scale (hundreds to low thousands of people) this is a few hundred KB; no recursion needed. The client builds union nodes and runs the layout. The payload carries **no birth or death dates** (the tree never shows them; `is_deceased` stays for labels), which also removes one place the §5.2 masking could leak, and **no contacts**. Each person has a `bio_excerpt` (the first ~140 characters of `bio`) for the quick look; contacts come from `GET /api/persons/{id}/contacts` (§7).
 - **Optional later:** `GET /api/persons/{id}/neighborhood?up=2&down=2` returns just the households around one person (same masking), if the full payload ever gets too large for phones. Not needed at family scale.
-- **One masked person read.** Every query that returns people to a browser selects explicit columns, never `p.*` or `birth_date`, so neither dates nor anything added to `persons` later can leak through `/api/tree`. Those that return birth dates (`/api/persons`, `/api/persons/{id}`, ancestors, descendants, directory, event and media tags) returns `masked_birth_date(p, $viewer_is_admin, $viewer_person_id)` (defined in Phase 3's migration with `persons`, §3.1) and never selects `birth_date` or `p.*`. sqlc can't share column lists between queries, so the SQL function is the single place the rule lives, and a living person's birth year can't leak through an endpoint added later.
+- **One masked person read.** Every query that returns people to a browser selects explicit columns, never `p.*` or `birth_date`, so neither dates nor anything added to `persons` later can leak through `/api/tree`. Every query that returns a birth date (today `/api/persons`, `/api/persons/{id}`, ancestors, descendants, directory, event and media tags, and any added later) gets it from `masked_birth_date(p, $viewer_is_admin, $viewer_person_id)` (defined in Phase 3's migration with `persons`, §3.1). sqlc can't share column lists between queries, so the SQL function is the single place the rule lives, and a living person's birth year can't leak through an endpoint added later.
 - **Ancestors / descendants** use recursive CTEs with a depth bound, over **family-parent links only** (`biological`, `adoptive`; §3.4), so foster links never appear as ancestors or descendants:
 
 ```sql
@@ -1213,7 +1216,7 @@ Real family data gets entered from Phase 4 onward, so Phase 4c deploys with back
 **Deferred from the frontend design** (accepted as ideas, not scheduled):
 
 - "On this day" on Home, and a stored theme preference for dark mode (`users.theme`).
-- Machine transcription, recording stories in the browser, and multipart uploads for long recordings.
+- Machine transcription, English translation of transcripts (would add a `transcript_en` column), recording stories in the browser, and multipart uploads for long recordings.
 - "Suggest a correction" on profiles, feeding the same Requests queue.
 
 **Still open, but not blocking until later**
