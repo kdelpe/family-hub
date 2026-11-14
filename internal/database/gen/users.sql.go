@@ -282,30 +282,6 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUse
 	return items, nil
 }
 
-const lockAccount = `-- name: LockAccount :one
-SELECT email, role, disabled_at, (password_hash IS NOT NULL OR google_sub IS NOT NULL)::boolean AS set_up
-FROM users WHERE id = $1 FOR UPDATE
-`
-
-type LockAccountRow struct {
-	Email      string
-	Role       string
-	DisabledAt *time.Time
-	SetUp      bool
-}
-
-func (q *Queries) LockAccount(ctx context.Context, id uuid.UUID) (LockAccountRow, error) {
-	row := q.db.QueryRow(ctx, lockAccount, id)
-	var i LockAccountRow
-	err := row.Scan(
-		&i.Email,
-		&i.Role,
-		&i.DisabledAt,
-		&i.SetUp,
-	)
-	return i, err
-}
-
 const lockEnabledUserByEmail = `-- name: LockEnabledUserByEmail :one
 SELECT id FROM users WHERE email = $1 AND disabled_at IS NULL FOR UPDATE
 `
@@ -318,7 +294,9 @@ func (q *Queries) LockEnabledUserByEmail(ctx context.Context, email string) (uui
 }
 
 const lockUser = `-- name: LockUser :one
-SELECT email, role, password_changed_at, disabled_at, google_sub FROM users WHERE id = $1 FOR UPDATE
+SELECT email, role, password_changed_at, disabled_at, google_sub,
+  (password_hash IS NOT NULL OR google_sub IS NOT NULL)::boolean AS set_up
+FROM users WHERE id = $1 FOR UPDATE
 `
 
 type LockUserRow struct {
@@ -327,6 +305,7 @@ type LockUserRow struct {
 	PasswordChangedAt *time.Time
 	DisabledAt        *time.Time
 	GoogleSub         *string
+	SetUp             bool
 }
 
 func (q *Queries) LockUser(ctx context.Context, id uuid.UUID) (LockUserRow, error) {
@@ -338,6 +317,7 @@ func (q *Queries) LockUser(ctx context.Context, id uuid.UUID) (LockUserRow, erro
 		&i.PasswordChangedAt,
 		&i.DisabledAt,
 		&i.GoogleSub,
+		&i.SetUp,
 	)
 	return i, err
 }

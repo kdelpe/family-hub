@@ -56,12 +56,8 @@ func (a *Admin) ListUsers(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	in := admin.ListInput{Limit: admin.DefaultPageSize, Cursor: query.Get("cursor")}
 	if raw := query.Get("limit"); raw != "" {
-		limit, err := strconv.Atoi(raw)
-		if err != nil {
-			httpx.Error(w, http.StatusBadRequest, "validation_error", admin.ErrInvalidPageSize.Error())
-			return
-		}
-		in.Limit = limit
+		// Not a number becomes 0, which List refuses like any other bad limit.
+		in.Limit, _ = strconv.Atoi(raw)
 	}
 	page, err := a.svc.List(r.Context(), in)
 	switch {

@@ -10,7 +10,6 @@ import (
 
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/database/gen"
-	"github.com/kdelpe/family-hub/internal/mail"
 )
 
 const (
@@ -63,8 +62,8 @@ func (s *Users) update(ctx context.Context, in UpdateInput, email string) (Accou
 		return Account{}, err
 	}
 	q := gen.New(tx)
-	// The same row lock as sign-in and every credential change, so none of them can race this.
-	locked, err := q.LockAccount(ctx, in.ID)
+	// The row lock sign-in and every credential change take, so none of them can race this.
+	locked, err := q.LockUser(ctx, in.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Account{}, ErrUserNotFound
 	}
@@ -146,27 +145,6 @@ func revoke(ctx context.Context, q *gen.Queries, id uuid.UUID) error {
 	}
 	if err := q.DeleteUserTokens(ctx, id); err != nil {
 		return fmt.Errorf("delete tokens: %w", err)
-	}
-	return nil
-}
-
-// Not canceled if the admin leaves: the server may already have the email, so the link must stay valid.
-func (s *Users) send(ctx context.Context, msg mail.Message) error {
-	err := s.mailer.Send(context.WithoutCancel(ctx), msg)
-	switch {
-	case errors.Is(err, mail.ErrInvalidMessage):
-		return fmt.Errorf("build email: %w", err)
-	case err != nil:
-		return fmt.Errorf("%w: %w", ErrEmailNotSent, err)
-	}
-	return nil
-}
-
-func commit(ctx context.Context, tx pgx.Tx, what string) error {
-	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
-	defer cancel()
-	if err := tx.Commit(commitCtx); err != nil {
-		return fmt.Errorf("commit %s: %w", what, err)
 	}
 	return nil
 }

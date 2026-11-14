@@ -100,7 +100,7 @@ func TestListUsers(t *testing.T) {
 	}{
 		{name: "a page", query: "?limit=1&cursor=abc", wantIn: &admin.ListInput{Limit: 1, Cursor: "abc"}, page: page, wantStatus: http.StatusOK, wantBody: pageBody},
 		{name: "the last page, at the default size", wantIn: &admin.ListInput{Limit: admin.DefaultPageSize}, wantStatus: http.StatusOK, wantBody: `{"users":[],"next_cursor":null}`},
-		{name: "limit not a number", query: "?limit=ten", wantStatus: http.StatusBadRequest,
+		{name: "limit not a number", query: "?limit=ten", wantIn: &admin.ListInput{}, listErr: admin.ErrInvalidPageSize, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"validation_error","message":"limit must be between 1 and 100"}}`},
 		{name: "limit zero", query: "?limit=0", wantIn: &admin.ListInput{}, listErr: admin.ErrInvalidPageSize, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"validation_error","message":"limit must be between 1 and 100"}}`},

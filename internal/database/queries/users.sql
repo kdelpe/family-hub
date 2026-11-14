@@ -2,7 +2,9 @@
 SELECT id, password_hash, password_changed_at, disabled_at FROM users WHERE email = @email;
 
 -- name: LockUser :one
-SELECT email, role, password_changed_at, disabled_at, google_sub FROM users WHERE id = @id FOR UPDATE;
+SELECT email, role, password_changed_at, disabled_at, google_sub,
+  (password_hash IS NOT NULL OR google_sub IS NOT NULL)::boolean AS set_up
+FROM users WHERE id = @id FOR UPDATE;
 
 -- name: GetGoogleUserBySub :one
 SELECT id FROM users WHERE google_sub = @google_sub;
@@ -67,10 +69,6 @@ FROM users u
 LEFT JOIN auth_tokens t ON t.user_id = u.id AND t.purpose = 'invite' AND t.consumed_at IS NULL
 WHERE u.id = @id
 GROUP BY u.id;
-
--- name: LockAccount :one
-SELECT email, role, disabled_at, (password_hash IS NOT NULL OR google_sub IS NOT NULL)::boolean AS set_up
-FROM users WHERE id = @id FOR UPDATE;
 
 -- Only admins who can sign in: an invited admin who never set up can't manage anyone.
 -- name: CountUsableAdmins :one

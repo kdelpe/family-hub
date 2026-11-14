@@ -30,7 +30,7 @@ func (s *Users) sendReset(ctx context.Context, id uuid.UUID) error {
 	}
 	q := gen.New(tx)
 	// Locked, so an email change or disable can't land between this read and the new link.
-	locked, err := q.LockAccount(ctx, id)
+	locked, err := q.LockUser(ctx, id)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return ErrUserNotFound

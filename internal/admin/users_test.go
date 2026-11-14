@@ -95,6 +95,7 @@ func TestListRefusesABadPage(t *testing.T) {
 		{name: "no limit", in: ListInput{}, wantErr: ErrInvalidPageSize},
 		{name: "cursor not base64", in: ListInput{Limit: DefaultPageSize, Cursor: "not a cursor!"}, wantErr: ErrInvalidCursor},
 		{name: "cursor without an id", in: ListInput{Limit: DefaultPageSize, Cursor: base64.RawURLEncoding.EncodeToString([]byte("a@example.com"))}, wantErr: ErrInvalidCursor},
+		{name: "cursor with an email that isn't UTF-8", in: ListInput{Limit: DefaultPageSize, Cursor: base64.RawURLEncoding.EncodeToString([]byte("\xff@example.com\x00" + uuid.NewString()))}, wantErr: ErrInvalidCursor},
 		{name: "cursor without an email", in: ListInput{Limit: DefaultPageSize, Cursor: base64.RawURLEncoding.EncodeToString([]byte("\x00" + uuid.NewString()))}, wantErr: ErrInvalidCursor},
 	}
 

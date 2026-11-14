@@ -32,32 +32,31 @@ func TestUpdate(t *testing.T) {
 	yes, no := true, false
 
 	tests := []struct {
-		name  string
-		setup string
-		in    UpdateInput
-		// Sending the invite to a new email.
-		wantSend    bool
-		sendErr     error
-		wantErr     error
-		wantEmail   string
-		wantRole    string
-		wantStatus  string
-		wantRevoked bool
+		name           string
+		setup          string
+		in             UpdateInput
+		wantInviteSent bool
+		sendErr        error
+		wantErr        error
+		wantEmail      string
+		wantRole       string
+		wantStatus     string
+		wantRevoked    bool
 	}{
 		{name: "made an admin", in: UpdateInput{Role: ptr(auth.RoleAdmin)}, wantEmail: testEmail, wantRole: auth.RoleAdmin, wantStatus: StatusActive},
 		{name: "disabled", in: UpdateInput{Disabled: &yes}, wantEmail: testEmail, wantRole: auth.RoleMember, wantStatus: StatusDisabled, wantRevoked: true},
 		{name: "enabled again", setup: `UPDATE users SET disabled_at = now() WHERE id = $1`, in: UpdateInput{Disabled: &no},
 			wantEmail: testEmail, wantRole: auth.RoleMember, wantStatus: StatusActive},
-		{name: "a new email starts over with an invite", in: UpdateInput{Email: ptr(" New@Example.COM ")}, wantSend: true,
+		{name: "a new email starts over with an invite", in: UpdateInput{Email: ptr(" New@Example.COM ")}, wantInviteSent: true,
 			wantEmail: "new@example.com", wantRole: auth.RoleMember, wantStatus: StatusInvited, wantRevoked: true},
-		{name: "a new email while enabling", setup: `UPDATE users SET disabled_at = now() WHERE id = $1`, in: UpdateInput{Email: ptr("new@example.com"), Disabled: &no}, wantSend: true,
+		{name: "a new email while enabling", setup: `UPDATE users SET disabled_at = now() WHERE id = $1`, in: UpdateInput{Email: ptr("new@example.com"), Disabled: &no}, wantInviteSent: true,
 			wantEmail: "new@example.com", wantRole: auth.RoleMember, wantStatus: StatusInvited, wantRevoked: true},
 		{name: "the same email isn't a change", in: UpdateInput{Email: ptr("TEST@example.com"), Disabled: &yes},
 			wantEmail: testEmail, wantRole: auth.RoleMember, wantStatus: StatusDisabled, wantRevoked: true},
 		{name: "a disabled user's email", setup: `UPDATE users SET disabled_at = now() WHERE id = $1`, in: UpdateInput{Email: ptr("new@example.com")}, wantErr: ErrDisabledEmailChange},
 		{name: "a new email while disabling", in: UpdateInput{Email: ptr("new@example.com"), Disabled: &yes}, wantErr: ErrDisabledEmailChange},
 		{name: "email taken", in: UpdateInput{Email: ptr(otherAdminEmail)}, wantErr: ErrEmailTaken},
-		{name: "invite not sent changes nothing", in: UpdateInput{Email: ptr("new@example.com")}, wantSend: true, sendErr: errors.New("smtp: 550"), wantErr: ErrEmailNotSent},
+		{name: "invite not sent changes nothing", in: UpdateInput{Email: ptr("new@example.com")}, wantInviteSent: true, sendErr: errors.New("smtp: 550"), wantErr: ErrEmailNotSent},
 		{name: "invalid email", in: UpdateInput{Email: ptr("Test <new@example.com>")}, wantErr: ErrInvalidEmail},
 		{name: "unknown role", in: UpdateInput{Role: ptr("owner")}, wantErr: ErrInvalidRole},
 		{name: "nothing to change", wantErr: ErrNoChanges},
@@ -81,7 +80,7 @@ func TestUpdate(t *testing.T) {
 			before := accountState(t, pool, id)
 			mailer := mailmocks.NewMailer(t)
 			var sent mail.Message
-			if tt.wantSend {
+			if tt.wantInviteSent {
 				mailer.EXPECT().Send(mock.Anything, mock.Anything).Run(func(_ context.Context, msg mail.Message) { sent = msg }).Return(tt.sendErr).Once()
 			}
 			tt.in.ID = id
@@ -107,7 +106,7 @@ func TestUpdate(t *testing.T) {
 				assert.Equal(t, 1, sessions)
 				assert.Equal(t, 1, resets)
 			}
-			if !tt.wantSend {
+			if !tt.wantInviteSent {
 				return
 			}
 			assert.Equal(t, tt.wantEmail, sent.To)

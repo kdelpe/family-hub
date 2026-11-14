@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/database/gen"
@@ -12,7 +11,6 @@ import (
 )
 
 const (
-	commitTimeout = 10 * time.Second
 	inviteSubject = "You're invited to the family hub"
 	inviteBody    = `Bonjou,
 

@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kdelpe/family-hub/internal/database/gen"
@@ -16,6 +18,8 @@ import (
 )
 
 const (
+	commitTimeout = 10 * time.Second
+
 	DefaultPageSize = 50
 	MaxPageSize     = 100
 
@@ -38,6 +42,27 @@ type Users struct {
 
 func NewUsers(pool *pgxpool.Pool, mailer mail.Mailer, baseURL string) *Users {
 	return &Users{pool: pool, mailer: mailer, baseURL: baseURL}
+}
+
+// Not canceled if the admin leaves: the server may already have the email, so the link must stay valid.
+func (s *Users) send(ctx context.Context, msg mail.Message) error {
+	err := s.mailer.Send(context.WithoutCancel(ctx), msg)
+	switch {
+	case errors.Is(err, mail.ErrInvalidMessage):
+		return fmt.Errorf("build email: %w", err)
+	case err != nil:
+		return fmt.Errorf("%w: %w", ErrEmailNotSent, err)
+	}
+	return nil
+}
+
+func commit(ctx context.Context, tx pgx.Tx, what string) error {
+	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
+	defer cancel()
+	if err := tx.Commit(commitCtx); err != nil {
+		return fmt.Errorf("commit %s: %w", what, err)
+	}
+	return nil
 }
 
 type ListInput struct {
@@ -124,7 +149,8 @@ func decodeCursor(cursor string) (string, uuid.UUID, error) {
 	}
 	email, idText, ok := strings.Cut(string(raw), "\x00")
 	id, err := uuid.Parse(idText)
-	if !ok || email == "" || err != nil {
+	// Postgres refuses text that isn't UTF-8, which would be a 500 instead of a 400.
+	if !ok || email == "" || !utf8.ValidString(email) || err != nil {
 		return "", uuid.Nil, ErrInvalidCursor
 	}
 	return email, id, nil
