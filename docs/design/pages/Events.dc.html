@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Events</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=Source+Sans+3:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+nav[aria-label="Main"] > div > a{transition:background-color .15s ease, box-shadow .15s ease}
+nav[aria-label="Main"] > div > a:hover, nav[aria-label="Main"] > div > a:focus-visible{background-color:#EFE7D8;box-shadow:0 1px 3px rgba(43,38,32,.12)}
+a{color:#2F5D50}a:hover{color:#1E3F36}
+@keyframes fh-fade{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+.fh-hcard{transition:translate .2s ease, box-shadow .2s ease}
+.fh-hcard:hover,.fh-hcard:focus-within,.fh-hcard:focus-visible{translate:0 -4px;box-shadow:0 12px 26px rgba(43,38,32,.12)}
+.fh-btn{transition:box-shadow .15s ease, translate .15s ease}
+.fh-btn:hover,.fh-btn:focus-visible{box-shadow:0 4px 12px rgba(43,38,32,.16);translate:0 -1px}
+.fh-btn:active{translate:0 0;box-shadow:0 1px 3px rgba(43,38,32,.12)}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 1260px; box-sizing: border-box; background: #F6F1E7; color: #2B2620; font-family: 'Source Sans 3', system-ui, sans-serif; font-size: 17px; display: flex; flex-wrap: wrap">
+
+  <nav aria-label="Main" style="flex: 1 1 220px; max-width: 260px; box-sizing: border-box; padding: 32px 24px; border-right: 1px solid #E2D9C8; display: flex; flex-direction: column; gap: 28px">
+    <a href="Home-Hearth.dc.html" aria-label="Pluviose-Monestime Family Hub, home" style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; color: #2B2620; text-decoration: none">
+      <svg aria-hidden="true" width="52" height="52" viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="25" fill="#E6EEE9" stroke="#2F5D50" stroke-width="1.5"></circle>
+        <path d="M26 42 V24 M26 30 L17 22 M26 30 L35 22 M26 24 L26 15" fill="none" stroke="#2F5D50" stroke-width="2.4" stroke-linecap="round"></path>
+        <circle cx="26" cy="13" r="4" fill="#2F5D50"></circle>
+        <circle cx="16" cy="20" r="3.4" fill="#8A6F4A"></circle>
+        <circle cx="36" cy="20" r="3.4" fill="#8A6F4A"></circle>
+      </svg>
+      <span style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+        <span style="font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 600; line-height: 1.15">Pluviose-Monestime</span>
+        <span style="font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6358">Family Hub</span>
+      </span>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <a href="Home-Hearth.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Home</a>
+      <a href="Main.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Family tree</a>
+      <a href="People.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">People</a>
+      <a href="Directory.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Directory</a>
+      <a href="Events.dc.html" aria-current="page" style="padding: 12px 14px; border-radius: 8px; background: #E9E0CF; color: #2B2620; text-decoration: none; font-weight: 600">Events</a>
+      <a href="Stories.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Stories</a>
+      <a href="My-Profile.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">My profile</a>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 16px; border-top: 1px solid #E2D9C8">
+      <span style="padding: 0 14px 4px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6358">Admin</span>
+      <a href="Manage-Access.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Members &amp; invites</a>
+    </div>
+    <div style="margin-top: auto; font-size: 14px; color: #6B6358">Signed in as Maya</div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 32px 40px; display: flex; flex-direction: column; gap: 24px">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+      <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 40px; font-weight: 500; flex: 1 1 auto">Events</h1>
+      <div role="group" aria-label="View" style="display: flex; padding: 4px; border-radius: 26px; background: #E9E0CF">
+        <button class="fh-btn" type="button" aria-pressed="{{timelineOn}}" onClick="{{showTimeline}}"  style="height: 44px; padding: 0 20px; border: 0; border-radius: 22px; background: {{timelineBg}}; font: inherit; font-weight: 600; color: #2B2620">Timeline</button>
+        <button class="fh-btn" type="button" aria-pressed="{{photosOn}}" onClick="{{showPhotos}}"  style="height: 44px; padding: 0 20px; border: 0; border-radius: 22px; background: {{photosBg}}; font: inherit; font-weight: 600; color: #2B2620">Media</button>
+      </div>
+      <button class="fh-btn" type="button" aria-expanded="{{eventOpen}}" onClick="{{openEvent}}"  style="height: 48px; padding: 0 20px; border: 1px solid {{accent}}; border-radius: 24px; background: transparent; color: #2F5D50; font: inherit; font-weight: 600">+ New event</button>
+      <button class="fh-btn" type="button" aria-expanded="{{uploadOpen}}" onClick="{{openUpload}}"  style="height: 48px; padding: 0 22px; border: 0; border-radius: 24px; background: {{accent}}; color: #FFFFFF; font: inherit; font-weight: 600">+ Upload</button>
+    </div>
+
+    <sc-if value="{{eventOpen}}" hint-placeholder-val="{{false}}">
+      <section aria-labelledby="ev-new" style="padding: 22px; border-radius: 18px; background: #FFFDF8; border: 2px solid {{accent}}; display: flex; flex-direction: column; gap: 14px; animation: fh-fade .2s ease-out both">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <h2 id="ev-new" style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 500; flex: 1">New event</h2>
+          <button class="fh-btn" type="button" onClick="{{closePanel}}" aria-label="Close"  style="width: 40px; height: 40px; border: 1px solid #E2D9C8; border-radius: 20px; background: transparent; font: inherit; font-size: 18px; color: #2B2620">×</button>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+          <div style="display: flex; flex-direction: column; gap: 6px"><label for="ev-title" style="font-weight: 600; font-size: 15px">What happened?</label><input id="ev-title" type="text" value="{{draftTitle}}" onChange="{{onTitle}}" placeholder="e.g. Rose’s 90th birthday" style="height: 48px; box-sizing: border-box; padding: 0 14px; border: 1px solid #CFC4AF; border-radius: 12px; background: #FBF7EF; font: inherit; color: #2B2620"></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><label for="ev-place" style="font-weight: 600; font-size: 15px">Where?</label><input id="ev-place" type="text" value="Fritz’s house, Brooklyn" style="height: 48px; box-sizing: border-box; padding: 0 14px; border: 1px solid #CFC4AF; border-radius: 12px; background: #FBF7EF; font: inherit; color: #2B2620"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <span style="font-weight: 600; font-size: 15px">When?</span>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+            <div role="group" aria-label="How exact is the date?" style="display: flex; padding: 4px; border-radius: 22px; background: #E9E0CF">
+              <sc-for list="{{precisions}}" as="pr" hint-placeholder-count="4">
+                <button class="fh-btn" type="button" aria-pressed="{{pr.on}}" onClick="{{pr.pick}}"  style="height: 36px; padding: 0 14px; border: 0; border-radius: 18px; background: {{pr.bg}}; font: inherit; font-size: 14px; font-weight: 600; color: #2B2620">{{pr.label}}</button>
+              </sc-for>
+            </div>
+            <label for="ev-date" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Date</label>
+            <input id="ev-date" type="text" value="{{dateExample}}" style="height: 44px; width: 200px; box-sizing: border-box; padding: 0 14px; border: 1px solid #CFC4AF; border-radius: 12px; background: #FBF7EF; font: inherit; color: #2B2620">
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><label for="ev-text" style="font-weight: 600; font-size: 15px">Tell the story <span style="font-weight: 400; color: #6B6358">(optional)</span></label><textarea id="ev-text" rows="2" style="box-sizing: border-box; padding: 12px 14px; border: 1px solid #CFC4AF; border-radius: 12px; background: #FBF7EF; font: inherit; color: #2B2620; resize: vertical">The whole family came for her birthday, and she danced with every grandchild.</textarea></div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+          <span style="font-weight: 600; font-size: 15px; margin-right: 6px">Who was there?</span>
+          <span style="padding: 4px 12px; border-radius: 14px; background: #F1EADC; font-size: 14px">Rose Monestime ×</span>
+          <span style="padding: 4px 12px; border-radius: 14px; background: #F1EADC; font-size: 14px">Fritz Pluviose ×</span>
+          <button class="fh-btn" type="button"  style="height: 32px; padding: 0 12px; border: 1px dashed #B8AC94; border-radius: 16px; background: transparent; font: inherit; font-size: 14px; color: #2B2620">+ Add person</button>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end">
+          <button class="fh-btn" type="button" onClick="{{closePanel}}"  style="height: 46px; padding: 0 20px; border: 1px solid #CFC4AF; border-radius: 23px; background: transparent; font: inherit; color: #2B2620">Cancel</button>
+          <button class="fh-btn" type="button" onClick="{{saveEvent}}"  style="height: 46px; padding: 0 22px; border: 0; border-radius: 23px; background: {{accent}}; color: #FFFFFF; font: inherit; font-weight: 600">Save event</button>
+        </div>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{uploadOpen}}" hint-placeholder-val="{{false}}">
+      <section aria-labelledby="ev-up" style="padding: 22px; border-radius: 18px; background: #FFFDF8; border: 2px solid {{accent}}; display: flex; flex-direction: column; gap: 14px; animation: fh-fade .2s ease-out both">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <h2 id="ev-up" style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 500; flex: 1">Upload photos &amp; videos</h2>
+          <button class="fh-btn" type="button" onClick="{{closePanel}}" aria-label="Close"  style="width: 40px; height: 40px; border: 1px solid #E2D9C8; border-radius: 20px; background: transparent; font: inherit; font-size: 18px; color: #2B2620">×</button>
+        </div>
+        <div style="padding: 26px; border-radius: 14px; border: 2px dashed #CFC4AF; background: #FBF7EF; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center">
+          <svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24"><path d="M12 16 V4 M7 9 L12 4 L17 9 M4 16 V20 H20 V16" fill="none" stroke="#2F5D50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          <span style="font-weight: 600">Drag photos and videos here</span>
+          <button class="fh-btn" type="button" onClick="{{startUpload}}"  style="height: 44px; padding: 0 20px; border: 1px solid #CFC4AF; border-radius: 22px; background: #FFFDF8; font: inherit; font-weight: 600; color: #2B2620">Choose files</button>
+          <span style="font-size: 14px; color: #6B6358">Photos and videos up to 2 GB each. Recording a longer interview? Add it as a <a href="Stories.dc.html">story</a> instead.</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+          <label for="ev-pick" style="font-weight: 600; font-size: 15px">Add to event</label>
+          <select id="ev-pick" defaultValue="Thanksgiving at Fritz’s" style="height: 44px; padding: 0 12px; border: 1px solid #CFC4AF; border-radius: 12px; background: #FBF7EF; font: inherit; color: #2B2620"><option>Thanksgiving at Fritz’s</option><option>Naomie is born</option><option>Jean-Robert &amp; Nadège’s wedding</option><option>No event — just add to Media</option></select>
+        </div>
+        <sc-if value="{{uploading}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <sc-for list="{{files}}" as="u" hint-placeholder-count="3">
+              <div style="display: flex; align-items: center; gap: 12px">
+                <span style="width: 44px; height: 44px; flex: none; border-radius: 8px; background: {{u.tone}}; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #FFFDF8">{{u.kind}}</span>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+                  <div style="display: flex; justify-content: space-between; font-size: 14px"><span>{{u.name}}</span><span style="color: #6B6358">{{u.status}}</span></div>
+                  <div style="height: 6px; border-radius: 3px; background: #EFE8DA"><div style="height: 6px; border-radius: 3px; width: {{u.pct}}; background: {{accent}}"></div></div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{timelineOn}}" hint-placeholder-val="{{true}}">
+      <div style="display: flex; flex-direction: column; gap: 0; padding-left: 8px">
+        <sc-for list="{{events}}" as="ev" hint-placeholder-count="4">
+          <div style="display: flex; gap: 24px">
+            <div style="width: 88px; flex: none; display: flex; flex-direction: column; align-items: flex-end; padding-top: 18px">
+              <span style="font-family: Fraunces, Georgia, serif; font-size: 22px">{{ev.year}}</span>
+            </div>
+            <div style="width: 2px; flex: none; background: #CFC4AF; position: relative">
+              <div style="position: absolute; top: 24px; left: -6px; width: 14px; height: 14px; border-radius: 50%; background: {{accent}}; border: 3px solid #F6F1E7"></div>
+            </div>
+            <article class="fh-hcard" style="flex: 1 1 auto; min-width: 0; margin: 8px 0 20px; padding: 20px; border-radius: 16px; background: #FFFDF8; border: 1px solid #E2D9C8; display: flex; flex-direction: column; gap: 12px">
+              <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px">
+                <h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 500">{{ev.title}}</h2>
+                <span style="font-size: 14px; color: #6B6358">{{ev.when}}</span>
+              </div>
+              <p style="margin: 0; line-height: 1.5; color: #4A433A">{{ev.text}}</p>
+              <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px">
+                <sc-for list="{{ev.photos}}" as="ph" hint-placeholder-count="3">
+                  <div style="aspect-ratio: 1; border-radius: 8px; background: {{ph.tone}}"></div>
+                </sc-for>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                <sc-for list="{{ev.people}}" as="who" hint-placeholder-count="3">
+                  <a href="Person-Profile.dc.html" style="padding: 4px 12px; border-radius: 14px; background: #F1EADC; color: #2B2620; text-decoration: none; font-size: 14px">{{who}}</a>
+                </sc-for>
+              </div>
+            </article>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{photosOn}}" hint-placeholder-val="{{false}}">
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px">
+        <sc-for list="{{grid}}" as="g" hint-placeholder-count="15">
+          <figure class="fh-hcard" style="margin: 0; display: flex; flex-direction: column; gap: 6px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 10px; background: {{g.tone}}"><sc-if value="{{g.isVideo}}" hint-placeholder-val="{{false}}"><span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center"><span style="width: 40px; height: 40px; border-radius: 50%; background: #FFFDF8; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M8 5 L19 12 L8 19 Z" fill="#2B2620"></path></svg></span></span><span style="position: absolute; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 8px; background: #2B2620; color: #FFFDF8; font-size: 12px">{{g.length}}</span></sc-if></div>
+            <figcaption style="font-size: 13px; color: #6B6358">{{g.caption}}</figcaption>
+          </figure>
+        </sc-for>
+      </div>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2F5D50","options":["#2F5D50","#8A4B2A","#3D4F7A"]},"$preview":{"width":1280,"height":1260}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { view: 'timeline', panel: null, precision: 'Exact day', draftTitle: 'Rose’s 90th birthday', added: [], uploading: false };
+  }
+  renderVals() {
+    const tones = ['#D9CDB5', '#C9D6CE', '#E2CDB8', '#D4D0BE', '#E5DBC8'];
+    const ph = (n) => Array.from({ length: n }, (_, i) => ({ tone: tones[i % tones.length] }));
+    const events = [
+      { year: '2026', title: 'Thanksgiving at Fritz’s', when: 'November 26, 2026 · 12 photos', text: 'Everyone under one roof for the first time since 2019. Grandma Rose’s pen patat recipe finally written down.', photos: ph(5), people: ['Fritz Pluviose', 'Rose Monestime', 'Maya Pluviose', 'Naomie Désir'] },
+      { year: '2025', title: 'Naomie is born', when: 'July 2, 2025 · 4 photos', text: 'Naïka and Ralph welcome their daughter, Naomie — the first of the fifth generation.', photos: ph(4), people: ['Naïka Jean-Louis', 'Naomie Désir'] },
+      { year: '1984', title: 'Jean-Robert & Nadège’s wedding', when: 'November 13, 1984 · 9 photos', text: 'St. Jerome’s Church, Flatbush. Scanned from Nadège’s album.', photos: ph(5), people: ['Jean-Robert Pluviose', 'Nadège Pluviose', 'Lucien Monestime'] },
+      { year: 'c. 1962', title: 'Rose’s kitchen', when: 'Around 1962 · 2 photos', text: 'The earliest photos we have of the Monestime house in Jacmel. Date is a guess from Rose.', photos: ph(2), people: ['Rose Monestime'] }
+    ];
+    const caps = ['Dessert table', 'The cousins', 'Rose, 1962', 'Naomie’s first steps', 'Wedding, 1984', 'Brooklyn, 1996', 'Fritz’s porch', 'Graduation', 'Christmas 2024', 'Beach day', 'Joseph’s taxi', 'Marie-Claire at 80', 'New house', 'Mackenson’s band', 'Reunion 2019'];
+    const vids = { 1: '2:14', 7: '0:48', 13: '3:05' };
+    const grid = caps.map((caption, i) => ({ caption, tone: tones[i % tones.length], isVideo: !!vids[i], length: vids[i] || '' }));
+    const st = this.state;
+    const allEvents = st.added.concat(events);
+    const t = st.view === 'timeline';
+    const examples = { 'Exact day': 'February 2, 2027', 'Month': 'February 2027', 'Year': '2027', 'About': 'around 1965' };
+    const precisions = Object.keys(examples).map((label) => ({ label, on: label === st.precision, bg: label === st.precision ? '#FFFDF8' : 'transparent', pick: () => this.setState({ precision: label }) }));
+    const files = [
+      { name: 'IMG_4021.jpg', kind: 'Photo', tone: '#B59A86', pct: '100%', status: 'Done' },
+      { name: 'IMG_4022.jpg', kind: 'Photo', tone: '#9DB3A8', pct: '100%', status: 'Done' },
+      { name: 'Grace-before-dinner.mov', kind: 'Video', tone: '#8C7B5E', pct: '64%', status: '64% · 1.1 of 1.7 GB' }
+    ];
+    return {
+      eventOpen: st.panel === 'event', uploadOpen: st.panel === 'upload',
+      openEvent: () => this.setState({ panel: st.panel === 'event' ? null : 'event' }),
+      openUpload: () => this.setState({ panel: st.panel === 'upload' ? null : 'upload', uploading: false }),
+      closePanel: () => this.setState({ panel: null }),
+      precisions, dateExample: examples[st.precision],
+      draftTitle: st.draftTitle, onTitle: (e) => this.setState({ draftTitle: e.target.value }),
+      saveEvent: () => this.setState({ panel: null, view: 'timeline', added: [{ year: st.precision === 'About' ? 'c. 1965' : '2027', title: st.draftTitle || 'New event', when: (st.precision === 'About' ? 'Around 1965' : examples[st.precision]) + ' · no photos yet', text: 'The whole family came for her birthday, and she danced with every grandchild.', photos: [], people: ['Rose Monestime', 'Fritz Pluviose'] }].concat(st.added) }),
+      uploading: st.uploading, startUpload: () => this.setState({ uploading: true }), files,
+      accent: this.props.accent ?? '#2F5D50', events: allEvents, grid,
+      timelineOn: t, photosOn: !t,
+      timelineBg: t ? '#FFFDF8' : 'transparent', photosBg: t ? 'transparent' : '#FFFDF8',
+      showTimeline: () => this.setState({ view: 'timeline' }),
+      showPhotos: () => this.setState({ view: 'photos', panel: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

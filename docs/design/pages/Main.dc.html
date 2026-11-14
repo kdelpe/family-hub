@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Family tree — Heirloom</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=Source+Sans+3:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+nav[aria-label="Main"] > div > a{transition:background-color .15s ease, box-shadow .15s ease}
+nav[aria-label="Main"] > div > a:hover, nav[aria-label="Main"] > div > a:focus-visible{background-color:#EFE7D8;box-shadow:0 1px 3px rgba(43,38,32,.12)}
+a{color:#2F5D50}a:hover{color:#1E3F36}
+@keyframes fh-up-a{from{opacity:0;transform:translateY(-48px)}to{opacity:1;transform:none}}
+@keyframes fh-up-b{from{opacity:0;transform:translateY(-48px)}to{opacity:1;transform:none}}
+@keyframes fh-down-a{from{opacity:0;transform:translateY(48px)}to{opacity:1;transform:none}}
+@keyframes fh-down-b{from{opacity:0;transform:translateY(48px)}to{opacity:1;transform:none}}
+@keyframes fh-side-a{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes fh-side-b{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes fh-swapc{0%{opacity:0}12%{opacity:1}42%{opacity:1}54%{opacity:0}100%{opacity:0}}
+@keyframes fh-fade{from{opacity:0}to{opacity:1}}
+@keyframes fh-pop{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes fh-panel-a{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+@keyframes fh-panel-b{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+.fh-conn svg{opacity:0}.fh-group{background:rgba(255,253,248,.75)!important}
+.fh-btn{transition:box-shadow .15s ease, translate .15s ease}
+.fh-btn:hover,.fh-btn:focus-visible{box-shadow:0 4px 12px rgba(43,38,32,.16);translate:0 -1px}
+.fh-btn:active{translate:0 0;box-shadow:0 1px 3px rgba(43,38,32,.12)}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 1260px; box-sizing: border-box; background: #F6F1E7; color: #2B2620; font-family: 'Source Sans 3', system-ui, sans-serif; font-size: 17px; display: flex; flex-wrap: wrap">
+
+  <nav aria-label="Main" style="flex: 1 1 220px; max-width: 260px; box-sizing: border-box; padding: 32px 24px; border-right: 1px solid #E2D9C8; display: flex; flex-direction: column; gap: 28px">
+    <a href="Home-Hearth.dc.html" aria-label="Pluviose-Monestime Family Hub, home" style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; color: #2B2620; text-decoration: none">
+      <svg aria-hidden="true" width="52" height="52" viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="25" fill="#E6EEE9" stroke="#2F5D50" stroke-width="1.5"></circle>
+        <path d="M26 42 V24 M26 30 L17 22 M26 30 L35 22 M26 24 L26 15" fill="none" stroke="#2F5D50" stroke-width="2.4" stroke-linecap="round"></path>
+        <circle cx="26" cy="13" r="4" fill="#2F5D50"></circle>
+        <circle cx="16" cy="20" r="3.4" fill="#8A6F4A"></circle>
+        <circle cx="36" cy="20" r="3.4" fill="#8A6F4A"></circle>
+      </svg>
+      <span style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+        <span style="font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 600; line-height: 1.15">Pluviose-Monestime</span>
+        <span style="font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6358">Family Hub</span>
+      </span>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <a href="Home-Hearth.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Home</a>
+      <a href="Main.dc.html" aria-current="page" style="padding: 12px 14px; border-radius: 8px; background: #E9E0CF; color: #2B2620; text-decoration: none; font-weight: 600">Family tree</a>
+      <a href="People.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">People</a>
+      <a href="Directory.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Directory</a>
+      <a href="Events.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Events</a>
+      <a href="Stories.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Stories</a>
+      <a href="My-Profile.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">My profile</a>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 16px; border-top: 1px solid #E2D9C8">
+      <span style="padding: 0 14px 4px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6358">Admin</span>
+      <a href="Manage-Access.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Members &amp; invites</a>
+    </div>
+    <div style="margin-top: auto; font-size: 14px; color: #6B6358">Signed in as Maya</div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 32px 40px; display: flex; flex-direction: column; gap: 20px">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+      <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 40px; font-weight: 500; flex: 1 1 auto">Family tree</h1>
+      <div style="position: relative">
+        <label for="a-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Find a relative</label>
+        <input id="a-search" type="search" autocomplete="off" placeholder="Find a relative…" value="{{q}}" onChange="{{onQ}}" style="height: 48px; width: 260px; max-width: 100%; box-sizing: border-box; padding: 0 16px; border: 1px solid #CFC4AF; border-radius: 24px; background: #FFFDF8; font: inherit; color: #2B2620">
+        <sc-if value="{{hasMatches}}" hint-placeholder-val="{{false}}">
+          <div role="listbox" aria-label="Matching relatives" style="position: absolute; top: 54px; left: 0; right: 0; z-index: 5; padding: 6px; border-radius: 14px; background: #FFFDF8; border: 1px solid #CFC4AF; display: flex; flex-direction: column; gap: 2px">
+            <sc-for list="{{matches}}" as="m" hint-placeholder-count="3">
+              <button type="button" role="option" onClick="{{m.pick}}" style="min-height: 44px; padding: 6px 12px; border: 0; border-radius: 10px; background: transparent; font: inherit; color: #2B2620; text-align: left; display: flex; flex-direction: column">
+                <span style="font-weight: 600">{{m.name}}</span><span style="font-size: 13px; color: #6B6358">{{m.rel}}</span>
+              </button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+      <button class="fh-btn" type="button" onClick="{{back}}" disabled="{{noBack}}"  style="height: 48px; padding: 0 18px; border: 1px solid #CFC4AF; border-radius: 24px; background: transparent; font: inherit; color: #2B2620; opacity: {{backOpacity}}">Back</button>
+      <button class="fh-btn" type="button" onClick="{{backToMe}}"  style="height: 48px; padding: 0 20px; border: 0; border-radius: 24px; background: {{accent}}; color: #FFFFFF; font: inherit; font-weight: 600">Back to me</button>
+    </div>
+
+    <nav aria-label="Where you've been" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 15px; color: #6B6358; min-height: 32px">
+      <sc-for list="{{trail}}" as="t" hint-placeholder-count="2">
+        <sc-if value="{{t.notFirst}}" hint-placeholder-val="{{false}}"><span aria-hidden="true">›</span></sc-if>
+        <sc-if value="{{t.isCurrent}}" hint-placeholder-val="{{true}}"><span style="font-weight: 600; color: #2B2620; padding: 4px 6px">{{t.name}}</span></sc-if>
+        <sc-if value="{{t.notCurrent}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{t.jump}}" style="min-height: 32px; padding: 4px 6px; border: 0; background: transparent; font: inherit; color: #2F5D50; text-decoration: underline">{{t.name}}</button></sc-if>
+      </sc-for>
+      <span style="margin-left: auto; font-size: 14px">Hover or tap a name for a quick look · double-click to center the tree on them</span>
+    </nav>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px">
+      <span style="padding: 6px 14px; border-radius: 16px; background: #E6EEE9; font-size: 15px"><strong>38</strong> people</span>
+      <span style="padding: 6px 14px; border-radius: 16px; background: #F1EADC; font-size: 15px"><strong>5</strong> generations</span>
+      <span style="padding: 6px 14px; border-radius: 16px; background: #F1EADC; font-size: 15px">Pluviose &amp; Monestime lines</span>
+      <span style="padding: 6px 14px; border-radius: 16px; background: #F1EADC; font-size: 15px">Earliest record: c. 1900, Jacmel</span>
+    </div>
+    <p aria-live="polite" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">{{status}}</p>
+
+    <div class="fh-panel" style="position: relative; border-radius: 22px; border: 1px solid #E2D9C8; overflow: visible">
+      <div class="fh-bg" aria-hidden="true" style="position: absolute; inset: 0; border-radius: 22px; overflow: hidden; pointer-events: none"><div style="position: absolute; inset: 0; background: #FBF7EF"></div><svg viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMax meet" style="position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 100%"><g fill="none" stroke="#EAE1D0" stroke-linecap="round"><path d="M500 1000 C495 860 505 760 500 640" stroke-width="46"></path><path d="M500 700 C430 640 330 600 220 560" stroke-width="26"></path><path d="M500 700 C570 640 670 600 780 560" stroke-width="26"></path><path d="M500 640 C500 520 500 420 500 300" stroke-width="30"></path><path d="M500 430 C420 380 330 350 240 330" stroke-width="18"></path><path d="M500 430 C580 380 670 350 760 330" stroke-width="18"></path><path d="M500 300 C460 230 420 180 380 120" stroke-width="14"></path><path d="M500 300 C540 230 580 180 620 120" stroke-width="14"></path><path d="M220 560 C170 520 130 480 100 430" stroke-width="12"></path><path d="M780 560 C830 520 870 480 900 430" stroke-width="12"></path><path d="M500 1000 C440 990 400 985 350 1000 M500 1000 C560 990 600 985 650 1000" stroke-width="10"></path></g><g fill="#EFE7D8"><circle cx="380" cy="110" r="34"></circle><circle cx="620" cy="110" r="34"></circle><circle cx="240" cy="320" r="30"></circle><circle cx="760" cy="320" r="30"></circle><circle cx="100" cy="420" r="26"></circle><circle cx="900" cy="420" r="26"></circle><circle cx="500" cy="270" r="40"></circle></g></svg></div>
+      <section aria-label="{{status}}" style="position: relative; display: flex; flex-direction: column; align-items: stretch; padding: 22px 20px 26px; animation: {{anim}}">
+        <sc-if value="{{hasGp}}" hint-placeholder-val="{{true}}">
+          <div class="fh-row fh-gp" style="display: flex; flex-direction: column; align-items: center">
+            <div class="fh-label" style="font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6358; text-align: center; margin-bottom: 8px">Grandparents</div>
+            <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 18px">
+              <sc-for list="{{gpGroups}}" as="g" hint-placeholder-count="2">
+                <div class="fh-group" style="display: flex; gap: 10px; padding: 10px; border-radius: 18px; border: 1px solid #E2D9C8; background: rgba(255, 253, 248, 0.6)">
+                  <sc-for list="{{g.people}}" as="p" hint-placeholder-count="2"><div onMouseEnter="{{p.enter}}" onMouseLeave="{{p.leave}}" onFocus="{{p.enter}}" onBlur="{{p.leave}}" style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<button type="button" class="fh-card" onClick="{{p.pick}}" onDoubleClick="{{p.dbl}}" aria-pressed="{{p.sel}}" style="width: 150px; height: 118px; box-sizing: border-box; padding: 12px 8px; border-radius: 14px; background: #FFFDF8; border: {{p.border}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; font: inherit; color: #2B2620; transform: {{p.lift}}; box-shadow: {{p.shadow}}; transition: transform .15s ease, box-shadow .15s ease">
+<span class="fh-av" style="position: relative; overflow: hidden; flex: none; width: 50px; height: 50px; border-radius: 50%; background: {{p.avBg}}; color: {{p.avFg}}; box-shadow: 0 0 0 3px #FFFDF8, 0 0 0 5px #D9CDB5; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif; font-size: 19px">{{p.initials}}<span aria-hidden="true" style="position: absolute; inset: 0; background: {{p.tone}}; opacity: 0; animation: fh-swapc 6s ease-in-out {{p.photoDelay}} infinite"><span style="position: absolute; left: 32%; top: 16%; width: 36%; height: 36%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span><span style="position: absolute; left: 14%; top: 60%; width: 72%; height: 54%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span></span></span>
+<span class="fh-name" style="font-weight: 600; font-size: 15px; line-height: 1.2; margin-top: 4px">{{p.name}}</span>
+<span class="fh-sub" style="font-size: 13px; color: #6B6358; line-height: 1.2">{{p.sub}}</span>
+</button>
+<sc-if value="{{p.more}}" hint-placeholder-val="{{false}}"><button class="fh-btn" type="button" onClick="{{p.center}}" aria-label="{{p.moreLabel}}"  style="height: 30px; padding: 0 12px; border: 1px solid #CFC4AF; border-radius: 15px; background: #FFFDF8; font: inherit; font-size: 13px; color: #2F5D50">▲ more</button></sc-if>
+<sc-if value="{{p.showGlimpse}}" hint-placeholder-val="{{false}}"><div style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); padding-top: 8px; z-index: 20; width: 250px"><div class="fh-glimpse" style="padding: 14px; border-radius: 12px; background: #FFFDF8; border: 1px solid #E2D9C8; box-shadow: 0 12px 28px rgba(43, 38, 32, 0.18); display: flex; flex-direction: column; gap: 6px; text-align: left; font-size: 14px; color: #2B2620; animation: fh-pop .16s ease-out both"><span style="font-weight: 600; font-size: 15px">{{p.rel}}</span><span style="line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">{{p.bio}}</span><sc-if value="{{p.hasContact}}" hint-placeholder-val="{{false}}"><span>{{p.contact}}</span></sc-if><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; padding-top: 8px; border-top: 1px solid #EFE8DA"><a href="Person-Profile.dc.html" style="font-weight: 600; min-height: 32px; display: flex; align-items: center">View profile ›</a><sc-if value="{{p.notFocus}}" hint-placeholder-val="{{true}}"><button type="button" onClick="{{p.center}}" style="min-height: 32px; border: 0; background: transparent; font: inherit; font-size: 13px; color: #6B6358; text-decoration: underline">Center here</button></sc-if></div></div></div></sc-if>
+</div></sc-for>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div class="fh-conn" aria-hidden="true" style="height: 24px; display: flex; justify-content: center"><svg width="40" height="24" viewBox="0 0 40 30" preserveAspectRatio="none"><path d="M20 0 C13 10 27 20 20 30" fill="none" stroke="#8C7B5E" stroke-width="3" stroke-linecap="round"></path><path d="M21 13 Q28 10 31 6" fill="none" stroke="#8C7B5E" stroke-width="1.6" stroke-linecap="round"></path><circle cx="32" cy="6" r="4" fill="#9DB3A8"></circle></svg></div>
+        </sc-if>
+        <div class="fh-row fh-par" style="display: flex; flex-direction: column; align-items: center">
+          <div class="fh-label" style="font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6358; text-align: center; margin-bottom: 8px">{{parentsLabel}}</div>
+          <sc-if value="{{hasParents}}" hint-placeholder-val="{{true}}">
+            <div class="fh-group" style="display: flex; gap: 10px; padding: 10px; border-radius: 18px; border: 1px solid #E2D9C8; background: rgba(255, 253, 248, 0.6)">
+              <sc-for list="{{parents}}" as="p" hint-placeholder-count="2"><div onMouseEnter="{{p.enter}}" onMouseLeave="{{p.leave}}" onFocus="{{p.enter}}" onBlur="{{p.leave}}" style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<button type="button" class="fh-card" onClick="{{p.pick}}" onDoubleClick="{{p.dbl}}" aria-pressed="{{p.sel}}" style="width: 150px; height: 118px; box-sizing: border-box; padding: 12px 8px; border-radius: 14px; background: #FFFDF8; border: {{p.border}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; font: inherit; color: #2B2620; transform: {{p.lift}}; box-shadow: {{p.shadow}}; transition: transform .15s ease, box-shadow .15s ease">
+<span class="fh-av" style="position: relative; overflow: hidden; flex: none; width: 50px; height: 50px; border-radius: 50%; background: {{p.avBg}}; color: {{p.avFg}}; box-shadow: 0 0 0 3px #FFFDF8, 0 0 0 5px #D9CDB5; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif; font-size: 19px">{{p.initials}}<span aria-hidden="true" style="position: absolute; inset: 0; background: {{p.tone}}; opacity: 0; animation: fh-swapc 6s ease-in-out {{p.photoDelay}} infinite"><span style="position: absolute; left: 32%; top: 16%; width: 36%; height: 36%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span><span style="position: absolute; left: 14%; top: 60%; width: 72%; height: 54%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span></span></span>
+<span class="fh-name" style="font-weight: 600; font-size: 15px; line-height: 1.2; margin-top: 4px">{{p.name}}</span>
+<span class="fh-sub" style="font-size: 13px; color: #6B6358; line-height: 1.2">{{p.sub}}</span>
+</button>
+
+<sc-if value="{{p.showGlimpse}}" hint-placeholder-val="{{false}}"><div style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); padding-top: 8px; z-index: 20; width: 250px"><div class="fh-glimpse" style="padding: 14px; border-radius: 12px; background: #FFFDF8; border: 1px solid #E2D9C8; box-shadow: 0 12px 28px rgba(43, 38, 32, 0.18); display: flex; flex-direction: column; gap: 6px; text-align: left; font-size: 14px; color: #2B2620; animation: fh-pop .16s ease-out both"><span style="font-weight: 600; font-size: 15px">{{p.rel}}</span><span style="line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">{{p.bio}}</span><sc-if value="{{p.hasContact}}" hint-placeholder-val="{{false}}"><span>{{p.contact}}</span></sc-if><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; padding-top: 8px; border-top: 1px solid #EFE8DA"><a href="Person-Profile.dc.html" style="font-weight: 600; min-height: 32px; display: flex; align-items: center">View profile ›</a><sc-if value="{{p.notFocus}}" hint-placeholder-val="{{true}}"><button type="button" onClick="{{p.center}}" style="min-height: 32px; border: 0; background: transparent; font: inherit; font-size: 13px; color: #6B6358; text-decoration: underline">Center here</button></sc-if></div></div></div></sc-if>
+</div></sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{noParents}}" hint-placeholder-val="{{false}}"><div style="padding: 16px 24px; border: 1px dashed #B8AC94; border-radius: 14px; color: #6B6358; background: #FFFDF8">No parents recorded yet</div></sc-if>
+        </div>
+        <div class="fh-conn" aria-hidden="true" style="height: 24px; display: flex; justify-content: center"><svg width="40" height="24" viewBox="0 0 40 30" preserveAspectRatio="none"><path d="M20 0 C13 10 27 20 20 30" fill="none" stroke="#8C7B5E" stroke-width="3" stroke-linecap="round"></path><path d="M21 13 Q28 10 31 6" fill="none" stroke="#8C7B5E" stroke-width="1.6" stroke-linecap="round"></path><circle cx="32" cy="6" r="4" fill="#9DB3A8"></circle></svg></div>
+        <div class="fh-row fh-you" style="display: flex; flex-direction: column; align-items: center">
+          <div class="fh-label" style="font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6358; text-align: center; margin-bottom: 8px">{{householdLabel}} &amp; siblings</div>
+          <div style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 14px">
+            <sc-for list="{{sibsLeft}}" as="p" hint-placeholder-count="1"><div onMouseEnter="{{p.enter}}" onMouseLeave="{{p.leave}}" onFocus="{{p.enter}}" onBlur="{{p.leave}}" style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<button type="button" class="fh-card" onClick="{{p.pick}}" onDoubleClick="{{p.dbl}}" aria-pressed="{{p.sel}}" style="width: 150px; height: 118px; box-sizing: border-box; padding: 12px 8px; border-radius: 14px; background: #FFFDF8; border: {{p.border}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; font: inherit; color: #2B2620; transform: {{p.lift}}; box-shadow: {{p.shadow}}; transition: transform .15s ease, box-shadow .15s ease">
+<span class="fh-av" style="position: relative; overflow: hidden; flex: none; width: 50px; height: 50px; border-radius: 50%; background: {{p.avBg}}; color: {{p.avFg}}; box-shadow: 0 0 0 3px #FFFDF8, 0 0 0 5px #D9CDB5; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif; font-size: 19px">{{p.initials}}<span aria-hidden="true" style="position: absolute; inset: 0; background: {{p.tone}}; opacity: 0; animation: fh-swapc 6s ease-in-out {{p.photoDelay}} infinite"><span style="position: absolute; left: 32%; top: 16%; width: 36%; height: 36%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span><span style="position: absolute; left: 14%; top: 60%; width: 72%; height: 54%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span></span></span>
+<span class="fh-name" style="font-weight: 600; font-size: 15px; line-height: 1.2; margin-top: 4px">{{p.name}}</span>
+<span class="fh-sub" style="font-size: 13px; color: #6B6358; line-height: 1.2">{{p.sub}}</span>
+</button>
+
+<sc-if value="{{p.showGlimpse}}" hint-placeholder-val="{{false}}"><div style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); padding-top: 8px; z-index: 20; width: 250px"><div class="fh-glimpse" style="padding: 14px; border-radius: 12px; background: #FFFDF8; border: 1px solid #E2D9C8; box-shadow: 0 12px 28px rgba(43, 38, 32, 0.18); display: flex; flex-direction: column; gap: 6px; text-align: left; font-size: 14px; color: #2B2620; animation: fh-pop .16s ease-out both"><span style="font-weight: 600; font-size: 15px">{{p.rel}}</span><span style="line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">{{p.bio}}</span><sc-if value="{{p.hasContact}}" hint-placeholder-val="{{false}}"><span>{{p.contact}}</span></sc-if><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; padding-top: 8px; border-top: 1px solid #EFE8DA"><a href="Person-Profile.dc.html" style="font-weight: 600; min-height: 32px; display: flex; align-items: center">View profile ›</a><sc-if value="{{p.notFocus}}" hint-placeholder-val="{{true}}"><button type="button" onClick="{{p.center}}" style="min-height: 32px; border: 0; background: transparent; font: inherit; font-size: 13px; color: #6B6358; text-decoration: underline">Center here</button></sc-if></div></div></div></sc-if>
+</div></sc-for>
+            <div class="fh-house" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding: 10px; border-radius: 18px; background: #E6EEE9; border: 2px solid {{accent}}">
+              <sc-for list="{{household}}" as="p" hint-placeholder-count="2"><div onMouseEnter="{{p.enter}}" onMouseLeave="{{p.leave}}" onFocus="{{p.enter}}" onBlur="{{p.leave}}" style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<button type="button" class="fh-card" onClick="{{p.pick}}" onDoubleClick="{{p.dbl}}" aria-pressed="{{p.sel}}" style="width: 150px; height: 118px; box-sizing: border-box; padding: 12px 8px; border-radius: 14px; background: #FFFDF8; border: {{p.border}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; font: inherit; color: #2B2620; transform: {{p.lift}}; box-shadow: {{p.shadow}}; transition: transform .15s ease, box-shadow .15s ease">
+<span class="fh-av" style="position: relative; overflow: hidden; flex: none; width: 50px; height: 50px; border-radius: 50%; background: {{p.avBg}}; color: {{p.avFg}}; box-shadow: 0 0 0 3px #FFFDF8, 0 0 0 5px #D9CDB5; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif; font-size: 19px">{{p.initials}}<span aria-hidden="true" style="position: absolute; inset: 0; background: {{p.tone}}; opacity: 0; animation: fh-swapc 6s ease-in-out {{p.photoDelay}} infinite"><span style="position: absolute; left: 32%; top: 16%; width: 36%; height: 36%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span><span style="position: absolute; left: 14%; top: 60%; width: 72%; height: 54%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span></span></span>
+<span class="fh-name" style="font-weight: 600; font-size: 15px; line-height: 1.2; margin-top: 4px">{{p.name}}</span>
+<span class="fh-sub" style="font-size: 13px; color: #6B6358; line-height: 1.2">{{p.sub}}</span>
+</button>
+
+<sc-if value="{{p.showGlimpse}}" hint-placeholder-val="{{false}}"><div style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); padding-top: 8px; z-index: 20; width: 250px"><div class="fh-glimpse" style="padding: 14px; border-radius: 12px; background: #FFFDF8; border: 1px solid #E2D9C8; box-shadow: 0 12px 28px rgba(43, 38, 32, 0.18); display: flex; flex-direction: column; gap: 6px; text-align: left; font-size: 14px; color: #2B2620; animation: fh-pop .16s ease-out both"><span style="font-weight: 600; font-size: 15px">{{p.rel}}</span><span style="line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">{{p.bio}}</span><sc-if value="{{p.hasContact}}" hint-placeholder-val="{{false}}"><span>{{p.contact}}</span></sc-if><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; padding-top: 8px; border-top: 1px solid #EFE8DA"><a href="Person-Profile.dc.html" style="font-weight: 600; min-height: 32px; display: flex; align-items: center">View profile ›</a><sc-if value="{{p.notFocus}}" hint-placeholder-val="{{true}}"><button type="button" onClick="{{p.center}}" style="min-height: 32px; border: 0; background: transparent; font: inherit; font-size: 13px; color: #6B6358; text-decoration: underline">Center here</button></sc-if></div></div></div></sc-if>
+</div></sc-for>
+            </div>
+            <sc-for list="{{sibsRight}}" as="p" hint-placeholder-count="1"><div onMouseEnter="{{p.enter}}" onMouseLeave="{{p.leave}}" onFocus="{{p.enter}}" onBlur="{{p.leave}}" style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<button type="button" class="fh-card" onClick="{{p.pick}}" onDoubleClick="{{p.dbl}}" aria-pressed="{{p.sel}}" style="width: 150px; height: 118px; box-sizing: border-box; padding: 12px 8px; border-radius: 14px; background: #FFFDF8; border: {{p.border}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; font: inherit; color: #2B2620; transform: {{p.lift}}; box-shadow: {{p.shadow}}; transition: transform .15s ease, box-shadow .15s ease">
+<span class="fh-av" style="position: relative; overflow: hidden; flex: none; width: 50px; height: 50px; border-radius: 50%; background: {{p.avBg}}; color: {{p.avFg}}; box-shadow: 0 0 0 3px #FFFDF8, 0 0 0 5px #D9CDB5; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif; font-size: 19px">{{p.initials}}<span aria-hidden="true" style="position: absolute; inset: 0; background: {{p.tone}}; opacity: 0; animation: fh-swapc 6s ease-in-out {{p.photoDelay}} infinite"><span style="position: absolute; left: 32%; top: 16%; width: 36%; height: 36%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span><span style="position: absolute; left: 14%; top: 60%; width: 72%; height: 54%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span></span></span>
+<span class="fh-name" style="font-weight: 600; font-size: 15px; line-height: 1.2; margin-top: 4px">{{p.name}}</span>
+<span class="fh-sub" style="font-size: 13px; color: #6B6358; line-height: 1.2">{{p.sub}}</span>
+</button>
+
+<sc-if value="{{p.showGlimpse}}" hint-placeholder-val="{{false}}"><div style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); padding-top: 8px; z-index: 20; width: 250px"><div class="fh-glimpse" style="padding: 14px; border-radius: 12px; background: #FFFDF8; border: 1px solid #E2D9C8; box-shadow: 0 12px 28px rgba(43, 38, 32, 0.18); display: flex; flex-direction: column; gap: 6px; text-align: left; font-size: 14px; color: #2B2620; animation: fh-pop .16s ease-out both"><span style="font-weight: 600; font-size: 15px">{{p.rel}}</span><span style="line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">{{p.bio}}</span><sc-if value="{{p.hasContact}}" hint-placeholder-val="{{false}}"><span>{{p.contact}}</span></sc-if><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; padding-top: 8px; border-top: 1px solid #EFE8DA"><a href="Person-Profile.dc.html" style="font-weight: 600; min-height: 32px; display: flex; align-items: center">View profile ›</a><sc-if value="{{p.notFocus}}" hint-placeholder-val="{{true}}"><button type="button" onClick="{{p.center}}" style="min-height: 32px; border: 0; background: transparent; font: inherit; font-size: 13px; color: #6B6358; text-decoration: underline">Center here</button></sc-if></div></div></div></sc-if>
+</div></sc-for>
+          </div>
+        </div>
+        <sc-if value="{{hasChildren}}" hint-placeholder-val="{{true}}">
+          <div class="fh-conn" aria-hidden="true" style="height: 24px; display: flex; justify-content: center"><svg width="40" height="24" viewBox="0 0 40 30" preserveAspectRatio="none"><path d="M20 0 C13 10 27 20 20 30" fill="none" stroke="#8C7B5E" stroke-width="3" stroke-linecap="round"></path><path d="M21 13 Q28 10 31 6" fill="none" stroke="#8C7B5E" stroke-width="1.6" stroke-linecap="round"></path><circle cx="32" cy="6" r="4" fill="#9DB3A8"></circle></svg></div>
+          <div class="fh-row fh-kids" style="display: flex; flex-direction: column; align-items: center">
+            <div class="fh-label" style="font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6358; text-align: center; margin-bottom: 8px">{{childrenLabel}}</div>
+            <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 14px">
+              <sc-for list="{{children}}" as="p" hint-placeholder-count="2"><div onMouseEnter="{{p.enter}}" onMouseLeave="{{p.leave}}" onFocus="{{p.enter}}" onBlur="{{p.leave}}" style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<button type="button" class="fh-card" onClick="{{p.pick}}" onDoubleClick="{{p.dbl}}" aria-pressed="{{p.sel}}" style="width: 150px; height: 118px; box-sizing: border-box; padding: 12px 8px; border-radius: 14px; background: #FFFDF8; border: {{p.border}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; font: inherit; color: #2B2620; transform: {{p.lift}}; box-shadow: {{p.shadow}}; transition: transform .15s ease, box-shadow .15s ease">
+<span class="fh-av" style="position: relative; overflow: hidden; flex: none; width: 50px; height: 50px; border-radius: 50%; background: {{p.avBg}}; color: {{p.avFg}}; box-shadow: 0 0 0 3px #FFFDF8, 0 0 0 5px #D9CDB5; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif; font-size: 19px">{{p.initials}}<span aria-hidden="true" style="position: absolute; inset: 0; background: {{p.tone}}; opacity: 0; animation: fh-swapc 6s ease-in-out {{p.photoDelay}} infinite"><span style="position: absolute; left: 32%; top: 16%; width: 36%; height: 36%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span><span style="position: absolute; left: 14%; top: 60%; width: 72%; height: 54%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span></span></span>
+<span class="fh-name" style="font-weight: 600; font-size: 15px; line-height: 1.2; margin-top: 4px">{{p.name}}</span>
+<span class="fh-sub" style="font-size: 13px; color: #6B6358; line-height: 1.2">{{p.sub}}</span>
+</button>
+
+<sc-if value="{{p.showGlimpse}}" hint-placeholder-val="{{false}}"><div style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); padding-top: 8px; z-index: 20; width: 250px"><div class="fh-glimpse" style="padding: 14px; border-radius: 12px; background: #FFFDF8; border: 1px solid #E2D9C8; box-shadow: 0 12px 28px rgba(43, 38, 32, 0.18); display: flex; flex-direction: column; gap: 6px; text-align: left; font-size: 14px; color: #2B2620; animation: fh-pop .16s ease-out both"><span style="font-weight: 600; font-size: 15px">{{p.rel}}</span><span style="line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">{{p.bio}}</span><sc-if value="{{p.hasContact}}" hint-placeholder-val="{{false}}"><span>{{p.contact}}</span></sc-if><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; padding-top: 8px; border-top: 1px solid #EFE8DA"><a href="Person-Profile.dc.html" style="font-weight: 600; min-height: 32px; display: flex; align-items: center">View profile ›</a><sc-if value="{{p.notFocus}}" hint-placeholder-val="{{true}}"><button type="button" onClick="{{p.center}}" style="min-height: 32px; border: 0; background: transparent; font: inherit; font-size: 13px; color: #6B6358; text-decoration: underline">Center here</button></sc-if></div></div></div></sc-if>
+</div></sc-for>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{hasGk}}" hint-placeholder-val="{{false}}">
+          <div class="fh-conn" aria-hidden="true" style="height: 24px; display: flex; justify-content: center"><svg width="40" height="24" viewBox="0 0 40 30" preserveAspectRatio="none"><path d="M20 0 C13 10 27 20 20 30" fill="none" stroke="#8C7B5E" stroke-width="3" stroke-linecap="round"></path><path d="M21 13 Q28 10 31 6" fill="none" stroke="#8C7B5E" stroke-width="1.6" stroke-linecap="round"></path><circle cx="32" cy="6" r="4" fill="#9DB3A8"></circle></svg></div>
+          <div class="fh-row fh-gk" style="display: flex; flex-direction: column; align-items: center">
+            <div class="fh-label" style="font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6358; text-align: center; margin-bottom: 8px">Grandchildren</div>
+            <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 14px">
+              <sc-for list="{{grandkids}}" as="p" hint-placeholder-count="2"><div onMouseEnter="{{p.enter}}" onMouseLeave="{{p.leave}}" onFocus="{{p.enter}}" onBlur="{{p.leave}}" style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<button type="button" class="fh-card" onClick="{{p.pick}}" onDoubleClick="{{p.dbl}}" aria-pressed="{{p.sel}}" style="width: 150px; height: 118px; box-sizing: border-box; padding: 12px 8px; border-radius: 14px; background: #FFFDF8; border: {{p.border}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; font: inherit; color: #2B2620; transform: {{p.lift}}; box-shadow: {{p.shadow}}; transition: transform .15s ease, box-shadow .15s ease">
+<span class="fh-av" style="position: relative; overflow: hidden; flex: none; width: 50px; height: 50px; border-radius: 50%; background: {{p.avBg}}; color: {{p.avFg}}; box-shadow: 0 0 0 3px #FFFDF8, 0 0 0 5px #D9CDB5; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif; font-size: 19px">{{p.initials}}<span aria-hidden="true" style="position: absolute; inset: 0; background: {{p.tone}}; opacity: 0; animation: fh-swapc 6s ease-in-out {{p.photoDelay}} infinite"><span style="position: absolute; left: 32%; top: 16%; width: 36%; height: 36%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span><span style="position: absolute; left: 14%; top: 60%; width: 72%; height: 54%; border-radius: 50%; background: #FFFDF8; opacity: 0.6"></span></span></span>
+<span class="fh-name" style="font-weight: 600; font-size: 15px; line-height: 1.2; margin-top: 4px">{{p.name}}</span>
+<span class="fh-sub" style="font-size: 13px; color: #6B6358; line-height: 1.2">{{p.sub}}</span>
+</button>
+<sc-if value="{{p.more}}" hint-placeholder-val="{{false}}"><button class="fh-btn" type="button" onClick="{{p.center}}" aria-label="{{p.moreLabel}}"  style="height: 30px; padding: 0 12px; border: 1px solid #CFC4AF; border-radius: 15px; background: #FFFDF8; font: inherit; font-size: 13px; color: #2F5D50">▼ more</button></sc-if>
+<sc-if value="{{p.showGlimpse}}" hint-placeholder-val="{{false}}"><div style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); padding-top: 8px; z-index: 20; width: 250px"><div class="fh-glimpse" style="padding: 14px; border-radius: 12px; background: #FFFDF8; border: 1px solid #E2D9C8; box-shadow: 0 12px 28px rgba(43, 38, 32, 0.18); display: flex; flex-direction: column; gap: 6px; text-align: left; font-size: 14px; color: #2B2620; animation: fh-pop .16s ease-out both"><span style="font-weight: 600; font-size: 15px">{{p.rel}}</span><span style="line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">{{p.bio}}</span><sc-if value="{{p.hasContact}}" hint-placeholder-val="{{false}}"><span>{{p.contact}}</span></sc-if><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; padding-top: 8px; border-top: 1px solid #EFE8DA"><a href="Person-Profile.dc.html" style="font-weight: 600; min-height: 32px; display: flex; align-items: center">View profile ›</a><sc-if value="{{p.notFocus}}" hint-placeholder-val="{{true}}"><button type="button" onClick="{{p.center}}" style="min-height: 32px; border: 0; background: transparent; font: inherit; font-size: 13px; color: #6B6358; text-decoration: underline">Center here</button></sc-if></div></div></div></sc-if>
+</div></sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2F5D50","options":["#2F5D50","#8A4B2A","#3D4F7A"]},"$preview":{"width":1280,"height":1260}}'>
+const FH_PEOPLE = {
+  jose:   { n: "Jean-Baptiste Pluviose", i: "JP", d: "c. 1900 – 1971", rel: "Your great-grandfather", bio: "Ran a small bakery near the market in Jacmel. Still remembered for his pen mayi." },
+  ana:    { n: "Anne-Marie Pluviose", i: "AP", d: "c. 1904 – 1980", rel: "Your great-grandmother", bio: "Remembered for her garden and her strict rules about Sunday lunch." },
+  ramon:  { n: "Joseph Pluviose", i: "JP", d: "1929 – 2004", rel: "Your grandfather", bio: "Drove a yellow cab in New York for 30 years. His old taxi medallion hangs in Fritz’s living room." },
+  lucia:  { n: "Marie-Claire Pluviose", i: "MP", d: "1933 – 2015", rel: "Your grandmother", bio: "Sang in the church choir until she was 80." },
+  hector: { n: "Lucien Monestime", i: "LM", d: "c. 1935 – 1998", rel: "Your grandfather", bio: "Carpenter. Built the Monestime house on Rue Sainte-Anne himself." },
+  rosa:   { n: "Rose Monestime", i: "RM", d: "Birthday Feb 2", rel: "Your grandmother", bio: "Keeper of the pen patat recipe. Still talks about the house Lucien built in Jacmel." },
+  daniel: { n: "Jean-Robert Pluviose", i: "JP", d: "Birthday Aug 12", rel: "Your father", bio: "Retired high-school band director. Plays trumpet at every wedding." },
+  elena:  { n: "Nadège Pluviose", i: "NP", d: "née Monestime · Birthday Nov 19", rel: "Your mother", bio: "Grew up in Brooklyn, taught third grade for thirty years, and still makes the best soup joumou every New Year’s Day." },
+  carla:  { n: "Guerline Saint-Fleur", i: "GS", d: "Birthday Oct 3", rel: "Jean-Robert’s former wife", bio: "Sabine’s mother. Lives in Montreal." },
+  carmen: { n: "Marie-Thérèse Pluviose", i: "MP", d: "Birthday Mar 15", rel: "Your aunt", bio: "Jean-Robert’s younger sister. Runs the family reunion every other summer." },
+  tomas:  { n: "Frantz Monestime", i: "FM", d: "Birthday Dec 1", rel: "Your uncle", bio: "Nadège’s brother. Took over Lucien’s carpentry shop." },
+  grace:  { n: "Mirlande Monestime", i: "MM", d: "Birthday Jun 18", rel: "Your aunt", bio: "Married Frantz in 1990." },
+  maya:   { n: "Maya Pluviose", i: "MP", d: "Birthday Jun 6", rel: "You", bio: "Eldest of the Pluviose kids. Nurse in Boston. Keeper of the family recipes." },
+  sam:    { n: "Stanley Jean-Louis", i: "SJ", d: "Birthday Sep 9", rel: "Your husband", bio: "Grew up in Cap-Haïtien. Makes the best diri djon djon." },
+  leo:    { n: "Fritz Pluviose", i: "FP", d: "Birthday Jan 30", rel: "Your brother", bio: "Hosts Thanksgiving. Keeps Joseph’s old taxi medallion.", c: ["Email", "fritz.p@example.com"] },
+  priya:  { n: "Fabienne Pluviose", i: "FP", d: "Birthday Apr 27", rel: "Your sister-in-law", bio: "Married Fritz in 2004." },
+  sofia:  { n: "Sabine Pluviose", i: "SP", d: "Birthday May 21", rel: "Your half-sister", bio: "Jean-Robert and Guerline’s daughter. Teaches high-school chemistry." },
+  diego:  { n: "Peterson Pluviose", i: "PP", d: "Birthday Aug 30", rel: "Your cousin", bio: "Marie-Thérèse’s son." },
+  nina:   { n: "Darline Monestime", i: "DM", d: "Birthday Feb 14", rel: "Your cousin", bio: "Frantz and Mirlande’s daughter." },
+  ava:    { n: "Naïka Jean-Louis", i: "NJ", d: "Birthday Apr 8", rel: "Your daughter", bio: "Architect in Atlanta." },
+  theo:   { n: "Mackenson Jean-Louis", i: "MJ", d: "Birthday Nov 24", rel: "Your son", bio: "Plays bass in a band with three of his cousins." },
+  jun:    { n: "Ralph Désir", i: "RD", d: "Birthday Jan 11", rel: "Naïka’s partner", bio: "Met Naïka in architecture school." },
+  lucas:  { n: "Kervens Pluviose", i: "KP", d: "Birthday Mar 3", rel: "Your nephew", bio: "Fritz and Fabienne’s eldest." },
+  isla:   { n: "Esther Pluviose", i: "EP", d: "Birthday Sep 17", rel: "Your niece", bio: "Fritz and Fabienne’s middle child." },
+  mateo:  { n: "Jonas Pluviose", i: "JP", d: "Birthday Dec 22", rel: "Your nephew", bio: "Fritz and Fabienne’s youngest." },
+  mila:   { n: "Naomie Désir", i: "ND", d: "Birthday Jul 2", rel: "Your granddaughter", bio: "Naïka and Ralph’s daughter — the first of the fifth generation." }
+};
+const FH_PARENTS = {
+  ramon: ["jose", "ana"], daniel: ["ramon", "lucia"], carmen: ["ramon", "lucia"],
+  elena: ["hector", "rosa"], tomas: ["hector", "rosa"],
+  maya: ["daniel", "elena"], leo: ["daniel", "elena"], sofia: ["daniel", "carla"],
+  diego: ["carmen"], nina: ["tomas", "grace"],
+  ava: ["maya", "sam"], theo: ["maya", "sam"],
+  lucas: ["leo", "priya"], isla: ["leo", "priya"], mateo: ["leo", "priya"],
+  mila: ["ava", "jun"]
+};
+const FH_COUPLES = [
+  ["jose", "ana"], ["ramon", "lucia"], ["hector", "rosa"], ["daniel", "elena"],
+  ["daniel", "carla", true], ["tomas", "grace"], ["maya", "sam"], ["leo", "priya"], ["ava", "jun"]
+];
+function fhParents(id) { return FH_PARENTS[id] || []; }
+function fhChildren(id) { return Object.keys(FH_PARENTS).filter((k) => FH_PARENTS[k].includes(id)); }
+function fhPartners(id) {
+  return FH_COUPLES.filter((c) => c[0] === id || c[1] === id)
+    .map((c) => ({ id: c[0] === id ? c[1] : c[0], ended: !!c[2] }));
+}
+function fhAncestors(id) {
+  const seen = new Set();
+  const walk = (x) => fhParents(x).forEach((p) => { if (!seen.has(p)) { seen.add(p); walk(p); } });
+  walk(id);
+  return seen;
+}
+function fhFirst(id) { return FH_PEOPLE[id].n.split(" ")[0]; }
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { focus: "maya", selected: "maya", pinned: null, hover: null, trail: ["maya"], dir: "none", flip: false, q: "" };
+  }
+  componentWillUnmount() { clearTimeout(this.fhTimer); }
+  moveTo(trail) {
+    const from = this.state.focus;
+    const to = trail[trail.length - 1];
+    if (to === from) { this.setState({ trail, selected: to, pinned: null, hover: null, q: "" }); return; }
+    const dir = fhAncestors(from).has(to) ? "up" : fhAncestors(to).has(from) ? "down" : "side";
+    this.setState({ focus: to, selected: to, pinned: null, hover: null, trail, dir, flip: !this.state.flip, q: "" });
+  }
+  focusOn(id) { this.moveTo([...this.state.trail, id].slice(-8)); }
+  renderVals() {
+    const accent = this.props.accent ?? "#2F5D50";
+    const s = this.state;
+    const F = s.focus;
+    const S = s.selected || F;
+    const card = (id, extra) => {
+      const p = FH_PEOPLE[id];
+      const sel = id === S;
+      const showGlimpse = id === (s.hover || s.pinned);
+      const hsh = id.split('').reduce((a, ch) => a + ch.charCodeAt(0), 0);
+      const tones = ['#9DB3A8', '#B59A86', '#A89478', '#8E9A86', '#A7A08C', '#C2B59B'];
+      return {
+        id, name: p.n, initials: p.i, sub: (extra && extra.sub) || p.rel, sel,
+        tone: tones[hsh % tones.length], photoDelay: ((hsh % 9) * 0.7 + 1).toFixed(1) + 's',
+        rel: p.rel, bio: p.bio, hasContact: !!p.c, contact: p.c ? p.c[0] + " · " + p.c[1] : "",
+        notFocus: id !== F, showGlimpse,
+        lift: showGlimpse ? "translateY(-3px) scale(1.04)" : "none",
+        shadow: showGlimpse ? "0 10px 24px rgba(43, 38, 32, 0.16)" : "none",
+        enter: () => { if (this.state.hover !== id) this.setState({ hover: id }); },
+        leave: () => { if (this.state.hover === id) this.setState({ hover: null }); },
+        border: sel ? "3px solid " + accent : (extra && extra.dashed) ? "1px dashed #B8AC94" : "1px solid #E2D9C8",
+        avBg: id === F ? accent : "#D9CDB5", avFg: id === F ? "#FFFFFF" : "#2B2620",
+        pick: () => {
+          this.setState({ selected: id });
+          clearTimeout(this.fhTimer);
+          this.fhTimer = setTimeout(() => this.setState({ pinned: this.state.pinned === id ? null : id }), 230);
+        },
+        dbl: () => { clearTimeout(this.fhTimer); this.focusOn(id); },
+        center: () => { clearTimeout(this.fhTimer); this.focusOn(id); },
+        more: !!(extra && extra.more), moreLabel: "Center the tree on " + p.n
+      };
+    };
+
+    const parentIds = fhParents(F);
+    const gpGroups = parentIds
+      .map((pid) => ({ label: fhFirst(pid) + "’s parents", people: fhParents(pid).map((g) => card(g, { more: fhParents(g).length > 0 })) }))
+      .filter((g) => g.people.length > 0);
+
+    const mine = new Set(parentIds);
+    const sibIds = [...new Set(parentIds.flatMap((p) => fhChildren(p)))].filter((x) => x !== F);
+    const sibs = sibIds.map((x) => {
+      const theirs = fhParents(x);
+      const full = theirs.length === mine.size && theirs.every((t) => mine.has(t));
+      const rel = FH_PEOPLE[x].rel;
+      return card(x, { sub: full || rel.startsWith("Your half") ? rel : rel + " · half-sibling" });
+    });
+    const half = Math.ceil(sibs.length / 2);
+
+    const partners = fhPartners(F);
+    const household = [card(F)].concat(
+      partners.filter((p) => !p.ended).map((p) => card(p.id)),
+      partners.filter((p) => p.ended).map((p) => card(p.id, { dashed: true, sub: "Former partner" }))
+    );
+
+    const childIds = fhChildren(F);
+    const gkIds = childIds.flatMap((c) => fhChildren(c));
+
+    const trail = s.trail.map((id, idx) => ({
+      name: id === "maya" ? "Me" : fhFirst(id),
+      notFirst: idx > 0, isCurrent: idx === s.trail.length - 1, notCurrent: idx !== s.trail.length - 1,
+      jump: () => this.moveTo(s.trail.slice(0, idx + 1))
+    }));
+
+    const q = s.q.trim().toLowerCase();
+    const matches = q.length === 0 ? [] : Object.keys(FH_PEOPLE)
+      .filter((id) => FH_PEOPLE[id].n.toLowerCase().includes(q)).slice(0, 6)
+      .map((id) => ({ name: FH_PEOPLE[id].n, rel: FH_PEOPLE[id].rel, pick: () => this.focusOn(id) }));
+
+
+    const anim = s.dir === "none" ? "none" : "fh-" + s.dir + "-" + (s.flip ? "a" : "b") + " .5s ease-out both";
+    const fName = F === "maya" ? "you" : fhFirst(F);
+    return {
+      accent,
+      q: s.q, onQ: (e) => this.setState({ q: e.target.value }),
+      matches, hasMatches: matches.length > 0,
+      back: () => { if (s.trail.length > 1) this.moveTo(s.trail.slice(0, -1)); },
+      noBack: s.trail.length < 2, backOpacity: s.trail.length < 2 ? 0.45 : 1,
+      backToMe: () => this.moveTo(["maya"]),
+      trail,
+      status: "Family tree centered on " + FH_PEOPLE[F].n,
+      anim,
+      gpGroups, hasGp: gpGroups.length > 0,
+      parents: parentIds.map((p) => card(p)), hasParents: parentIds.length > 0, noParents: parentIds.length === 0,
+      parentsLabel: F === "maya" ? "Your parents" : fhFirst(F) + "’s parents",
+      sibsLeft: sibs.slice(0, half), sibsRight: sibs.slice(half),
+      household, householdLabel: F === "maya" ? "Your household" : fhFirst(F) + "’s household",
+      children: childIds.map((c) => card(c)), hasChildren: childIds.length > 0,
+      childrenLabel: F === "maya" ? "Your children" : fhFirst(F) + "’s children",
+      grandkids: gkIds.map((g) => card(g, { more: fhChildren(g).length > 0 })), hasGk: gkIds.length > 0,
+      fName
+    };
+  }
+}
+</script>
+</body>
+</html>

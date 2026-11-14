@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home — Hearth</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=Source+Sans+3:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+nav[aria-label="Main"] > div > a{transition:background-color .15s ease, box-shadow .15s ease}
+nav[aria-label="Main"] > div > a:hover, nav[aria-label="Main"] > div > a:focus-visible{background-color:#EFE7D8;box-shadow:0 1px 3px rgba(43,38,32,.12)}
+a{color:#2F5D50}a:hover{color:#1E3F36}
+@keyframes fh-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes fh-draw{0%{stroke-dashoffset:100;opacity:0}3%{opacity:1}100%{stroke-dashoffset:0;opacity:1}}
+@keyframes fh-pop{0%{opacity:0;transform:scale(.4)}70%{opacity:1;transform:scale(1.08)}100%{opacity:1;transform:scale(1)}}
+@keyframes fh-sway{0%,100%{transform:rotate(-1.5deg)}50%{transform:rotate(1.5deg)}}
+@keyframes fh-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes fh-photo{0%{opacity:0}4%{opacity:1}18%{opacity:1}22%{opacity:0}100%{opacity:0}}
+@keyframes fh-ring{0%{opacity:0;stroke-width:0}4%{opacity:1;stroke-width:3}18%{opacity:1;stroke-width:3}22%{opacity:0;stroke-width:0}100%{opacity:0}}
+@keyframes fh-fadein{from{opacity:0}to{opacity:1}}
+@keyframes fh-swapc{0%{opacity:0}12%{opacity:1}42%{opacity:1}54%{opacity:0}100%{opacity:0}}
+@keyframes fh-swap{0%,45%{opacity:1}50%,95%{opacity:0}100%{opacity:1}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+.fh-hcard{transition:translate .2s ease, box-shadow .2s ease}
+.fh-hcard:hover,.fh-hcard:focus-within{translate:0 -4px;box-shadow:0 12px 26px rgba(43,38,32,.12)}
+.fh-btn{transition:box-shadow .15s ease, translate .15s ease}
+.fh-btn:hover,.fh-btn:focus-visible{box-shadow:0 4px 12px rgba(43,38,32,.16);translate:0 -1px}
+.fh-btn:active{translate:0 0;box-shadow:0 1px 3px rgba(43,38,32,.12)}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 1260px; box-sizing: border-box; background: #F6F1E7; color: #2B2620; font-family: 'Source Sans 3', system-ui, sans-serif; font-size: 17px; display: flex; flex-wrap: wrap">
+
+  <nav aria-label="Main" style="flex: 1 1 220px; max-width: 260px; box-sizing: border-box; padding: 32px 24px; border-right: 1px solid #E2D9C8; display: flex; flex-direction: column; gap: 28px">
+    <a href="Home-Hearth.dc.html" aria-label="Pluviose-Monestime Family Hub, home" style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; color: #2B2620; text-decoration: none">
+      <svg aria-hidden="true" width="52" height="52" viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="25" fill="#E6EEE9" stroke="#2F5D50" stroke-width="1.5"></circle>
+        <path d="M26 42 V24 M26 30 L17 22 M26 30 L35 22 M26 24 L26 15" fill="none" stroke="#2F5D50" stroke-width="2.4" stroke-linecap="round"></path>
+        <circle cx="26" cy="13" r="4" fill="#2F5D50"></circle>
+        <circle cx="16" cy="20" r="3.4" fill="#8A6F4A"></circle>
+        <circle cx="36" cy="20" r="3.4" fill="#8A6F4A"></circle>
+      </svg>
+      <span style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+        <span style="font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 600; line-height: 1.15">Pluviose-Monestime</span>
+        <span style="font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6358">Family Hub</span>
+      </span>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <a href="Home-Hearth.dc.html" aria-current="page" style="padding: 12px 14px; border-radius: 8px; background: #E9E0CF; color: #2B2620; text-decoration: none; font-weight: 600">Home</a>
+      <a href="Main.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Family tree</a>
+      <a href="People.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">People</a>
+      <a href="Directory.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Directory</a>
+      <a href="Events.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Events</a>
+      <a href="Stories.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Stories</a>
+      <a href="My-Profile.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">My profile</a>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 16px; border-top: 1px solid #E2D9C8">
+      <span style="padding: 0 14px 4px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6358">Admin</span>
+      <a href="Manage-Access.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Members &amp; invites</a>
+    </div>
+    <div style="margin-top: auto; font-size: 14px; color: #6B6358">Signed in as Maya</div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 40px; display: flex; flex-direction: column; gap: 32px">
+
+    <section aria-label="Welcome" style="display: flex; flex-wrap: wrap; gap: 32px; align-items: center; padding: 36px; border-radius: 20px; background: #FBF7EF; border: 1px solid #E2D9C8">
+      <div style="flex: 1 1 340px; display: flex; flex-direction: column; gap: 14px; animation: fh-rise .8s ease-out both">
+        <span style="font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: #6B6358">Friday evening</span>
+        <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 52px; font-weight: 500; line-height: 1.05">Good evening, Maya</h1>
+        <p style="margin: 0; font-size: 19px; line-height: 1.5; color: #4A433A">Your mom's birthday is in 6 days, and Fritz added 12 photos from Thanksgiving.</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px">
+          <a class="fh-btn" href="Main.dc.html"  style="height: 48px; padding: 0 22px; display: flex; align-items: center; border-radius: 24px; background: {{accent}}; color: #FFFFFF; text-decoration: none; font-weight: 600">Open the family tree</a>
+          <a class="fh-btn" href="Events.dc.html"  style="height: 48px; padding: 0 22px; display: flex; align-items: center; border-radius: 24px; border: 1px solid #CFC4AF; color: #2B2620; text-decoration: none">See new photos</a>
+        </div>
+      </div>
+      <div style="flex: 0 1 320px; display: flex; flex-direction: column; align-items: center; gap: 10px">
+      <svg role="img" aria-label="An illustrated family tree that grows in, with you and your closest family on its branches taking turns showing a photo" viewBox="0 0 320 280" style="width: 100%; max-width: 320px; height: 260px">
+        <defs><clipPath id="fh-c-mp"><circle cx="160" cy="44" r="22"></circle></clipPath><clipPath id="fh-c-jp"><circle cx="80" cy="104" r="18"></circle></clipPath><clipPath id="fh-c-np"><circle cx="240" cy="104" r="18"></circle></clipPath><clipPath id="fh-c-fp"><circle cx="48" cy="52" r="15"></circle></clipPath><clipPath id="fh-c-sp"><circle cx="272" cy="52" r="15"></circle></clipPath></defs>
+        <path d="M0 252 Q40 196 82 220 Q122 160 170 206 Q214 158 258 200 Q292 178 320 252" fill="none" stroke="#DED3BD" stroke-width="1.3" stroke-linecap="round" pathLength="100" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.60s ease-out 0.03s both"></path>
+        <path d="M0 256 Q50 220 100 240 Q150 212 200 242 Q252 218 320 256" fill="none" stroke="#C9BBA0" stroke-width="1.6" stroke-linecap="round" pathLength="100" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.54s ease-out 0.12s both"></path>
+        <path d="M24 256 Q160 249 296 256" fill="none" stroke="#B8AC94" stroke-width="2" stroke-linecap="round" pathLength="100" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.30s ease-out 0.18s both"></path>
+        <path d="M104 255 l-2 -6 M108 255 l2 -5" fill="none" stroke="#A89878" stroke-width="1.2" stroke-linecap="round" style="opacity: 0; animation: fh-fadein 0.24s ease-out 0.36s both"></path>
+        <path d="M124 255 l-2 -6 M128 255 l2 -5" fill="none" stroke="#A89878" stroke-width="1.2" stroke-linecap="round" style="opacity: 0; animation: fh-fadein 0.24s ease-out 0.36s both"></path>
+        <path d="M196 255 l-2 -6 M200 255 l2 -5" fill="none" stroke="#A89878" stroke-width="1.2" stroke-linecap="round" style="opacity: 0; animation: fh-fadein 0.24s ease-out 0.36s both"></path>
+        <path d="M218 255 l-2 -6 M222 255 l2 -5" fill="none" stroke="#A89878" stroke-width="1.2" stroke-linecap="round" style="opacity: 0; animation: fh-fadein 0.24s ease-out 0.36s both"></path>
+        <path d="M160 256 Q146 264 132 268" fill="none" stroke="#C2B59B" stroke-width="1.6" stroke-linecap="round" pathLength="100" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.30s ease-out 0.21s both"></path>
+        <path d="M160 256 Q154 270 148 274" fill="none" stroke="#C2B59B" stroke-width="1.6" stroke-linecap="round" pathLength="100" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.30s ease-out 0.25s both"></path>
+        <path d="M160 256 Q166 270 172 274" fill="none" stroke="#C2B59B" stroke-width="1.6" stroke-linecap="round" pathLength="100" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.30s ease-out 0.28s both"></path>
+        <path d="M160 256 Q174 264 188 268" fill="none" stroke="#C2B59B" stroke-width="1.6" stroke-linecap="round" pathLength="100" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.30s ease-out 0.32s both"></path>
+        <g style="transform-box: view-box; transform-origin: 160px 256px; animation: fh-sway 6s ease-in-out 1.8s infinite">
+        <g fill="none" stroke="#8C7B5E" stroke-linecap="round"><path pathLength="100" stroke-width="3.4" d="M160 255 C160 210 160 180 160 150" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.42s linear 0.42s both"></path><path pathLength="100" stroke-width="3.0" d="M160 170 C130 150 110 130 80 110" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.39s linear 0.75s both"></path><path pathLength="100" stroke-width="3.0" d="M160 170 C190 150 210 130 240 110" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.39s linear 0.75s both"></path><path pathLength="100" stroke-width="2.8" d="M160 150 C160 120 160 95 160 60" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.39s linear 0.81s both"></path><path pathLength="100" stroke-width="2.4" d="M80 110 C70 90 60 75 50 60" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.33s linear 1.11s both"></path><path pathLength="100" stroke-width="2.4" d="M240 110 C250 90 260 75 270 60" style="stroke-dasharray: 100; stroke-dashoffset: 100; animation: fh-draw 0.33s linear 1.11s both"></path></g>
+        <g style="transform-box: fill-box; transform-origin: center; animation: fh-pop 0.24s ease-out 0.96s both"><circle cx="122" cy="140" r="5.5" fill="#9DB3A8"></circle><circle cx="122" cy="140" r="5.5" fill="#B59A86" style="opacity: 0; animation: fh-swapc 3s ease-in-out 1.32s infinite"></circle></g>
+        <g style="transform-box: fill-box; transform-origin: center; animation: fh-pop 0.24s ease-out 0.96s both"><circle cx="198" cy="140" r="5.5" fill="#B59A86"></circle><circle cx="198" cy="140" r="5.5" fill="#8E9A86" style="opacity: 0; animation: fh-swapc 3s ease-in-out 1.56s infinite"></circle></g>
+        <g style="transform-box: fill-box; transform-origin: center; animation: fh-pop 0.24s ease-out 1.08s both"><circle cx="167" cy="100" r="5.0" fill="#8E9A86"></circle><circle cx="167" cy="100" r="5.0" fill="#A7A08C" style="opacity: 0; animation: fh-swapc 3s ease-in-out 1.92s infinite"></circle></g>
+        <g style="transform-box: fill-box; transform-origin: center; animation: fh-pop 0.24s ease-out 1.02s both"><circle cx="152" cy="122" r="4.5" fill="#A7A08C"></circle><circle cx="152" cy="122" r="4.5" fill="#9DB3A8" style="opacity: 0; animation: fh-swapc 3s ease-in-out 2.10s infinite"></circle></g>
+        <g style="transform-box: fill-box; transform-origin: center; animation: fh-pop 0.24s ease-out 1.32s both"><circle cx="62" cy="84" r="4.5" fill="#C2B59B"></circle><circle cx="62" cy="84" r="4.5" fill="#8E9A86" style="opacity: 0; animation: fh-swapc 3s ease-in-out 2.64s infinite"></circle></g>
+        <g style="transform-box: fill-box; transform-origin: center; animation: fh-pop 0.24s ease-out 1.32s both"><circle cx="258" cy="84" r="4.5" fill="#9DB3A8"></circle><circle cx="258" cy="84" r="4.5" fill="#C2B59B" style="opacity: 0; animation: fh-swapc 3s ease-in-out 2.88s infinite"></circle></g>
+        <g font-family="Fraunces, Georgia, serif" text-anchor="middle">
+        <g style="transform-box: fill-box; transform-origin: center; animation: fh-pop 0.30s ease-out 1.20s both"><circle cx="160" cy="44" r="22" fill="{{accent}}"></circle><text x="160" y="49" font-size="13" fill="#FFFFFF">MP</text><g clip-path="url(#fh-c-mp)" style="opacity: 0; animation: fh-photo 15s ease-in-out 2.0s infinite"><circle cx="160" cy="44" r="22" fill="#9DB3A8"></circle><circle cx="160" cy="40.0" r="7.9" fill="#FFFDF8" opacity="0.6"></circle><ellipse cx="160" cy="62.7" rx="15.8" ry="11.0" fill="#FFFDF8" opacity="0.6"></ellipse></g><circle cx="160" cy="44" r="26" fill="none" stroke="{{accent}}" style="opacity: 0; animation: fh-ring 15s ease-in-out 2.0s infinite"></circle></g>
+        <g style="transform-box: fill-box; transform-origin: center; animation: fh-pop 0.30s ease-out 1.14s both"><circle cx="80" cy="104" r="18" fill="#D9CDB5"></circle><text x="80" y="109" font-size="13" fill="#2B2620">JP</text><g clip-path="url(#fh-c-jp)" style="opacity: 0; animation: fh-photo 15s ease-in-out 5.0s infinite"><circle cx="80" cy="104" r="18" fill="#A89478"></circle><circle cx="80" cy="100.8" r="6.5" fill="#FFFDF8" opacity="0.6"></circle><ellipse cx="80" cy="119.3" rx="13.0" ry="9.0" fill="#FFFDF8" opacity="0.6"></ellipse></g><circle cx="80" cy="104" r="22" fill="none" stroke="{{accent}}" style="opacity: 0; animation: fh-ring 15s ease-in-out 5.0s infinite"></circle></g>
+        <g style="transform-box: fill-box; transform-origin: center; animation: fh-pop 0.30s ease-out 1.14s both"><circle cx="240" cy="104" r="18" fill="#D9CDB5"></circle><text x="240" y="109" font-size="13" fill="#2B2620">NP</text><g clip-path="url(#fh-c-np)" style="opacity: 0; animation: fh-photo 15s ease-in-out 8.0s infinite"><circle cx="240" cy="104" r="18" fill="#B59A86"></circle><circle cx="240" cy="100.8" r="6.5" fill="#FFFDF8" opacity="0.6"></circle><ellipse cx="240" cy="119.3" rx="13.0" ry="9.0" fill="#FFFDF8" opacity="0.6"></ellipse></g><circle cx="240" cy="104" r="22" fill="none" stroke="{{accent}}" style="opacity: 0; animation: fh-ring 15s ease-in-out 8.0s infinite"></circle></g>
+        <g style="transform-box: fill-box; transform-origin: center; animation: fh-pop 0.30s ease-out 1.44s both"><circle cx="48" cy="52" r="15" fill="#E5DBC8"></circle><text x="48" y="57" font-size="13" fill="#2B2620">FP</text><g clip-path="url(#fh-c-fp)" style="opacity: 0; animation: fh-photo 15s ease-in-out 11.0s infinite"><circle cx="48" cy="52" r="15" fill="#8E9A86"></circle><circle cx="48" cy="49.3" r="5.4" fill="#FFFDF8" opacity="0.6"></circle><ellipse cx="48" cy="64.8" rx="10.8" ry="7.5" fill="#FFFDF8" opacity="0.6"></ellipse></g><circle cx="48" cy="52" r="19" fill="none" stroke="{{accent}}" style="opacity: 0; animation: fh-ring 15s ease-in-out 11.0s infinite"></circle></g>
+        <g style="transform-box: fill-box; transform-origin: center; animation: fh-pop 0.30s ease-out 1.44s both"><circle cx="272" cy="52" r="15" fill="#E5DBC8"></circle><text x="272" y="57" font-size="13" fill="#2B2620">SP</text><g clip-path="url(#fh-c-sp)" style="opacity: 0; animation: fh-photo 15s ease-in-out 14.0s infinite"><circle cx="272" cy="52" r="15" fill="#A7A08C"></circle><circle cx="272" cy="49.3" r="5.4" fill="#FFFDF8" opacity="0.6"></circle><ellipse cx="272" cy="64.8" rx="10.8" ry="7.5" fill="#FFFDF8" opacity="0.6"></ellipse></g><circle cx="272" cy="52" r="19" fill="none" stroke="{{accent}}" style="opacity: 0; animation: fh-ring 15s ease-in-out 14.0s infinite"></circle></g>
+        </g>
+        </g>
+      </svg>
+      <div aria-hidden="true" style="position: relative; width: 100%; height: 26px; font-size: 15px; color: #4A433A"><span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; animation: fh-photo 15s ease-in-out 2.0s infinite">Maya · Boston, 2024</span><span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; animation: fh-photo 15s ease-in-out 5.0s infinite">Dad · Band concert, 1991</span><span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; animation: fh-photo 15s ease-in-out 8.0s infinite">Mom · Christmas 1987</span><span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; animation: fh-photo 15s ease-in-out 11.0s infinite">Fritz · Thanksgiving 2026</span><span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; animation: fh-photo 15s ease-in-out 14.0s infinite">Sabine · Graduation, 2010</span></div>
+      </div>
+    </section>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+      <section class="fh-hcard" style="padding: 22px; border-radius: 16px; background: #FFFDF8; border: 1px solid #E2D9C8; display: flex; flex-direction: column; gap: 12px; animation: fh-rise .6s ease-out .3s both">
+        <h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 500">Coming up</h2>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <div style="width: 52px; flex: none; text-align: center; padding: 6px 0; border-radius: 10px; background: #E6EEE9"><div style="font-size: 12px; text-transform: uppercase; color: #2F5D50; font-weight: 600">Nov</div><div style="font-family: Fraunces, Georgia, serif; font-size: 22px">19</div></div>
+          <div><div style="font-weight: 600">Nadège's birthday</div><div style="font-size: 14px; color: #6B6358">In 6 days</div></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <div style="width: 52px; flex: none; text-align: center; padding: 6px 0; border-radius: 10px; background: #F1EADC"><div style="font-size: 12px; text-transform: uppercase; color: #6B6358; font-weight: 600">Nov</div><div style="font-family: Fraunces, Georgia, serif; font-size: 22px">24</div></div>
+          <div><div style="font-weight: 600">Mackenson's birthday</div><div style="font-size: 14px; color: #6B6358">In 11 days</div></div>
+        </div>
+      </section>
+
+      <section class="fh-hcard" style="padding: 22px; border-radius: 16px; background: #FFFDF8; border: 1px solid #E2D9C8; display: flex; flex-direction: column; gap: 12px; animation: fh-rise .6s ease-out .45s both">
+        <h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 500">On this day</h2>
+        <div style="position: relative; height: 150px; border-radius: 12px; overflow: hidden">
+          <div style="position: absolute; inset: 0; background: #D9CDB5; display: flex; align-items: flex-end; padding: 12px; box-sizing: border-box; animation: fh-swap 10s ease-in-out infinite"><span style="font-size: 14px; background: #FFFDF8; padding: 4px 10px; border-radius: 10px">Photo · Wedding, 1984</span></div>
+          <div style="position: absolute; inset: 0; background: #C9D6CE; display: flex; align-items: flex-end; padding: 12px; box-sizing: border-box; opacity: 0; animation: fh-swap 10s ease-in-out 5s infinite"><span style="font-size: 14px; background: #FFFDF8; padding: 4px 10px; border-radius: 10px">Photo · Jacmel trip, 1996</span></div>
+        </div>
+        <span style="font-size: 15px; color: #4A433A">Jean-Robert &amp; Nadège were married 42 years ago today.</span>
+      </section>
+
+      <section class="fh-hcard" style="padding: 22px; border-radius: 16px; background: #FFFDF8; border: 1px solid #E2D9C8; display: flex; flex-direction: column; gap: 12px; animation: fh-rise .6s ease-out .6s both">
+        <h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 500">New in the family</h2>
+        <div style="display: flex; align-items: center; gap: 12px"><div style="width: 40px; height: 40px; flex: none; border-radius: 50%; background: #E5DBC8; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif">ND</div><div><div style="font-weight: 600">Naomie Désir</div><div style="font-size: 14px; color: #6B6358">Naïka's daughter · added Tuesday</div></div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><div style="width: 40px; height: 40px; flex: none; border-radius: 50%; background: #E5DBC8; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif">JP</div><div><div style="font-weight: 600">Jean-Baptiste Pluviose</div><div style="font-size: 14px; color: #6B6358">Great-grandfather · bio added</div></div></div>
+        <a href="People.dc.html" style="font-weight: 600; font-size: 15px; margin-top: auto">See everyone</a>
+      </section>
+    </div>
+
+    <section aria-labelledby="hh-story" class="fh-hcard" style="display: flex; flex-wrap: wrap; border-radius: 20px; overflow: hidden; background: #FBF7EF; border: 1px solid #E2D9C8; animation: fh-rise .6s ease-out .75s both">
+      <a href="Story-Detail.dc.html" aria-label="Watch How we came to Brooklyn" style="flex: 1 1 360px; min-height: 240px; position: relative; background: #5B5044; display: flex; align-items: center; justify-content: center; text-decoration: none">
+        <span style="position: absolute; top: 14px; left: 14px; font-size: 13px; color: #FFFDF8; background: #2B2620; padding: 4px 10px; border-radius: 10px">[Video still · Rose at her kitchen table]</span>
+        <span style="width: 72px; height: 72px; border-radius: 50%; background: #FFFDF8; display: flex; align-items: center; justify-content: center">
+          <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24"><path d="M8 5 L19 12 L8 19 Z" fill="#2B2620"></path></svg>
+        </span>
+        <span style="position: absolute; bottom: 14px; right: 14px; font-size: 14px; color: #FFFDF8; background: #2B2620; padding: 4px 10px; border-radius: 10px">38 min</span>
+      </a>
+      <div style="flex: 1 1 380px; box-sizing: border-box; padding: 28px 32px; display: flex; flex-direction: column; gap: 12px; justify-content: center">
+        <span style="font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #6B6358">Story of the week</span>
+        <h2 id="hh-story" style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 32px; font-weight: 500; line-height: 1.1">How we came to Brooklyn</h2>
+        <span style="color: #4A433A">Told by <strong>Grandma Rose</strong> · recorded October 2026</span>
+        <p style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 19px; line-height: 1.45; color: #2B2620">“At the airport the man asked my mother what was in the suitcase. She said, ‘my whole kitchen.’”</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px">
+          <a class="fh-btn" href="Story-Detail.dc.html"  style="height: 48px; padding: 0 22px; display: flex; align-items: center; border-radius: 24px; background: {{accent}}; color: #FFFFFF; text-decoration: none; font-weight: 600">Watch the story</a>
+          <a class="fh-btn" href="Stories.dc.html"  style="height: 48px; padding: 0 22px; display: flex; align-items: center; border-radius: 24px; border: 1px solid #CFC4AF; color: #2B2620; text-decoration: none">More stories</a>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2F5D50","options":["#2F5D50","#8A4B2A","#3D4F7A"]},"$preview":{"width":1280,"height":1260}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#2F5D50' };
+  }
+}
+</script>
+</body>
+</html>

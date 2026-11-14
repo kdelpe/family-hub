@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Directory</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=Source+Sans+3:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+nav[aria-label="Main"] > div > a{transition:background-color .15s ease, box-shadow .15s ease}
+nav[aria-label="Main"] > div > a:hover, nav[aria-label="Main"] > div > a:focus-visible{background-color:#EFE7D8;box-shadow:0 1px 3px rgba(43,38,32,.12)}
+a{color:#2F5D50}a:hover{color:#1E3F36}
+.fh-hcard{transition:translate .2s ease, box-shadow .2s ease}
+.fh-hcard:hover,.fh-hcard:focus-within,.fh-hcard:focus-visible{translate:0 -4px;box-shadow:0 12px 26px rgba(43,38,32,.12)}
+.fh-btn{transition:box-shadow .15s ease, translate .15s ease}
+.fh-btn:hover,.fh-btn:focus-visible{box-shadow:0 4px 12px rgba(43,38,32,.16);translate:0 -1px}
+.fh-btn:active{translate:0 0;box-shadow:0 1px 3px rgba(43,38,32,.12)}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 1260px; box-sizing: border-box; background: #F6F1E7; color: #2B2620; font-family: 'Source Sans 3', system-ui, sans-serif; font-size: 17px; display: flex; flex-wrap: wrap">
+
+  <nav aria-label="Main" style="flex: 1 1 220px; max-width: 260px; box-sizing: border-box; padding: 32px 24px; border-right: 1px solid #E2D9C8; display: flex; flex-direction: column; gap: 28px">
+    <a href="Home-Hearth.dc.html" aria-label="Pluviose-Monestime Family Hub, home" style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; color: #2B2620; text-decoration: none">
+      <svg aria-hidden="true" width="52" height="52" viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="25" fill="#E6EEE9" stroke="#2F5D50" stroke-width="1.5"></circle>
+        <path d="M26 42 V24 M26 30 L17 22 M26 30 L35 22 M26 24 L26 15" fill="none" stroke="#2F5D50" stroke-width="2.4" stroke-linecap="round"></path>
+        <circle cx="26" cy="13" r="4" fill="#2F5D50"></circle>
+        <circle cx="16" cy="20" r="3.4" fill="#8A6F4A"></circle>
+        <circle cx="36" cy="20" r="3.4" fill="#8A6F4A"></circle>
+      </svg>
+      <span style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+        <span style="font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 600; line-height: 1.15">Pluviose-Monestime</span>
+        <span style="font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #6B6358">Family Hub</span>
+      </span>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <a href="Home-Hearth.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Home</a>
+      <a href="Main.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Family tree</a>
+      <a href="People.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">People</a>
+      <a href="Directory.dc.html" aria-current="page" style="padding: 12px 14px; border-radius: 8px; background: #E9E0CF; color: #2B2620; text-decoration: none; font-weight: 600">Directory</a>
+      <a href="Events.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Events</a>
+      <a href="Stories.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Stories</a>
+      <a href="My-Profile.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">My profile</a>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 16px; border-top: 1px solid #E2D9C8">
+      <span style="padding: 0 14px 4px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6358">Admin</span>
+      <a href="Manage-Access.dc.html" style="padding: 12px 14px; border-radius: 8px; color: #2B2620; text-decoration: none">Members &amp; invites</a>
+    </div>
+    <div style="margin-top: auto; font-size: 14px; color: #6B6358">Signed in as Maya</div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 32px 40px; display: flex; flex-direction: column; gap: 24px">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+      <div style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px">
+        <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 40px; font-weight: 500">Directory</h1>
+        <span style="color: #6B6358">How to reach family members who are with us. Phone numbers and addresses are shared only when you ask.</span>
+      </div>
+      <label for="d-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search the directory</label>
+      <input id="d-search" type="search" placeholder="Search by name…" style="height: 48px; width: 300px; max-width: 100%; box-sizing: border-box; padding: 0 16px; border: 1px solid #CFC4AF; border-radius: 24px; background: #FFFDF8; font: inherit; color: #2B2620">
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <sc-for list="{{entries}}" as="e" hint-placeholder-count="6">
+        <article class="fh-hcard" style="padding: 18px 22px; border-radius: 16px; background: #FFFDF8; border: 1px solid #E2D9C8; display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px">
+          <a href="Person-Profile.dc.html" style="flex: 1 1 240px; display: flex; gap: 14px; align-items: center; color: #2B2620; text-decoration: none">
+            <span style="width: 56px; height: 56px; flex: none; border-radius: 50%; background: #D9CDB5; box-shadow: 0 0 0 3px #FFFDF8, 0 0 0 5px #D9CDB5; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif; font-size: 19px">{{e.initials}}</span>
+            <span style="display: flex; flex-direction: column"><span style="font-weight: 600; font-size: 18px">{{e.name}}</span><span style="font-size: 14px; color: #6B6358">{{e.rel}}</span></span>
+          </a>
+
+          <div style="flex: 2 1 380px; display: flex; flex-direction: column; gap: 10px">
+            <sc-if value="{{e.hasEmail}}" hint-placeholder-val="{{true}}">
+              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+                <span style="font-size: 15px">{{e.email}}</span>
+                <a class="fh-btn" href="#"  style="height: 36px; padding: 0 14px; display: inline-flex; align-items: center; border-radius: 18px; background: {{accent}}; color: #FFFFFF; text-decoration: none; font-size: 14px; font-weight: 600">Email</a>
+              </div>
+            </sc-if>
+            <sc-if value="{{e.hasSocial}}" hint-placeholder-val="{{true}}">
+              <div role="list" aria-label="Social accounts" style="display: flex; flex-wrap: wrap; gap: 6px">
+                <sc-for list="{{e.social}}" as="x" hint-placeholder-count="2">
+                  <a class="fh-btn" role="listitem" href="#" aria-label="{{x.aria}}"  style="height: 36px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border-radius: 18px; border: 1px solid #CFC4AF; background: #FBF7EF; color: #2B2620; text-decoration: none; font-size: 14px">
+                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24"><path d="M10 14 L14 10 M8.5 16.5 L6.8 18.2 A3.5 3.5 0 0 1 1.8 13.2 L5 10 A3.5 3.5 0 0 1 10 10 M15.5 7.5 L17.2 5.8 A3.5 3.5 0 0 1 22.2 10.8 L19 14 A3.5 3.5 0 0 1 14 14" fill="none" stroke="#2F5D50" stroke-width="2" stroke-linecap="round"></path></svg>{{x.label}}
+                  </a>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{e.hasRequests}}" hint-placeholder-val="{{true}}">
+              <div style="display: flex; flex-wrap: wrap; gap: 8px">
+                <sc-for list="{{e.requests}}" as="r" hint-placeholder-count="2">
+                  <sc-if value="{{r.open}}" hint-placeholder-val="{{true}}">
+                    <button class="fh-btn" type="button" onClick="{{r.ask}}"  style="height: 36px; padding: 0 14px; border: 1px dashed #B8AC94; border-radius: 18px; background: transparent; font: inherit; font-size: 14px; color: #2B2620">{{r.label}}</button>
+                  </sc-if>
+                  <sc-if value="{{r.asked}}" hint-placeholder-val="{{false}}">
+                    <span role="status" style="height: 36px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; border-radius: 18px; background: #E6EEE9; font-size: 14px; color: #2B2620"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24"><path d="M5 12.5 L10 17 L19 7" fill="none" stroke="#2F5D50" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>{{r.done}}</span>
+                  </sc-if>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </article>
+      </sc-for>
+    </div>
+    <p style="margin: 0; font-size: 14px; color: #6B6358; line-height: 1.5">Only living family members appear here, with just what they chose to share. When you ask for a phone number or address, they decide whether to share it with you. Manage your own in <a href="My-Profile.dc.html">My profile</a>.</p>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2F5D50","options":["#2F5D50","#8A4B2A","#3D4F7A"]},"$preview":{"width":1280,"height":1260}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { asked: {} };
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#2F5D50';
+    const kinds = { phone: ['Request phone number', 'Phone number requested'], address: ['Request address', 'Address requested'], whatsapp: ['Request WhatsApp', 'WhatsApp requested'] };
+    const people = [
+      { id: 'fz', initials: 'FP', name: 'Fritz Pluviose', rel: 'Your brother', email: 'fritz.p@example.com', social: ['Facebook', 'YouTube'], ask: ['phone', 'address'] },
+      { id: 'jr', initials: 'JP', name: 'Jean-Robert Pluviose', rel: 'Your father', email: '', social: [], ask: ['phone', 'address'] },
+      { id: 'mk', initials: 'MJ', name: 'Mackenson Jean-Louis', rel: 'Your son', email: '', social: ['TikTok', 'Instagram', 'YouTube'], ask: ['phone'] },
+      { id: 'na', initials: 'NP', name: 'Nadège Pluviose', rel: 'Your mother', email: '', social: ['Facebook'], ask: ['phone', 'whatsapp', 'address'] },
+      { id: 'nk', initials: 'NJ', name: 'Naïka Jean-Louis', rel: 'Your daughter', email: 'naika@example.com', social: ['Instagram', 'X'], ask: ['phone'] },
+      { id: 'ro', initials: 'RM', name: 'Rose Monestime', rel: 'Your grandmother', email: '', social: [], ask: ['phone'] },
+      { id: 'st', initials: 'SJ', name: 'Stanley Jean-Louis', rel: 'Your husband', email: 'stanley.jl@example.com', social: ['Instagram'], ask: [] }
+    ];
+    const s = this.state;
+    const entries = people.map((p) => ({
+      ...p,
+      hasEmail: !!p.email, hasSocial: p.social.length > 0, hasRequests: p.ask.length > 0,
+      social: p.social.map((label) => ({ label, aria: p.name.split(' ')[0] + ' on ' + label })),
+      requests: p.ask.map((k) => {
+        const key = p.id + ':' + k;
+        const asked = !!s.asked[key];
+        return { label: kinds[k][0], done: kinds[k][1], asked, open: !asked, ask: () => this.setState({ asked: { ...s.asked, [key]: true } }) };
+      })
+    }));
+    return { accent, entries };
+  }
+}
+</script>
+</body>
+</html>
