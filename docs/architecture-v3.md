@@ -147,7 +147,7 @@ CREATE TABLE auth_tokens (
   purpose     TEXT NOT NULL CHECK (purpose IN ('invite','password_reset')),
   token_hash  BYTEA NOT NULL UNIQUE,                   -- SHA-256 of a 256-bit random token
   expires_at  TIMESTAMPTZ NOT NULL,
-  consumed_at TIMESTAMPTZ,                             -- unused: a token is deleted when used (§5); kept, as 000001 shipped
+  consumed_at TIMESTAMPTZ,                             -- never set: a token is deleted when used (§5); kept, as 000001 shipped, and still checked
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_auth_tokens_user ON auth_tokens(user_id, purpose, created_at DESC);
