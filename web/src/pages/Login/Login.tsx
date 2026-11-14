@@ -47,9 +47,9 @@ export function Login() {
     ? loginErrorMessage(signIn.error)
     : // Waits for providers, so the alert isn't announced once and then corrected.
       googleFailed && !signIn.isPending && !providersPending
-      ? available?.google
-        ? googleFailedMessage
-        : googleOffMessage
+      ? available?.google === false
+        ? googleOffMessage
+        : googleFailedMessage
       : null
 
   return (
@@ -74,7 +74,10 @@ export function Login() {
               autoComplete="email"
               required
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value)
+                signIn.reset()
+              }}
               className={styles.input}
             />
           </div>
@@ -94,7 +97,10 @@ export function Login() {
                 autoComplete="current-password"
                 required
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => {
+                  setPassword(event.target.value)
+                  signIn.reset()
+                }}
                 className={styles.passwordInput}
               />
               <button

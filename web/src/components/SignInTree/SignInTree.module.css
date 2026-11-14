@@ -8,7 +8,7 @@
 }
 
 /* Stacked on narrow screens, a fixed share of the window keeps the form close below. */
-@media (max-width: 959px) {
+@media (width < 960px) {
   .tree {
     flex: none;
     height: 40vh;
@@ -46,7 +46,7 @@
   stroke-width: 1.6;
   stroke-linecap: round;
   opacity: 0;
-  animation: fade-in 0.4s ease-out both;
+  animation: fade-in ease-out both;
 }
 
 .root {

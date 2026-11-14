@@ -25,12 +25,14 @@ type Options = {
 }
 
 export async function api<T>(method: Method, path: string, { body, signal }: Options = {}): Promise<T> {
+  // Outside the try: a body that can't be serialized is a bug, not a lost connection.
+  const json = body === undefined ? undefined : JSON.stringify(body)
   let response: Response
   try {
     response = await fetch(`/api${path}`, {
       method,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: json === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: json,
       signal,
     })
   } catch (error) {

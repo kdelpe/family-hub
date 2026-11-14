@@ -1,5 +1,3 @@
-import { memo } from 'react'
-
 import styles from './SignInTree.module.css'
 import { branches, grass, leaves, mountains, roots } from './signInTreeData'
 
@@ -8,6 +6,7 @@ import { branches, grass, leaves, mountains, roots } from './signInTreeData'
 const growthSpeed = 2.35
 const popDuration = 0.4
 const grassDelay = 0.5
+const grassDuration = 0.4
 const rootDuration = 0.7
 const swayDelay = 4.6
 
@@ -15,8 +14,7 @@ const leafColor = (index: number) => `var(--leaf-${index + 1})`
 const seconds = (s: number) => `${Math.round(s * 1000) / 1000}s`
 const atSpeed = (s: number) => seconds(s / growthSpeed)
 
-// Memoized: its ~370 static elements needn't be diffed again on each move between the sign-in pages.
-export const SignInTree = memo(function SignInTree() {
+export function SignInTree() {
   return (
     <svg aria-hidden="true" viewBox="-120 -239 723 889" className={styles.tree}>
       {(['back', 'front'] as const).map((which) => {
@@ -38,7 +36,7 @@ export const SignInTree = memo(function SignInTree() {
         style={{ animationDuration: atSpeed(mountains.ground[1]), animationDelay: atSpeed(mountains.ground[2]) }}
       />
       {grass.map((d) => (
-        <path key={d} d={d} className={styles.grass} style={{ animationDelay: atSpeed(grassDelay) }} />
+        <path key={d} d={d} className={styles.grass} style={{ animationDuration: atSpeed(grassDuration), animationDelay: atSpeed(grassDelay) }} />
       ))}
       {roots.map(([d, width, delay]) => (
         <path
@@ -79,4 +77,4 @@ export const SignInTree = memo(function SignInTree() {
       </g>
     </svg>
   )
-})
+}

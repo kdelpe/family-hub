@@ -16,7 +16,7 @@
 }
 
 /* Side by side, the panel is exactly one window tall and the tree takes what the words leave. */
-@media (min-width: 960px) {
+@media (width >= 960px) {
   /* Never wrap here: a classic scrollbar can make the page narrower than the media query's 960px. */
   .page {
     flex-wrap: nowrap;
