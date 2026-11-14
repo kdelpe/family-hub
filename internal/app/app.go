@@ -32,14 +32,23 @@ const (
 	loginsPerIPWindow = 15 * time.Minute
 )
 
-// Run serves until ctx is canceled. The port opens only once the app can answer,
-// so callers get "connection refused" during migrations rather than a hang.
+// Run serves until ctx is canceled: a clean stop even before the port opens, but not during
+// AUTO_MIGRATE. The port opens only once the app can answer, so callers never hang on it.
 func Run(ctx context.Context, cfg config.Config) error {
 	if cfg.AutoMigrate {
 		if err := database.MigrateUp(ctx, cfg.DatabaseURL); err != nil {
 			return err
 		}
 	}
+	err := connectAndServe(ctx, cfg)
+	if ctx.Err() != nil && errors.Is(err, context.Canceled) {
+		zerolog.Ctx(ctx).Info().Msg("stopped")
+		return nil
+	}
+	return err
+}
+
+func connectAndServe(ctx context.Context, cfg config.Config) error {
 	pool, err := database.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err

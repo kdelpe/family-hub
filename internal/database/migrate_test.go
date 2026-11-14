@@ -142,6 +142,23 @@ func TestMigrateUpStopsBetweenMigrationsWhenCanceled(t *testing.T) {
 	assert.False(t, db.tableExists(t, "widgets"))
 }
 
+func TestMigrateUpCanceledDuringTheLastMigrationSucceeds(t *testing.T) {
+	db := newTestSchema(t)
+	slowOnly := fstest.MapFS{
+		"migrations/000001_slow.up.sql":   {Data: []byte("SELECT pg_sleep(1);")},
+		"migrations/000001_slow.down.sql": {Data: []byte("SELECT 1;")},
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- migrateUp(ctx, slowOnly, db.url) }()
+	require.Eventually(t, db.sleeping, 5*time.Second, 50*time.Millisecond)
+
+	cancel()
+
+	require.NoError(t, <-done)
+	assert.Equal(t, 1, db.version(t))
+}
+
 func TestWithTimeouts(t *testing.T) {
 	tests := []struct {
 		name       string
