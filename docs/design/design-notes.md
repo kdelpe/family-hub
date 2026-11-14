@@ -270,7 +270,7 @@ Generated once (seeded, deterministic) and embedded as inline SVG:
 - **Shape:** trunk 235 units from the ground, recursive branching to 6 levels (2 splits, sometimes 3 near the trunk), spread 23°→19° per level, each branch 70–80% of its parent, slight random bend, angles pulled 22% toward vertical so the crown is taller than wide. Stroke widths 7.5 → 1.4; round caps. ~136 branches.
 - **Leaves (~116):** at most forks, part-way along some branches, and every tip; radius 7–16; palette in §1.1.
 - **Scene:** two faint mountain ridges (back peaks about halfway up the trunk, front ridge lower), a ground line, a few grass marks, 8 light roots below ground. **These never move.**
-- **Growth timeline:** mountains draw 0.05–1.2s · ground 0.05s · roots 0.15–0.6s · trunk from 0.75s · every branch starts when its parent is 82% drawn, drawing at 195 units/s · leaves pop (0.4s scale-in) the moment their branch reaches them · fully grown ≈ 4.3s.
+- **Growth timeline:** mountains draw 0.05–1.2s · ground 0.05s · roots 0.15–0.6s · trunk from 0.75s · every branch starts when its parent is 82% drawn, drawing at 195 units/s · leaves pop (0.4s scale-in) the moment their branch reaches them · fully grown ≈ 4.7s. **The app plays this whole timeline 2.35× faster (owner's choice, 2026-11-14), so the tree is fully grown in about 2s;** the leaf colour cycle and the sway keep their pace.
 - **Drawing trick:** `pathLength="100"`, `stroke-dasharray: 100`, animate `stroke-dashoffset` 100→0, and keep **opacity 0 until the stroke starts**, otherwise round caps show as dots before the line draws.
 - **After growth:** each leaf fades to a second neutral color and back on a **3s** cycle, starting 0.6s after it appears, neighbours offset by 0.3s (stand-in for photos switching). Only the trunk/branches/leaves group sways, ±1.5° over 4.5s, pivoting at the base of the trunk.
 
@@ -287,7 +287,7 @@ Generated once (seeded, deterministic) and embedded as inline SVG:
 - No looping motion anywhere else.
 
 ### 6.4 Pausing the motion
-The swaying, the leaf colour cycle, the Home photo/caption cycle and the People portrait fade run longer than 5 seconds beside other content, so each tree and the People grid get a **Pause motion / Play motion** text button (a real `<button>` with `aria-pressed`, 13px `--muted` under the tree or its caption, and on People at the end of the filter row, 44px tall hit area). Pausing freezes everything as it is (portraits stay on their initials) and stops the photo cycle; it's one choice for the whole site, remembered for the session. With reduced motion there is nothing to pause, so the button is hidden. (WCAG 2.2.2.)
+The swaying, the leaf colour cycle, the Home photo/caption cycle and the People portrait fade run longer than 5 seconds beside other content, so each tree and the People grid get a **Pause motion / Play motion** text button (a real `<button>` with `aria-pressed`, 13px `--muted` under the tree or its caption, and on People at the end of the filter row, 44px tall hit area). Pausing freezes everything as it is (portraits stay on their initials) and stops the photo cycle; it's one choice for the whole site, remembered for the session. With reduced motion there is nothing to pause, so the button is hidden. (WCAG 2.2.2.) **Exception, owner's choice (2026-11-14):** the sign-in tree on the five pre-login pages has no pause button, as in their mockups.
 
 ---
 
