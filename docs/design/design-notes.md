@@ -4,6 +4,19 @@ The agreed look and behaviour for the Pluviose-Monestime Family Hub frontend (Ph
 
 All names, dates, stories, phone numbers and addresses in the mockups are **made up** sample data.
 
+## Scope for the MVP
+
+`docs/architecture-v3.md` §16 defers a few things this design shows. Until each one lands, build the page as drawn without it:
+
+| Deferred | Where it shows | What the MVP does instead |
+|---|---|---|
+| Phone, WhatsApp and address shared **on request** | First-time setup step 2, Directory "Request …" buttons, My profile, Full profile | Phone and address rows exist with an **Only me** switch only: owner and admins see them; nobody else, and the API never sends them to other members. No Request buttons, no WhatsApp row. |
+| **Social accounts** | First-time setup step 2, Directory pills, My profile | Left out. |
+| **On this day** | Home | Home shows Coming up and New in the family only. |
+| **Record now**, and uploads that resume in parts | Add a story, step 2 | Upload a file only, up to the 2 GiB cap, said in plain words. |
+| Machine transcription and English translation | Add a story, step 4; the finish screen | The transcript is typed or pasted; no "Show English translation". The finish screen has no "Preparing the video" or "Making captions" steps and the story shows no "Processing…": it's ready when saved. |
+| Dark mode | everywhere | Light theme only (§1.1 keeps the variables ready). |
+
 ---
 
 ## 1. Look and feel
@@ -88,7 +101,7 @@ Placeholder until a real logo exists: circle `#E6EEE9` with a `#2F5D50` outline,
 
 Initials avatar (circle, Fraunces), name (600), one line underneath with the relation **from the viewer's point of view** ("Your mother", "Your half-sister").
 
-**No birthdays or dates in the family tree**: not on cards, chips or the quick look. Dates appear only on People, profiles and the birthday lists, following the masking rules (living people month/day only, deceased full years, "c. 1935" for approximate dates).
+**No birthdays or dates in the family tree**: not on cards, chips or the quick look. Dates appear only on profiles and the birthday lists (People cards show none either, §4.3), following the masking rules (living people month/day only, deceased full years, "c. 1935" for approximate dates).
 
 ### 2.4 Card hover (everywhere)
 Every card-style item lifts on hover **and** on keyboard focus inside it: `translate: 0 -4px` plus `box-shadow: 0 12px 26px rgba(43,38,32,.12)`, 200ms. Use the `translate` property (not `transform`) so it never fights a card's entrance animation. Applies to: Home cards and Story of the week, tree cards (which also scale slightly), People cards, Directory rows, Events timeline cards and Media tiles, Stories cards/storytellers/featured story, profile family cards, admin request cards. Off with reduced motion.
