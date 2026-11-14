@@ -106,6 +106,33 @@ describe('Login', () => {
     })
   })
 
+  it('keeps a pending sign-in when the user types', async () => {
+    const fetch = stubApi({ providers: noGoogle })
+    fetch.mockImplementation((path: string) =>
+      path === '/api/auth/providers'
+        ? Promise.resolve(Response.json({ google: false }))
+        : new Promise<Response>(() => {}),
+    )
+    const { providersSettled } = renderLogin()
+    await providersSettled()
+
+    signIn()
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'typo@example.com' } })
+
+    expect(screen.getByRole('button', { name: 'Signing in…' })).toBeDisabled()
+  })
+
+  it('clears a shown error once the user types', async () => {
+    stubApi({ providers: noGoogle, login: { status: 401, body: { error: { code: 'invalid_credentials', message: 'x' } } } })
+    renderLogin()
+    signIn()
+    await screen.findByRole('alert')
+
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'kafe-ak-pen-patat!' } })
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it.each([
     {
       name: 'wrong email or password',

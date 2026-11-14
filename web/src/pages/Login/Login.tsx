@@ -17,7 +17,7 @@ export function Login() {
   const [passwordShown, setPasswordShown] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   // Read once, then dropped from the address, so a reload doesn't show it again.
-  const [googleFailed] = useState(searchParams.get('google') === 'unavailable')
+  const [googleFailed, setGoogleFailed] = useState(searchParams.get('google') === 'unavailable')
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -38,8 +38,16 @@ export function Login() {
     onSuccess: () => void navigate('/', { replace: true }),
   })
 
+  // Only a shown error: resetting a pending sign-in would detach it, re-enabling the button and losing its answer.
+  const clearError = () => {
+    if (signIn.isError) {
+      signIn.reset()
+    }
+  }
+
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setGoogleFailed(false)
     signIn.mutate()
   }
 
@@ -76,7 +84,7 @@ export function Login() {
               value={email}
               onChange={(event) => {
                 setEmail(event.target.value)
-                signIn.reset()
+                clearError()
               }}
               className={styles.input}
             />
@@ -99,7 +107,7 @@ export function Login() {
                 value={password}
                 onChange={(event) => {
                   setPassword(event.target.value)
-                  signIn.reset()
+                  clearError()
                 }}
                 className={styles.passwordInput}
               />
@@ -131,7 +139,8 @@ export function Login() {
           </span>
 
           {/* Holds Google's place until the answer comes, so the centered form doesn't jump. */}
-          {(providersPending || available?.google) && (
+          {/* Shown too if the check failed: the link then either works or comes back here with a message. */}
+          {available?.google !== false && (
             <div className={providersPending ? `${styles.google} ${styles.reserved}` : styles.google}>
               <div aria-hidden="true" className={styles.divider}>
                 <span className={styles.rule} />

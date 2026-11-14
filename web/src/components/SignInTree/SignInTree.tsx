@@ -17,7 +17,7 @@ const atSpeed = (s: number) => seconds(s / growthSpeed)
 export function SignInTree() {
   return (
     <svg aria-hidden="true" viewBox="-120 -239 723 889" className={styles.tree}>
-      {(['back', 'front'] as const).map((which) => {
+      {(['back', 'front', 'ground'] as const).map((which) => {
         const [d, duration, delay] = mountains[which]
         return (
           <path
@@ -29,12 +29,6 @@ export function SignInTree() {
           />
         )
       })}
-      <path
-        d={mountains.ground[0]}
-        pathLength={100}
-        className={`${styles.draw} ${styles.ground}`}
-        style={{ animationDuration: atSpeed(mountains.ground[1]), animationDelay: atSpeed(mountains.ground[2]) }}
-      />
       {grass.map((d) => (
         <path key={d} d={d} className={styles.grass} style={{ animationDuration: atSpeed(grassDuration), animationDelay: atSpeed(grassDelay) }} />
       ))}

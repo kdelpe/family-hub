@@ -119,12 +119,16 @@
   }
 }
 
+/* Starts and ends upright (the mockup starts at -1.5deg, a visible jump when the sway begins). */
 @keyframes sway {
   0%,
   100% {
+    transform: rotate(0deg);
+  }
+  25% {
     transform: rotate(-1.5deg);
   }
-  50% {
+  75% {
     transform: rotate(1.5deg);
   }
 }
