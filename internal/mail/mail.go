@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"mime"
@@ -57,13 +58,16 @@ func (c SMTPConfig) GoString() string { return "mail.SMTPConfig" + c.String() }
 
 type SMTP struct {
 	cfg SMTPConfig
+	// Test hooks: where a host name really connects, and which CAs to trust (nil: the system's).
+	dial  func(ctx context.Context, network, addr string) (net.Conn, error)
+	roots *x509.CertPool
 }
 
 func (s *SMTP) String() string   { return "mail.SMTP" + s.cfg.String() }
 func (s *SMTP) GoString() string { return s.String() }
 
 func NewSMTP(cfg SMTPConfig) *SMTP {
-	return &SMTP{cfg: cfg}
+	return &SMTP{cfg: cfg, dial: (&net.Dialer{}).DialContext}
 }
 
 func (s *SMTP) Send(ctx context.Context, msg Message) error {
@@ -90,7 +94,7 @@ func (s *SMTP) Send(ctx context.Context, msg Message) error {
 }
 
 func (s *SMTP) send(ctx context.Context, to string, data []byte) error {
-	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", net.JoinHostPort(s.cfg.Host, s.cfg.Port))
+	conn, err := s.dial(ctx, "tcp", net.JoinHostPort(s.cfg.Host, s.cfg.Port))
 	if err != nil {
 		return err
 	}
@@ -110,7 +114,7 @@ func (s *SMTP) send(ctx context.Context, to string, data []byte) error {
 		return err
 	}
 	if ok, _ := c.Extension("STARTTLS"); ok {
-		if err := c.StartTLS(&tls.Config{ServerName: s.cfg.Host, MinVersion: tls.VersionTLS12}); err != nil {
+		if err := c.StartTLS(&tls.Config{ServerName: s.cfg.Host, MinVersion: tls.VersionTLS12, RootCAs: s.roots}); err != nil {
 			return err
 		}
 	} else if !isLoopback(s.cfg.Host) {
