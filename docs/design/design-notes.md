@@ -54,7 +54,7 @@ White text only ever sits on `--accent` (buttons, the focus avatar).
 
 ### 1.2 Type
 
-- **Headings:** Fraunces (Google Fonts, opsz 9–144, weights 500/600).
+- **Headings:** Fraunces (opsz 9–144, weights 500/600). The mockups load both fonts from Google Fonts; the app bundles them as `woff2` files instead (architecture §7), for the CSP and privacy. The type looks the same.
 - **Body:** Source Sans 3 (400/600). Base size **17px**; never below 13px.
 - Page title (h1): 40px Fraunces 500. Sign-in heading 44px.
 - Section titles: 20–24px Fraunces 500.
