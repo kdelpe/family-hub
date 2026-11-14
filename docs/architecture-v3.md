@@ -147,7 +147,7 @@ CREATE TABLE auth_tokens (
   purpose     TEXT NOT NULL CHECK (purpose IN ('invite','password_reset')),
   token_hash  BYTEA NOT NULL UNIQUE,                   -- SHA-256 of a 256-bit random token
   expires_at  TIMESTAMPTZ NOT NULL,
-  consumed_at TIMESTAMPTZ,
+  consumed_at TIMESTAMPTZ,                             -- unused: a token is deleted when used (§5); kept, as 000001 shipped
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_auth_tokens_user ON auth_tokens(user_id, purpose, created_at DESC);
@@ -461,7 +461,7 @@ A user may have a password, a linked Google account, or both (`password_hash` an
    - A new **invite** (admin-only) does replace the previous unconsumed invite.
    - **Any credential change invalidates all of the user's outstanding tokens** (every purpose): consuming a token, setting or changing a password, linking Google, an admin changing the email, and disabling the user. An old invite or reset link therefore never outlives the credential it was meant to create.
 2. Email `https://<BASE_URL>/auth/set-password#t=<token>`. The token is in the **URL fragment**, so it never reaches server logs or `Referer`, and email link-scanners that GET links can't burn it. The SPA page shows a "choose a password" form and POSTs `{token, password}` to `/api/auth/password/reset`.
-3. **All-or-nothing, in one transaction:** look up the token, then lock the user's row (`SELECT … FROM users WHERE id = $1 FOR UPDATE`) and, under that lock, re-check that the token is unconsumed and unexpired and the user is enabled and still has the email the token was looked up with. The password is checked and hashed before the lock (Argon2 is slow), but only after the token is found, so a malformed or unknown token never costs a hash. A lock that can't be had within the 5 s `lock_timeout`, or a deadlock, is `503 busy`. Then consume the token by deleting it with all the user's other tokens, set the password, delete all sessions, create the new session, and commit. Any failure rolls everything back, so recovery is never half-applied.
+3. **All-or-nothing, in one transaction:** look up the token, then lock the user's row (`SELECT … FROM users WHERE id = $1 FOR UPDATE`) and, under that lock, re-check that the token still exists and is unexpired and the user is enabled and still has the email the token was looked up with. The password is checked and hashed before the lock (Argon2 is slow), but only after the token is found, so a malformed or unknown token never costs a hash. A lock that can't be had within the 5 s `lock_timeout`, or a deadlock, is `503 busy`. Then consume the token by deleting it with all the user's other tokens, set the password, delete all sessions, create the new session, and commit. Any failure rolls everything back, so recovery is never half-applied.
 
 **One lock for every credential change, and for every new session.** Token consumption, token issuance, password set/change, Google linking, admin email change, disabling, **and every successful sign-in** take the same `FOR UPDATE` lock on the user's row first and re-check eligibility under it. Concurrent requests for the same person run one after another instead of interleaving.
 
@@ -503,7 +503,7 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
 - Cookie flags: `HttpOnly; Secure; SameSite=Lax; Path=/`. Name `__Host-fh_session` in prod. With `COOKIE_SECURE=false` (set by `make dev-api` and `make run`) the cookie is `fh_session` without `Secure`: Safari doesn't accept `Secure` cookies on `http://localhost` (verified 2026-11: WebKit bugs 218980/232088 are still open), and the `__Host-` prefix requires `Secure`.
 - Lifetime: 30-day sliding window, 180-day absolute cap. `last_seen_at` is only rewritten when it's more than an hour stale, to avoid a DB write on every request. Logout and "disable user" delete rows, so revocation is immediate.
 
-**Auth cleanup job** (Phase 2, in-process, no extra infrastructure): a ticker runs every 15 minutes and deletes, in batches of 1,000, `oauth_flows` that are consumed or expired, `auth_tokens` consumed or expired more than 7 days ago, and `sessions` past their expiry. Expiry is already enforced on every read; the job only keeps the tables from growing. Each table has an index on its expiry column for this.
+**Auth cleanup job** (Phase 2, in-process, no extra infrastructure): a ticker runs every 15 minutes and deletes, in batches of 1,000, `oauth_flows` that are consumed or expired, `auth_tokens` expired more than 7 days ago (a used token is already deleted), and `sessions` past their expiry. Expiry is already enforced on every read; the job only keeps the tables from growing. Each table has an index on its expiry column for this.
 
 **Rate limits** (in memory, fine for a single instance). `internal/ratelimit` is a small token bucket per key rather than `x/time/rate`, which can't give back a token granted at once; it drops a bucket only once it has refilled, so memory stays bounded and no penalty is forgiven early. Each limit is a bucket of N that refills evenly over the window ("5 per 15 min" is 5 at once, then one more every 3 minutes), so a sustained attacker gets N per window after the first burst. A blocked request gets `429 rate_limited` with `Retry-After`. Each endpoint's limits land with the endpoint. Two layers:
 
