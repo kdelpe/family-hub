@@ -13,6 +13,7 @@ All names, dates, stories, phone numbers and addresses in the mockups are **made
 | **On this day** | Home | Home shows Coming up, New in the family and Story of the week, without the On this day card. |
 | **Record now**, and uploads that resume in parts | Add a story, step 2 | Upload a file only, up to the 2 GiB cap, said in plain words. |
 | Any phone video (needs the Phase 6 converter) | Add a story, step 2 | The drop zone says which files work before upload: *"MP4 videos and audio files (MP3, M4A, WAV). iPhone videos: share them as 'Most Compatible' or export as MP4."* A video the browser reports as HEVC/QuickTime is refused with that same line. |
+| HEIC photos, TIFF scans and phone videos (need the Phase 6 converter) | Events, + Upload | The drop zone says which files work: *"JPEG, PNG or WebP photos and MP4 videos. Scans: save them as JPEG. iPhone: share as 'Most Compatible'."* Other files are refused with that same line. |
 | Machine transcription and English translation | Add a story, step 4; the finish screen | The transcript is typed or pasted; no "Show English translation". The finish screen has no "Preparing the video" or "Making captions" steps and the story shows no "Processing…": it's ready when saved. |
 | Dark mode | everywhere | Light theme only (§1.1 keeps the variables ready). |
 
@@ -286,7 +287,7 @@ Generated once (seeded, deterministic) and embedded as inline SVG:
 - No looping motion anywhere else.
 
 ### 6.4 Pausing the motion
-The swaying, the leaf colour cycle and the Home photo/caption cycle run longer than 5 seconds beside other content, so each tree gets a **Pause motion / Play motion** text button (a real `<button>` with `aria-pressed`, 13px `--muted` under the tree or its caption, 44px tall hit area). Pausing freezes the tree as it is and stops the photo cycle; the choice is remembered for the session. With reduced motion there is nothing to pause, so the button is hidden. (WCAG 2.2.2.)
+The swaying, the leaf colour cycle, the Home photo/caption cycle and the People portrait fade run longer than 5 seconds beside other content, so each tree and the People grid get a **Pause motion / Play motion** text button (a real `<button>` with `aria-pressed`, 13px `--muted` under the tree or its caption, and on People at the end of the filter row, 44px tall hit area). Pausing freezes everything as it is (portraits stay on their initials) and stops the photo cycle; it's one choice for the whole site, remembered for the session. With reduced motion there is nothing to pause, so the button is hidden. (WCAG 2.2.2.)
 
 ---
 
