@@ -30,6 +30,7 @@ type User struct {
 const (
 	signInLockTimeout = 5 * time.Second
 	lockNotAvailable  = "55P03"
+	deadlockDetected  = "40P01"
 
 	loginFailuresPerEmailAndIP       = 5
 	loginFailuresPerEmailAndIPWindow = 15 * time.Minute
@@ -147,6 +148,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error
 	}
 
 	token, user, err := s.login(ctx, email, in)
+	err = busyIfContended(err)
 	if !errors.Is(err, ErrInvalidCredentials) {
 		s.failuresByEmailAndIP.Refund(pair)
 		s.failuresByEmail.Refund(email)
@@ -189,7 +191,7 @@ func (s *Service) login(ctx context.Context, email string, in LoginInput) (strin
 
 	// A reset, email change or disable that committed since the verify wins. A concurrent
 	// login's rehash keeps password_changed_at, so it doesn't refuse this one.
-	locked, err := s.lockUser(ctx, tx, found.ID)
+	locked, err := s.lockUser(ctx, tx, qtx, found.ID)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return "", User{}, errChangedDuringLogin
@@ -216,21 +218,26 @@ func (s *Service) login(ctx context.Context, email string, in LoginInput) (strin
 	return token, User{ID: found.ID, Email: locked.Email, Role: locked.Role}, nil
 }
 
-// lockUser takes the row lock that every credential change and new session waits on (§5),
-// giving up with ErrBusy after lockTimeout.
-func (s *Service) lockUser(ctx context.Context, tx pgx.Tx, id uuid.UUID) (gen.LockUserForSignInRow, error) {
+// lockUser takes the row lock that every credential change and new session waits on (§5).
+// Its lock_timeout holds for the rest of tx, so callers map the tx's errors with busyIfContended.
+func (s *Service) lockUser(ctx context.Context, tx pgx.Tx, qtx *gen.Queries, id uuid.UUID) (gen.LockUserRow, error) {
 	if _, err := tx.Exec(ctx, `SELECT set_config('lock_timeout', $1, true)`, fmt.Sprintf("%dms", s.lockTimeout.Milliseconds())); err != nil {
-		return gen.LockUserForSignInRow{}, fmt.Errorf("set lock timeout: %w", err)
+		return gen.LockUserRow{}, fmt.Errorf("set lock timeout: %w", err)
 	}
-	locked, err := gen.New(tx).LockUserForSignIn(ctx, id)
-	var pgErr *pgconn.PgError
-	switch {
-	case errors.As(err, &pgErr) && pgErr.Code == lockNotAvailable:
-		return gen.LockUserForSignInRow{}, ErrBusy
-	case err != nil:
-		return gen.LockUserForSignInRow{}, fmt.Errorf("lock user: %w", err)
+	locked, err := qtx.LockUser(ctx, id)
+	if err != nil {
+		return gen.LockUserRow{}, fmt.Errorf("lock user: %w", err)
 	}
 	return locked, nil
+}
+
+// A lock timeout or deadlock is a contended row, not a fault: the client can just retry.
+func busyIfContended(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && (pgErr.Code == lockNotAvailable || pgErr.Code == deadlockDetected) {
+		return ErrBusy
+	}
+	return err
 }
 
 // A failed rehash only means the old parameters stay until the next sign-in.

@@ -1,7 +1,3 @@
--- name: CreateAuthToken :exec
-INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at)
-VALUES (@user_id, @purpose, @token_hash, now() + @ttl::interval);
-
 -- name: GetUsableToken :one
 SELECT t.id, t.user_id, u.email
 FROM auth_tokens t JOIN users u ON u.id = t.user_id

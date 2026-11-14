@@ -4,40 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kdelpe/family-hub/internal/database/gen"
 )
 
-const (
-	purposeInvite = "invite"
-	purposeReset  = "password_reset"
-)
-
-var tokenTTL = map[string]time.Duration{
-	purposeInvite: 7 * 24 * time.Hour,
-	purposeReset:  30 * time.Minute,
-}
-
 var ErrInvalidToken = errors.New("link is invalid, used or expired")
-
-// issueToken returns the token for an emailed link; only its hash is stored.
-func issueToken(ctx context.Context, db gen.DBTX, userID uuid.UUID, purpose string) (string, error) {
-	ttl, ok := tokenTTL[purpose]
-	if !ok {
-		return "", fmt.Errorf("issue token: unknown purpose %q", purpose)
-	}
-	raw, token := newToken()
-	if err := gen.New(db).CreateAuthToken(ctx, gen.CreateAuthTokenParams{
-		UserID: userID, Purpose: purpose, TokenHash: hashToken(raw), Ttl: ttl,
-	}); err != nil {
-		return "", fmt.Errorf("issue token: %w", err)
-	}
-	return token, nil
-}
 
 type SetPasswordInput struct {
 	Token         string
@@ -49,6 +22,11 @@ type SetPasswordInput struct {
 // SetPasswordWithToken uses an invite or reset link: all or nothing, it consumes the token, sets
 // the password, drops the user's other tokens and sessions, and returns a new session (§5).
 func (s *Service) SetPasswordWithToken(ctx context.Context, in SetPasswordInput) (string, User, error) {
+	token, user, err := s.setPasswordWithToken(ctx, in)
+	return token, user, busyIfContended(err)
+}
+
+func (s *Service) setPasswordWithToken(ctx context.Context, in SetPasswordInput) (string, User, error) {
 	raw, ok := decodeToken(in.Token)
 	if !ok {
 		return "", User{}, ErrInvalidToken
@@ -77,7 +55,7 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, in SetPasswordInput)
 	qtx := gen.New(tx)
 
 	// A use, disable or email change that committed since the lookup wins.
-	locked, err := s.lockUser(ctx, tx, found.UserID)
+	locked, err := s.lockUser(ctx, tx, qtx, found.UserID)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return "", User{}, ErrInvalidToken
@@ -95,6 +73,9 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, in SetPasswordInput)
 	}
 	if err := qtx.SetPassword(ctx, gen.SetPasswordParams{ID: found.UserID, PasswordHash: hash}); err != nil {
 		return "", User{}, fmt.Errorf("set password: %w", err)
+	}
+	if err := qtx.RecordLogin(ctx, gen.RecordLoginParams{ID: found.UserID}); err != nil {
+		return "", User{}, fmt.Errorf("record login: %w", err)
 	}
 	if err := qtx.DeleteOtherTokens(ctx, gen.DeleteOtherTokensParams{UserID: found.UserID, KeepID: found.ID}); err != nil {
 		return "", User{}, fmt.Errorf("delete other tokens: %w", err)

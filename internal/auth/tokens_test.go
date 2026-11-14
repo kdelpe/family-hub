@@ -13,41 +13,6 @@ import (
 
 const newPassword = "purple staple orbit"
 
-func TestIssueToken(t *testing.T) {
-	tests := []struct {
-		purpose string
-		wantTTL time.Duration
-	}{
-		{purpose: purposeInvite, wantTTL: 7 * 24 * time.Hour},
-		{purpose: purposeReset, wantTTL: 30 * time.Minute},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.purpose, func(t *testing.T) {
-			_, pool, userID := withTestUser(t)
-
-			token, err := issueToken(t.Context(), pool, userID, tt.purpose)
-
-			require.NoError(t, err)
-			raw, ok := decodeToken(token)
-			require.True(t, ok)
-			var ttl time.Duration
-			require.NoError(t, pool.QueryRow(t.Context(),
-				`SELECT expires_at - created_at FROM auth_tokens WHERE token_hash = $1 AND purpose = $2`, hashToken(raw), tt.purpose).Scan(&ttl))
-			assert.InDelta(t, tt.wantTTL, ttl, float64(time.Second))
-		})
-	}
-}
-
-func TestIssueTokenRefusesAnUnknownPurpose(t *testing.T) {
-	_, pool, userID := withTestUser(t)
-
-	_, err := issueToken(t.Context(), pool, userID, "login")
-
-	require.Error(t, err)
-	assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM auth_tokens`))
-}
-
 func TestSetPasswordWithToken(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -57,21 +22,21 @@ func TestSetPasswordWithToken(t *testing.T) {
 		password string
 		wantErr  error
 	}{
-		{name: "invite for a user without a password", purpose: purposeInvite, setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`},
-		{name: "password reset", purpose: purposeReset},
-		{name: "malformed token", purpose: purposeReset, token: func(string) string { return "not-a-token" }, wantErr: ErrInvalidToken},
-		{name: "unknown token", purpose: purposeReset, token: func(string) string { _, t := newToken(); return t }, wantErr: ErrInvalidToken},
-		{name: "already used", purpose: purposeReset, setup: `UPDATE auth_tokens SET consumed_at = now()`, wantErr: ErrInvalidToken},
-		{name: "expired", purpose: purposeReset, setup: `UPDATE auth_tokens SET expires_at = now() - interval '1 second'`, wantErr: ErrInvalidToken},
-		{name: "disabled user", purpose: purposeInvite, setup: `UPDATE users SET disabled_at = now()`, wantErr: ErrInvalidToken},
-		{name: "password too short", purpose: purposeReset, password: "short", wantErr: ErrPasswordTooShort},
-		{name: "password is the email", purpose: purposeReset, password: testEmail, wantErr: ErrPasswordTooCommon},
+		{name: "invite for a user without a password", purpose: "invite", setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`},
+		{name: "password reset", purpose: "password_reset"},
+		{name: "malformed token", purpose: "password_reset", token: func(string) string { return "not-a-token" }, wantErr: ErrInvalidToken},
+		{name: "unknown token", purpose: "password_reset", token: func(string) string { _, t := newToken(); return t }, wantErr: ErrInvalidToken},
+		{name: "already used", purpose: "password_reset", setup: `UPDATE auth_tokens SET consumed_at = now()`, wantErr: ErrInvalidToken},
+		{name: "expired", purpose: "password_reset", setup: `UPDATE auth_tokens SET expires_at = now() - interval '1 second'`, wantErr: ErrInvalidToken},
+		{name: "disabled user", purpose: "invite", setup: `UPDATE users SET disabled_at = now()`, wantErr: ErrInvalidToken},
+		{name: "password too short", purpose: "password_reset", password: "short", wantErr: ErrPasswordTooShort},
+		{name: "password is the email", purpose: "password_reset", password: testEmail, wantErr: ErrPasswordTooCommon},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, pool, userID := withTestUser(t)
-			token, err := issueToken(t.Context(), pool, userID, tt.purpose)
+			token, err := insertToken(t, pool, userID, tt.purpose)
 			require.NoError(t, err)
 			if tt.setup != "" {
 				_, err := pool.Exec(t.Context(), tt.setup)
@@ -99,6 +64,7 @@ func TestSetPasswordWithToken(t *testing.T) {
 			got, err := NewSessions(pool).Authenticate(t.Context(), session)
 			require.NoError(t, err)
 			assert.Equal(t, userID, got.UserID)
+			assert.Equal(t, 1, count(t, pool, `SELECT count(*) FROM users WHERE last_login_at IS NOT NULL`))
 			_, _, err = svc.Login(t.Context(), LoginInput{Email: testEmail, Password: newPassword})
 			assert.NoError(t, err)
 		})
@@ -107,7 +73,7 @@ func TestSetPasswordWithToken(t *testing.T) {
 
 func TestSetPasswordWithTokenWorksOnce(t *testing.T) {
 	svc, pool, userID := withTestUser(t)
-	token, err := issueToken(t.Context(), pool, userID, purposeReset)
+	token, err := insertToken(t, pool, userID, "password_reset")
 	require.NoError(t, err)
 	_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword})
 	require.NoError(t, err)
@@ -123,11 +89,11 @@ func TestSetPasswordWithTokenRevokesOtherCredentials(t *testing.T) {
 	svc, pool, userID := withTestUser(t)
 	oldSession, _, err := svc.Login(t.Context(), LoginInput{Email: testEmail, Password: testPassword})
 	require.NoError(t, err)
-	otherReset, err := issueToken(t.Context(), pool, userID, purposeReset)
+	otherReset, err := insertToken(t, pool, userID, "password_reset")
 	require.NoError(t, err)
-	invite, err := issueToken(t.Context(), pool, userID, purposeInvite)
+	invite, err := insertToken(t, pool, userID, "invite")
 	require.NoError(t, err)
-	token, err := issueToken(t.Context(), pool, userID, purposeReset)
+	token, err := insertToken(t, pool, userID, "password_reset")
 	require.NoError(t, err)
 
 	newSession, _, err := svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword})
@@ -152,7 +118,7 @@ func TestSetPasswordWithTokenEndsTheSessionItReplaces(t *testing.T) {
 	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email) VALUES ('other@example.com') RETURNING id`).Scan(&otherID))
 	othersSession, err := NewSessions(pool).Create(t.Context(), otherID, "")
 	require.NoError(t, err)
-	token, err := issueToken(t.Context(), pool, userID, purposeInvite)
+	token, err := insertToken(t, pool, userID, "invite")
 	require.NoError(t, err)
 
 	_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword, ReplacesToken: othersSession})
@@ -164,9 +130,9 @@ func TestSetPasswordWithTokenEndsTheSessionItReplaces(t *testing.T) {
 
 func TestSetPasswordWithTokenIsAllOrNothing(t *testing.T) {
 	svc, pool, userID := withTestUser(t)
-	_, err := issueToken(t.Context(), pool, userID, purposeInvite)
+	_, err := insertToken(t, pool, userID, "invite")
 	require.NoError(t, err)
-	token, err := issueToken(t.Context(), pool, userID, purposeReset)
+	token, err := insertToken(t, pool, userID, "password_reset")
 	require.NoError(t, err)
 	_, _, err = svc.Login(t.Context(), LoginInput{Email: testEmail, Password: testPassword})
 	require.NoError(t, err)
@@ -191,7 +157,7 @@ func TestSetPasswordWithTokenIsAllOrNothing(t *testing.T) {
 
 func TestSetPasswordWithTokenConcurrently(t *testing.T) {
 	svc, pool, userID := withTestUser(t)
-	token, err := issueToken(t.Context(), pool, userID, purposeReset)
+	token, err := insertToken(t, pool, userID, "password_reset")
 	require.NoError(t, err)
 
 	errs := make(chan error, 4)
@@ -227,7 +193,7 @@ func TestSetPasswordWithTokenRefusedWhenAChangeWinsTheLock(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, pool, userID := withTestUser(t)
-			token, err := issueToken(t.Context(), pool, userID, purposeReset)
+			token, err := insertToken(t, pool, userID, "password_reset")
 			require.NoError(t, err)
 			change, err := pool.Begin(t.Context())
 			require.NoError(t, err)
@@ -244,7 +210,7 @@ func TestSetPasswordWithTokenRefusedWhenAChangeWinsTheLock(t *testing.T) {
 			require.Eventually(t, func() bool {
 				var waiting bool
 				err := pool.QueryRow(context.Background(), `SELECT EXISTS (SELECT FROM pg_stat_activity
-					WHERE wait_event_type = 'Lock' AND query LIKE '-- name: LockUserForSignIn %')`).Scan(&waiting)
+					WHERE wait_event_type = 'Lock' AND query LIKE '-- name: LockUser %')`).Scan(&waiting)
 				return err == nil && waiting
 			}, 10*time.Second, 10*time.Millisecond, "waits on the change's row lock")
 			require.NoError(t, change.Commit(t.Context()))
@@ -256,23 +222,35 @@ func TestSetPasswordWithTokenRefusedWhenAChangeWinsTheLock(t *testing.T) {
 	}
 }
 
-func TestSetPasswordWithTokenIsBusyWhileTheUserRowStaysLocked(t *testing.T) {
-	svc, pool, userID := withTestUser(t)
-	svc.lockTimeout = 100 * time.Millisecond
-	token, err := issueToken(t.Context(), pool, userID, purposeReset)
-	require.NoError(t, err)
-	holder, err := pool.Begin(t.Context())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = holder.Rollback(context.Background()) })
-	_, err = holder.Exec(t.Context(), `SELECT 1 FROM users FOR UPDATE`)
-	require.NoError(t, err)
+func TestSetPasswordWithTokenIsBusyWhileARowStaysLocked(t *testing.T) {
+	tests := []struct {
+		name string
+		hold string
+	}{
+		{name: "the user row", hold: `SELECT 1 FROM users FOR UPDATE`},
+		{name: "the token row, past the user lock", hold: `SELECT 1 FROM auth_tokens FOR UPDATE`},
+	}
 
-	_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, pool, userID := withTestUser(t)
+			svc.lockTimeout = 100 * time.Millisecond
+			token, err := insertToken(t, pool, userID, "password_reset")
+			require.NoError(t, err)
+			holder, err := pool.Begin(t.Context())
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = holder.Rollback(context.Background()) })
+			_, err = holder.Exec(t.Context(), tt.hold)
+			require.NoError(t, err)
 
-	assert.ErrorIs(t, err, ErrBusy)
-	require.NoError(t, holder.Rollback(t.Context()))
-	_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword})
-	assert.NoError(t, err, "a busy refusal leaves the link usable")
+			_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword})
+
+			assert.ErrorIs(t, err, ErrBusy)
+			require.NoError(t, holder.Rollback(t.Context()))
+			_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword})
+			assert.NoError(t, err, "a busy refusal leaves the link usable")
+		})
+	}
 }
 
 // The stored hash and its change time, to show a refusal left the password alone.
@@ -282,4 +260,12 @@ func passwordState(t *testing.T, pool *pgxpool.Pool) string {
 	require.NoError(t, pool.QueryRow(t.Context(),
 		`SELECT coalesce(password_hash, '') || '|' || coalesce(password_changed_at::text, '') FROM users`).Scan(&state))
 	return state
+}
+
+func insertToken(t *testing.T, pool *pgxpool.Pool, userID uuid.UUID, purpose string) (string, error) {
+	t.Helper()
+	raw, token := newToken()
+	_, err := pool.Exec(t.Context(), `INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '30 minutes')`,
+		userID, purpose, hashToken(raw))
+	return token, err
 }

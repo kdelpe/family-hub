@@ -9,7 +9,6 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"time"
 )
 
 const consumeToken = `-- name: ConsumeToken :execrows
@@ -23,28 +22,6 @@ func (q *Queries) ConsumeToken(ctx context.Context, id uuid.UUID) (int64, error)
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const createAuthToken = `-- name: CreateAuthToken :exec
-INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at)
-VALUES ($1, $2, $3, now() + $4::interval)
-`
-
-type CreateAuthTokenParams struct {
-	UserID    uuid.UUID
-	Purpose   string
-	TokenHash []byte
-	Ttl       time.Duration
-}
-
-func (q *Queries) CreateAuthToken(ctx context.Context, arg CreateAuthTokenParams) error {
-	_, err := q.db.Exec(ctx, createAuthToken,
-		arg.UserID,
-		arg.Purpose,
-		arg.TokenHash,
-		arg.Ttl,
-	)
-	return err
 }
 
 const deleteOtherTokens = `-- name: DeleteOtherTokens :exec

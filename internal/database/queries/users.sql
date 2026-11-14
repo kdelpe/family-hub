@@ -1,7 +1,7 @@
 -- name: GetLoginUser :one
 SELECT id, password_hash, password_changed_at, disabled_at FROM users WHERE email = @email;
 
--- name: LockUserForSignIn :one
+-- name: LockUser :one
 SELECT email, role, password_changed_at, disabled_at FROM users WHERE id = @id FOR UPDATE;
 
 -- name: RecordLogin :exec
