@@ -246,15 +246,30 @@ CREATE INDEX idx_rel_b ON relationships(person_b);
 CREATE TABLE contact_methods (
   id         UUID PRIMARY KEY DEFAULT uuidv7(),
   person_id  UUID NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
-  kind       TEXT NOT NULL CHECK (kind IN ('email','phone','address','other')),
-  label      TEXT,                                      -- "Mobile", "Home", "Instagram"
-  value      TEXT NOT NULL,
-  visibility TEXT NOT NULL DEFAULT 'hidden' CHECK (visibility IN ('hidden','family')),
+  kind       TEXT NOT NULL CHECK (kind IN ('email','phone','address','social','other')),
+  platform   TEXT CHECK (platform IN ('whatsapp','instagram','facebook','tiktok','linkedin','x','youtube','other')),
+  label      TEXT,                                      -- "Mobile", "Home"
+  value      TEXT NOT NULL,                             -- for social: a handle, a WhatsApp number or an https URL on that platform
+  -- email/social: hidden | family; phone, WhatsApp, address: hidden | on_request (the service enforces which per kind, §5.2)
+  visibility TEXT NOT NULL DEFAULT 'hidden' CHECK (visibility IN ('hidden','family','on_request')),
   sort_order INT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK ((kind = 'social') = (platform IS NOT NULL))
 );
 CREATE INDEX idx_contact_methods_person ON contact_methods(person_id);
+
+-- A member asks to see someone's phone, WhatsApp or address; the owner shares with that one person (§5.2)
+CREATE TABLE contact_requests (
+  id           UUID PRIMARY KEY DEFAULT uuidv7(),
+  requester_id UUID NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+  person_id    UUID NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+  kind         TEXT NOT NULL CHECK (kind IN ('phone','whatsapp','address')),
+  status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','shared','declined','revoked')),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  decided_at   TIMESTAMPTZ,
+  UNIQUE (requester_id, person_id, kind)
+);
 
 -- Access requests (Phase 3): someone asks for an invitation, or a member suggests a relative.
 -- A request never creates an account; an admin approves it by sending the normal invite (§5).
@@ -614,7 +629,8 @@ Each person's contact details live in `contact_methods`, one row per phone/email
 | Rule | Behavior |
 |---|---|
 | Default | `hidden`. Nothing is shared until the person flips a toggle ("Visible to family"). |
-| Phones and addresses | Never shown to other members (the design lists them only "on request", which is deferred, §16): the service refuses `family` for `phone` and `address` rows, so they stay with the owner and admins. Emails and `other` rows can be `family`. |
+| Phones, WhatsApp, addresses | Never listed for the family: their visibility is `hidden` or `on_request`. A member can ask (`POST /api/persons/{id}/contact-requests {kind}`, idempotent, rate-limited per requester); the owner shares, declines (silently) or later revokes from My profile (`/api/me/contact-requests`). `GET /api/persons/{id}` and the directory return such a value **only to a viewer with a `shared` request**, otherwise `{kind, requestable: true, my_request_status}`. In-app notice only (a badge on My profile, a line on Home). People without logins can't approve, so theirs stay admin-only. |
+| Social accounts | `kind = 'social'` with a `platform`; `hidden` or `family` like email. Links are built from the platform's known `https://` base (or accept only `https://` URLs on that platform's domain) and open with `rel="noopener noreferrer"`; arbitrary URLs are never rendered as links. WhatsApp counts as a phone. |
 | Who edits | The linked user edits their own rows via `/api/me/contacts`; admins can edit anyone's, including relatives with no login (admin-entered rows also default to `hidden`; the admin marks them `family` only with that person's consent). |
 | Who sees a row | The owner and admins: always. Any other signed-in user: only rows with `visibility = 'family'`. |
 | Enforcement | In the SQL/service layer (`WHERE visibility = 'family'` for non-owners), never in the frontend. Hidden values are not sent to the browser at all. |
@@ -1184,8 +1200,6 @@ Real family data gets entered from Phase 4 onward, so Phase 4c deploys with back
 
 **Deferred from the frontend design** (accepted as ideas, not scheduled):
 
-- Social accounts as contact methods (WhatsApp, Instagram, …), with links built from each platform's known base URL.
-- Phone numbers and addresses shared **on request**: a member asks and the owner shares with that one person (a `contact_requests` table).
 - "On this day" on Home, and a stored theme preference for dark mode (`users.theme`).
 - Machine transcription, recording stories in the browser, and multipart uploads for long recordings.
 - "Suggest a correction" on profiles, feeding the same Requests queue.

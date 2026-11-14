@@ -10,8 +10,6 @@ All names, dates, stories, phone numbers and addresses in the mockups are **made
 
 | Deferred | Where it shows | What the MVP does instead |
 |---|---|---|
-| Phone, WhatsApp and address shared **on request** | First-time setup step 2, Directory "Request …" buttons, My profile, Full profile | Phone and address rows exist with an **Only me** switch only: owner and admins see them; nobody else, and the API never sends them to other members. No Request buttons, no WhatsApp row. |
-| **Social accounts** | First-time setup step 2, Directory pills, My profile | Left out. |
 | **On this day** | Home | Home shows Coming up and New in the family only. |
 | **Record now**, and uploads that resume in parts | Add a story, step 2 | Upload a file only, up to the 2 GiB cap, said in plain words. |
 | Machine transcription and English translation | Add a story, step 4; the finish screen | The transcript is typed or pasted; no "Show English translation". The finish screen has no "Preparing the video" or "Making captions" steps and the story shows no "Processing…": it's ready when saved. |
