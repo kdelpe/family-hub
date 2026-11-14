@@ -118,7 +118,7 @@ func (q *Queries) RecordLogin(ctx context.Context, arg RecordLoginParams) error 
 }
 
 const setPasswordAndRecordLogin = `-- name: SetPasswordAndRecordLogin :exec
-UPDATE users SET password_hash = $1::text, password_changed_at = now(), last_login_at = now() WHERE id = $2
+UPDATE users SET password_hash = $1::text, password_changed_at = clock_timestamp(), last_login_at = clock_timestamp() WHERE id = $2
 `
 
 type SetPasswordAndRecordLoginParams struct {

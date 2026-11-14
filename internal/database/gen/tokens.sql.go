@@ -11,29 +11,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const consumeToken = `-- name: ConsumeToken :execrows
-UPDATE auth_tokens SET consumed_at = now()
-WHERE id = $1 AND consumed_at IS NULL AND expires_at > clock_timestamp()
-`
-
-// clock_timestamp, not now(): now() is when the transaction began, before its wait for the user lock.
-func (q *Queries) ConsumeToken(ctx context.Context, id uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, consumeToken, id)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const deleteUserTokens = `-- name: DeleteUserTokens :exec
-DELETE FROM auth_tokens WHERE user_id = $1
-`
-
-func (q *Queries) DeleteUserTokens(ctx context.Context, userID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteUserTokens, userID)
-	return err
-}
-
 const getUsableToken = `-- name: GetUsableToken :one
 SELECT t.id, t.user_id, u.email
 FROM auth_tokens t JOIN users u ON u.id = t.user_id
@@ -51,4 +28,23 @@ func (q *Queries) GetUsableToken(ctx context.Context, tokenHash []byte) (GetUsab
 	var i GetUsableTokenRow
 	err := row.Scan(&i.ID, &i.UserID, &i.Email)
 	return i, err
+}
+
+const useToken = `-- name: UseToken :one
+WITH deleted AS (DELETE FROM auth_tokens WHERE user_id = $2 RETURNING id, consumed_at, expires_at)
+SELECT EXISTS (SELECT 1 FROM deleted WHERE id = $1 AND consumed_at IS NULL AND expires_at > clock_timestamp())
+`
+
+type UseTokenParams struct {
+	ID     uuid.UUID
+	UserID uuid.UUID
+}
+
+// Deletes all the user's tokens and reports whether the presented one was usable; the caller rolls
+// back if not. clock_timestamp, as now() is when the transaction began, before its wait for the lock.
+func (q *Queries) UseToken(ctx context.Context, arg UseTokenParams) (bool, error) {
+	row := q.db.QueryRow(ctx, useToken, arg.ID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }

@@ -64,19 +64,15 @@ func (s *Service) setPasswordWithToken(ctx context.Context, in SetPasswordInput)
 	case locked.DisabledAt != nil || locked.Email != found.Email:
 		return "", User{}, ErrInvalidToken
 	}
-	consumed, err := qtx.ConsumeToken(ctx, found.ID)
+	usable, err := qtx.UseToken(ctx, gen.UseTokenParams{UserID: found.UserID, ID: found.ID})
 	switch {
 	case err != nil:
-		return "", User{}, fmt.Errorf("consume token: %w", err)
-	case consumed == 0:
+		return "", User{}, fmt.Errorf("use token: %w", err)
+	case !usable:
 		return "", User{}, ErrInvalidToken
 	}
 	if err := qtx.SetPasswordAndRecordLogin(ctx, gen.SetPasswordAndRecordLoginParams{ID: found.UserID, PasswordHash: hash}); err != nil {
 		return "", User{}, fmt.Errorf("set password: %w", err)
-	}
-	// The consumed token too: a consumed row has nothing left to guard.
-	if err := qtx.DeleteUserTokens(ctx, found.UserID); err != nil {
-		return "", User{}, fmt.Errorf("delete tokens: %w", err)
 	}
 	if err := qtx.DeleteUserSessions(ctx, found.UserID); err != nil {
 		return "", User{}, fmt.Errorf("delete sessions: %w", err)

@@ -20,4 +20,4 @@ VALUES (@email, 'admin', @password_hash::text, now());
 SELECT EXISTS (SELECT 1 FROM users WHERE email = @email);
 
 -- name: SetPasswordAndRecordLogin :exec
-UPDATE users SET password_hash = @password_hash::text, password_changed_at = now(), last_login_at = now() WHERE id = @id;
+UPDATE users SET password_hash = @password_hash::text, password_changed_at = clock_timestamp(), last_login_at = clock_timestamp() WHERE id = @id;

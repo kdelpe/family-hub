@@ -21,6 +21,8 @@ func TestSetPasswordWithToken(t *testing.T) {
 		token    func(issued string) string
 		password string
 		wantErr  error
+		// A refused password mustn't burn the link.
+		linkStillWorks bool
 	}{
 		{name: "invite for a user without a password", purpose: "invite", setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`},
 		{name: "password reset", purpose: "password_reset"},
@@ -29,8 +31,8 @@ func TestSetPasswordWithToken(t *testing.T) {
 		{name: "already used", purpose: "password_reset", setup: `UPDATE auth_tokens SET consumed_at = now()`, wantErr: ErrInvalidToken},
 		{name: "expired", purpose: "password_reset", setup: `UPDATE auth_tokens SET expires_at = now() - interval '1 second'`, wantErr: ErrInvalidToken},
 		{name: "disabled user", purpose: "invite", setup: `UPDATE users SET disabled_at = now()`, wantErr: ErrInvalidToken},
-		{name: "password too short", purpose: "password_reset", password: "short", wantErr: ErrPasswordTooShort},
-		{name: "password is the email", purpose: "password_reset", password: testEmail, wantErr: ErrPasswordTooCommon},
+		{name: "password too short", purpose: "password_reset", password: "short", wantErr: ErrPasswordTooShort, linkStillWorks: true},
+		{name: "password is the email", purpose: "password_reset", password: testEmail, wantErr: ErrPasswordTooCommon, linkStillWorks: true},
 	}
 
 	for _, tt := range tests {
@@ -57,6 +59,10 @@ func TestSetPasswordWithToken(t *testing.T) {
 				require.ErrorIs(t, err, tt.wantErr)
 				assert.Equal(t, before, passwordState(t, pool))
 				assert.Equal(t, 0, count(t, pool, `SELECT count(*) FROM sessions`))
+				if tt.linkStillWorks {
+					_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: token, Password: newPassword})
+					assert.NoError(t, err)
+				}
 				return
 			}
 			require.NoError(t, err)
