@@ -1,6 +1,6 @@
 # Family Hub: Architecture & Engineering Plan V3
 
-A private, invite-only, multi-generational family archive: interactive family tree, event/milestone feed, photo and video library, sign-in with email + password or Google. One Go service serves the JSON API and the embedded React SPA. Postgres holds data; an S3-compatible bucket holds media, uploaded directly from the browser.
+A private, invite-only, multi-generational family archive: interactive family tree, event/milestone feed, photo and video library, recorded family stories, sign-in with email + password or Google. Relatives can ask for an invitation; an admin decides. The frontend's look and behaviour are specified in `docs/design/` (§7). One Go service serves the JSON API and the embedded React SPA. Postgres holds data; an S3-compatible bucket holds media, uploaded directly from the browser.
 
 **Status:** draft for review. Items marked **(verify)** are things I believe but haven't confirmed against current docs; check each one when the phase that depends on it starts.
 
@@ -76,11 +76,12 @@ family-hub/
 │   ├── httpx/                    # JSON helpers, error type, pagination, security middleware
 │   ├── auth/                     # passwords, Google sign-in, emailed tokens, sessions, per-account limits (Phase 2)
 │   ├── ratelimit/                # in-memory token bucket per key, with refunds; no HTTP
-│   ├── admin/                    # `admin create` command; invites, roles (Phase 2); person linking (Phase 3)
+│   ├── admin/                    # `admin create` command; invites, roles (Phase 2); person linking, access requests (Phase 3)
 │   ├── family/                   # persons, relationships, tree, ancestors, cycles   (Phase 3)
 │   ├── contacts/                 # contact methods, visibility, directory            (Phase 3)
 │   ├── event/                    #                                                   (Phase 5)
 │   ├── media/                    # upload/confirm/view; worker in Phase 6            (Phase 5)
+│   ├── story/                    # stories, chapters, transcripts, captions          (Phase 5b)
 │   ├── mail/                     # Mailer interface + net/smtp impl
 │   ├── storage/                  # Storage interface + s3.go (presign, head, delete)    (Phase 5)
 │   ├── database/
@@ -151,6 +152,10 @@ CREATE TABLE auth_tokens (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_auth_tokens_user ON auth_tokens(user_id, purpose, created_at DESC);
+-- Phase 3 adds who an invite is from (shown in the email and on the Welcome page) and who sent it (audit):
+--   ALTER TABLE auth_tokens ADD COLUMN from_person_id  UUID REFERENCES persons(id) ON DELETE SET NULL,
+--                           ADD COLUMN sent_by_user_id UUID REFERENCES users(id)   ON DELETE SET NULL;
+-- Both stay NULL for password_reset tokens.
 CREATE INDEX idx_auth_tokens_expires ON auth_tokens(expires_at);   -- cleanup job
 
 CREATE TABLE sessions (
@@ -251,6 +256,28 @@ CREATE TABLE contact_methods (
 );
 CREATE INDEX idx_contact_methods_person ON contact_methods(person_id);
 
+-- Access requests (Phase 3): someone asks for an invitation, or a member suggests a relative.
+-- A request never creates an account; an admin approves it by sending the normal invite (§5).
+CREATE TABLE access_requests (
+  id              UUID PRIMARY KEY DEFAULT uuidv7(),
+  full_name       TEXT NOT NULL CHECK (btrim(full_name) <> ''),
+  email           TEXT NOT NULL CHECK (email = lower(email)),
+  side            TEXT CHECK (side IN ('first','second','married_in')),  -- labels from FAMILY_SIDES (§6.5)
+  relationship    TEXT,                                 -- "daughter", "brother", … from the form's list
+  related_names   TEXT[] NOT NULL DEFAULT '{}',         -- names as typed, 1–4
+  note            TEXT,
+  source          TEXT NOT NULL CHECK (source IN ('self','member_suggestion')),
+  suggested_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+  status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','declined')),
+  reviewed_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at     TIMESTAMPTZ,
+  invited_user_id UUID REFERENCES users(id) ON DELETE SET NULL,  -- set when approved and invited
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- not a CHECK pairing source with suggested_by: ON DELETE SET NULL would then fail when the suggester's user is deleted
+  CHECK (source = 'member_suggestion' OR suggested_by IS NULL)
+);
+CREATE INDEX idx_access_requests_pending ON access_requests(created_at) WHERE status = 'pending';
+
 -- Events ------------------------------------------------------------------------
 CREATE TABLE events (
   id                   UUID PRIMARY KEY DEFAULT uuidv7(),
@@ -279,7 +306,7 @@ CREATE TABLE media (
   id                UUID PRIMARY KEY DEFAULT uuidv7(),
   event_id          UUID REFERENCES events(id) ON DELETE SET NULL,
   uploader_id       UUID REFERENCES users(id)  ON DELETE SET NULL,
-  kind              TEXT NOT NULL CHECK (kind IN ('photo','video')),
+  kind              TEXT NOT NULL CHECK (kind IN ('photo','video','audio')),  -- audio for stories (Phase 5b)
   storage_key       TEXT NOT NULL UNIQUE,               -- media/2026/<uuid>/original.<ext>
   original_filename TEXT,                               -- display only, never used in keys
   mime_type         TEXT NOT NULL,
@@ -310,6 +337,42 @@ CREATE TABLE media_tags (
   PRIMARY KEY (media_id, person_id)
 );
 CREATE INDEX idx_media_tags_person ON media_tags(person_id);
+
+-- Stories (Phase 5b): a recorded video or audio story told by a relative (§9.6)
+CREATE TABLE stories (
+  id                    UUID PRIMARY KEY DEFAULT uuidv7(),
+  title                 TEXT NOT NULL CHECK (btrim(title) <> ''),
+  teller_person_id      UUID REFERENCES persons(id) ON DELETE SET NULL,
+  media_id              UUID REFERENCES media(id)   ON DELETE SET NULL,   -- the video or audio
+  status                TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),
+  consent_confirmed_at  TIMESTAMPTZ,                  -- the teller agreed to share it; required to publish
+  recorded_on           DATE,
+  recorded_on_precision TEXT CHECK (recorded_on_precision IN ('day','month','year','circa')),
+  recorded_by           UUID REFERENCES users(id) ON DELETE SET NULL,
+  place                 TEXT,
+  summary               TEXT,
+  language              TEXT,                         -- spoken language: 'ht', 'fr', 'en', 'mixed'
+  chapters              JSONB NOT NULL DEFAULT '[]',  -- [{"at": 400, "title": "…"}], seconds from the start
+  transcript            JSONB NOT NULL DEFAULT '[]',  -- [{"at": 12, "text": "…"}], typed or pasted by an editor
+  topics                TEXT[] NOT NULL DEFAULT '{}',
+  search_tsv            TSVECTOR,                     -- title + summary + transcript, set by the service on write
+  featured_at           TIMESTAMPTZ,                  -- "Story of the week": the latest featured one
+  created_by            UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at            TIMESTAMPTZ,
+  CHECK ((recorded_on IS NULL) = (recorded_on_precision IS NULL)),
+  CHECK (status <> 'published' OR consent_confirmed_at IS NOT NULL)
+);
+CREATE INDEX idx_stories_search ON stories USING gin (search_tsv) WHERE deleted_at IS NULL;
+CREATE INDEX idx_stories_teller ON stories(teller_person_id) WHERE deleted_at IS NULL;
+
+CREATE TABLE story_persons (            -- tree people mentioned in or appearing in a story
+  story_id  UUID NOT NULL REFERENCES stories(id)  ON DELETE CASCADE,
+  person_id UUID NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+  PRIMARY KEY (story_id, person_id)
+);
+CREATE INDEX idx_story_persons_person ON story_persons(person_id);
 
 ALTER TABLE media ADD CONSTRAINT media_taken_pair
   CHECK ((taken_on IS NULL) = (taken_on_precision IS NULL));
@@ -346,8 +409,8 @@ $$;
 
 ```sql
 DROP FUNCTION IF EXISTS masked_birth_date(persons, boolean, uuid);
-DROP TABLE IF EXISTS media_tags, media, event_persons, events, contact_methods, relationships,
-                     oauth_flows, sessions, auth_tokens, persons, users CASCADE;
+DROP TABLE IF EXISTS story_persons, stories, media_tags, media, event_persons, events, access_requests,
+                     contact_methods, relationships, oauth_flows, sessions, auth_tokens, persons, users CASCADE;
 ```
 
 Down migrations are a local-dev convenience. In production, fix forward with a new migration.
@@ -402,6 +465,8 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | POST | `/api/auth/login` | no session (sign-in flow), rate-limited | `{email, password}` → sets session cookie (the session the request's old cookie held, if any, is ended in the same transaction) and returns the user as `/me` does; any failure is the same `401 invalid_credentials` (`503 busy` when the hash limit is full or the user's row stays locked) |
 | POST | `/api/auth/password/forgot` | no session (sign-in flow), rate-limited | `{email}` → always `202`; reset email sent only if user exists and is enabled |
 | POST | `/api/auth/password/reset` | no session (sign-in flow), rate-limited | `{token, password}` (invite or reset link) → sets password, revokes all the user's sessions and other tokens, signs in (ending the old cookie's session, as login does) and returns the user as `/me` does; `400 invalid_token` for a malformed, unknown, used or expired token or a disabled user, `400 validation_error` for a password the rules refuse, `503 busy` as for login |
+| POST | `/api/auth/invite/preview` | no session (sign-in flow), rate-limited | `{token}` → `{invitee_first_name, invitee_email, from_name, google_eligible}` for the Welcome page, which can't GET the token because it lives in the URL fragment (§5). Consumes nothing; the same `400 invalid_token` as `password/reset` for a malformed, unknown, used or expired token. Phase 2 returns the invitee's email and Google eligibility; names arrive with persons in Phase 3 |
+| POST | `/api/access-requests` | no session (sign-in flow), rate-limited | `{full_name, email, side, relationship, related_names, note}` → always `202` with the same body, whether or not the email has an account or a pending request. A honeypot field; lengths capped; email normalized. Never creates an account (§5) |
 | POST | `/api/auth/password/change` | session | `{current_password, new_password}` → revokes other sessions |
 | GET | `/api/auth/google/start` | no session (sign-in flow), rate-limited | Redirects to Google (state, nonce, PKCE) |
 | GET | `/api/auth/google/callback` | no session (sign-in flow), rate-limited | Verifies the ID token; signs in by `sub`, auto-links only Gmail/Workspace invited emails (§5); redirects into the app |
@@ -409,9 +474,13 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/api/auth/me` | session | Current user, role, linked person |
 | POST | `/api/auth/logout` | none needed | Always clears the cookie, so an expired session's cookie still goes away; deletes the cookie's session row if there is one (`204`, or `500` if that delete failed) |
 | GET | `/api/admin/users` | admin | List users |
-| POST | `/api/admin/users` | admin | Invite: `{email, role}`; from Phase 3 also `person_id`, required (§5.1) |
+| POST | `/api/admin/users` | admin | Invite: `{email, role}`; from Phase 3 also `person_id` (required, §5.1), `from_person_id` (optional; a person linked to an active user; defaults to the suggesting member's person, else the sending admin's) and `access_request_id` (optional; marks that request `approved` in the same transaction) |
+| GET | `/api/admin/access-requests` | admin | Pending first. Each `related_names` entry comes with its best trigram match among non-deleted persons, so the UI can show "In the tree" or "Not found — check spelling". Matching happens only here, never for the public form |
+| POST | `/api/admin/access-requests/{id}/decline` | admin | Quietly sets `declined`; no email is sent |
+| POST | `/api/admin/access-requests/{id}/reopen` | admin | Undo a decline |
+| POST | `/api/me/suggestions` | session | A member suggests a relative: an access request with `source = member_suggestion`, `suggested_by` = the member |
 | PATCH | `/api/admin/users/{id}` | admin | Role, disable/enable, link person, change email (clears Google link and password, revokes sessions and tokens, re-invites; §5) |
-| GET | `/api/tree` | session | All non-deleted people + relationships (flat; see §10) |
+| GET | `/api/tree` | session | All non-deleted people + relationships (flat; see §10). No dates and no contacts; each person carries a short `bio_excerpt` for the quick look |
 | GET | `/api/persons` | session | `?q=` trigram search for autocomplete |
 | POST | `/api/persons` | admin | Create |
 | GET | `/api/persons/{id}` | session | Profile, direct relations, tagged media, and **only the contact methods the viewer may see** (§5.2) |
@@ -440,10 +509,15 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/api/media/{id}/url` | session | `?variant=original\|poster\|mp4_720` → presigned GET (supports `Range`) |
 | PATCH | `/api/media/{id}` | uploader/admin | Caption, tags |
 | DELETE | `/api/media/{id}` | uploader/admin | Soft delete (object removal is deferred, §9) |
+| GET | `/api/stories` | session | Published stories; `?teller_id=&topic=&q=` (`q` searches title, summary and transcript); the featured one first |
+| POST | `/api/stories` | admin (members when `MEMBERS_CAN_CONTRIBUTE=true`) | Create a draft (with `person_ids`, `media_id`) |
+| GET/PATCH | `/api/stories/{id}` | GET: session (drafts: their creator and admins); PATCH: admin, or the creator when contributions are enabled | Read / update, including chapters, transcript and publishing (requires `consent_confirmed_at`) |
+| DELETE | `/api/stories/{id}` | creator/admin | Soft delete |
+| GET | `/api/stories/{id}/captions.vtt` | session | WebVTT captions generated from the transcript |
 
 ## 5. Authentication & sessions
 
-**Model: invite-only.** Only emails that an admin has created in `users` can sign in, by either method below. Nobody can self-register. The **email address is the username**: one identifier to remember, and it's already needed for invites and resets.
+**Model: invite-only.** Only emails that an admin has created in `users` can sign in, by either method below. Nobody can self-register. Anyone may **ask** for an invitation (`POST /api/access-requests`), and members can suggest a relative; a request never creates an account. It waits in the admins' Requests queue, which shows whether the names given match people in the tree. Approving it means sending the normal invite; declining is silent. The form always answers the same way, so it reveals nothing about who is a member. The **email address is the username**: one identifier to remember, and it's already needed for invites and resets.
 
 Two ways to sign in, both ending in the same server-side session:
 
@@ -493,7 +567,7 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
    - Otherwise show a generic "no invitation found for this account" page. Nothing is created. Relatives whose invited address isn't Gmail or Workspace simply use their password; the page says so.
 4. After linking, sign-in is by `sub`, so a later change to the Google account's email doesn't lock them out. A Google link is removed only as part of an admin email change (below).
 
-**Invites.** The admin invites `{email, role}` (plus `person_id` from Phase 3, §5.1); the invite email says: *"Set a password, or sign in with Google if this is your Google address."* Admins can resend an invite or trigger a password reset from the users screen.
+**Invites.** Sending an invite is admin-only. The admin invites `{email, role}` (plus `person_id` from Phase 3, §5.1), and the invite names who it is **from**: the member who suggested the person, or otherwise the sending admin (`from_person_id`; the token row also keeps who sent it). Subject *"<From first name> invited you to the family hub"*; the email adds *"Approved by <admin>, admin."* when the two differ, and says *"Set a password, or sign in with Google if this is your Google address."* The Welcome page shows the same names through `POST /api/auth/invite/preview`. Admins can resend an invite or trigger a password reset from the users screen. Exact copy: `docs/design/design-notes.md` §4.10.
 
 **When an admin changes a user's email** (e.g. fixing a typo'd invite): the user's `google_sub` **and password** (`password_hash`, `password_changed_at`) are cleared, their sessions and outstanding tokens are deleted, and a fresh invite goes to the new address. Whoever received the old address loses all access, since the email itself isn't a secret and the old password must not keep working. The real person sets a new password from the fresh invite, or re-links Google. There is deliberately **no standalone "unlink Google"**: Google only auto-links addresses it owns (Gmail/Workspace), so an unlinked account would simply re-link on its next sign-in. An unwanted link can only come from a wrong email address, which an email change fixes (the old Google account no longer matches); disabling the user cuts off all access.
 
@@ -503,15 +577,16 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
 - Cookie flags: `HttpOnly; Secure; SameSite=Lax; Path=/`. Name `__Host-fh_session` in prod. With `COOKIE_SECURE=false` (set by `make dev-api` and `make run`) the cookie is `fh_session` without `Secure`: Safari doesn't accept `Secure` cookies on `http://localhost` (verified 2026-11: WebKit bugs 218980/232088 are still open), and the `__Host-` prefix requires `Secure`.
 - Lifetime: 30-day sliding window, 180-day absolute cap. `last_seen_at` is only rewritten when it's more than an hour stale, to avoid a DB write on every request. Logout and "disable user" delete rows, so revocation is immediate.
 
-**Auth cleanup job** (Phase 2, in-process, no extra infrastructure): a ticker runs every 15 minutes and deletes, in batches of 1,000, `oauth_flows` that are consumed or expired, `auth_tokens` expired more than 7 days ago (a used token is already deleted), and `sessions` past their expiry. Expiry is already enforced on every read; the job only keeps the tables from growing. Each table has an index on its expiry column for this.
+**Auth cleanup job** (Phase 2, in-process, no extra infrastructure): a ticker runs every 15 minutes and deletes, in batches of 1,000, `oauth_flows` that are consumed or expired, `auth_tokens` expired more than 7 days ago (a used token is already deleted), `sessions` past their expiry, and (from Phase 3) `access_requests` declined more than 90 days ago. Expiry is already enforced on every read; the job only keeps the tables from growing. Each table has an index on its expiry column for this.
 
 **Rate limits** (in memory, fine for a single instance). `internal/ratelimit` is a small token bucket per key rather than `x/time/rate`, which can't give back a token granted at once; it drops a bucket only once it has refilled, so memory stays bounded and no penalty is forgiven early. Each limit is a bucket of N that refills evenly over the window ("5 per 15 min" is 5 at once, then one more every 3 minutes), so a sustained attacker gets N per window after the first burst. A blocked request gets `429 rate_limited` with `Retry-After`. Each endpoint's limits land with the endpoint. Two layers:
 
-- **Per IP, as router middleware** (it only needs the client address; IPv6 is counted per /64, since one household usually holds a whole /64): `login` 20 per 15 min, `password/forgot` 20/hour, `password/reset` 10/minute, `google/*` 20/minute.
+- **Per IP, as router middleware** (it only needs the client address; IPv6 is counted per /64, since one household usually holds a whole /64): `login` 20 per 15 min, `password/forgot` 20/hour, `password/reset` and `invite/preview` 10/minute each, `access-requests` 20/hour, `google/*` 20/minute.
 - **Per account, inside the auth service** (only the service knows the email and whether verification failed), counting **failures only**:
   - `login`: 5 failures per 15 min per **email + IP** pair, and a backstop of 50 failures per hour per email across all IPs. Each attempt takes its slot *before* the Argon2 verify (so parallel guesses can't all pass an unspent limit) and gets it back unless the password was wrong; a right password refused because a credential changed mid-login isn't a failure. Emails over 254 characters are refused before they become limiter keys.
   - `password/change`: 5 wrong `current_password` attempts per 15 min per user.
   - `password/forgot`: 5 emails per hour per address.
+  - `access-requests`: 5 per hour per address; over the limit still answers `202` and stores nothing.
 
 Honest limits of this: a determined attacker rotating IPs can, at worst, hit the 50/hour backstop and **delay password sign-in** for one account. They can never block that person's **Google sign-in or password reset**, both of which prove ownership another way, and the login error page links to both. There's no hard lockout.
 
@@ -525,7 +600,7 @@ Honest limits of this: a determined attacker rotating IPs can, at worst, hit the
 
 An admin decides who each login *is*; nobody claims a spot themselves. This lands in Phase 3 with the `persons` table; until then, invited logins are unlinked.
 
-- **Invite flow:** the admin picks the person first (trigram search over the tree), or creates the person in the same step, then enters the email and role. Searching before creating prevents duplicate nodes. From Phase 3, a person is **required**: every invited login is linked at invite time, and logins invited before then are linked from the admin screen. (Only admins made with `admin create` may start unlinked; they link themselves from the admin screen.)
+- **Invite flow:** the admin picks the person first (an approved request opens this step with its details filled in) (trigram search over the tree), or creates the person in the same step, then enters the email and role. Searching before creating prevents duplicate nodes. From Phase 3, a person is **required**: every invited login is linked at invite time, and logins invited before then are linked from the admin screen. (Only admins made with `admin create` may start unlinked; they link themselves from the admin screen.)
 - **Constraint:** `uq_users_person` allows at most one login per person. Couples who share an email address still need separate invites.
 - **Guard:** soft-deleting a person who has an active login is refused until the admin unlinks or disables that login.
 - **On login:** `/api/auth/me` returns `person_id`; the tree opens centered on that person with a "you" marker and a "back to me" button, and relationships are labelled from their point of view ("your aunt Rosa"). Labels are computed client-side from the already-loaded tree using the lowest common ancestor; build that as a pure function with a table-driven test (cousins once removed, half-siblings, step-relations).
@@ -542,7 +617,7 @@ Each person's contact details live in `contact_methods`, one row per phone/email
 | Who sees a row | The owner and admins: always. Any other signed-in user: only rows with `visibility = 'family'`. |
 | Enforcement | In the SQL/service layer (`WHERE visibility = 'family'` for non-owners), never in the frontend. Hidden values are not sent to the browser at all. |
 | Where contacts appear | `GET /api/persons/{id}` and `GET /api/directory` only. They are **not** in `/api/tree`, `/api/persons?q=` search results, logs, or error messages, and search never matches on contact values. |
-| Birthdays | **Month and day** are visible to every signed-in user. The birth **year** of a *living* person is visible only to admins and to that person themselves; for deceased people the full date is visible to all. Masking happens in SQL via the `masked_birth_date` function (§3.1), so the year never reaches a non-permitted browser, including through `/api/tree`. A living person with only a year or "circa" precision shows nothing to others. |
+| Birthdays | **Month and day** are visible to every signed-in user. The birth **year** of a *living* person is visible only to admins and to that person themselves; for deceased people the full date is visible to all. Masking happens in SQL via the `masked_birth_date` function (§3.1), so the year never reaches a non-permitted browser. `/api/tree` carries no dates at all (§10). A living person with only a year or "circa" precision shows nothing to others. |
 | Login email | `users.email` is an authentication detail and is **never** exposed. A contact email is a separate, optional row the person chooses to add. |
 | Admin visibility | Admins can see everything, and the profile settings page says so ("Administrators can see all information"). |
 | First login | A short onboarding step walks the user through their profile and shows each contact field with its visibility toggle, defaulting to off. |
@@ -764,27 +839,33 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 | `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PATH_STYLE` | `auto` / `true` for R2 and local servers | |
 | `MAX_UPLOAD_BYTES` | `2147483648` | Single-PUT cap (§9) |
 | `MEMBERS_CAN_CONTRIBUTE` | `false` | Opens event creation and media upload to members |
-| `APP_TIMEZONE` | `America/New_York` | Defines "today" for the upcoming-birthdays panel |
+| `APP_TIMEZONE` | `America/New_York` | Defines "today" for the upcoming-birthdays panel and the home page's "Good evening" |
+| `FAMILY_NAME` | `Torres` | Shown in the menu, page titles, emails ("the <FAMILY_NAME> Family Hub"); kept out of code |
+| `FAMILY_SIDES` | `Torres,Ruiz` | Labels for the `first` and `second` family sides on the request form and the People filter |
 | `BACKUP_PING_URL` | `https://hc-ping.com/<uuid>` | Pinged after each successful backup (§11) |
 
 `S3_PUBLIC_ENDPOINT` matters because SigV4 includes the `Host` header: if the app runs in Docker and signs against `storage:9000`, the browser's request to `localhost:9000` fails signature validation.
 
 ## 7. Frontend
 
+- **The design is set: `docs/design/`.** The mockup pages are the visual target and the build matches them as closely as the browser allows (layout, copy, colors, type, sizes, spacing, radii, motion); `docs/design/design-notes.md` is the behaviour spec and wins where the two disagree. Each page is compared side by side with its mockup before it's done, and a deliberate deviation is agreed with the owner first. The points below are the engineering side.
+- **Look ("Heirloom"):** colors as CSS variables from day one (design-notes §1.1), so the deferred dark mode is a swap. Fraunces and Source Sans 3 (both SIL Open Font License) are **bundled as `woff2` files** and served by the app, not loaded from Google Fonts: the strict CSP (§12) and privacy both want same-origin fonts. Every animation is off under `prefers-reduced-motion`.
 - React 19 + TypeScript + Vite; TanStack Query for server state; React Router.
 - `vite.config.ts`: `server.proxy['/api'] = 'http://localhost:8080'`; `build.outDir = '../internal/webui/dist'`, `emptyOutDir: true`.
 - Typed client: generate from an OpenAPI file later if the API grows; hand-written fetch wrapper for now with one error type.
 - **Family tree view: a Workday-style focus view, not a canvas of the whole family.** The screen shows one **focus person** with their parents' household above, their own household beside them, and their children below: about two generations up and down. Siblings sit next to the focus person.
-  - **Cards:** initials (photo once media lands in Phase 5), name, life dates (month/day only for living people to non-admins, §5.2), and a badge for what's collapsed, e.g. "3 children".
-  - **Interaction:** tap a card to open a detail panel (bio, visible contacts, photos); tap an arrow to expand a branch in place; tap "Make focus" to re-center; "Back" and "Back to me" are always visible; a search box jumps to anyone. Pan and zoom aren't required.
+  - **Cards:** initials (photo once media lands in Phase 5), name, and the relation from the viewer's point of view. The tree shows no dates.
+  - **Interaction (design-notes §4.2):** hover or keyboard focus shows a **quick look** under the card (relation, 2-line story from `bio_excerpt`, shared contact, "View profile", "Center here"); a click keeps it open, which is how phones get it; a double-click centers the tree on that person. ▲/▼ chips open more generations; a trail of recent focus people, "Back" and "Back to me" are always visible; a search box jumps to anyone. Pan and zoom aren't required.
+  - **Quick-look contacts** load lazily: on hover or focus (debounced ~150 ms) the client calls `GET /api/persons/{id}` and caches it for the session; until it arrives, the quick look shows without the contact line.
   - **Households play the role of Workday's teams.** A couple, or a person with children and no partner on record, is one grouped card. Multiple marriages appear as separate households, with ended couples marked "former". Adoptive and foster links get a small label; step-relations are derived (§3.4) and labelled from the viewer's point of view. Households are derived from `relationships`, with no schema change.
   - **Layout:** only a few generations are drawn at a time, so plain CSS grid/flex with SVG connector lines is enough and no auto-layout engine is needed. Reach for elkjs or React Flow only if you later add a "whole family" overview.
   - **Data:** the client builds the view from the already-loaded `/api/tree` payload. A server-side "neighborhood" endpoint (§10) is a later optimization.
   - **Accessibility for older relatives:** large tap targets and type, high contrast, keyboard navigation, no hover-only actions, text labels instead of icon-only buttons.
   - **Prototype first:** build the focus view as a standalone clickable mockup at the start of Phase 4b, before the real tree, and show it to one non-technical relative. It uses no backend or database: the family data is hardcoded in the page, shaped like the `/api/tree` payload (§10) so the household-grouping logic can carry over into the real frontend. Real family shape and names are fine in the private mockup; anything committed to the repo uses made-up names. It is still the riskiest UI piece, but far smaller than a full-graph layout.
 - Upload modal: request `upload-url`, `XMLHttpRequest`/`fetch` PUT with the returned headers (needed for progress events), then `confirm`. Compute width/height/duration client-side from the file for the confirm call.
-- Auth pages: `/auth/login` (email + password, "Continue with Google", "Forgot password?"), `/auth/forgot`, `/auth/set-password` (reads `#t=`; used for both invites and resets), and "Change password" in My profile. Large inputs, a show-password toggle, and plain-language errors.
-- **Member experience is read-mostly:** tree view centered on "you", person profiles, a directory of visible contact info, and a "My profile" page (bio, avatar, contact methods with visibility toggles). Tree-editing controls are not rendered for members.
+- Auth pages: `/auth/login` (email + password, "Continue with Google", "Forgot password?", "Request access"), `/auth/request-access`, `/auth/forgot`, `/auth/set-password` (reads `#t=`; used for both invites and resets; for an invite it shows the Welcome page from `invite/preview`, then first-time setup), and "Change password" in My profile. Large inputs, a show-password toggle, and plain-language errors.
+- **Member experience is read-mostly:** Home, the tree centered on "you", People, person profiles, a directory of visible contact info, Events, Stories, and a "My profile" page (bio, avatar, contact methods with visibility toggles, "Suggest a relative"). Tree-editing controls are not rendered for members.
+- **Home ("Hearth"):** a greeting by time of day in `APP_TIMEZONE`, **Coming up** (upcoming birthdays §5.3, and upcoming events from Phase 5) and **New in the family** (people added in the last 30 days). Built from existing queries, no new tables.
 - **Admin editing without raw edges:** admins never see "relationship type: parent_child, person A/B". From a person's card they choose "Add parent / child / partner / sibling", pick or create the other person, and the app maps that to a relationship (and, for "sibling", to shared parents). "Add parent" and "Add child" ask biological, adoptive or foster (default biological). "Add partner" asks **married or partner** and whether the relationship has **ended**; both can be changed later from the couple's card. Large icon buttons, plain-language labels, and undo (soft delete + restore) keep this safe for non-technical admins.
 
 ## 8. Tooling: Makefile, Compose, Dockerfile
@@ -920,7 +1001,7 @@ The image builds its own `dist/` (the placeholder until Phase 4a, then the web s
 
 ### 9.1 Upload
 
-1. `POST /api/media/upload-url {filename, mime_type, size_bytes, event_id?}`. Server validates the MIME against an allowlist (`image/jpeg`, `image/png`, `image/webp`, `image/heic`, `image/tiff` for flatbed scans of old photos, `video/mp4`, `video/quicktime`; TIFF and HEIC are shown through the Phase 6 JPEG variant, since browsers can't display TIFF) and `size_bytes <= MAX_UPLOAD_BYTES`; inserts a `pending` row with key `media/<yyyy>/<uuid>/original.<ext>` (extension derived from MIME, **never** from the filename); returns a presigned PUT (15 min) that signs `Content-Type` and `Content-Length`.
+1. `POST /api/media/upload-url {filename, mime_type, size_bytes, event_id?}`. Server validates the MIME against an allowlist (`image/jpeg`, `image/png`, `image/webp`, `image/heic`, `image/tiff` for flatbed scans of old photos, `video/mp4`, `video/quicktime`, and for stories `audio/mpeg`, `audio/mp4`, `audio/wav` (old cassette transfers); TIFF and HEIC are shown through the Phase 6 JPEG variant, since browsers can't display TIFF) and `size_bytes <= MAX_UPLOAD_BYTES`; inserts a `pending` row with key `media/<yyyy>/<uuid>/original.<ext>` (extension derived from MIME, **never** from the filename); returns a presigned PUT (15 min) that signs `Content-Type` and `Content-Length`.
 2. Browser PUTs directly to the bucket. The response's `headers` contain only `Content-Type`; browsers forbid scripts from setting `Content-Length` and send it automatically from the file body, which must equal the signed value. A SigV4-signed `Content-Length` makes the storage service reject mismatches, which is what enforces the size cap. **(verify on the chosen storage server and on R2 in the Phase 5 storage spike)**; the `HeadObject` size check in step 3 is the backstop either way.
 3. `POST /api/media/{id}/confirm` → server calls `HeadObject`, checks it exists and `ContentLength == size_bytes`, sets `status='ready'`, records tags/caption, and (Phase 6) sets `processing_status='queued'`.
 
@@ -947,16 +1028,27 @@ In-process goroutine(s) polling `SELECT ... WHERE processing_status='queued' FOR
 
 ### 9.5 Local object storage: decided at the start of Phase 5
 
-Nothing before Phase 5 stores files, so the MVP's local stack is just Postgres and Mailpit, and no Cloudflare/R2 account is needed until then.
+Nothing before Phase 5 stores files, so until then the local stack is just Postgres and Mailpit, and no Cloudflare/R2 account is needed.
 
 
 MinIO was the V2 default. Its community edition is in maintenance mode and has been source-only (no new Docker images) since about October 2025. Candidates: a **pinned last MinIO image** (current lean: dev-only, so being frozen matters little), **Garage** (fallback; maintained, lightweight), RustFS (newer, less proven), SeaweedFS (heavier than needed), or no local server and a dev R2 bucket (loses offline dev). The spike runs the same checks against real R2 too, since R2's behavior is what matters in production. Whatever is chosen sits behind the `storage.Storage` interface, so the choice is cheap to reverse. The spike must prove: presigned PUT with signed `Content-Length`, `HeadObject`, presigned GET with `Range`, and browser CORS.
 
+### 9.6 Stories (Phase 5b)
+
+A story is a recorded video or audio of a relative telling something, with chapters and a transcript (design-notes §4.6–4.7b). Its file is an ordinary `media` row, uploaded the normal way (§9.1).
+
+- **Transcripts are typed or pasted by an editor** in the MVP, as timestamped lines; chapters likewise. Captions (`captions.vtt`, on by default in the player) are generated from the transcript. Machine transcription (self-hosted Whisper or a hosted speech-to-text API) is a later, separate decision: it's a new dependency, and Haitian Creole accuracy needs a human read-through anyway.
+- **Consent:** a story is published only once `consent_confirmed_at` is set; drafts are visible to their creator and admins.
+- **Search** covers what was said: the service keeps `search_tsv` (title, summary, transcript) current on every write; `q` uses it. People mentioned who aren't in the tree stay text in the transcript or summary; only tree people go in `story_persons`.
+- **Profiles** list "Stories <name> told" (`teller_person_id`) and "Stories about <name>" (`story_persons`). A story's year can appear on the Events timeline.
+- **Length:** long recordings can pass the 2 GiB single-PUT cap (§9.1). Until multipart uploads exist, the Add a story page says so and suggests a smaller export.
+- **Playback:** until the Phase 6 worker, stories must be H.264 MP4 or audio; an iPhone HEVC `.mov` won't play in Chrome or Firefox.
+
 ## 10. Family-tree queries
 
-- **`GET /api/tree`** is two flat reads: all non-deleted `persons` (slim columns) and all `relationships` whose endpoints are both non-deleted. At family scale (hundreds to low thousands of people) this is a few hundred KB; no recursion needed. The client builds union nodes and runs the layout. Birth dates in this payload are masked per viewer (§5.2): non-admins get month/day for living people, never the year.
+- **`GET /api/tree`** is two flat reads: all non-deleted `persons` (slim columns) and all `relationships` whose endpoints are both non-deleted. At family scale (hundreds to low thousands of people) this is a few hundred KB; no recursion needed. The client builds union nodes and runs the layout. The payload carries **no birth or death dates** (the tree never shows them; `is_deceased` stays for labels), which also removes one place the §5.2 masking could leak, and **no contacts**. Each person has a `bio_excerpt` (the first ~140 characters of `bio`) for the quick look; contacts come from `GET /api/persons/{id}` (§7).
 - **Optional later:** `GET /api/persons/{id}/neighborhood?up=2&down=2` returns just the households around one person (same masking), if the full payload ever gets too large for phones. Not needed at family scale.
-- **One masked person read.** Every query that returns people to a browser (`/api/tree`, `/api/persons`, `/api/persons/{id}`, ancestors, descendants, directory, event and media tags) returns `masked_birth_date(p, $viewer_is_admin, $viewer_person_id)` (defined in Phase 3's migration with `persons`, §3.1) and never selects `birth_date` or `p.*`. sqlc can't share column lists between queries, so the SQL function is the single place the rule lives, and a living person's birth year can't leak through an endpoint added later.
+- **One masked person read.** Every query that returns people's birth dates to a browser (`/api/persons`, `/api/persons/{id}`, ancestors, descendants, directory, event and media tags) returns `masked_birth_date(p, $viewer_is_admin, $viewer_person_id)` (defined in Phase 3's migration with `persons`, §3.1) and never selects `birth_date` or `p.*`. sqlc can't share column lists between queries, so the SQL function is the single place the rule lives, and a living person's birth year can't leak through an endpoint added later.
 - **Ancestors / descendants** use recursive CTEs with a depth bound, over **family-parent links only** (`biological`, `adoptive`; §3.4), so foster links never appear as ancestors or descendants:
 
 ```sql
@@ -1013,7 +1105,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 ## 12. Security & privacy checklist
 
-- Invite-only; enumeration-safe login, forgot-password and Google matching; Argon2id password hashes; single-use 256-bit emailed tokens; Google sign-in only links to an already-invited, verified email; server-side revocable sessions, revoked on password reset (§5).
+- Invite-only; enumeration-safe login, forgot-password, access-request and Google matching; the public request form never suggests or reveals names from the tree; Argon2id password hashes; single-use 256-bit emailed tokens; Google sign-in only links to an already-invited, verified email; server-side revocable sessions, revoked on password reset (§5).
 - Security headers: strict CSP (`default-src 'self'; frame-ancestors 'none'`; `img-src`/`media-src` allow the bucket host), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `X-Robots-Tag: noindex`, HSTS in prod.
 - All SQL via sqlc (parameterized). JSON body size limits. Upload MIME allowlist; keys never derived from user filenames.
 - Secrets only from env/secret manager; separate S3 credentials for app vs. backup jobs; the app's key can't delete from the backup bucket.
@@ -1023,7 +1115,7 @@ For a "multi-decade" archive, this section matters more than any other.
 
 ## 13. Testing & CI
 
-- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose via `TEST_DATABASE_URL`, never `DATABASE_URL`; `internal/testdb` holds the skip-locally, fail-in-CI rule, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection (including a chain deeper than any display bound, and a loop closed through a foster link), ancestors/descendants exclude foster links, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected (via POST and via PATCH changing a subtype), missing `subtype` defaults or returns 400, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, blank or whitespace-only names are rejected (a blank surname input is stored as NULL), derived relations (full/half/unspecified siblings, including one sibling's second parent not yet recorded and people with more than two family parents, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), emailed tokens single-use and expiring (invite 7 days, reset 30 min), reset revokes all sessions, login returns the same 401 for unknown email / wrong password / Google-only / disabled user, every login failure path runs one Argon2 verify (unknown, Google-only and disabled users alike), any credential change invalidates all outstanding tokens, disabled users are refused on every path including Google by `sub`, admin email change clears `google_sub` and the password and revokes sessions, a new reset request leaves earlier reset links valid, token consumption is all-or-nothing (a failure mid-way leaves the token unconsumed and the old password intact), concurrent credential changes for one user serialize on the row lock, emails are matched case-insensitively (incl. Google's), per-account failure limits and the 50/hour backstop never block Google or reset, `password/change` is rate-limited, the hash semaphore caps concurrent Argon2 work, Argon2id rehash when parameters change, password length and common-password rules, Google sign-in: repeat sign-in with the user's existing `sub` succeeds; an email auto-link attempt with a **different** `sub` for a user already linked is rejected, as are unverified emails, uninvited emails and state/nonce mismatches, and auto-links only Gmail or matching-`hd` Workspace addresses (a verified non-Gmail address without `hd` is refused; that user signs in with their password), and links `google_sub` on first use, a login whose verified hash changed before the session commit is refused (no stale session, no rehash over a new password), Google sign-in by `sub` is refused if the email was changed or the user disabled mid-flow (and a flow started before an email change can't re-link by email), the auth cleanup job deletes expired/consumed flows, tokens and sessions, a forged, expired or reused flow handle is refused, change password always requires the current password and is limited per user, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
+- **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose via `TEST_DATABASE_URL`, never `DATABASE_URL`; `internal/testdb` holds the skip-locally, fail-in-CI rule, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection (including a chain deeper than any display bound, and a loop closed through a foster link), ancestors/descendants exclude foster links, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected (via POST and via PATCH changing a subtype), missing `subtype` defaults or returns 400, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, blank or whitespace-only names are rejected (a blank surname input is stored as NULL), derived relations (full/half/unspecified siblings, including one sibling's second parent not yet recorded and people with more than two family parents, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), emailed tokens single-use and expiring (invite 7 days, reset 30 min), reset revokes all sessions, login returns the same 401 for unknown email / wrong password / Google-only / disabled user, every login failure path runs one Argon2 verify (unknown, Google-only and disabled users alike), any credential change invalidates all outstanding tokens, disabled users are refused on every path including Google by `sub`, admin email change clears `google_sub` and the password and revokes sessions, a new reset request leaves earlier reset links valid, token consumption is all-or-nothing (a failure mid-way leaves the token unconsumed and the old password intact), concurrent credential changes for one user serialize on the row lock, emails are matched case-insensitively (incl. Google's), per-account failure limits and the 50/hour backstop never block Google or reset, `password/change` is rate-limited, the hash semaphore caps concurrent Argon2 work, Argon2id rehash when parameters change, password length and common-password rules, Google sign-in: repeat sign-in with the user's existing `sub` succeeds; an email auto-link attempt with a **different** `sub` for a user already linked is rejected, as are unverified emails, uninvited emails and state/nonce mismatches, and auto-links only Gmail or matching-`hd` Workspace addresses (a verified non-Gmail address without `hd` is refused; that user signs in with their password), and links `google_sub` on first use, a login whose verified hash changed before the session commit is refused (no stale session, no rehash over a new password), Google sign-in by `sub` is refused if the email was changed or the user disabled mid-flow (and a flow started before an email change can't re-link by email), the auth cleanup job deletes expired/consumed flows, tokens and sessions, a forged, expired or reused flow handle is refused, change password always requires the current password and is limited per user, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size, an access request answers the same for a member's email, a pending request's email and a new one, and never creates a user; approving a request through an invite marks it approved in the same transaction; a declined request sends no email; `invite/preview` consumes nothing and refuses used or expired tokens like `password/reset`; `/api/tree` carries no dates and no contacts; a story can't be published without consent, and drafts are hidden from other members; story search finds a word from the transcript. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every person-returning endpoint: tree, search, profile, ancestors, descendants, directory, upcoming birthdays); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
 - **Web:** Vitest + Testing Library for components; one Playwright smoke test (seed a user with a known password → sign in → add person → see tree) once Phase 4b lands.
 ### 13.1 Branches, CI and releases
 
@@ -1057,19 +1149,20 @@ Either way: `TRUSTED_PROXY=true` only when behind Caddy/the platform proxy, `COO
 
 ## 15. Phased roadmap
 
-**MVP = Phases 1 through 4c**: a working tree, logins, contact visibility and upcoming birthdays, **deployed with backups and in the family's hands**. Photos and video come after, and the transcoding worker (Phase 6) only once you've actually hit a playback problem.
+**MVP = Phases 1 through 5b**: a working tree, logins, access requests, contact visibility and upcoming birthdays, events with photos and video, and family stories, **deployed with backups and in the family's hands**. The transcoding worker (Phase 6) comes only once you've actually hit a playback problem.
 
-Real family data gets entered from Phase 4 onward, so the MVP ships (deploy + backups, Phase 4c) before any media work starts. Nothing precious should live only on a laptop.
+Real family data gets entered from Phase 4 onward, so Phase 4c deploys with backups before any media work starts, and the family can start using it then. Nothing precious should live only on a laptop. Phases 5 and 5b complete the MVP on that deployment.
 
 | Phase | Goal | Exit criteria |
 |---|---|---|
 | **1. Foundation** | Repo, compose, config, migrations, health, CI, `webui` embed + SPA handler, draft-release and release workflows | `make dev-api` runs (it starts compose itself); `/health` + `/ready` pass; CI green on a fresh clone (stub UI) |
-| **2. Auth** | Invite-only email + password (Argon2id), invite and forgot-password emails, change password, sessions, rate limits, `admin create`, admin user endpoints. Then Continue with Google as a separate PR | Invite → set password via Mailpit → sign in; forgot/reset works and revokes sessions; Google sign-in links an invited account and refuses an uninvited one; enumeration, replay, expiry and disabled-user tests pass |
-| **3. People, tree & contacts API** | Person linking (§5.1, moved from Phase 2 so it lands with the `persons` table), admin-only persons/relationships writes, `/api/tree`, ancestors/descendants, cycle validation, contact methods with visibility filtering, `/api/directory` | Integration tests incl. cycle rejection and the role/visibility matrix (§13); one-login-per-person enforced; seed script loads a sample family |
-| **4a. Frontend shell** | Login UI, onboarding + "My profile" (bio and contact visibility toggles; initials only, avatars arrive in Phase 5), person profile page, directory, upcoming-birthdays panel | Accept an invite via Mailpit, set a password, sign in and land on the home page; forgot-password works end to end; edit own bio and contact visibility; a member sees only visible contacts in profiles and the directory; works on desktop and phone |
+| **2. Auth** | Invite-only email + password (Argon2id), invite and forgot-password emails, invite preview, change password, sessions, rate limits, `admin create`, admin user endpoints. Then Continue with Google as a separate PR | Invite → set password via Mailpit → sign in; forgot/reset works and revokes sessions; Google sign-in links an invited account and refuses an uninvited one; enumeration, replay, expiry and disabled-user tests pass |
+| **3. People, tree & contacts API** | Person linking (§5.1, moved from Phase 2 so it lands with the `persons` table), invites "from" a person, access requests and member suggestions with tree matching, admin-only persons/relationships writes, `/api/tree`, ancestors/descendants, cycle validation, contact methods with visibility filtering, `/api/directory` | Integration tests incl. cycle rejection and the role/visibility matrix (§13); one-login-per-person enforced; seed script loads a sample family |
+| **4a. Frontend shell** | The design's shell and pages (`docs/design/`): sign in, request access, Welcome + first-time setup, forgot password, Home, People, person profile, directory, "My profile" (bio and contact visibility toggles; initials only, avatars arrive in Phase 5), Members & invites with the Requests queue | Accept an invite via Mailpit, set a password, sign in and land on the home page; forgot-password works end to end; edit own bio and contact visibility; a member sees only visible contacts in profiles and the directory; works on desktop and phone |
 | **4b. Family tree** | **Mockup first:** a standalone clickable focus-view mockup (§7) with the real family shape, tried on the owner's phone, then by one non-technical relative. Then the real focus-view family tree centered on "you" (§7), "back to me", search-to-jump, admin add-parent/child/partner/sibling flows (§7) | Sample family can be navigated by clicking, with multiple marriages and step-children shown as households, on desktop and phone; an admin can build a branch without touching raw edges |
 | **4c Ship the MVP** | Deploy (§14), mail provider + domain with SPF/DKIM/DMARC, nightly backups + failure alert, restore drill, TLS, basic security headers | Deployed behind TLS; login email lands in Gmail and Outlook inboxes; restore drill passes; a deliberately failed backup triggers the alert; first real invites sent |
 | **5. Events & media (originals)** | **Storage spike first:** choose the local server and prove the four capabilities in §9.5 against it and R2 with a throwaway Go test; add `storage` to compose. Then events + feed, upload/confirm/view (admin-only at first; members via `MEMBERS_CAN_CONTRIBUTE`), avatars (members can always set their own), tagging, orphan sweep, admin "missing info" tracker (§5.4) | Upload a 1 GB video from the browser and play it back with seeking |
+| **5b. Stories** | Stories with chapters, typed transcripts, captions, search, consent; Stories, A story and Add a story pages (§9.6) | Add a story with an audio file and a video file, publish it after confirming consent, find it by a word from its transcript, and play it with captions on desktop and phone |
 | **6. Processing** | Worker: thumbnails, posters, H.264 variant, HEIC, EXIF | An iPhone HEVC `.mov` plays in Chrome and Firefox |
 | **7. Harden** | Strict CSP covering the media bucket, runbook + handover note, export command if wanted (§11) | Second admin named and handover note written; CSP has no violations in normal use; restore drill re-run with media in the backups |
 
@@ -1080,10 +1173,20 @@ Real family data gets entered from Phase 4 onward, so the MVP ships (deploy + ba
 1. **Roles:** admins maintain the tree, events and media; members edit only their own profile and contact info. One flag, `MEMBERS_CAN_CONTRIBUTE` (default `false`), later opens event creation and media upload to members.
 2. **Visibility:** two levels for contact info (`hidden` / `family`). Birthday month and day are visible to all; the birth year of living people is visible to admins and that person only. Admins see everything.
 3. **No birthday emails.** Birthdays appear only in the app (§5.3). The app emails nothing but invites and password resets.
-4. **Access:** invite-only. No "request access" flow and no "suggest a correction" feature; relatives who spot a mistake message the admin.
+4. **Access:** invite-only, but relatives can **request access** and members can **suggest a relative** (reversed in November 2026 by the frontend design, §5). Sending invites stays admin-only. Still no "suggest a correction" feature; relatives who spot a mistake message the admin.
 5. **Video:** one 720p H.264 variant, built only when you hit a playback problem (Phase 6).
 6. **Hosting:** Option A, a single VPS (§14).
 7. **GEDCOM import/export:** later. Move it up only if you already have a tree file from another service.
+8. **Stories are in the MVP** (Phase 5b), with transcripts typed by hand; machine transcription is a later decision (§9.6).
+9. **Frontend design:** `docs/design/` is the agreed look and behaviour, and the build matches the mockups (§7).
+
+**Deferred from the frontend design** (accepted as ideas, not scheduled):
+
+- Social accounts as contact methods (WhatsApp, Instagram, …), with links built from each platform's known base URL.
+- Phone numbers and addresses shared **on request**: a member asks and the owner shares with that one person (a `contact_requests` table).
+- "On this day" on Home, and a stored theme preference for dark mode (`users.theme`).
+- Machine transcription, recording stories in the browser, and multipart uploads for long recordings.
+- "Suggest a correction" on profiles, feeding the same Requests queue.
 
 **Still open, but not blocking until later**
 
