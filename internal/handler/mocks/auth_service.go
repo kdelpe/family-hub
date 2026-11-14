@@ -177,6 +177,72 @@ func (_c *AuthService_Logout_Call) RunAndReturn(run func(ctx context.Context, to
 	return _c
 }
 
+// PreviewLink provides a mock function for the type AuthService
+func (_mock *AuthService) PreviewLink(ctx context.Context, token string) (auth.LinkPreview, error) {
+	ret := _mock.Called(ctx, token)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PreviewLink")
+	}
+
+	var r0 auth.LinkPreview
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (auth.LinkPreview, error)); ok {
+		return returnFunc(ctx, token)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) auth.LinkPreview); ok {
+		r0 = returnFunc(ctx, token)
+	} else {
+		r0 = ret.Get(0).(auth.LinkPreview)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, token)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// AuthService_PreviewLink_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PreviewLink'
+type AuthService_PreviewLink_Call struct {
+	*mock.Call
+}
+
+// PreviewLink is a helper method to define mock.On call
+//   - ctx context.Context
+//   - token string
+func (_e *AuthService_Expecter) PreviewLink(ctx any, token any) *AuthService_PreviewLink_Call {
+	return &AuthService_PreviewLink_Call{Call: _e.mock.On("PreviewLink", ctx, token)}
+}
+
+func (_c *AuthService_PreviewLink_Call) Run(run func(ctx context.Context, token string)) *AuthService_PreviewLink_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *AuthService_PreviewLink_Call) Return(linkPreview auth.LinkPreview, err error) *AuthService_PreviewLink_Call {
+	_c.Call.Return(linkPreview, err)
+	return _c
+}
+
+func (_c *AuthService_PreviewLink_Call) RunAndReturn(run func(ctx context.Context, token string) (auth.LinkPreview, error)) *AuthService_PreviewLink_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SetPasswordWithToken provides a mock function for the type AuthService
 func (_mock *AuthService) SetPasswordWithToken(ctx context.Context, in auth.SetPasswordInput) (string, auth.User, error) {
 	ret := _mock.Called(ctx, in)

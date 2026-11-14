@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -227,6 +228,56 @@ func TestMe(t *testing.T) {
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			assert.JSONEq(t, tt.wantBody, rec.Body.String())
+		})
+	}
+}
+
+func TestPreviewLink(t *testing.T) {
+	tests := []struct {
+		name        string
+		body        string
+		preview     auth.LinkPreview
+		previewErr  error
+		wantPreview bool
+		canceled    bool
+		wantStatus  int
+		wantBody    string
+	}{
+		{name: "invite", body: `{"token":"tok"}`, wantPreview: true, preview: auth.LinkPreview{Purpose: "invite", Email: "test@gmail.com", GoogleEligible: true}, wantStatus: http.StatusOK,
+			wantBody: `{"purpose":"invite","invitee_email":"test@gmail.com","invitee_first_name":null,"from_name":null,"google_eligible":true}`},
+		{name: "password reset", body: `{"token":"tok"}`, wantPreview: true, preview: auth.LinkPreview{Purpose: "password_reset", Email: "test@example.com"}, wantStatus: http.StatusOK,
+			wantBody: `{"purpose":"password_reset","invitee_email":"test@example.com","invitee_first_name":null,"from_name":null,"google_eligible":false}`},
+		{name: "invalid token", body: `{"token":"tok"}`, wantPreview: true, previewErr: auth.ErrInvalidToken, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"invalid_token","message":"this link is invalid, used or expired; ask for a new one"}}`},
+		{name: "database error", body: `{"token":"tok"}`, wantPreview: true, previewErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+		{name: "client gone", body: `{"token":"tok"}`, wantPreview: true, previewErr: context.Canceled, canceled: true, wantStatus: http.StatusOK},
+		{name: "unknown field", body: `{"token":"tok","password":"x"}`, wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"bad_request","message":"invalid JSON body"}}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewAuthService(t)
+			if tt.wantPreview {
+				svc.EXPECT().PreviewLink(mock.Anything, "tok").Return(tt.preview, tt.previewErr)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/auth/invite/preview", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			if tt.canceled {
+				ctx, cancel := context.WithCancel(req.Context())
+				cancel()
+				req = req.WithContext(ctx)
+			}
+			rec := httptest.NewRecorder()
+
+			handler.NewAuth(svc, handler.NewSessionCookie(true)).PreviewLink(rec, req)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			if tt.wantBody == "" {
+				assert.Empty(t, rec.Body.String())
+				return
+			}
+			assert.JSONEq(t, tt.wantBody, rec.Body.String())
+			assert.Empty(t, rec.Result().Cookies(), "previewing never signs in")
 		})
 	}
 }

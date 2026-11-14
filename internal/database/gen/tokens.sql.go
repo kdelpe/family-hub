@@ -35,21 +35,27 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) error 
 }
 
 const getUsableToken = `-- name: GetUsableToken :one
-SELECT t.id, t.user_id, u.email
+SELECT t.id, t.user_id, t.purpose, u.email
 FROM auth_tokens t JOIN users u ON u.id = t.user_id
 WHERE t.token_hash = $1 AND t.consumed_at IS NULL AND t.expires_at > now() AND u.disabled_at IS NULL
 `
 
 type GetUsableTokenRow struct {
-	ID     uuid.UUID
-	UserID uuid.UUID
-	Email  string
+	ID      uuid.UUID
+	UserID  uuid.UUID
+	Purpose string
+	Email   string
 }
 
 func (q *Queries) GetUsableToken(ctx context.Context, tokenHash []byte) (GetUsableTokenRow, error) {
 	row := q.db.QueryRow(ctx, getUsableToken, tokenHash)
 	var i GetUsableTokenRow
-	err := row.Scan(&i.ID, &i.UserID, &i.Email)
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Purpose,
+		&i.Email,
+	)
 	return i, err
 }
 
