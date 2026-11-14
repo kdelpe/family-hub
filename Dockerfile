@@ -1,6 +1,6 @@
 # Base images are pinned to exact tags; Dependabot proposes updates.
 # The Go version must be at least the `go` line in go.mod.
-FROM golang:1.27.3-alpine3.24 AS build
+FROM golang:1.27.4-alpine3.24 AS build
 WORKDIR /src
 RUN apk add --no-cache make
 COPY . .
