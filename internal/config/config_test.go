@@ -2,6 +2,7 @@ package config
 
 import (
 	netmail "net/mail"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -293,6 +294,31 @@ func TestLoadSMTP(t *testing.T) {
 		{
 			name:        "host of dots",
 			env:         map[string]string{"SMTP_HOST": "..", "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name: "longest host",
+			env:  map[string]string{"SMTP_HOST": strings.Repeat("a", 63) + "." + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 61), "SMTP_PORT": "587"},
+			want: mail.SMTPConfig{Host: strings.Repeat("a", 63) + "." + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 61), Port: "587", From: defaultFrom},
+		},
+		{
+			name:        "host one too long",
+			env:         map[string]string{"SMTP_HOST": strings.Repeat("a", 63) + "." + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 62), "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name:        "label too long",
+			env:         map[string]string{"SMTP_HOST": strings.Repeat("a", 64) + ".example.com", "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name:        "label starting with a hyphen",
+			env:         map[string]string{"SMTP_HOST": "-smtp.example.com", "SMTP_PORT": "587"},
+			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
+		},
+		{
+			name:        "label ending with a hyphen",
+			env:         map[string]string{"SMTP_HOST": "smtp-.example.com", "SMTP_PORT": "587"},
 			wantErrMsgs: []string{"SMTP_HOST must be a bare host name"},
 		},
 		{

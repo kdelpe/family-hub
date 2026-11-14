@@ -16,6 +16,8 @@ import (
 const (
 	defaultMailFrom = "Family Hub <noreply@family.example.com>"
 	implicitTLSPort = "465"
+	maxHostLen      = 253
+	maxLabelLen     = 63
 )
 
 type Config struct {
@@ -133,10 +135,14 @@ func LoadSMTP(getenv func(string) string) (mail.SMTPConfig, error) {
 	return cfg, nil
 }
 
-// Dot-separated labels of lowercase letters, digits and hyphens (the host is lowercased first).
+// A DNS name (RFC 1123): dot-separated labels of lowercase letters, digits and inner hyphens.
 func hostName(host string) bool {
+	if len(host) > maxHostLen {
+		return false
+	}
 	for label := range strings.SplitSeq(host, ".") {
-		if label == "" || strings.Trim(label, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
+		if label == "" || len(label) > maxLabelLen || label[0] == '-' || label[len(label)-1] == '-' ||
+			strings.Trim(label, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
 			return false
 		}
 	}
