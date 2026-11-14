@@ -12,7 +12,7 @@ SMTP_PORT         ?= 1025
 BASE_URL          ?= http://localhost:5173
 export DATABASE_URL TEST_DATABASE_URL TEST_MAILPIT_URL SMTP_HOST SMTP_PORT BASE_URL
 
-.PHONY: up down ui-stub dev-api generate build run test lint vuln migrate-up
+.PHONY: up down ui-stub dev-api dev-ui generate build ui build-go run test lint web-check vuln migrate-up
 
 up:
 	docker compose up -d --wait
@@ -30,13 +30,23 @@ ui-stub:
 dev-api: up ui-stub
 	AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 
+# On :5173, sending /api to dev-api on :8080.
+dev-ui:
+	cd web && npm run dev
+
 generate:
 	@v=$$(mockery version 2>/dev/null); \
 	  [ "$$v" = "v$(MOCKERY_VERSION)" ] || { echo "need mockery $(MOCKERY_VERSION), found '$$v'"; exit 1; }
 	go tool sqlc generate
 	mockery
 
-build: ui-stub
+build: ui build-go
+
+ui:
+	cd web && npm ci && npm run build
+
+# Embeds whatever internal/webui/dist holds: the built UI, or the placeholder.
+build-go: ui-stub
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN) ./cmd
 
 # Pass subcommand and flags via ARGS, e.g. `make run ARGS="migrate up"`.
@@ -51,6 +61,9 @@ lint: ui-stub
 	@v=$$(golangci-lint version --short 2>/dev/null); \
 	  [ "$$v" = "$(GOLANGCI_LINT_VERSION)" ] || { echo "need golangci-lint $(GOLANGCI_LINT_VERSION), found '$$v'"; exit 1; }
 	golangci-lint run
+
+web-check:
+	cd web && npm run lint && npm run typecheck && npm test
 
 vuln: ui-stub
 	go tool govulncheck ./...
