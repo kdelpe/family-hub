@@ -40,6 +40,8 @@ const (
 	resetsPerIPWindow   = time.Minute
 	previewsPerIP       = 10
 	previewsPerIPWindow = time.Minute
+	googlePerIP         = 20
+	googlePerIPWindow   = time.Minute
 )
 
 // Run serves until ctx is canceled: a clean stop even before the port opens, but not during
@@ -64,28 +66,41 @@ func connectAndServe(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	defer pool.Close()
+	var google *auth.GoogleAuth
+	if cfg.GoogleClientID != "" {
+		providerCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		google, err = auth.NewGoogleAuth(providerCtx, pool, cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.BaseURL)
+		cancel()
+		if err != nil {
+			return err
+		}
+	}
 
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
 	zerolog.Ctx(ctx).Info().Str("addr", ln.Addr().String()).Msg("listening")
-	srv, resets := newServer(pool, cfg)
+	srv, resets := newServer(pool, cfg, google)
 	err = serve(ctx, srv, ln, shutdownTimeout)
 	// Before the pool closes: a reset still sending needs it.
 	resets.Close(resetsCloseGrace)
 	return err
 }
 
-func newServer(pool *pgxpool.Pool, cfg config.Config) (*http.Server, *auth.Resets) {
+func newServer(pool *pgxpool.Pool, cfg config.Config, google ...*auth.GoogleAuth) (*http.Server, *auth.Resets) {
 	cookie := handler.NewSessionCookie(cfg.CookieSecure)
 	svc := auth.NewService(pool, auth.NewHasher())
 	mailer := mail.NewSMTP(cfg.SMTP)
 	resets := auth.NewResets(svc, mailer, cfg.BaseURL)
+	var googleService handler.GoogleAuthService
+	if len(google) > 0 {
+		googleService = google[0]
+	}
 	routes := router.New(
 		router.Handlers{
 			Health: handler.NewHealth(pool),
-			Auth:   handler.NewAuth(svc, resets, cookie),
+			Auth:   handler.NewAuth(svc, resets, cookie, googleService),
 			Admin:  handler.NewAdmin(admin.NewInvites(pool, mailer, cfg.BaseURL)),
 		},
 		router.Middleware{
@@ -94,6 +109,7 @@ func newServer(pool *pgxpool.Pool, cfg config.Config) (*http.Server, *auth.Reset
 			LimitForgot:    httpx.LimitByIP(ratelimit.New(forgotsPerIP, forgotsPerIPWindow)),
 			LimitReset:     httpx.LimitByIP(ratelimit.New(resetsPerIP, resetsPerIPWindow)),
 			LimitPreview:   httpx.LimitByIP(ratelimit.New(previewsPerIP, previewsPerIPWindow)),
+			LimitGoogle:    httpx.LimitByIP(ratelimit.New(googlePerIP, googlePerIPWindow)),
 			TrustedProxy:   cfg.TrustedProxy,
 		},
 	)

@@ -29,3 +29,12 @@ SELECT EXISTS (SELECT 1 FROM sessions WHERE id_hash = @id_hash AND user_id = @us
 -- Waits out a logout deleting the row, which takes no user lock.
 SELECT EXISTS (SELECT 1 FROM sessions WHERE id_hash = @id_hash AND user_id = @user_id
   AND expires_at > clock_timestamp() AND last_seen_at > clock_timestamp() - @idle_timeout::interval FOR UPDATE);
+
+-- name: CreateOAuthFlow :exec
+INSERT INTO oauth_flows (handle_hash, state, nonce, pkce_verifier, expires_at)
+VALUES (@handle_hash, @state, @nonce, @pkce_verifier, now() + @lifetime::interval);
+
+-- name: ConsumeOAuthFlow :one
+UPDATE oauth_flows SET consumed_at = clock_timestamp()
+WHERE handle_hash = @handle_hash AND consumed_at IS NULL AND expires_at > clock_timestamp()
+RETURNING state, nonce, pkce_verifier;

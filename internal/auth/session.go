@@ -42,7 +42,10 @@ func NewSessions(db gen.DBTX) *Sessions {
 
 // Create returns the token for the cookie; only its hash is stored.
 func (s *Sessions) Create(ctx context.Context, userID uuid.UUID, userAgent string) (string, error) {
-	raw, token := newToken()
+	raw, token, err := newToken()
+	if err != nil {
+		return "", fmt.Errorf("generate session token: %w", err)
+	}
 	var agent *string
 	if userAgent != "" {
 		// Postgres rejects invalid UTF-8, which a header can carry.
@@ -91,10 +94,12 @@ func (s *Sessions) Delete(ctx context.Context, token string) error {
 }
 
 // newToken returns a random token and its encoding for a cookie or link; store only hashToken(raw).
-func newToken() (raw []byte, encoded string) {
+func newToken() (raw []byte, encoded string, err error) {
 	raw = make([]byte, tokenLen)
-	_, _ = rand.Read(raw)
-	return raw, base64.RawURLEncoding.EncodeToString(raw)
+	if _, err = rand.Read(raw); err != nil {
+		return nil, "", err
+	}
+	return raw, base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
 // sessionHash is the stored id of a session token, or nil for a malformed one, which matches no session.

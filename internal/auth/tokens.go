@@ -36,8 +36,11 @@ func SetPasswordLink(baseURL, token string) string {
 }
 
 func createToken(ctx context.Context, db gen.DBTX, userID uuid.UUID, purpose string, lifetime time.Duration) (string, error) {
-	raw, token := newToken()
-	err := gen.New(db).CreateToken(ctx, gen.CreateTokenParams{UserID: userID, Purpose: purpose, TokenHash: hashToken(raw), Lifetime: lifetime})
+	raw, token, err := newToken()
+	if err != nil {
+		return "", fmt.Errorf("generate %s token: %w", purpose, err)
+	}
+	err = gen.New(db).CreateToken(ctx, gen.CreateTokenParams{UserID: userID, Purpose: purpose, TokenHash: hashToken(raw), Lifetime: lifetime})
 	if err != nil {
 		return "", fmt.Errorf("create %s token: %w", purpose, err)
 	}

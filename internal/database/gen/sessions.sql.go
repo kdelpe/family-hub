@@ -12,6 +12,49 @@ import (
 	"time"
 )
 
+const consumeOAuthFlow = `-- name: ConsumeOAuthFlow :one
+UPDATE oauth_flows SET consumed_at = clock_timestamp()
+WHERE handle_hash = $1 AND consumed_at IS NULL AND expires_at > clock_timestamp()
+RETURNING state, nonce, pkce_verifier
+`
+
+type ConsumeOAuthFlowRow struct {
+	State        string
+	Nonce        string
+	PkceVerifier string
+}
+
+func (q *Queries) ConsumeOAuthFlow(ctx context.Context, handleHash []byte) (ConsumeOAuthFlowRow, error) {
+	row := q.db.QueryRow(ctx, consumeOAuthFlow, handleHash)
+	var i ConsumeOAuthFlowRow
+	err := row.Scan(&i.State, &i.Nonce, &i.PkceVerifier)
+	return i, err
+}
+
+const createOAuthFlow = `-- name: CreateOAuthFlow :exec
+INSERT INTO oauth_flows (handle_hash, state, nonce, pkce_verifier, expires_at)
+VALUES ($1, $2, $3, $4, now() + $5::interval)
+`
+
+type CreateOAuthFlowParams struct {
+	HandleHash   []byte
+	State        string
+	Nonce        string
+	PkceVerifier string
+	Lifetime     time.Duration
+}
+
+func (q *Queries) CreateOAuthFlow(ctx context.Context, arg CreateOAuthFlowParams) error {
+	_, err := q.db.Exec(ctx, createOAuthFlow,
+		arg.HandleHash,
+		arg.State,
+		arg.Nonce,
+		arg.PkceVerifier,
+		arg.Lifetime,
+	)
+	return err
+}
+
 const createSession = `-- name: CreateSession :exec
 INSERT INTO sessions (id_hash, user_id, expires_at, user_agent)
 VALUES ($1, $2, now() + $3::interval, $4)
