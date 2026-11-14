@@ -9,7 +9,30 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"time"
 )
+
+const createToken = `-- name: CreateToken :exec
+INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at)
+VALUES ($1, $2, $3, now() + $4::interval)
+`
+
+type CreateTokenParams struct {
+	UserID    uuid.UUID
+	Purpose   string
+	TokenHash []byte
+	Lifetime  time.Duration
+}
+
+func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) error {
+	_, err := q.db.Exec(ctx, createToken,
+		arg.UserID,
+		arg.Purpose,
+		arg.TokenHash,
+		arg.Lifetime,
+	)
+	return err
+}
 
 const getUsableToken = `-- name: GetUsableToken :one
 SELECT t.id, t.user_id, u.email

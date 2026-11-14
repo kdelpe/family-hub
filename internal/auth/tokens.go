@@ -4,13 +4,30 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kdelpe/family-hub/internal/database/gen"
 )
 
+const (
+	InviteLifetime = 7 * 24 * time.Hour
+	purposeInvite  = "invite"
+)
+
 var ErrInvalidToken = errors.New("link is invalid, used or expired")
+
+// CreateInvite stores an invite for a new user and returns the token for the link.
+func CreateInvite(ctx context.Context, db gen.DBTX, userID uuid.UUID) (string, error) {
+	raw, token := newToken()
+	err := gen.New(db).CreateToken(ctx, gen.CreateTokenParams{UserID: userID, Purpose: purposeInvite, TokenHash: hashToken(raw), Lifetime: InviteLifetime})
+	if err != nil {
+		return "", fmt.Errorf("create invite: %w", err)
+	}
+	return token, nil
+}
 
 type SetPasswordInput struct {
 	Token         string

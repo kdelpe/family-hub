@@ -498,7 +498,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/api/auth/me` | session | Current user, role, linked person |
 | POST | `/api/auth/logout` | none needed | Always clears the cookie, so an expired session's cookie still goes away; deletes the cookie's session row if there is one (`204`, or `500` if that delete failed) |
 | GET | `/api/admin/users` | admin | List users |
-| POST | `/api/admin/users` | admin | Invite: `{email, role}`; from Phase 3 also `person_id` (required, §5.1), `from_person_id` (optional; a person linked to an active user; defaults to the suggesting member's person, else the sending admin's) and `access_request_id` (optional; marks that request `approved` in the same transaction) |
+| POST | `/api/admin/users` | admin | Invite: `{email, role}` → `201` with the new user; `400 validation_error` for a bad email or a role other than `admin`/`member`, `409 email_taken`, `502 mail_failed` when the email couldn't be sent (nothing is saved then, §5). From Phase 3 also `person_id` (required, §5.1), `from_person_id` (optional; a person linked to an active user; defaults to the suggesting member's person, else the sending admin's) and `access_request_id` (optional; marks that request `approved` in the same transaction) |
 | GET | `/api/admin/access-requests` | admin | Pending first. Each `related_names` entry comes with its best trigram match among non-deleted persons, so the UI can show "In the tree" or "Not found — check spelling". Matching happens only here, never for the public form |
 | POST | `/api/admin/access-requests/{id}/decline` | admin | Quietly sets `declined`; no email is sent |
 | POST | `/api/admin/access-requests/{id}/reopen` | admin | Undo a decline; `409 conflict` if another request for that email is pending meanwhile (decline or approve that one instead) |
@@ -597,6 +597,8 @@ A 256-bit random token makes brute force moot; plain SHA-256 is appropriate for 
 4. After linking, sign-in is by `sub`, so a later change to the Google account's email doesn't lock them out. A Google link is removed only as part of an admin email change (below).
 
 **Invites.** Sending an invite is admin-only. The admin invites `{email, role}` (plus `person_id` from Phase 3, §5.1), and the invite names who it is **from**: the member who suggested the person, or otherwise the sending admin (`from_person_id`; the token row also keeps who sent it). Subject *"<From first name> invited you to the family hub"* (or *"You're invited to the family hub"* when there is no "from" person, e.g. an admin made with `admin create` and not yet linked); the email adds *"Approved by <admin>, admin."* when the two differ, and says *"Set a password, or sign in with Google if this is your Google address."* The Welcome page shows the same names through `POST /api/auth/invite/preview`. Admins can resend an invite or trigger a password reset from the users screen. Exact copy: `docs/design/design-notes.md` §4.10.
+
+Creating the user, issuing the token and sending the email happen in one transaction, and the email goes out **before the commit**: a failed send leaves no user, so the admin just tries again. If the commit itself fails after the send, the link is dead and inviting again works. Until Phase 3 there are no persons, no "from" names, no record of who sent it and no `FAMILY_NAME`, so the email greets with *"Bonjou,"*, says *"You're invited to the family hub"*, and leaves out the Google line until Continue with Google lands.
 
 **When an admin changes a user's email** (e.g. fixing a typo'd invite): the user's `google_sub` **and password** (`password_hash`, `password_changed_at`) are cleared, their sessions and outstanding tokens are deleted, and a fresh invite goes to the new address. Whoever received the old address loses all access, since the email itself isn't a secret and the old password must not keep working. The real person sets a new password from the fresh invite, or re-links Google. There is deliberately **no standalone "unlink Google"**: Google only auto-links addresses it owns (Gmail/Workspace), so an unlinked account would simply re-link on its next sign-in. An unwanted link can only come from a wrong email address, which an email change fixes (the old Google account no longer matches); disabling the user cuts off all access.
 
@@ -779,7 +781,7 @@ func New(h Handlers, mw Middleware) http.Handler {
             r.Get("/persons/{id}/contacts", h.Contacts.ListFor) // filtered per viewer (§5.2)
 
             r.Group(func(r chi.Router) {             // admin-only writes
-                r.Use(auth.RequireRole("admin"))
+                r.Use(handler.RequireAdmin)          // after RequireSession, which reads the role on every request
                 r.Post("/persons", h.Family.CreatePerson)
                 r.Delete("/persons/{id}", h.Family.DeletePerson)
                 r.Post("/persons/{id}/restore", h.Family.RestorePerson)
@@ -803,7 +805,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 }
 ```
 
-Role checks in the router (`RequireRole`) are the coarse gate; the fine-grained rules (a member may PATCH only their own person, only profile fields) live in the service, so they're enforced and tested regardless of routing.
+Role checks in the router (`handler.RequireAdmin`) are the coarse gate; the fine-grained rules (a member may PATCH only their own person, only profile fields) live in the service, so they're enforced and tested regardless of routing.
 
 Changes vs V2: no CORS middleware (Vite proxies `/api`, so dev is same-origin too); no compression middleware (Caddy compresses in prod); no per-request timeout middleware yet (the `http.Server` timeouts bound each connection); CSRF via the stdlib instead of a hand-written guard; JSON 404s; security headers; a JSON decode helper (`httpx.DecodeJSON`) that requires `Content-Type: application/json` (415 otherwise), limits the body to 1 MiB via `http.MaxBytesReader` (413), and rejects unknown fields and trailing data (400).
 
@@ -861,7 +863,7 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 |---|---|---|
 | `DATABASE_URL` | `postgres://app:app@localhost:5432/familyhub?sslmode=disable` | Required; URL form only |
 | `HTTP_ADDR` | `:8080` | Default `:8080` |
-| `BASE_URL` | `http://localhost:5173` (dev), `https://family.example.com` | Used in email links and the Origin check |
+| `BASE_URL` | `http://localhost:5173` (dev), `https://family.example.com` | Used in email links and the Origin check. Required by `serve` and ignored by the other commands, like the mail settings; an `http(s)` origin without a path (a trailing `/` is dropped) |
 | `AUTO_MIGRATE` | `false` | Default `false`; `make dev-api` sets `true`. Booleans accept `true`/`false` in any case |
 | `TRUSTED_PROXY` | `false` | Takes the client IP from the last `X-Forwarded-For` entry, the one the proxy appended |
 | `COOKIE_SECURE` | `true` | `false` for local http |
@@ -913,7 +915,8 @@ TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=di
 TEST_MAILPIT_URL  ?= http://localhost:8025
 SMTP_HOST         ?= localhost
 SMTP_PORT         ?= 1025
-export DATABASE_URL TEST_DATABASE_URL TEST_MAILPIT_URL SMTP_HOST SMTP_PORT
+BASE_URL          ?= http://localhost:5173
+export DATABASE_URL TEST_DATABASE_URL TEST_MAILPIT_URL SMTP_HOST SMTP_PORT BASE_URL
 
 .PHONY: up down run dev-api dev-ui ui-stub generate test lint vuln build migrate-up migrate-new seed
 

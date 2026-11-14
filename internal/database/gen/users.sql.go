@@ -27,6 +27,22 @@ func (q *Queries) CreateAdmin(ctx context.Context, arg CreateAdminParams) error 
 	return err
 }
 
+const createInvitedUser = `-- name: CreateInvitedUser :one
+INSERT INTO users (email, role) VALUES ($1, $2) RETURNING id
+`
+
+type CreateInvitedUserParams struct {
+	Email string
+	Role  string
+}
+
+func (q *Queries) CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, createInvitedUser, arg.Email, arg.Role)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const emailTaken = `-- name: EmailTaken :one
 SELECT EXISTS (SELECT 1 FROM users WHERE email = $1)
 `
