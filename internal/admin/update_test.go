@@ -22,6 +22,9 @@ const (
 	otherAdminEmail = "admin@example.com"
 	// This test's user becomes the only enabled admin.
 	onlyAdmin = `UPDATE users SET role = 'admin', disabled_at = CASE WHEN id = $1 THEN NULL ELSE now() END`
+	// The other admin never set up, so this test's user is the only admin who can sign in.
+	invitedOtherAdmin = `UPDATE users SET role = 'admin',
+		password_hash = CASE WHEN id = $1 THEN password_hash END, password_changed_at = CASE WHEN id = $1 THEN password_changed_at END`
 )
 
 func TestUpdate(t *testing.T) {
@@ -64,6 +67,8 @@ func TestUpdate(t *testing.T) {
 			in: UpdateInput{Role: ptr(auth.RoleMember)}, wantErr: ErrLastAdmin},
 		{name: "the last admin can't be disabled", setup: onlyAdmin,
 			in: UpdateInput{Disabled: &yes}, wantErr: ErrLastAdmin},
+		{name: "the last admin can't get a new email", setup: onlyAdmin, in: UpdateInput{Email: ptr("new@example.com")}, wantErr: ErrLastAdmin},
+		{name: "an admin who never set up doesn't count", setup: invitedOtherAdmin, in: UpdateInput{Role: ptr(auth.RoleMember)}, wantErr: ErrLastAdmin},
 	}
 
 	for _, tt := range tests {
@@ -190,7 +195,7 @@ func credentials(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) string {
 
 func listed(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) Account {
 	t.Helper()
-	page, err := NewUsers(pool, nil, testBaseURL).List(t.Context(), ListInput{})
+	page, err := NewUsers(pool, nil, testBaseURL).List(t.Context(), ListInput{Limit: DefaultPageSize})
 	require.NoError(t, err)
 	for _, a := range page.Accounts {
 		if a.ID == id {

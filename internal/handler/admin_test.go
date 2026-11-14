@@ -99,17 +99,17 @@ func TestListUsers(t *testing.T) {
 		wantBody   string
 	}{
 		{name: "a page", query: "?limit=1&cursor=abc", wantIn: &admin.ListInput{Limit: 1, Cursor: "abc"}, page: page, wantStatus: http.StatusOK, wantBody: pageBody},
-		{name: "the last page", wantIn: &admin.ListInput{}, wantStatus: http.StatusOK, wantBody: `{"users":[],"next_cursor":null}`},
+		{name: "the last page, at the default size", wantIn: &admin.ListInput{Limit: admin.DefaultPageSize}, wantStatus: http.StatusOK, wantBody: `{"users":[],"next_cursor":null}`},
 		{name: "limit not a number", query: "?limit=ten", wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"validation_error","message":"limit must be between 1 and 100"}}`},
-		{name: "limit zero", query: "?limit=0", wantStatus: http.StatusBadRequest,
+		{name: "limit zero", query: "?limit=0", wantIn: &admin.ListInput{}, listErr: admin.ErrInvalidPageSize, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"validation_error","message":"limit must be between 1 and 100"}}`},
 		{name: "limit out of range", query: "?limit=500", wantIn: &admin.ListInput{Limit: 500}, listErr: admin.ErrInvalidPageSize, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"validation_error","message":"limit must be between 1 and 100"}}`},
-		{name: "bad cursor", query: "?cursor=x", wantIn: &admin.ListInput{Cursor: "x"}, listErr: admin.ErrInvalidCursor, wantStatus: http.StatusBadRequest,
+		{name: "bad cursor", query: "?cursor=x", wantIn: &admin.ListInput{Limit: admin.DefaultPageSize, Cursor: "x"}, listErr: admin.ErrInvalidCursor, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"validation_error","message":"invalid cursor"}}`},
-		{name: "database error", wantIn: &admin.ListInput{}, listErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
-		{name: "client gone", wantIn: &admin.ListInput{}, listErr: context.Canceled, canceled: true, wantStatus: http.StatusOK},
+		{name: "database error", wantIn: &admin.ListInput{Limit: admin.DefaultPageSize}, listErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+		{name: "client gone", wantIn: &admin.ListInput{Limit: admin.DefaultPageSize}, listErr: context.Canceled, canceled: true, wantStatus: http.StatusOK},
 	}
 
 	for _, tt := range tests {
@@ -168,7 +168,7 @@ func TestUpdateUser(t *testing.T) {
 		{name: "email taken", body: body, wantUpdate: true, updateErr: admin.ErrEmailTaken, wantStatus: http.StatusConflict,
 			wantBody: `{"error":{"code":"email_taken","message":"a user with this email already exists"}}`},
 		{name: "the last admin", body: body, wantUpdate: true, updateErr: admin.ErrLastAdmin, wantStatus: http.StatusConflict,
-			wantBody: `{"error":{"code":"last_admin","message":"the last enabled admin can't be demoted or disabled"}}`},
+			wantBody: `{"error":{"code":"last_admin","message":"the last admin who can sign in can't be demoted, disabled or given a new email"}}`},
 		{name: "invite not sent", body: body, wantUpdate: true, updateErr: fmt.Errorf("%w: smtp: 550", admin.ErrEmailNotSent), wantStatus: http.StatusBadGateway,
 			wantBody: `{"error":{"code":"mail_failed","message":"the invitation to the new email couldn't be sent and nothing was changed; try again"}}`},
 		{name: "busy", body: body, wantUpdate: true, updateErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable,

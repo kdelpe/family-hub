@@ -15,7 +15,8 @@ import (
 
 // SendReset emails an enabled user a fresh link: a new invite if they never set up their
 // account (the old invites stop working), otherwise a password reset that leaves earlier
-// ones valid, as Forgot password does. Sent before the commit, so a failed send saves nothing.
+// ones valid, as Forgot password does. Sent after the commit, so a slow mail server doesn't
+// hold the user's row lock and block their sign-in.
 func (s *Users) SendReset(ctx context.Context, id uuid.UUID) error {
 	return auth.BusyIfContended(s.sendReset(ctx, id))
 }
@@ -26,7 +27,7 @@ func (s *Users) sendReset(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("begin send reset: %w", err)
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
-	if err := auth.SetLockTimeout(ctx, tx, lockTimeout); err != nil {
+	if err := auth.SetLockTimeout(ctx, tx, auth.LockTimeout); err != nil {
 		return err
 	}
 	q := gen.New(tx)
@@ -58,8 +59,8 @@ func (s *Users) sendReset(ctx context.Context, id uuid.UUID) error {
 		}
 		msg = s.inviteMessage(locked.Email, token)
 	}
-	if err := s.send(ctx, msg); err != nil {
+	if err := commit(ctx, tx); err != nil {
 		return err
 	}
-	return commit(ctx, tx)
+	return s.send(ctx, msg)
 }

@@ -181,7 +181,7 @@ func (g *GoogleAuth) signIn(ctx context.Context, subject, email string, emailVer
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	qtx := gen.New(tx)
-	if err := setGoogleLockTimeout(ctx, tx); err != nil {
+	if err := SetLockTimeout(ctx, tx, LockTimeout); err != nil {
 		return "", User{}, err
 	}
 	locked, err := qtx.LockUser(ctx, userID)
@@ -236,7 +236,7 @@ func (g *GoogleAuth) signInLinked(ctx context.Context, userID uuid.UUID, subject
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	qtx := gen.New(tx)
-	if err := setGoogleLockTimeout(ctx, tx); err != nil {
+	if err := SetLockTimeout(ctx, tx, LockTimeout); err != nil {
 		return "", User{}, err
 	}
 	locked, err := qtx.LockUser(ctx, userID)
@@ -292,11 +292,4 @@ func googleOwnsEmail(email, hostedDomain string) bool {
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
-}
-
-func setGoogleLockTimeout(ctx context.Context, tx pgx.Tx) error {
-	if _, err := tx.Exec(ctx, "SELECT set_config('lock_timeout', $1, true)", fmt.Sprintf("%dms", signInLockTimeout.Milliseconds())); err != nil {
-		return fmt.Errorf("set Google sign-in lock timeout: %w", err)
-	}
-	return nil
 }

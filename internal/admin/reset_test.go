@@ -37,8 +37,10 @@ func TestSendReset(t *testing.T) {
 		{name: "a Google-only user gets a reset to add a password", setup: []string{googleOnly}, wantSend: true, wantSubject: "Reset your family hub password", wantResets: 2},
 		{name: "a user who never set up gets a new invite instead of the old", setup: []string{notSetUp, oldInvite}, wantSend: true,
 			wantSubject: inviteSubject, wantResets: 1, wantInvites: 1},
-		{name: "email not sent saves nothing", wantSend: true, sendErr: errors.New("smtp: 550"), wantErr: ErrEmailNotSent},
-		{name: "email not sent keeps the old invite", setup: []string{notSetUp, oldInvite}, wantSend: true, sendErr: errors.New("smtp: 550"), wantErr: ErrEmailNotSent},
+		// Saved first, so the admin can just send again.
+		{name: "email not sent", wantSend: true, sendErr: errors.New("smtp: 550"), wantErr: ErrEmailNotSent, wantSubject: "Reset your family hub password", wantResets: 2},
+		{name: "invite not sent", setup: []string{notSetUp, oldInvite}, wantSend: true, sendErr: errors.New("smtp: 550"), wantErr: ErrEmailNotSent,
+			wantSubject: inviteSubject, wantResets: 1, wantInvites: 1},
 		{name: "disabled", setup: []string{`UPDATE users SET disabled_at = now() WHERE id = $1`}, wantErr: ErrUserNotFound},
 		{name: "unknown user", unknown: true, wantErr: ErrUserNotFound},
 	}
@@ -63,12 +65,16 @@ func TestSendReset(t *testing.T) {
 
 			err := NewUsers(pool, mailer, testBaseURL).SendReset(t.Context(), target)
 
-			if tt.wantErr != nil {
+			if errors.Is(tt.wantErr, ErrUserNotFound) {
 				require.ErrorIs(t, err, tt.wantErr)
 				assert.Equal(t, before, accountState(t, pool, id), "nothing saved")
 				return
 			}
-			require.NoError(t, err)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
 			assert.Equal(t, testEmail, sent.To)
 			assert.Equal(t, tt.wantSubject, sent.Subject)
 			assert.Equal(t, tt.wantResets, countFor(t, pool, `SELECT count(*) FROM auth_tokens WHERE user_id = $1 AND purpose = 'password_reset'`, id))

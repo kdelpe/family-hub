@@ -24,6 +24,8 @@ var ErrInvalidCredentials = errors.New("invalid credentials")
 const (
 	RoleAdmin  = "admin"
 	RoleMember = "member"
+	// LockTimeout bounds every wait on a user's row lock.
+	LockTimeout = 5 * time.Second
 )
 
 type User struct {
@@ -33,9 +35,8 @@ type User struct {
 }
 
 const (
-	signInLockTimeout = 5 * time.Second
-	lockNotAvailable  = "55P03"
-	deadlockDetected  = "40P01"
+	lockNotAvailable = "55P03"
+	deadlockDetected = "40P01"
 
 	loginFailuresPerEmailAndIP             = 5
 	loginFailuresPerEmailAndIPWindow       = 15 * time.Minute
@@ -70,7 +71,7 @@ type Service struct {
 
 func NewService(pool *pgxpool.Pool, hasher *Hasher) *Service {
 	return &Service{
-		pool: pool, hasher: hasher, lockTimeout: signInLockTimeout,
+		pool: pool, hasher: hasher, lockTimeout: LockTimeout,
 		failuresByEmailAndIP: ratelimit.New(loginFailuresPerEmailAndIP, loginFailuresPerEmailAndIPWindow),
 		failuresByEmail:      ratelimit.New(loginFailuresPerEmail, loginFailuresPerEmailWindow),
 		failuresBySession:    ratelimit.New(passwordChangeFailuresPerSession, passwordChangeFailuresPerSessionWindow),

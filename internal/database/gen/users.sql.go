@@ -27,12 +27,14 @@ func (q *Queries) ChangeEmail(ctx context.Context, arg ChangeEmailParams) error 
 	return err
 }
 
-const countEnabledAdmins = `-- name: CountEnabledAdmins :one
-SELECT count(*) FROM users WHERE role = 'admin' AND disabled_at IS NULL
+const countUsableAdmins = `-- name: CountUsableAdmins :one
+SELECT count(*) FROM users
+WHERE role = 'admin' AND disabled_at IS NULL AND (password_hash IS NOT NULL OR google_sub IS NOT NULL)
 `
 
-func (q *Queries) CountEnabledAdmins(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countEnabledAdmins)
+// Only admins who can sign in: an invited admin who never set up can't manage anyone.
+func (q *Queries) CountUsableAdmins(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsableAdmins)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

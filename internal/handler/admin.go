@@ -54,10 +54,10 @@ type pageResponse struct {
 
 func (a *Admin) ListUsers(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	in := admin.ListInput{Cursor: query.Get("cursor")}
+	in := admin.ListInput{Limit: admin.DefaultPageSize, Cursor: query.Get("cursor")}
 	if raw := query.Get("limit"); raw != "" {
 		limit, err := strconv.Atoi(raw)
-		if err != nil || limit == 0 {
+		if err != nil {
 			httpx.Error(w, http.StatusBadRequest, "validation_error", admin.ErrInvalidPageSize.Error())
 			return
 		}

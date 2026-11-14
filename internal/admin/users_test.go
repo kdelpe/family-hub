@@ -45,7 +45,7 @@ func TestListShowsEachAccountsStatus(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			page, err := NewUsers(pool, nil, testBaseURL).List(t.Context(), ListInput{})
+			page, err := NewUsers(pool, nil, testBaseURL).List(t.Context(), ListInput{Limit: DefaultPageSize})
 
 			require.NoError(t, err)
 			require.Len(t, page.Accounts, 1)
@@ -92,9 +92,10 @@ func TestListRefusesABadPage(t *testing.T) {
 	}{
 		{name: "limit too big", in: ListInput{Limit: MaxPageSize + 1}, wantErr: ErrInvalidPageSize},
 		{name: "negative limit", in: ListInput{Limit: -1}, wantErr: ErrInvalidPageSize},
-		{name: "cursor not base64", in: ListInput{Cursor: "not a cursor!"}, wantErr: ErrInvalidCursor},
-		{name: "cursor without an id", in: ListInput{Cursor: base64.RawURLEncoding.EncodeToString([]byte("a@example.com"))}, wantErr: ErrInvalidCursor},
-		{name: "cursor without an email", in: ListInput{Cursor: base64.RawURLEncoding.EncodeToString([]byte("\x00" + uuid.NewString()))}, wantErr: ErrInvalidCursor},
+		{name: "no limit", in: ListInput{}, wantErr: ErrInvalidPageSize},
+		{name: "cursor not base64", in: ListInput{Limit: DefaultPageSize, Cursor: "not a cursor!"}, wantErr: ErrInvalidCursor},
+		{name: "cursor without an id", in: ListInput{Limit: DefaultPageSize, Cursor: base64.RawURLEncoding.EncodeToString([]byte("a@example.com"))}, wantErr: ErrInvalidCursor},
+		{name: "cursor without an email", in: ListInput{Limit: DefaultPageSize, Cursor: base64.RawURLEncoding.EncodeToString([]byte("\x00" + uuid.NewString()))}, wantErr: ErrInvalidCursor},
 	}
 
 	for _, tt := range tests {

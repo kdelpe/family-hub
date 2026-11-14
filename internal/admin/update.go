@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -15,7 +14,6 @@ import (
 )
 
 const (
-	lockTimeout = 5 * time.Second
 	// Serializes the changes that can remove an enabled admin, so two can't each leave the other as the last.
 	lastAdminLockKey = 7_004_001
 )
@@ -23,7 +21,7 @@ const (
 var (
 	ErrUserNotFound        = errors.New("user not found")
 	ErrNoChanges           = errors.New("nothing to change")
-	ErrLastAdmin           = errors.New("the last enabled admin can't be demoted or disabled")
+	ErrLastAdmin           = errors.New("the last admin who can sign in can't be demoted, disabled or given a new email")
 	ErrDisabledEmailChange = errors.New("a disabled user's email can't be changed; enable them first")
 )
 
@@ -62,7 +60,7 @@ func (s *Users) update(ctx context.Context, in UpdateInput, email string) (Accou
 		return Account{}, fmt.Errorf("begin update user: %w", err)
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
-	if err := auth.SetLockTimeout(ctx, tx, lockTimeout); err != nil {
+	if err := auth.SetLockTimeout(ctx, tx, auth.LockTimeout); err != nil {
 		return Account{}, err
 	}
 	q := gen.New(tx)
@@ -86,7 +84,8 @@ func (s *Users) update(ctx context.Context, in UpdateInput, email string) (Accou
 	if emailChanged && disabled {
 		return Account{}, ErrDisabledEmailChange
 	}
-	if locked.Role == auth.RoleAdmin && locked.DisabledAt == nil && (role != auth.RoleAdmin || disabled) {
+	// A new email clears the credentials too, so it also takes away an admin who can sign in.
+	if locked.Role == auth.RoleAdmin && locked.DisabledAt == nil && locked.SetUp && (role != auth.RoleAdmin || disabled || emailChanged) {
 		if err := requireAnotherAdmin(ctx, tx, q); err != nil {
 			return Account{}, err
 		}
@@ -95,7 +94,7 @@ func (s *Users) update(ctx context.Context, in UpdateInput, email string) (Accou
 	if err := q.SetRoleAndDisabled(ctx, gen.SetRoleAndDisabledParams{ID: in.ID, Role: role, Disabled: disabled}); err != nil {
 		return Account{}, fmt.Errorf("set role and disabled: %w", err)
 	}
-	if disabled || emailChanged {
+	if (disabled && locked.DisabledAt == nil) || emailChanged {
 		if err := revoke(ctx, q, in.ID); err != nil {
 			return Account{}, err
 		}
@@ -132,7 +131,7 @@ func requireAnotherAdmin(ctx context.Context, tx pgx.Tx, q *gen.Queries) error {
 		return fmt.Errorf("lock admins: %w", err)
 	}
 	// Counted after the lock, so it sees a change that held it before.
-	admins, err := q.CountEnabledAdmins(ctx)
+	admins, err := q.CountUsableAdmins(ctx)
 	if err != nil {
 		return fmt.Errorf("count admins: %w", err)
 	}

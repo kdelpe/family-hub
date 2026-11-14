@@ -41,7 +41,6 @@ func NewUsers(pool *pgxpool.Pool, mailer mail.Mailer, baseURL string) *Users {
 }
 
 type ListInput struct {
-	// 0 means DefaultPageSize.
 	Limit  int
 	Cursor string
 }
@@ -68,9 +67,6 @@ type Page struct {
 // List pages through every user by email.
 func (s *Users) List(ctx context.Context, in ListInput) (Page, error) {
 	limit := in.Limit
-	if limit == 0 {
-		limit = DefaultPageSize
-	}
 	if limit < 1 || limit > MaxPageSize {
 		return Page{}, ErrInvalidPageSize
 	}

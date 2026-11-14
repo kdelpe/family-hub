@@ -72,8 +72,10 @@ GROUP BY u.id;
 SELECT email, role, disabled_at, (password_hash IS NOT NULL OR google_sub IS NOT NULL)::boolean AS set_up
 FROM users WHERE id = @id FOR UPDATE;
 
--- name: CountEnabledAdmins :one
-SELECT count(*) FROM users WHERE role = 'admin' AND disabled_at IS NULL;
+-- Only admins who can sign in: an invited admin who never set up can't manage anyone.
+-- name: CountUsableAdmins :one
+SELECT count(*) FROM users
+WHERE role = 'admin' AND disabled_at IS NULL AND (password_hash IS NOT NULL OR google_sub IS NOT NULL);
 
 -- name: SetRoleAndDisabled :exec
 UPDATE users
