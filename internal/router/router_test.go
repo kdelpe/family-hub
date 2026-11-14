@@ -36,7 +36,8 @@ func TestRoutes(t *testing.T) {
 		{name: "login reaches its handler", method: http.MethodPost, path: "/api/auth/login", wantStatus: http.StatusUnsupportedMediaType, wantType: "application/json"},
 		{name: "forgot password reaches its handler", method: http.MethodPost, path: "/api/auth/password/forgot", wantStatus: http.StatusUnsupportedMediaType, wantType: "application/json"},
 		{name: "invite preview reaches its handler", method: http.MethodPost, path: "/api/auth/invite/preview", wantStatus: http.StatusUnsupportedMediaType, wantType: "application/json"},
-		{name: "Google sign-in is disabled without configuration", method: http.MethodGet, path: "/api/auth/google/start", wantStatus: http.StatusNotFound, wantType: "text/plain; charset=utf-8"},
+		{name: "providers needs no session", method: http.MethodGet, path: "/api/auth/providers", wantStatus: http.StatusOK, wantType: "application/json"},
+		{name: "Google sign-in is disabled without configuration", method: http.MethodGet, path: "/api/auth/google/start", wantStatus: http.StatusSeeOther},
 		{name: "Google callback is disabled without configuration", method: http.MethodGet, path: "/api/auth/google/callback", wantStatus: http.StatusSeeOther},
 		{name: "password reset reaches its handler", method: http.MethodPost, path: "/api/auth/password/reset", wantStatus: http.StatusUnsupportedMediaType, wantType: "application/json"},
 		{name: "wrong method on an /api route is a JSON 405", method: http.MethodGet, path: "/api/auth/login", wantStatus: http.StatusMethodNotAllowed, wantType: "application/json"},
@@ -127,7 +128,7 @@ func TestGoogleRoutesSharePerIPRateLimit(t *testing.T) {
 		rec := httptest.NewRecorder()
 		routes.ServeHTTP(rec, req)
 		if i == 0 {
-			assert.Equal(t, http.StatusNotFound, rec.Code)
+			assert.Equal(t, http.StatusSeeOther, rec.Code)
 		} else {
 			assert.Equal(t, http.StatusTooManyRequests, rec.Code)
 		}

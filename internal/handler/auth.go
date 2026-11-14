@@ -12,6 +12,9 @@ import (
 	"github.com/kdelpe/family-hub/internal/httpx"
 )
 
+// The web app's sign-in page, which explains the failure.
+const googleUnavailablePath = "/auth/login?google=unavailable"
+
 type AuthService interface {
 	Login(ctx context.Context, in auth.LoginInput) (string, auth.User, error)
 	SetPasswordWithToken(ctx context.Context, in auth.SetPasswordInput) (string, auth.User, error)
@@ -46,14 +49,23 @@ func NewAuth(svc AuthService, resets ResetRequester, cookie SessionCookie, googl
 	return a
 }
 
+type providersResponse struct {
+	Google bool `json:"google"`
+}
+
+// Providers tells the sign-in page which ways to sign in exist, so it can hide Continue with Google.
+func (a *Auth) Providers(w http.ResponseWriter, _ *http.Request) {
+	httpx.JSON(w, http.StatusOK, providersResponse{Google: a.google != nil})
+}
+
 func (a *Auth) GoogleStart(w http.ResponseWriter, r *http.Request) {
 	if a.google == nil {
-		http.NotFound(w, r)
+		googleRefused(w, r, nil, "")
 		return
 	}
 	handle, destination, err := a.google.Start(r.Context())
 	if err != nil {
-		internalError(w, r, err, "start Google sign-in")
+		googleRefused(w, r, err, "start Google sign-in")
 		return
 	}
 	a.googleCookie.set(w, handle)
@@ -63,12 +75,12 @@ func (a *Auth) GoogleStart(w http.ResponseWriter, r *http.Request) {
 func (a *Auth) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	a.googleCookie.clear(w)
 	if a.google == nil {
-		http.Redirect(w, r, "/login?google=unavailable", http.StatusSeeOther)
+		googleRefused(w, r, nil, "")
 		return
 	}
 	handle, err := r.Cookie("fh_oauth")
 	if err != nil {
-		http.Redirect(w, r, "/login?google=unavailable", http.StatusSeeOther)
+		googleRefused(w, r, nil, "")
 		return
 	}
 	code := r.URL.Query().Get("code")
@@ -79,18 +91,28 @@ func (a *Auth) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		Handle: handle.Value, State: r.URL.Query().Get("state"), Code: code,
 		UserAgent: r.UserAgent(), ReplacesToken: a.cookieToken(r),
 	})
+	if errors.Is(err, auth.ErrGoogleAccess) {
+		googleRefused(w, r, nil, "")
+		return
+	}
 	if err != nil {
-		if !errors.Is(err, auth.ErrGoogleAccess) && !clientGone(r) {
-			zerolog.Ctx(r.Context()).Error().Err(err).Msg("complete Google sign-in")
-		}
-		if clientGone(r) {
-			return
-		}
-		http.Redirect(w, r, "/login?google=unavailable", http.StatusSeeOther)
+		googleRefused(w, r, err, "complete Google sign-in")
 		return
 	}
 	a.cookie.set(w, token)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// googleRefused sends the browser back to the sign-in page, which explains, rather than to an error
+// body; the Google routes are full-page navigations. A non-nil err is a fault worth logging.
+func googleRefused(w http.ResponseWriter, r *http.Request, err error, msg string) {
+	if clientGone(r) {
+		return
+	}
+	if err != nil {
+		zerolog.Ctx(r.Context()).Error().Err(err).Msg(msg)
+	}
+	http.Redirect(w, r, googleUnavailablePath, http.StatusSeeOther)
 }
 
 type loginRequest struct {
