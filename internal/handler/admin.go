@@ -125,7 +125,7 @@ func (a *Admin) SendReset(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == nil:
 		w.WriteHeader(http.StatusNoContent)
-	// Only a plain cancel is dropped: a failed commit after the email went out must still be logged.
+	// Only a plain cancel is dropped: a send that failed after the commit must still be logged.
 	case clientGone(r) && errors.Is(err, context.Canceled):
 	case errors.Is(err, admin.ErrUserNotFound):
 		httpx.Error(w, http.StatusNotFound, "not_found", err.Error())

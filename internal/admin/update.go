@@ -33,9 +33,8 @@ type UpdateInput struct {
 	Disabled *bool
 }
 
-// Update changes a user's role, enabled state or email. Disabling signs them out and voids
-// their links. A new email also clears their password and Google link and emails a fresh
-// invite before the commit, so a failed send changes nothing (§5).
+// Update changes a user's role, enabled state or email. A new email clears their credentials and
+// emails a fresh invite before the commit, so a failed send changes nothing (§5).
 func (s *Users) Update(ctx context.Context, in UpdateInput) (Account, error) {
 	if in.Email == nil && in.Role == nil && in.Disabled == nil {
 		return Account{}, ErrNoChanges
@@ -120,7 +119,7 @@ func (s *Users) update(ctx context.Context, in UpdateInput, email string) (Accou
 			return Account{}, err
 		}
 	}
-	if err := commit(ctx, tx); err != nil {
+	if err := commit(ctx, tx, "update user"); err != nil {
 		return Account{}, err
 	}
 	return accountFromRow(gen.ListUsersRow(row)), nil
@@ -163,11 +162,11 @@ func (s *Users) send(ctx context.Context, msg mail.Message) error {
 	return nil
 }
 
-func commit(ctx context.Context, tx pgx.Tx) error {
+func commit(ctx context.Context, tx pgx.Tx, what string) error {
 	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
 	defer cancel()
 	if err := tx.Commit(commitCtx); err != nil {
-		return fmt.Errorf("commit: %w", err)
+		return fmt.Errorf("commit %s: %w", what, err)
 	}
 	return nil
 }

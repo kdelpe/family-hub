@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -35,7 +36,7 @@ func TestSendReset(t *testing.T) {
 	}{
 		{name: "a password user gets a reset; the earlier one still works", wantSend: true, wantSubject: "Reset your family hub password", wantResets: 2},
 		{name: "a Google-only user gets a reset to add a password", setup: []string{googleOnly}, wantSend: true, wantSubject: "Reset your family hub password", wantResets: 2},
-		{name: "a user who never set up gets a new invite instead of the old", setup: []string{notSetUp, oldInvite}, wantSend: true,
+		{name: "a user who never set up gets a new invite; the old one still works", setup: []string{notSetUp, oldInvite}, wantSend: true,
 			wantSubject: inviteSubject, wantResets: 1, wantInvites: 1},
 		// Saved first, so the admin can just send again.
 		{name: "email not sent", wantSend: true, sendErr: errors.New("smtp: 550"), wantErr: ErrEmailNotSent, wantSubject: "Reset your family hub password", wantResets: 2},
@@ -79,7 +80,11 @@ func TestSendReset(t *testing.T) {
 			assert.Equal(t, tt.wantSubject, sent.Subject)
 			assert.Equal(t, tt.wantResets, countFor(t, pool, `SELECT count(*) FROM auth_tokens WHERE user_id = $1 AND purpose = 'password_reset'`, id))
 			assert.Equal(t, tt.wantInvites, countFor(t, pool, `SELECT count(*) FROM auth_tokens WHERE user_id = $1 AND purpose = 'invite' AND token_hash <> 'old invite'`, id))
-			assert.Zero(t, countFor(t, pool, `SELECT count(*) FROM auth_tokens WHERE user_id = $1 AND token_hash = 'old invite'`, id), "the old invite stops working")
+			wantOld := 0
+			if slices.Contains(tt.setup, oldInvite) {
+				wantOld = 1
+			}
+			assert.Equal(t, wantOld, countFor(t, pool, `SELECT count(*) FROM auth_tokens WHERE user_id = $1 AND token_hash = 'old invite'`, id), "earlier links stay valid")
 			assert.Equal(t, 1, countFor(t, pool, `SELECT count(*) FROM sessions WHERE user_id = $1`, id), "nobody is signed out")
 			_, user, err := auth.NewService(pool, auth.NewHasher()).SetPasswordWithToken(t.Context(), auth.SetPasswordInput{Token: inviteToken(t, sent.Body), Password: testPassword})
 			require.NoError(t, err, "the emailed link sets a password")

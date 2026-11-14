@@ -28,7 +28,7 @@ Admins can see all the information you enter.
 
 var (
 	ErrInvalidRole = errors.New("role must be admin or member")
-	// ErrEmailNotSent means the email failed, so nothing was saved.
+	// ErrEmailNotSent: Invite and Update then save nothing; SendReset keeps the link, so it can just be sent again.
 	ErrEmailNotSent = errors.New("email could not be sent")
 )
 
@@ -68,7 +68,7 @@ func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 	if err := s.send(ctx, s.inviteMessage(email, token)); err != nil {
 		return auth.User{}, err
 	}
-	if err := commit(ctx, tx); err != nil {
+	if err := commit(ctx, tx, "invite"); err != nil {
 		return auth.User{}, err
 	}
 	return auth.User{ID: id, Email: email, Role: in.Role}, nil

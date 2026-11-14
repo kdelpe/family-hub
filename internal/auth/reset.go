@@ -170,7 +170,7 @@ func (r *Resets) send(ctx context.Context, email string) error {
 	if err != nil {
 		return fmt.Errorf("lock user: %w", err)
 	}
-	token, err := createToken(ctx, tx, userID, purposePasswordReset, ResetLifetime)
+	token, err := CreatePasswordReset(ctx, tx, userID)
 	if err != nil {
 		return err
 	}

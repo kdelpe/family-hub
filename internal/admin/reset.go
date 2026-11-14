@@ -13,10 +13,8 @@ import (
 	"github.com/kdelpe/family-hub/internal/mail"
 )
 
-// SendReset emails an enabled user a fresh link: a new invite if they never set up their
-// account (the old invites stop working), otherwise a password reset that leaves earlier
-// ones valid, as Forgot password does. Sent after the commit, so a slow mail server doesn't
-// hold the user's row lock and block their sign-in.
+// SendReset emails an enabled user a new invite, or a password reset once they've set up; earlier links stay valid.
+// Sent after the commit, so a slow mail server doesn't hold the row lock their sign-in waits on.
 func (s *Users) SendReset(ctx context.Context, id uuid.UUID) error {
 	return auth.BusyIfContended(s.sendReset(ctx, id))
 }
@@ -50,16 +48,13 @@ func (s *Users) sendReset(ctx context.Context, id uuid.UUID) error {
 		}
 		msg = auth.ResetMessage(s.baseURL, locked.Email, token)
 	} else {
-		if err := q.DeleteUserInvites(ctx, id); err != nil {
-			return fmt.Errorf("delete old invites: %w", err)
-		}
 		token, err := auth.CreateInvite(ctx, tx, id)
 		if err != nil {
 			return err
 		}
 		msg = s.inviteMessage(locked.Email, token)
 	}
-	if err := commit(ctx, tx); err != nil {
+	if err := commit(ctx, tx, "send reset"); err != nil {
 		return err
 	}
 	return s.send(ctx, msg)
