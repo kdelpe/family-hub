@@ -6,7 +6,8 @@ MOCKERY_VERSION := 3.8.1
 
 DATABASE_URL      ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
 TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
-export DATABASE_URL TEST_DATABASE_URL
+TEST_MAILPIT_URL  ?= http://localhost:8025
+export DATABASE_URL TEST_DATABASE_URL TEST_MAILPIT_URL
 
 .PHONY: up down ui-stub dev-api generate build run test lint vuln migrate-up
 

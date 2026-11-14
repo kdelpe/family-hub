@@ -12,3 +12,6 @@ packages:
   github.com/kdelpe/family-hub/internal/admin:
     interfaces:
       Terminal: {}
+  github.com/kdelpe/family-hub/internal/mail:
+    interfaces:
+      Mailer: {}
