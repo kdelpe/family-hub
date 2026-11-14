@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kdelpe/family-hub/internal/admin"
+	"github.com/kdelpe/family-hub/internal/testdb"
 )
 
 func TestRun(t *testing.T) {
@@ -52,6 +55,36 @@ func TestRun(t *testing.T) {
 				assert.ErrorIs(t, err, tt.wantErr)
 			}
 			assert.Equal(t, tt.wantStdout, stdout.String())
+		})
+	}
+}
+
+func TestRunCutShortBySignal(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr bool
+	}{
+		{name: "serve stops cleanly, even before listening", args: []string{"serve"}},
+		{name: "migrate up fails", args: []string{"migrate", "up"}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, name := range []string{"HTTP_ADDR", "AUTO_MIGRATE", "COOKIE_SECURE", "TRUSTED_PROXY"} {
+				t.Setenv(name, "")
+			}
+			t.Setenv("DATABASE_URL", testdb.UnreachableURL)
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			err := run(ctx, tt.args, io.Discard)
+
+			if tt.wantErr {
+				assert.ErrorIs(t, err, context.Canceled)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

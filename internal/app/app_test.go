@@ -39,6 +39,32 @@ func TestRunFailsWithoutADatabase(t *testing.T) {
 	assert.Contains(t, err.Error(), "database:")
 }
 
+func TestRunCanceledBeforeListening(t *testing.T) {
+	tests := []struct {
+		name        string
+		autoMigrate bool
+		wantErr     bool
+	}{
+		{name: "is a clean stop", autoMigrate: false},
+		{name: "fails if it cuts migrations short", autoMigrate: true, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			err := Run(ctx, config.Config{DatabaseURL: testdb.UnreachableURL, HTTPAddr: "127.0.0.1:0", AutoMigrate: tt.autoMigrate})
+
+			if tt.wantErr {
+				assert.ErrorIs(t, err, context.Canceled)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestServeLetsInFlightRequestsFinish(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

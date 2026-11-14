@@ -39,13 +39,7 @@ func main() {
 	// After the first signal, a second one kills the process as usual.
 	context.AfterFunc(ctx, stop)
 	err := run(ctx, os.Args[1:], os.Stdout)
-	// Read before stop(), which cancels ctx itself.
-	signaled := ctx.Err() != nil
 	stop()
-	if signaled && errors.Is(err, context.Canceled) {
-		logger.Info().Msg("stopped")
-		return
-	}
 	if err != nil {
 		logger.Error().Err(err).Msg("failed")
 		os.Exit(1)

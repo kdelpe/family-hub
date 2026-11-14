@@ -71,7 +71,7 @@ func TestRunCreate(t *testing.T) {
 		{name: "password too short", email: testEmail, typed: []string{"short"}, wantErr: auth.ErrPasswordTooShort},
 		{name: "password is the email", email: testEmail, typed: []string{testEmail}, wantErr: auth.ErrPasswordTooCommon},
 		{name: "passwords differ", email: testEmail, typed: []string{testPassword, "correct horse battery!"}, wantErr: ErrPasswordMismatch},
-		{name: "read canceled", email: testEmail, typed: []string{""}, readErr: context.Canceled, wantErr: errAborted},
+		{name: "read canceled", email: testEmail, typed: []string{""}, readErr: context.Canceled, wantErr: context.Canceled},
 		{name: "email taken", email: "TEST@example.com", existing: testEmail, wantErr: ErrEmailTaken},
 	}
 
