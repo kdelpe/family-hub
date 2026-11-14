@@ -21,7 +21,7 @@ const (
 	SessionLifetime    = 180 * 24 * time.Hour
 	sessionIdleTimeout = 30 * 24 * time.Hour
 	sessionTouchAfter  = time.Hour
-	sessionTokenLen    = 32
+	tokenLen           = 32
 	maxUserAgentLen    = 512
 )
 
@@ -42,8 +42,7 @@ func NewSessions(db gen.DBTX) *Sessions {
 
 // Create returns the token for the cookie; only its hash is stored.
 func (s *Sessions) Create(ctx context.Context, userID uuid.UUID, userAgent string) (string, error) {
-	raw := make([]byte, sessionTokenLen)
-	_, _ = rand.Read(raw)
+	raw, token := newToken()
 	var agent *string
 	if userAgent != "" {
 		// Postgres rejects invalid UTF-8, which a header can carry.
@@ -55,7 +54,7 @@ func (s *Sessions) Create(ctx context.Context, userID uuid.UUID, userAgent strin
 	}); err != nil {
 		return "", fmt.Errorf("create session: %w", err)
 	}
-	return base64.RawURLEncoding.EncodeToString(raw), nil
+	return token, nil
 }
 
 func (s *Sessions) Authenticate(ctx context.Context, token string) (Session, error) {
@@ -92,9 +91,16 @@ func (s *Sessions) Delete(ctx context.Context, token string) error {
 	return nil
 }
 
+// newToken returns a random token and its encoding for a cookie or link; store only hashToken(raw).
+func newToken() (raw []byte, encoded string) {
+	raw = make([]byte, tokenLen)
+	_, _ = rand.Read(raw)
+	return raw, base64.RawURLEncoding.EncodeToString(raw)
+}
+
 func decodeToken(token string) ([]byte, bool) {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
-	return raw, err == nil && len(raw) == sessionTokenLen
+	return raw, err == nil && len(raw) == tokenLen
 }
 
 func hashToken(raw []byte) []byte {

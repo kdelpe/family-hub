@@ -186,21 +186,15 @@ func (s *Service) login(ctx context.Context, email string, in LoginInput) (strin
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	qtx := gen.New(tx)
-	if _, err := tx.Exec(ctx, `SELECT set_config('lock_timeout', $1, true)`, fmt.Sprintf("%dms", s.lockTimeout.Milliseconds())); err != nil {
-		return "", User{}, fmt.Errorf("set lock timeout: %w", err)
-	}
 
 	// A reset, email change or disable that committed since the verify wins. A concurrent
 	// login's rehash keeps password_changed_at, so it doesn't refuse this one.
-	locked, err := qtx.LockUserForSignIn(ctx, found.ID)
-	var pgErr *pgconn.PgError
+	locked, err := s.lockUser(ctx, tx, found.ID)
 	switch {
-	case errors.As(err, &pgErr) && pgErr.Code == lockNotAvailable:
-		return "", User{}, ErrBusy
 	case errors.Is(err, pgx.ErrNoRows):
 		return "", User{}, errChangedDuringLogin
 	case err != nil:
-		return "", User{}, fmt.Errorf("lock user: %w", err)
+		return "", User{}, err
 	case locked.DisabledAt != nil || locked.Email != email ||
 		locked.PasswordChangedAt == nil || !locked.PasswordChangedAt.Equal(*found.PasswordChangedAt):
 		return "", User{}, errChangedDuringLogin
@@ -220,6 +214,23 @@ func (s *Service) login(ctx context.Context, email string, in LoginInput) (strin
 		return "", User{}, fmt.Errorf("commit login: %w", err)
 	}
 	return token, User{ID: found.ID, Email: locked.Email, Role: locked.Role}, nil
+}
+
+// lockUser takes the row lock that every credential change and new session waits on (§5),
+// giving up with ErrBusy after lockTimeout.
+func (s *Service) lockUser(ctx context.Context, tx pgx.Tx, id uuid.UUID) (gen.LockUserForSignInRow, error) {
+	if _, err := tx.Exec(ctx, `SELECT set_config('lock_timeout', $1, true)`, fmt.Sprintf("%dms", s.lockTimeout.Milliseconds())); err != nil {
+		return gen.LockUserForSignInRow{}, fmt.Errorf("set lock timeout: %w", err)
+	}
+	locked, err := gen.New(tx).LockUserForSignIn(ctx, id)
+	var pgErr *pgconn.PgError
+	switch {
+	case errors.As(err, &pgErr) && pgErr.Code == lockNotAvailable:
+		return gen.LockUserForSignInRow{}, ErrBusy
+	case err != nil:
+		return gen.LockUserForSignInRow{}, fmt.Errorf("lock user: %w", err)
+	}
+	return locked, nil
 }
 
 // A failed rehash only means the old parameters stay until the next sign-in.
