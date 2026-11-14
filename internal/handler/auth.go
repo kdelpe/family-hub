@@ -13,6 +13,7 @@ import (
 
 type AuthService interface {
 	Login(ctx context.Context, in auth.LoginInput) (string, auth.User, error)
+	SetPasswordWithToken(ctx context.Context, in auth.SetPasswordInput) (string, auth.User, error)
 	Logout(ctx context.Context, token string) error
 	User(ctx context.Context, id uuid.UUID) (auth.User, error)
 }
@@ -31,6 +32,11 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+type resetPasswordRequest struct {
+	Token    string `json:"token"`
+	Password string `json:"password"`
+}
+
 type userResponse struct {
 	ID    uuid.UUID `json:"id"`
 	Email string    `json:"email"`
@@ -42,9 +48,8 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
-	in := auth.LoginInput{Email: req.Email, Password: req.Password, UserAgent: r.UserAgent(), ClientIP: httpx.ClientIP(r)}
-	if c, err := r.Cookie(a.cookie.name); err == nil {
-		in.ReplacesToken = c.Value
+	in := auth.LoginInput{
+		Email: req.Email, Password: req.Password, UserAgent: r.UserAgent(), ClientIP: httpx.ClientIP(r), ReplacesToken: a.cookieToken(r),
 	}
 	token, user, err := a.svc.Login(r.Context(), in)
 	var limited *auth.RateLimitedError
@@ -62,6 +67,30 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusServiceUnavailable, "busy", "try again in a moment")
 	default:
 		internalError(w, r, err, "login")
+	}
+}
+
+// ResetPassword uses an invite or password-reset link's token to set the password and sign in.
+func (a *Auth) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req resetPasswordRequest
+	if !httpx.DecodeJSON(w, r, &req) {
+		return
+	}
+	in := auth.SetPasswordInput{Token: req.Token, Password: req.Password, UserAgent: r.UserAgent(), ReplacesToken: a.cookieToken(r)}
+	token, user, err := a.svc.SetPasswordWithToken(r.Context(), in)
+	switch {
+	case err == nil:
+		a.cookie.set(w, token)
+		httpx.JSON(w, http.StatusOK, toUserResponse(user))
+	case clientGone(r):
+	case errors.Is(err, auth.ErrInvalidToken):
+		httpx.Error(w, http.StatusBadRequest, "invalid_token", "this link is invalid, used or expired; ask for a new one")
+	case errors.Is(err, auth.ErrPasswordTooShort), errors.Is(err, auth.ErrPasswordTooLong), errors.Is(err, auth.ErrPasswordTooCommon):
+		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
+	case errors.Is(err, auth.ErrBusy):
+		httpx.Error(w, http.StatusServiceUnavailable, "busy", "try again in a moment")
+	default:
+		internalError(w, r, err, "reset password")
 	}
 }
 
@@ -98,6 +127,13 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 	default:
 		httpx.JSON(w, http.StatusOK, toUserResponse(user))
 	}
+}
+
+func (a *Auth) cookieToken(r *http.Request) string {
+	if c, err := r.Cookie(a.cookie.name); err == nil {
+		return c.Value
+	}
+	return ""
 }
 
 func toUserResponse(u auth.User) userResponse {
