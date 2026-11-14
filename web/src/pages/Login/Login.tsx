@@ -34,6 +34,8 @@ export function Login() {
     staleTime: Infinity,
     // One quick check: retrying would hold back the Google button and message for seconds.
     retry: false,
+    // Not paused while the browser says it's offline, which would keep the Google part hidden.
+    networkMode: 'always',
   })
   const signIn = useMutation({
     mutationFn: () => login(email, password),
@@ -54,14 +56,7 @@ export function Login() {
     signIn.mutate()
   }
 
-  const error = signIn.error
-    ? loginErrorMessage(signIn.error)
-    : // Waits for providers, so the alert isn't announced once and then corrected.
-      googleFailed && !providersPending
-      ? available?.google === false
-        ? googleOffMessage
-        : googleFailedMessage
-      : null
+  const error = alertMessage(signIn.error, googleFailed, providersPending, available?.google)
 
   return (
     <>
@@ -161,6 +156,22 @@ export function Login() {
       </main>
     </>
   )
+}
+
+function alertMessage(
+  signInError: Error | null,
+  googleFailed: boolean,
+  providersPending: boolean,
+  googleConfigured: boolean | undefined,
+): string | null {
+  if (signInError) {
+    return loginErrorMessage(signInError)
+  }
+  // Waits for providers, so the alert isn't announced once and then corrected.
+  if (!googleFailed || providersPending) {
+    return null
+  }
+  return googleConfigured === false ? googleOffMessage : googleFailedMessage
 }
 
 function loginErrorMessage(error: Error): string {
