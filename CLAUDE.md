@@ -4,7 +4,7 @@ A private, invite-only family archive. The design lives in `docs/architecture-v3
 
 ## Current stage
 
-**Phase 2 (auth) in progress.** Planning is done; code is written one small PR at a time, in the order below.
+**Phase 2 (auth) done; Phase 4a in progress**, starting with the five pages before sign-in. Code is written one small PR at a time, in the order below.
 
 Planned order:
 1. Repo structure: settled (architecture §2).
