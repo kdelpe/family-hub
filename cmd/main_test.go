@@ -71,10 +71,12 @@ func TestRunCutShortBySignal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			for _, name := range []string{"HTTP_ADDR", "AUTO_MIGRATE", "COOKIE_SECURE", "TRUSTED_PROXY"} {
+			for _, name := range []string{"HTTP_ADDR", "AUTO_MIGRATE", "COOKIE_SECURE", "TRUSTED_PROXY", "SMTP_USER", "SMTP_PASS", "MAIL_FROM"} {
 				t.Setenv(name, "")
 			}
 			t.Setenv("DATABASE_URL", testdb.UnreachableURL)
+			t.Setenv("SMTP_HOST", "localhost")
+			t.Setenv("SMTP_PORT", "1025")
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
 

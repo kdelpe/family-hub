@@ -81,9 +81,11 @@ func adminCommand(ctx context.Context, args []string, stdout io.Writer) error {
 
 func serve(ctx context.Context) error {
 	cfg, err := config.Load(os.Getenv)
-	if err != nil {
+	smtp, smtpErr := config.LoadSMTP(os.Getenv)
+	if err := errors.Join(err, smtpErr); err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
+	cfg.SMTP = smtp
 	if err := app.Run(ctx, cfg); err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
