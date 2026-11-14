@@ -52,7 +52,7 @@ func TestResetsRequest(t *testing.T) {
 
 			resets.Request(ctx, tt.email)
 			cancel()
-			resets.sending.Wait()
+			resets.Close(time.Minute)
 
 			if !tt.wantSend {
 				assert.Zero(t, count(t, pool, `SELECT count(*) FROM auth_tokens`))
@@ -81,8 +81,8 @@ func TestResetsRequestKeepsEarlierLinksAndLimitsPerEmail(t *testing.T) {
 
 	for range resetsPerEmail + 1 {
 		resets.Request(t.Context(), testEmail)
-		resets.sending.Wait()
 	}
+	resets.Close(time.Minute)
 
 	assert.Equal(t, resetsPerEmail, count(t, pool, `SELECT count(*) FROM auth_tokens`), "the request over the limit sends nothing")
 	require.Len(t, bodies, resetsPerEmail)
@@ -102,40 +102,47 @@ func linkToken(t *testing.T, body string) string {
 	return ""
 }
 
-func TestResetsLimitWhatRunsAtOnce(t *testing.T) {
+func TestResetsBoundTheWork(t *testing.T) {
 	tests := []struct {
 		name string
-		// Sends that are still running when the next request comes in.
-		busy        int
-		closed      bool
-		wantSends   int
-		wantStarted int
+		// Sends still running, and requests waiting behind them, when the next request comes in.
+		busy, queued int
+		closed       bool
+		wantStarted  bool
+		wantSends    int
+		wantRefunded bool
 	}{
-		{name: "under the cap starts at once", busy: maxResetsSending - 1, wantSends: maxResetsSending, wantStarted: maxResetsSending},
-		{name: "over the cap waits for a slot", busy: maxResetsSending, wantSends: maxResetsSending + 1, wantStarted: maxResetsSending},
-		{name: "after Close nothing starts", closed: true},
+		{name: "a free worker starts at once", busy: resetWorkers - 1, wantStarted: true, wantSends: resetWorkers},
+		{name: "busy workers: it waits in the queue", busy: resetWorkers, wantSends: resetWorkers + 1},
+		{name: "a full queue drops it", busy: resetWorkers, queued: resetQueueLength, wantSends: resetWorkers + resetQueueLength, wantRefunded: true},
+		{name: "after Close nothing starts", closed: true, wantRefunded: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, pool, _ := withTestUser(t)
-			for i := range maxResetsSending + 1 {
-				_, err := pool.Exec(t.Context(), `INSERT INTO users (email) VALUES ($1)`, fmt.Sprintf("busy%d@example.com", i))
+			others := make([]string, tt.busy+tt.queued)
+			for i := range others {
+				others[i] = fmt.Sprintf("other%d@example.com", i)
+				_, err := pool.Exec(t.Context(), `INSERT INTO users (email) VALUES ($1)`, others[i])
 				require.NoError(t, err)
 			}
 			mailer := mailmocks.NewMailer(t)
 			release := make(chan struct{})
-			started := make(chan struct{}, maxResetsSending+2)
+			started := make(chan string, len(others)+1)
 			if tt.wantSends > 0 {
-				mailer.EXPECT().Send(mock.Anything, mock.Anything).Run(func(context.Context, mail.Message) {
-					started <- struct{}{}
+				mailer.EXPECT().Send(mock.Anything, mock.Anything).Run(func(_ context.Context, msg mail.Message) {
+					started <- msg.To
 					<-release
 				}).Return(nil).Times(tt.wantSends)
 			}
 			resets := NewResets(svc, mailer, testBaseURL)
-			for i := range tt.busy {
-				resets.Request(t.Context(), fmt.Sprintf("busy%d@example.com", i))
+			for _, email := range others[:tt.busy] {
+				resets.Request(t.Context(), email)
 				<-started
+			}
+			for _, email := range others[tt.busy:] {
+				resets.Request(t.Context(), email)
 			}
 			if tt.closed {
 				resets.Close(time.Second)
@@ -143,16 +150,23 @@ func TestResetsLimitWhatRunsAtOnce(t *testing.T) {
 
 			resets.Request(t.Context(), testEmail)
 
-			if tt.wantStarted > tt.busy {
+			if tt.wantStarted {
 				select {
-				case <-started:
+				case to := <-started:
+					assert.Equal(t, testEmail, to)
 				case <-time.After(10 * time.Second):
-					t.Fatal("the send under the cap didn't start")
+					t.Fatal("the send with a free worker didn't start")
 				}
 			} else {
-				// Nothing should start; give it a moment to prove that.
+				// Nothing should start yet; give it a moment to prove that.
 				time.Sleep(200 * time.Millisecond)
 				assert.Empty(t, started)
+			}
+			if tt.wantRefunded {
+				for range resetsPerEmail {
+					ok, _ := resets.perEmail.Take(testEmail)
+					assert.True(t, ok, "a dropped request gives its allowance back")
+				}
 			}
 			close(release)
 			resets.Close(time.Minute)
@@ -177,6 +191,6 @@ func TestResetsCloseCancelsSendsPastTheGrace(t *testing.T) {
 
 	resets.Close(10 * time.Millisecond)
 
-	resets.sending.Wait()
+	resets.workers.Wait()
 	assert.ErrorIs(t, sendErr, context.Canceled)
 }

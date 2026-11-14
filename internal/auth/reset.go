@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,10 +19,9 @@ import (
 const (
 	resetsPerEmail       = 5
 	resetsPerEmailWindow = time.Hour
-	// Caps the lookups and SMTP sends a flood of addresses can run at once.
-	maxResetsSending = 4
-	resetSlotWait    = time.Minute
-	// Starts once a slot is free, so time spent waiting never shortens the send.
+	// Caps the lookups and SMTP sends a flood of addresses can run at once, and the work waiting for them.
+	resetWorkers     = 4
+	resetQueueLength = 32
 	resetSendTimeout = time.Minute
 	resetSubject     = "Reset your family hub password"
 	resetBody        = `Bonjou,
@@ -35,28 +35,42 @@ It works for %d minutes. If you didn't ask, ignore this email: your password sta
 
 var errShuttingDown = errors.New("canceled for shutdown")
 
+type resetJob struct {
+	email  string
+	logger *zerolog.Logger
+}
+
 // Resets sends password-reset emails in the background, so the answer never reveals who has an account.
 type Resets struct {
 	svc      *Service
 	mailer   mail.Mailer
 	baseURL  string
 	perEmail *ratelimit.Limiter
-	slots    chan struct{}
 
 	mu       sync.Mutex
 	closed   bool
-	sending  sync.WaitGroup
+	queue    chan resetJob
+	workers  sync.WaitGroup
 	stopping chan struct{}
 	stopOnce sync.Once
 }
 
+// NewResets starts the workers; Close stops them.
 func NewResets(svc *Service, mailer mail.Mailer, baseURL string) *Resets {
-	return &Resets{
+	r := &Resets{
 		svc: svc, mailer: mailer, baseURL: baseURL,
 		perEmail: ratelimit.New(resetsPerEmail, resetsPerEmailWindow),
-		slots:    make(chan struct{}, maxResetsSending),
+		queue:    make(chan resetJob, resetQueueLength),
 		stopping: make(chan struct{}),
 	}
+	for range resetWorkers {
+		r.workers.Go(func() {
+			for job := range r.queue {
+				r.run(job)
+			}
+		})
+	}
+	return r
 }
 
 // Request emails a reset link if the address belongs to an enabled user. It returns at once and
@@ -66,6 +80,8 @@ func (r *Resets) Request(ctx context.Context, email string) {
 	if !ValidEmail(email) {
 		return
 	}
+	// Trimmed from a body of up to 1 MiB: a copy, so the limiter key doesn't keep the whole body alive.
+	email = strings.Clone(email)
 	// Taken for every address, known or not, so the limit can't tell them apart.
 	if ok, _ := r.perEmail.Take(email); !ok {
 		return
@@ -74,47 +90,54 @@ func (r *Resets) Request(ctx context.Context, email string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed {
+		r.perEmail.Refund(email)
 		return
 	}
-	r.sending.Go(func() {
-		// Outlives the request, keeping only its logger; Close or the timeout ends it.
-		ctx, cancel := context.WithCancelCause(logger.WithContext(context.Background()))
-		defer cancel(nil)
-		go func() {
-			select {
-			case <-r.stopping:
-				cancel(errShuttingDown)
-			case <-ctx.Done():
-			}
-		}()
-		// Waits rather than drops, so a burst can delay a real reset but not lose it.
-		select {
-		case r.slots <- struct{}{}:
-			defer func() { <-r.slots }()
-		case <-ctx.Done():
-			logger.Warn().Err(context.Cause(ctx)).Msg("password reset dropped before it started")
-			return
-		case <-time.After(resetSlotWait):
-			logger.Warn().Msg("password reset dropped: no free slot in time")
-			return
-		}
-		sendCtx, cancelSend := context.WithTimeout(ctx, resetSendTimeout)
-		defer cancelSend()
-		if err := r.send(sendCtx, email); err != nil {
-			logger.Error().Err(err).AnErr("cause", context.Cause(sendCtx)).Msg("send password reset")
-		}
-	})
+	select {
+	case r.queue <- resetJob{email: email, logger: logger}:
+	default:
+		// Nothing was sent, so the address keeps its allowance for a retry.
+		r.perEmail.Refund(email)
+		logger.Warn().Msg("password reset dropped: queue full")
+	}
 }
 
-// Close refuses new resets, gives those running up to grace to finish, then cancels the rest
-// and waits at most grace again.
+func (r *Resets) run(job resetJob) {
+	// Outlives the request, keeping only its logger; Close or the timeout ends it.
+	ctx, cancel := context.WithCancelCause(job.logger.WithContext(context.Background()))
+	defer cancel(nil)
+	ctx, cancelTimeout := context.WithTimeout(ctx, resetSendTimeout)
+	defer cancelTimeout()
+	select {
+	case <-r.stopping:
+		job.logger.Warn().Err(errShuttingDown).Msg("password reset dropped before it started")
+		return
+	default:
+	}
+	go func() {
+		select {
+		case <-r.stopping:
+			cancel(errShuttingDown)
+		case <-ctx.Done():
+		}
+	}()
+	if err := r.send(ctx, job.email); err != nil {
+		job.logger.Error().Err(err).AnErr("cause", context.Cause(ctx)).Msg("send password reset")
+	}
+}
+
+// Close refuses new resets, gives the queued and running ones up to grace to finish, then cancels
+// the rest and waits at most grace again.
 func (r *Resets) Close(grace time.Duration) {
 	r.mu.Lock()
-	r.closed = true
+	if !r.closed {
+		r.closed = true
+		close(r.queue)
+	}
 	r.mu.Unlock()
 	done := make(chan struct{})
 	go func() {
-		r.sending.Wait()
+		r.workers.Wait()
 		close(done)
 	}()
 	select {
@@ -134,7 +157,8 @@ func (r *Resets) send(ctx context.Context, email string) error {
 	if err != nil {
 		return fmt.Errorf("begin reset: %w", err)
 	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
+	// The send context, so a hung connection can't outlast the timeout or shutdown.
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.svc.setLockTimeout(ctx, tx); err != nil {
 		return err
 	}

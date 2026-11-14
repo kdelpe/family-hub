@@ -22,7 +22,8 @@ func TestServerAnswersReadyUntilCanceled(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	srv, _ := newServer(pool, config.Config{CookieSecure: true})
+	srv, resets := newServer(pool, config.Config{CookieSecure: true})
+	t.Cleanup(func() { resets.Close(time.Second) })
 	go func() { done <- serve(ctx, srv, ln, time.Second) }()
 
 	resp := waitForServer(t, "http://"+ln.Addr().String()+"/ready", done)
