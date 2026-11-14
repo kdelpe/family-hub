@@ -39,7 +39,7 @@ func TestInvite(t *testing.T) {
 		{name: "unknown role", in: InviteInput{Email: testEmail, Role: "owner"}, wantErr: ErrInvalidRole},
 		{name: "no role", in: InviteInput{Email: testEmail}, wantErr: ErrInvalidRole},
 		{name: "email taken", in: InviteInput{Email: "TEST@example.com", Role: auth.RoleMember}, existing: testEmail, wantErr: ErrEmailTaken},
-		{name: "email not sent saves nothing", in: InviteInput{Email: testEmail, Role: auth.RoleMember}, wantSend: true, sendErr: errors.New("smtp: 550"), wantErr: ErrInviteNotSent},
+		{name: "email not sent saves nothing", in: InviteInput{Email: testEmail, Role: auth.RoleMember}, wantSend: true, sendErr: errors.New("smtp: 550"), wantErr: ErrEmailNotSent},
 		{name: "a refused message is not a send failure", in: InviteInput{Email: testEmail, Role: auth.RoleMember}, wantSend: true, sendErr: fmt.Errorf("%w: subject", mail.ErrInvalidMessage), wantErr: mail.ErrInvalidMessage},
 	}
 
@@ -69,7 +69,7 @@ func TestInvite(t *testing.T) {
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
 				if errors.Is(tt.wantErr, mail.ErrInvalidMessage) {
-					assert.NotErrorIs(t, err, ErrInviteNotSent)
+					assert.NotErrorIs(t, err, ErrEmailNotSent)
 				}
 				var newUsers, tokens int
 				require.NoError(t, pool.QueryRow(t.Context(),

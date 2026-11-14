@@ -89,7 +89,7 @@ type SetPasswordInput struct {
 // the password, drops the user's other tokens and sessions, and returns a new session (§5).
 func (s *Service) SetPasswordWithToken(ctx context.Context, in SetPasswordInput) (string, User, error) {
 	token, user, err := s.setPasswordWithToken(ctx, in)
-	return token, user, busyIfContended(err)
+	return token, user, BusyIfContended(err)
 }
 
 func (s *Service) setPasswordWithToken(ctx context.Context, in SetPasswordInput) (string, User, error) {

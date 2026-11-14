@@ -77,6 +77,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 				r.Use(handler.RequireAdmin)
 				r.Get("/admin/users", h.Admin.ListUsers)
 				r.Post("/admin/users", h.Admin.InviteUser)
+				r.Patch("/admin/users/{id}", h.Admin.UpdateUser)
 			})
 		})
 	})

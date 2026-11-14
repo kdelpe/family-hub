@@ -58,3 +58,27 @@ WHERE @after_email::text = '' OR (u.email, u.id) > (@after_email::text, @after_i
 GROUP BY u.id
 ORDER BY u.email, u.id
 LIMIT @page_size;
+
+-- name: GetAccount :one
+SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
+  (u.password_hash IS NOT NULL OR u.google_sub IS NOT NULL)::boolean AS set_up,
+  (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
+FROM users u
+LEFT JOIN auth_tokens t ON t.user_id = u.id AND t.purpose = 'invite' AND t.consumed_at IS NULL
+WHERE u.id = @id
+GROUP BY u.id;
+
+-- name: LockAccount :one
+SELECT email, role, disabled_at FROM users WHERE id = @id FOR UPDATE;
+
+-- name: CountEnabledAdmins :one
+SELECT count(*) FROM users WHERE role = 'admin' AND disabled_at IS NULL;
+
+-- name: SetRoleAndDisabled :exec
+UPDATE users
+SET role = @role, disabled_at = CASE WHEN @disabled::boolean THEN coalesce(disabled_at, clock_timestamp()) END
+WHERE id = @id;
+
+-- The old address's password and Google link mustn't carry over to whoever owns the new one (§5).
+-- name: ChangeEmail :exec
+UPDATE users SET email = @email, password_hash = NULL, password_changed_at = NULL, google_sub = NULL WHERE id = @id;

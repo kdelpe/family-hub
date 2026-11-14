@@ -157,7 +157,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (string, User, error
 	}
 
 	token, user, err := s.login(ctx, email, in)
-	err = busyIfContended(err)
+	err = BusyIfContended(err)
 	if !errors.Is(err, ErrInvalidCredentials) {
 		s.failuresByEmailAndIP.Refund(pair)
 		s.failuresByEmail.Refund(email)
@@ -228,7 +228,7 @@ func (s *Service) login(ctx context.Context, email string, in LoginInput) (strin
 }
 
 // lockUser takes the row lock that every credential change and new session waits on (§5).
-// Its lock_timeout holds for the rest of tx, so callers map the tx's errors with busyIfContended.
+// Its lock_timeout holds for the rest of tx, so callers map the tx's errors with BusyIfContended.
 func (s *Service) lockUser(ctx context.Context, tx pgx.Tx, qtx *gen.Queries, id uuid.UUID) (gen.LockUserRow, error) {
 	if err := s.setLockTimeout(ctx, tx); err != nil {
 		return gen.LockUserRow{}, err
@@ -241,14 +241,19 @@ func (s *Service) lockUser(ctx context.Context, tx pgx.Tx, qtx *gen.Queries, id 
 }
 
 func (s *Service) setLockTimeout(ctx context.Context, tx pgx.Tx) error {
-	if _, err := tx.Exec(ctx, `SELECT set_config('lock_timeout', $1, true)`, fmt.Sprintf("%dms", s.lockTimeout.Milliseconds())); err != nil {
+	return SetLockTimeout(ctx, tx, s.lockTimeout)
+}
+
+// SetLockTimeout bounds every lock wait for the rest of tx; map tx's errors with BusyIfContended.
+func SetLockTimeout(ctx context.Context, tx pgx.Tx, timeout time.Duration) error {
+	if _, err := tx.Exec(ctx, `SELECT set_config('lock_timeout', $1, true)`, fmt.Sprintf("%dms", timeout.Milliseconds())); err != nil {
 		return fmt.Errorf("set lock timeout: %w", err)
 	}
 	return nil
 }
 
-// A lock timeout or deadlock is a contended row, not a fault: the client can just retry.
-func busyIfContended(err error) error {
+// BusyIfContended turns a lock timeout or deadlock into ErrBusy: a contended row, not a fault, so the client can retry.
+func BusyIfContended(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && (pgErr.Code == lockNotAvailable || pgErr.Code == deadlockDetected) {
 		return ErrBusy

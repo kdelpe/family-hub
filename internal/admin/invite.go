@@ -28,8 +28,8 @@ Admins can see all the information you enter.
 
 var (
 	ErrInvalidRole = errors.New("role must be admin or member")
-	// ErrInviteNotSent means the email failed, so nothing was saved.
-	ErrInviteNotSent = errors.New("invitation email could not be sent")
+	// ErrEmailNotSent means the email failed, so nothing was saved.
+	ErrEmailNotSent = errors.New("email could not be sent")
 )
 
 type InviteInput struct {
@@ -65,18 +65,11 @@ func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 	if err != nil {
 		return auth.User{}, err
 	}
-	// Not canceled if the admin leaves: the server may already have the email, so the link must stay valid.
-	err = s.mailer.Send(context.WithoutCancel(ctx), s.inviteMessage(email, token))
-	switch {
-	case errors.Is(err, mail.ErrInvalidMessage):
-		return auth.User{}, fmt.Errorf("build invite: %w", err)
-	case err != nil:
-		return auth.User{}, fmt.Errorf("%w: %w", ErrInviteNotSent, err)
+	if err := s.send(ctx, s.inviteMessage(email, token)); err != nil {
+		return auth.User{}, err
 	}
-	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commitTimeout)
-	defer cancel()
-	if err := tx.Commit(commitCtx); err != nil {
-		return auth.User{}, fmt.Errorf("commit invite: %w", err)
+	if err := commit(ctx, tx); err != nil {
+		return auth.User{}, err
 	}
 	return auth.User{ID: id, Email: email, Role: in.Role}, nil
 }

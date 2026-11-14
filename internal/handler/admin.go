@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
@@ -18,6 +19,7 @@ import (
 type AdminService interface {
 	Invite(ctx context.Context, in admin.InviteInput) (auth.User, error)
 	List(ctx context.Context, in admin.ListInput) (admin.Page, error)
+	Update(ctx context.Context, in admin.UpdateInput) (admin.Account, error)
 }
 
 type Admin struct {
@@ -72,6 +74,55 @@ func (a *Admin) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type updateUserRequest struct {
+	Email    *string `json:"email"`
+	Role     *string `json:"role"`
+	Disabled *bool   `json:"disabled"`
+}
+
+func (a *Admin) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	id, ok := userID(w, r)
+	if !ok {
+		return
+	}
+	var req updateUserRequest
+	if !httpx.DecodeJSON(w, r, &req) {
+		return
+	}
+	account, err := a.svc.Update(r.Context(), admin.UpdateInput{ID: id, Email: req.Email, Role: req.Role, Disabled: req.Disabled})
+	switch {
+	case err == nil:
+		httpx.JSON(w, http.StatusOK, toAccountResponse(account))
+	// Only a plain cancel is dropped: a failed commit after the email went out must still be logged.
+	case clientGone(r) && errors.Is(err, context.Canceled):
+	case errors.Is(err, admin.ErrNoChanges), errors.Is(err, admin.ErrInvalidEmail), errors.Is(err, admin.ErrInvalidRole),
+		errors.Is(err, admin.ErrDisabledEmailChange):
+		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
+	case errors.Is(err, admin.ErrUserNotFound):
+		httpx.Error(w, http.StatusNotFound, "not_found", err.Error())
+	case errors.Is(err, admin.ErrEmailTaken):
+		httpx.Error(w, http.StatusConflict, "email_taken", err.Error())
+	case errors.Is(err, admin.ErrLastAdmin):
+		httpx.Error(w, http.StatusConflict, "last_admin", err.Error())
+	case errors.Is(err, admin.ErrEmailNotSent):
+		zerolog.Ctx(r.Context()).Error().Err(err).Msg("send invite to the new email")
+		httpx.Error(w, http.StatusBadGateway, "mail_failed", "the invitation to the new email couldn't be sent and nothing was changed; try again")
+	case errors.Is(err, auth.ErrBusy):
+		busy(w)
+	default:
+		internalError(w, r, err, "update user")
+	}
+}
+
+func userID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.Error(w, http.StatusNotFound, "not_found", admin.ErrUserNotFound.Error())
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
 func toPageResponse(page admin.Page) pageResponse {
 	resp := pageResponse{Users: make([]accountResponse, 0, len(page.Accounts))}
 	if page.NextCursor != "" {
@@ -105,7 +156,7 @@ func (a *Admin) InviteUser(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, admin.ErrEmailTaken):
 		httpx.Error(w, http.StatusConflict, "email_taken", err.Error())
-	case errors.Is(err, admin.ErrInviteNotSent):
+	case errors.Is(err, admin.ErrEmailNotSent):
 		zerolog.Ctx(r.Context()).Error().Err(err).Msg("send invite")
 		httpx.Error(w, http.StatusBadGateway, "mail_failed", "the invitation email couldn't be sent and nothing was saved; try again")
 	default:
