@@ -62,6 +62,10 @@ func migrateUp(ctx context.Context, fsys fs.FS, databaseURL string) error {
 		if err != nil {
 			return fmt.Errorf("migrate up: %w", explain(err))
 		}
+		// Checked now, not at the next ctx check, so a signal during the last step isn't reported as cut short.
+		if v, dirty, verr := m.Version(); verr == nil && !dirty && v == last {
+			return nil
+		}
 	}
 }
 
