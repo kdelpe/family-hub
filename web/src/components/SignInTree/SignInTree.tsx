@@ -58,14 +58,16 @@ export function SignInTree() {
         {leaves.map(([cx, cy, r, color, second, popDelay, cycleDelay]) => (
           <g key={`${cx},${cy}`} className={styles.leaf} style={{ animationDuration: atSpeed(popDuration), animationDelay: atSpeed(popDelay) }}>
             <circle cx={cx} cy={cy} r={r} style={{ fill: leafColor(color) }} />
-            <circle
-              cx={cx}
-              cy={cy}
-              r={r}
-              className={styles.cycle}
-              // Only the wait for the leaf to appear speeds up; its offset from the pop keeps the mockup's stagger.
-              style={{ fill: leafColor(second), animationDelay: seconds(popDelay / growthSpeed + cycleDelay - popDelay) }}
-            />
+            {second !== color && (
+              <circle
+                cx={cx}
+                cy={cy}
+                r={r}
+                className={styles.cycle}
+                // Only the wait for the leaf to appear speeds up; its offset from the pop keeps the mockup's stagger.
+                style={{ fill: leafColor(second), animationDelay: seconds(popDelay / growthSpeed + cycleDelay - popDelay) }}
+              />
+            )}
           </g>
         ))}
       </g>

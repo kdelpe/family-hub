@@ -119,17 +119,23 @@
   }
 }
 
-/* Starts and ends upright (the mockup starts at -1.5deg, a visible jump when the sway begins). */
+/* Starts upright (the mockup starts at -1.5deg, a visible jump when the sway begins). Per-segment easing
+   keeps the swing moving through upright, so it only slows at the two ends, like the mockup's. */
 @keyframes sway {
-  0%,
-  100% {
+  0% {
     transform: rotate(0deg);
+    animation-timing-function: ease-out;
   }
   25% {
     transform: rotate(-1.5deg);
+    animation-timing-function: ease-in-out;
   }
   75% {
     transform: rotate(1.5deg);
+    animation-timing-function: ease-in;
+  }
+  100% {
+    transform: rotate(0deg);
   }
 }
 

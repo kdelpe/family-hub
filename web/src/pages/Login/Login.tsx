@@ -32,6 +32,8 @@ export function Login() {
     queryKey: authKeys.providers,
     queryFn: providers,
     staleTime: Infinity,
+    // One quick check: retrying would hold back the Google button and message for seconds.
+    retry: false,
   })
   const signIn = useMutation({
     mutationFn: () => login(email, password),
@@ -40,6 +42,7 @@ export function Login() {
 
   // Only a shown error: resetting a pending sign-in would detach it, re-enabling the button and losing its answer.
   const clearError = () => {
+    setGoogleFailed(false)
     if (signIn.isError) {
       signIn.reset()
     }
@@ -54,7 +57,7 @@ export function Login() {
   const error = signIn.error
     ? loginErrorMessage(signIn.error)
     : // Waits for providers, so the alert isn't announced once and then corrected.
-      googleFailed && !signIn.isPending && !providersPending
+      googleFailed && !providersPending
       ? available?.google === false
         ? googleOffMessage
         : googleFailedMessage
