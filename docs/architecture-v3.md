@@ -98,7 +98,7 @@ family-hub/
 │       └── dist/                 # Vite output (git-ignored; stubbed by `make ui-stub`)
 │   (each package with interfaces gets a mocks/ subfolder: mockery output, committed)
 ├── web/                          # React app (Vite outDir -> ../internal/webui/dist)
-│   ├── index.html, package.json, vite.config.ts, tsconfig.json
+│   ├── index.html, package.json, vite.config.ts, tsconfig.json, eslint.config.js
 │   └── src/
 │       ├── main.tsx              # mounts the app: query client + router
 │       ├── app/                  # routes.tsx (the only place routes are wired), signed-in shell, auth guard
@@ -107,7 +107,7 @@ family-hub/
 │       ├── components/           # pieces used by 2+ pages: Button, TextField, Avatar, Chip, SignInTree…
 │       ├── api/                  # fetch client (JSON, error shape) + one file per backend area: auth.ts, admin.ts…
 │       ├── styles/               # tokens.css (design-notes §1.1 variables), base.css, fonts.css
-│       ├── assets/fonts/         # the bundled woff2 files
+│       ├── assets/fonts/         # the bundled woff2 files (their OFL licenses ship from public/licenses/)
 │       └── lib/                  # small pure helpers (e.g. date + precision formatting)
 ├── deploy/                       # Caddyfile, compose.prod.yaml, backup + restore scripts (Phase 4c)
 ├── docs/
@@ -897,7 +897,7 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 - **The design is set: `docs/design/`.** The mockup pages are the visual target and the build matches them as closely as the browser allows (layout, copy, colors, type, sizes, spacing, radii, motion); `docs/design/design-notes.md` is the behaviour spec and wins where the two disagree. Each page is compared side by side with its mockup before it's done, and a deliberate deviation is agreed with the owner first. The points below are the engineering side.
 - **Look ("Heirloom"):** colors as CSS variables from day one (design-notes §1.1), so the deferred dark mode is a swap. Fraunces and Source Sans 3 (both SIL Open Font License) are **bundled as `woff2` files** and served by the app, not loaded from Google Fonts: the strict CSP (§12) and privacy both want same-origin fonts. Every animation is off under `prefers-reduced-motion`.
 - React 19 + TypeScript + Vite; TanStack Query for server state; React Router.
-- **Code layout** (§2), mirroring the Go side: imports point one way, pages → components → `api`/`lib`, and components never import pages; routes are wired only in `app/routes.tsx`. Each page folder is named after its mockup (`docs/design/pages/<Name>.dc.html` → `pages/<Name>/`), so every page can be compared side by side with its mockup. Styles are **CSS Modules** (`<Name>.module.css`, built into Vite, no dependency): plain CSS with class names local to the file, so two pages can't clash on `.title`. Colors, type and spacing come only from the variables in `styles/tokens.css`. Each file's styles and test sit next to it.
+- **Code layout** (§2), mirroring the Go side: imports point one way, pages → components → `api`/`lib`, and components never import pages; routes are wired only in `app/routes.tsx`. Each page folder is named after its mockup (`docs/design/pages/<Name>.dc.html` → `pages/<Name>/`), so every page can be compared side by side with its mockup. Styles are **CSS Modules** (`<Name>.module.css`, built into Vite, no dependency): plain CSS with class names local to the file, so two pages can't clash on `.title`. Colors and font families come only from the variables in `styles/tokens.css`; sizes and spacing are written as the mockups give them, so each page can be checked against its mockup value by value. Each file's styles and test sit next to it.
 - `vite.config.ts`: `server.proxy['/api'] = 'http://localhost:8080'`; `build.outDir = '../internal/webui/dist'`, `emptyOutDir: true`.
 - Typed client: generate from an OpenAPI file later if the API grows; hand-written fetch wrapper for now with one error type.
 - **Family tree view: a Workday-style focus view, not a canvas of the whole family.** The screen shows one **focus person** with their parents' household above, their own household beside them, and their children below: about two generations up and down. Siblings sit next to the focus person.
@@ -951,13 +951,16 @@ dev-ui:        ; cd web && npm run dev
 run: ui-stub   ; COOKIE_SECURE=false go run ./cmd $(ARGS)
 
 test: ui-stub ; env -u DATABASE_URL go test -race ./...   # tests can't reach the dev database
-lint: ui-stub ; golangci-lint run && cd web && npm run lint && npm run typecheck
+lint: ui-stub ; golangci-lint run
+web-check:     ; cd web && npm run lint && npm run typecheck && npm test
 vuln: ui-stub  ; go tool govulncheck ./...
 
-build: ui-stub
-	cd web && npm ci && npm run build
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/family-hub ./cmd
+build: ui ; $(MAKE) build-go                        # in order, so `make -j` can't embed the placeholder
+ui:            ; cd web && npm run build                # into internal/webui/dist; `npm ci` once first
+build-go: ui-stub ; CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/family-hub ./cmd
 ```
+
+`build-go` embeds whatever `internal/webui/dist` holds, so the Go-only CI job and the Docker build stage (which has no Node) build without npm.
 
 `sqlc`, `govulncheck` and the `migrate` CLI are pinned in `go.mod` via `go get -tool ...` (Go ≥1.24), so there's no `@latest`. mockery (v3) and golangci-lint are installed as pinned binaries instead, locally and in CI, because both projects advise against installing via `go get`/`go tool` (dependency conflicts; mockery's docs recommend the release binary, checked 2026-11). The Makefile's `lint` and `generate` refuse any other version; CI downloads mockery's release tarball and checks a pinned SHA-256. `go tool migrate` is only used for `create`; `migrate up` goes through the app binary, so the CLI doesn't need database build tags **(verify)**.
 
@@ -986,14 +989,23 @@ volumes: { pgdata: {} }
 
 ```dockerfile
 # Base images are pinned to exact tags; Dependabot proposes updates.
+# Keep the Node version in sync with the web job in ci.yml.
+FROM node:26.13.1-alpine3.24 AS web
+WORKDIR /src/web
+COPY web/package.json web/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+COPY web/ ./
+# Vite writes to ../internal/webui/dist, the folder the Go binary embeds.
+RUN npm run build
+
 # The Go version must be at least the `go` line in go.mod.
-FROM golang:1.27.3-alpine3.24 AS build
+FROM golang:1.27.4-alpine3.24 AS build
 WORKDIR /src
 RUN apk add --no-cache make
 COPY . .
-# The Makefile's build, so the image and CI build the same way (with the placeholder UI until Phase 4a).
-# No `go mod download`: it would also fetch the sqlc tool's large dependency tree.
-RUN --mount=type=cache,target=/go/pkg/mod make build
+COPY --from=web /src/internal/webui/dist ./internal/webui/dist
+# The Makefile's Go build, as CI runs it. No `go mod download`: it would also fetch the sqlc tool's large dependency tree.
+RUN --mount=type=cache,target=/go/pkg/mod make build-go
 
 # Phase 6 adds ffmpeg and vips here.
 FROM alpine:3.24.4
@@ -1009,20 +1021,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=30s \
 ENTRYPOINT ["./family-hub"]
 ```
 
-Phase 4a puts a Node stage in front, and the build stage then compiles only the Go part (`make build` will also run npm, which this stage doesn't have):
-
-```dockerfile
-FROM node:22-alpine AS web
-WORKDIR /src/web
-COPY web/package*.json ./
-RUN npm ci
-COPY web/ ./
-# vite outDir is ../internal/webui/dist
-RUN npm run build
-# ...and in the build stage, after COPY . .:
-COPY --from=web /src/internal/webui/dist ./internal/webui/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/family-hub ./cmd
-```
+A Node stage builds the UI into `internal/webui/dist`; the Go stage copies it in and runs only `make build-go`, since it has no npm.
 
 The binary is PID 1 (exec-form `ENTRYPOINT`), so `docker stop`'s SIGTERM reaches it directly and the 8-second shutdown (§6.4) fits in Docker's 10-second grace.
 
@@ -1165,7 +1164,7 @@ For a "multi-decade" archive, this section matters more than any other.
 ## 13. Testing & CI
 
 - **Go:** unit tests for services; integration tests against real Postgres (`familyhub_test` DB from compose via `TEST_DATABASE_URL`, never `DATABASE_URL`; `internal/testdb` holds the skip-locally, fail-in-CI rule, schema built by running the embedded migrations; truncate between tests). **Mocks:** mockery generates testify mocks (`.mockery.yml`, committed) for the interfaces at the edges and between layers: `Mailer` and `Storage` (into `internal/mail/mocks/`, `internal/storage/mocks/`), and the service interfaces declared in `handler` (into `internal/handler/mocks/`). The database is **never** mocked; query and permission behavior is tested against real Postgres. Tests are **table-driven** by default (a slice of named cases looped with `t.Run` subtests). Assertions use testify (`require` for setup, `assert` for checks). Time-dependent code (session expiry, rate limits, upcoming-birthday window) is tested with `testing/synctest` instead of sleeps. Specific tests: ancestry-cycle rejection (including a chain deeper than any display bound, and a loop closed through a foster link), ancestors/descendants exclude foster links, relationship canonicalization/uniqueness (one couple row per pair), third biological parent rejected (via POST and via PATCH changing a subtype), missing `subtype` defaults or returns 400, `ended` only on couples, death date requires `is_deceased`, search works for people without a last name, blank or whitespace-only names are rejected (a blank surname input is stored as NULL), derived relations (full/half/unspecified siblings, including one sibling's second parent not yet recorded and people with more than two family parents, step-parents incl. former, step-siblings; adoptive links behave like biological; foster links yield only foster labels, e.g. two foster children of one couple are foster siblings, not full siblings), emailed tokens single-use and expiring (invite 7 days, reset 30 min), reset revokes all sessions, login returns the same 401 for unknown email / wrong password / Google-only / disabled user, every login failure path runs one Argon2 verify (unknown, Google-only and disabled users alike), any credential change invalidates all outstanding tokens, disabled users are refused on every path including Google by `sub`, admin email change clears `google_sub` and the password and revokes sessions, a new reset request leaves earlier reset links valid, token consumption is all-or-nothing (a failure mid-way leaves the token unconsumed and the old password intact), concurrent credential changes for one user serialize on the row lock, emails are matched case-insensitively (incl. Google's), per-account failure limits and the 50/hour backstop never block Google or reset, the hash semaphore caps concurrent Argon2 work, Argon2id rehash when parameters change, password length and common-password rules, Google sign-in: repeat sign-in with the user's existing `sub` succeeds; an email auto-link attempt with a **different** `sub` for a user already linked is rejected, as are unverified emails, uninvited emails and state/nonce mismatches, and auto-links only Gmail or matching-`hd` Workspace addresses (a verified non-Gmail address without `hd` is refused; that user signs in with their password), and links `google_sub` on first use, a login whose verified hash changed before the session commit is refused (no stale session, no rehash over a new password), Google sign-in by `sub` is refused if the email was changed or the user disabled mid-flow (and a flow started before an email change can't re-link by email), the auth cleanup job deletes expired/consumed flows, tokens and sessions, a forged, expired or reused flow handle is refused, change password always requires the current password, is limited per session and is all-or-nothing, a logout or reset racing it gives `401` and no new session, session sliding/absolute expiry, rate limits, `confirm` rejecting wrong size, an access request answers the same for a member's email, a pending request's email and a new one, and never creates a user; approving a request through an invite marks it approved in the same transaction; a declined request sends no email; `invite/preview` consumes nothing and refuses used or expired tokens like `password/reset`; `/api/tree` carries no dates and no contacts; an `on_request` phone, WhatsApp or address reaches only admins, its owner and viewers with a `shared` request (never through search, the tree or a declined or revoked request), the service refuses `family` for those kinds (WhatsApp included) and `on_request` for email, other social accounts and people without a login, a social value is only rendered as a link on its platform's domain, a story can't be published without consent, and drafts are hidden from other members; story search finds a word from the transcript. Permission tests are table-driven across roles: a member can't create/patch other people or touch relationships; a member can edit only their own contacts; hidden contact rows never appear in `/api/persons/{id}`, `/api/directory`, `/api/tree` or search for non-owners; the unique person-link constraint; refusing to delete a linked person; birth-year masking (living vs deceased, self, admin, across every endpoint that returns birth dates: search, profile, ancestors, descendants, directory, upcoming birthdays; `/api/tree` returns none); upcoming birthdays: Feb 29 handling, year-end wraparound (Dec 28 → Jan 5), deceased/deleted people skipped.
-- **Web:** Vitest + Testing Library for components; one Playwright smoke test (seed a user with a known password → sign in → add person → see tree) once Phase 4b lands.
+- **Web:** Vitest + Testing Library (jsdom) for components, ESLint (typescript-eslint, React hooks rules) and `tsc --noEmit` (`make web-check`, and CI's `web` job); one Playwright smoke test (seed a user with a known password → sign in → add person → see tree) once Phase 4b lands.
 ### 13.1 Branches, CI and releases
 
 **Branches (trunk-based):** `main` plus short-lived work branches named `<type>/kdelpe/<descriptive-name>` (types `feature`, `fix`, `docs`, `chore`; e.g. `feature/kdelpe/password-login-and-reset`). Every change reaches `main` through a PR that is **squash-merged**, so `main` has one commit per PR. Releases are tags on `main`.
@@ -1174,16 +1173,16 @@ For a "multi-decade" archive, this section matters more than any other.
 
 | Job | Checks |
 |---|---|
-| go | `go mod tidy -diff`, golangci-lint (its `standard` linters include `go vet`, plus the gofmt formatter; `.golangci.yml`), `govulncheck`, `go test -race` (via `make test`) with a `postgres:18.6` service whose `POSTGRES_DB` is `familyhub_test`, `make build` |
+| go | `go mod tidy -diff`, golangci-lint (its `standard` linters include `go vet`, plus the gofmt formatter; `.golangci.yml`), `govulncheck`, `go test -race` (via `make test`) with a `postgres:18.6` service whose `POSTGRES_DB` is `familyhub_test`, `make build-go` (with the placeholder UI) |
 | generated | Deletes `internal/database/gen` and every `mocks/` folder, then runs `make generate` (sqlc and mockery); fails if the working tree then differs, so stale or orphaned output is caught |
-| web | Lint, typecheck, tests, build |
+| web | `npm ci`, then `make web-check` (ESLint, `tsc --noEmit`, Vitest) and `make ui` (the Vite build), on the Node version the Dockerfile uses |
 | docker | `docker build` (no push) |
 
 **Releases** are cut by the owner in the GitHub UI. **`draft-release.yml`** runs on every push to `main` (each squash-merge) and keeps exactly one draft Release. With no draft, it creates one (`gh release create --draft`) suggesting the next patch after the highest published `vX.Y.Z` as the tag (`v0.1.0` when there is none). Releases are never deleted and prereleases aren't used, so that tag is always free. With a draft, it updates it in place: new target commit and regenerated notes since the last published release (notes for both paths come from the `releases/generate-notes` API, which accepts a tag that doesn't exist yet when given a target commit; the previous tag is passed explicitly because the API doesn't document a default), but the draft's tag name is kept, so a tag the owner changed survives, and it re-checks that the release is still a draft just before editing, so one published meanwhile keeps the owner's notes. It never deletes the draft, so a draft open in the UI can still be published. A `concurrency` group runs one at a time, so back-to-back merges can't create two drafts (a newer queued run replaces an older one, which is fine). The owner changes the tag for a minor or major bump, edits the notes just before publishing (a later merge regenerates them), and clicks Publish, which creates the tag. **`release.yml`** runs on `release: released` (a full release is published, or a prerelease is promoted to one), so a `-rc` prerelease never produces a deployable image: it checks out the tag with full history, fails unless the tag is `vX.Y.Z` and the tagged commit is on `main` (`git merge-base --is-ancestor`), then builds the image and pushes it to GitHub Container Registry as `ghcr.io/<owner>/<repo>:<tag>` with plain `docker login`/`build`/`push` and the workflow's `GITHUB_TOKEN` (no third-party actions). It refuses to push a tag that already has an image (a lookup that fails for any reason but "manifest unknown" also stops it), and runs one at a time per tag, so a version's image never changes. A package pushed by a workflow is linked to its repository and starts **private**; the VPS pulls it with a read-only token. The image tag is the version; the binary doesn't embed one. A tag ruleset on `v*` blocks updating or deleting release tags. Deploying is a separate, deliberate step (the VPS pulls the tagged image).
 
 **Workflow hygiene:** least-privilege `permissions:` per workflow (read-only by default; `draft-release.yml` gets `contents: write`, the release job gets `contents: read` and `packages: write` (listing any permission sets the rest to none)); third-party actions pinned to commit SHAs; Dependabot keeps them current.
 
-**Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), the `go`, `generated` and `docker` CI checks must pass on a branch that is up to date with `main` (add each new CI job here as it lands), no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
+**Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), the `go`, `generated`, `web` and `docker` CI checks must pass on a branch that is up to date with `main` (add each new CI job here as it lands), no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
 
 ## 14. Deployment (Phase 4c options)
 

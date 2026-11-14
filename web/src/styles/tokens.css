@@ -1,0 +1,27 @@
+/* Colors and font families (design-notes §1.1–1.2) come only from here, so dark mode is a swap. Sizes stay literal, as in the mockups. */
+:root {
+  --bg: #f6f1e7;
+  --surface: #fffdf8;
+  --surface-soft: #fbf7ef;
+  --brand-panel: #efe7d8;
+  --nav-active: #e9e0cf;
+  --border: #e2d9c8;
+  --divider: #efe8da;
+  --chip: #f1eadc;
+  --accent-tint: #e6eee9;
+  --input-border: #cfc4af;
+  --line: #b8ac94;
+  --avatar: #d9cdb5;
+  --avatar-soft: #e5dbc8;
+  --text: #2b2620;
+  --text-2: #4a433a;
+  --muted: #6b6358;
+  --accent: #2f5d50;
+  --accent-hover: #1e3f36;
+  --on-accent: #ffffff;
+  --switch-off: #8a8070;
+  --warning-tint: #f6e3d4;
+
+  --font-serif: Fraunces, Georgia, serif;
+  --font-sans: 'Source Sans 3', system-ui, sans-serif;
+}

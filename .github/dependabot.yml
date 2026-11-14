@@ -5,6 +5,14 @@ updates:
     schedule:
       interval: weekly
 
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-and-patch:
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -32,4 +40,7 @@ updates:
     ignore:
       # A new Go minor moves with go.mod and CI, by hand.
       - dependency-name: golang
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # A new Node minor moves with ci.yml's node-version, by hand. A patch PR needs that bumped too.
+      - dependency-name: node
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
