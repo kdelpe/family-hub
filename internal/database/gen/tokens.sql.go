@@ -50,6 +50,15 @@ func (q *Queries) DeleteOldExpiredTokens(ctx context.Context, batchSize int32) (
 	return result.RowsAffected(), nil
 }
 
+const deleteUserInvites = `-- name: DeleteUserInvites :exec
+DELETE FROM auth_tokens WHERE user_id = $1 AND purpose = 'invite'
+`
+
+func (q *Queries) DeleteUserInvites(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserInvites, userID)
+	return err
+}
+
 const deleteUserTokens = `-- name: DeleteUserTokens :exec
 DELETE FROM auth_tokens WHERE user_id = $1
 `

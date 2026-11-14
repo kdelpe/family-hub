@@ -281,19 +281,26 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUse
 }
 
 const lockAccount = `-- name: LockAccount :one
-SELECT email, role, disabled_at FROM users WHERE id = $1 FOR UPDATE
+SELECT email, role, disabled_at, (password_hash IS NOT NULL OR google_sub IS NOT NULL)::boolean AS set_up
+FROM users WHERE id = $1 FOR UPDATE
 `
 
 type LockAccountRow struct {
 	Email      string
 	Role       string
 	DisabledAt *time.Time
+	SetUp      bool
 }
 
 func (q *Queries) LockAccount(ctx context.Context, id uuid.UUID) (LockAccountRow, error) {
 	row := q.db.QueryRow(ctx, lockAccount, id)
 	var i LockAccountRow
-	err := row.Scan(&i.Email, &i.Role, &i.DisabledAt)
+	err := row.Scan(
+		&i.Email,
+		&i.Role,
+		&i.DisabledAt,
+		&i.SetUp,
+	)
 	return i, err
 }
 

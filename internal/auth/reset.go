@@ -178,7 +178,10 @@ func (r *Resets) send(ctx context.Context, email string) error {
 		return fmt.Errorf("commit reset: %w", err)
 	}
 
-	minutes := int(ResetLifetime.Minutes())
-	body := fmt.Sprintf(resetBody, SetPasswordLink(r.baseURL, token), minutes)
-	return r.mailer.Send(ctx, mail.Message{To: email, Subject: resetSubject, Body: body})
+	return r.mailer.Send(ctx, ResetMessage(r.baseURL, email, token))
+}
+
+func ResetMessage(baseURL, email, token string) mail.Message {
+	body := fmt.Sprintf(resetBody, SetPasswordLink(baseURL, token), int(ResetLifetime.Minutes()))
+	return mail.Message{To: email, Subject: resetSubject, Body: body}
 }

@@ -30,6 +30,10 @@ func CreateInvite(ctx context.Context, db gen.DBTX, userID uuid.UUID) (string, e
 	return createToken(ctx, db, userID, purposeInvite, InviteLifetime)
 }
 
+func CreatePasswordReset(ctx context.Context, db gen.DBTX, userID uuid.UUID) (string, error) {
+	return createToken(ctx, db, userID, purposePasswordReset, ResetLifetime)
+}
+
 // SetPasswordLink is the emailed link; the token goes in the fragment so it never reaches a server log (§5).
 func SetPasswordLink(baseURL, token string) string {
 	return baseURL + SetPasswordPath + token

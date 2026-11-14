@@ -214,6 +214,60 @@ func TestUpdateUser(t *testing.T) {
 	}
 }
 
+func TestSendReset(t *testing.T) {
+	tests := []struct {
+		name       string
+		id         string
+		resetErr   error
+		wantReset  bool
+		canceled   bool
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "sent", wantReset: true, wantStatus: http.StatusNoContent},
+		{name: "unknown or disabled user", wantReset: true, resetErr: admin.ErrUserNotFound, wantStatus: http.StatusNotFound,
+			wantBody: `{"error":{"code":"not_found","message":"user not found"}}`},
+		{name: "not a user id", id: "42", wantStatus: http.StatusNotFound, wantBody: `{"error":{"code":"not_found","message":"user not found"}}`},
+		{name: "email not sent", wantReset: true, resetErr: fmt.Errorf("%w: smtp: 550", admin.ErrEmailNotSent), wantStatus: http.StatusBadGateway,
+			wantBody: `{"error":{"code":"mail_failed","message":"the email couldn't be sent; try again"}}`},
+		{name: "busy", wantReset: true, resetErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable,
+			wantBody: `{"error":{"code":"busy","message":"try again in a moment"}}`},
+		{name: "database error", wantReset: true, resetErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+		{name: "client gone", wantReset: true, resetErr: context.Canceled, canceled: true, wantStatus: http.StatusOK},
+		{name: "a failed commit is reported after the client left", wantReset: true, resetErr: errors.New("commit: conn closed"), canceled: true,
+			wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewAdminService(t)
+			if tt.wantReset {
+				svc.EXPECT().SendReset(mock.Anything, testUser.ID).Return(tt.resetErr)
+			}
+			id := testUser.ID.String()
+			if tt.id != "" {
+				id = tt.id
+			}
+			req := withURLParam(httptest.NewRequest(http.MethodPost, "/api/admin/users/"+id+"/send-reset", nil), "id", id)
+			if tt.canceled {
+				ctx, cancel := context.WithCancel(req.Context())
+				cancel()
+				req = req.WithContext(ctx)
+			}
+			rec := httptest.NewRecorder()
+
+			handler.NewAdmin(svc).SendReset(rec, req)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			if tt.wantBody == "" {
+				assert.Empty(t, rec.Body.String())
+				return
+			}
+			assert.JSONEq(t, tt.wantBody, rec.Body.String())
+		})
+	}
+}
+
 func withURLParam(req *http.Request, key, value string) *http.Request {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add(key, value)

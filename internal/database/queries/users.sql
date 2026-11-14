@@ -69,7 +69,8 @@ WHERE u.id = @id
 GROUP BY u.id;
 
 -- name: LockAccount :one
-SELECT email, role, disabled_at FROM users WHERE id = @id FOR UPDATE;
+SELECT email, role, disabled_at, (password_hash IS NOT NULL OR google_sub IS NOT NULL)::boolean AS set_up
+FROM users WHERE id = @id FOR UPDATE;
 
 -- name: CountEnabledAdmins :one
 SELECT count(*) FROM users WHERE role = 'admin' AND disabled_at IS NULL;

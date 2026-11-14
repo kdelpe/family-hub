@@ -20,6 +20,7 @@ type AdminService interface {
 	Invite(ctx context.Context, in admin.InviteInput) (auth.User, error)
 	List(ctx context.Context, in admin.ListInput) (admin.Page, error)
 	Update(ctx context.Context, in admin.UpdateInput) (admin.Account, error)
+	SendReset(ctx context.Context, id uuid.UUID) error
 }
 
 type Admin struct {
@@ -111,6 +112,30 @@ func (a *Admin) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		busy(w)
 	default:
 		internalError(w, r, err, "update user")
+	}
+}
+
+// SendReset answers 204 once the email is out: a new invite or a password reset, as the account needs.
+func (a *Admin) SendReset(w http.ResponseWriter, r *http.Request) {
+	id, ok := userID(w, r)
+	if !ok {
+		return
+	}
+	err := a.svc.SendReset(r.Context(), id)
+	switch {
+	case err == nil:
+		w.WriteHeader(http.StatusNoContent)
+	// Only a plain cancel is dropped: a failed commit after the email went out must still be logged.
+	case clientGone(r) && errors.Is(err, context.Canceled):
+	case errors.Is(err, admin.ErrUserNotFound):
+		httpx.Error(w, http.StatusNotFound, "not_found", err.Error())
+	case errors.Is(err, admin.ErrEmailNotSent):
+		zerolog.Ctx(r.Context()).Error().Err(err).Msg("send reset")
+		httpx.Error(w, http.StatusBadGateway, "mail_failed", "the email couldn't be sent; try again")
+	case errors.Is(err, auth.ErrBusy):
+		busy(w)
+	default:
+		internalError(w, r, err, "send reset")
 	}
 }
 

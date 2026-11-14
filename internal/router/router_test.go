@@ -44,6 +44,7 @@ func TestRoutes(t *testing.T) {
 		{name: "changing the password needs a session", method: http.MethodPost, path: "/api/auth/password/change", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "listing users needs a session", method: http.MethodGet, path: "/api/admin/users", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "changing a user needs a session", method: http.MethodPatch, path: "/api/admin/users/01890000-0000-7000-8000-000000000001", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
+		{name: "sending a reset needs a session", method: http.MethodPost, path: "/api/admin/users/01890000-0000-7000-8000-000000000001/send-reset", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "inviting needs a session", method: http.MethodPost, path: "/api/admin/users", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "logout without a session still clears", method: http.MethodPost, path: "/api/auth/logout", wantStatus: http.StatusNoContent},
 		{name: "cross-site POST to /api is refused", method: http.MethodPost, path: "/api/auth/login", header: http.Header{"Sec-Fetch-Site": {"cross-site"}}, wantStatus: http.StatusForbidden, wantType: "application/json"},

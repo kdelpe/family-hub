@@ -78,6 +78,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 				r.Get("/admin/users", h.Admin.ListUsers)
 				r.Post("/admin/users", h.Admin.InviteUser)
 				r.Patch("/admin/users/{id}", h.Admin.UpdateUser)
+				r.Post("/admin/users/{id}/send-reset", h.Admin.SendReset)
 			})
 		})
 	})
