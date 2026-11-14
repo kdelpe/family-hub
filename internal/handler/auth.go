@@ -60,12 +60,12 @@ func (a *Auth) Providers(w http.ResponseWriter, _ *http.Request) {
 
 func (a *Auth) GoogleStart(w http.ResponseWriter, r *http.Request) {
 	if a.google == nil {
-		googleRefused(w, r, nil, "")
+		googleRefused(w, r)
 		return
 	}
 	handle, destination, err := a.google.Start(r.Context())
 	if err != nil {
-		googleRefused(w, r, err, "start Google sign-in")
+		googleFault(w, r, err, "start Google sign-in")
 		return
 	}
 	a.googleCookie.set(w, handle)
@@ -75,12 +75,12 @@ func (a *Auth) GoogleStart(w http.ResponseWriter, r *http.Request) {
 func (a *Auth) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	a.googleCookie.clear(w)
 	if a.google == nil {
-		googleRefused(w, r, nil, "")
+		googleRefused(w, r)
 		return
 	}
 	handle, err := r.Cookie("fh_oauth")
 	if err != nil {
-		googleRefused(w, r, nil, "")
+		googleRefused(w, r)
 		return
 	}
 	code := r.URL.Query().Get("code")
@@ -92,11 +92,11 @@ func (a *Auth) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(), ReplacesToken: a.cookieToken(r),
 	})
 	if errors.Is(err, auth.ErrGoogleAccess) {
-		googleRefused(w, r, nil, "")
+		googleRefused(w, r)
 		return
 	}
 	if err != nil {
-		googleRefused(w, r, err, "complete Google sign-in")
+		googleFault(w, r, err, "complete Google sign-in")
 		return
 	}
 	a.cookie.set(w, token)
@@ -104,15 +104,20 @@ func (a *Auth) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 // googleRefused sends the browser back to the sign-in page, which explains, rather than to an error
-// body; the Google routes are full-page navigations. A non-nil err is a fault worth logging.
-func googleRefused(w http.ResponseWriter, r *http.Request, err error, msg string) {
+// body: the Google routes are full-page navigations.
+func googleRefused(w http.ResponseWriter, r *http.Request) {
 	if clientGone(r) {
 		return
 	}
-	if err != nil {
+	http.Redirect(w, r, googleUnavailablePath, http.StatusSeeOther)
+}
+
+// googleFault logs a real failure, even when the client has left meanwhile, then refuses.
+func googleFault(w http.ResponseWriter, r *http.Request, err error, msg string) {
+	if !errors.Is(err, context.Canceled) {
 		zerolog.Ctx(r.Context()).Error().Err(err).Msg(msg)
 	}
-	http.Redirect(w, r, googleUnavailablePath, http.StatusSeeOther)
+	googleRefused(w, r)
 }
 
 type loginRequest struct {
