@@ -27,7 +27,7 @@ func TestSetPasswordWithToken(t *testing.T) {
 		{name: "invite for a user without a password", purpose: purposeInvite, setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`},
 		{name: "password reset", purpose: purposePasswordReset},
 		{name: "malformed token", purpose: purposePasswordReset, token: func(string) string { return "not-a-token" }, wantErr: ErrInvalidToken},
-		{name: "unknown token", purpose: purposePasswordReset, token: func(string) string { _, tok := newToken(); return tok }, wantErr: ErrInvalidToken},
+		{name: "unknown token", purpose: purposePasswordReset, token: func(string) string { return "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }, wantErr: ErrInvalidToken},
 		{name: "expired", purpose: purposePasswordReset, setup: `UPDATE auth_tokens SET expires_at = now() - interval '1 second'`, wantErr: ErrInvalidToken},
 		{name: "disabled user", purpose: purposeInvite, setup: `UPDATE users SET disabled_at = now()`, wantErr: ErrInvalidToken},
 		{name: "password too short", purpose: purposePasswordReset, password: "short", wantErr: ErrPasswordTooShort, linkStillWorks: true},
@@ -272,8 +272,11 @@ func passwordState(t *testing.T, pool *pgxpool.Pool) string {
 
 func insertToken(t *testing.T, pool *pgxpool.Pool, userID uuid.UUID, purpose string) (string, error) {
 	t.Helper()
-	raw, token := newToken()
-	_, err := pool.Exec(t.Context(), `INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '30 minutes')`,
+	raw, token, err := newToken()
+	if err != nil {
+		return "", err
+	}
+	_, err = pool.Exec(t.Context(), `INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '30 minutes')`,
 		userID, purpose, hashToken(raw))
 	return token, err
 }
@@ -305,7 +308,7 @@ func TestPreviewLink(t *testing.T) {
 		{name: "a Googlemail address can't", purpose: purposeInvite, email: "test@googlemail.com", want: LinkPreview{Purpose: purposeInvite, Email: "test@googlemail.com"}},
 		{name: "a look-alike domain can't", purpose: purposeInvite, email: "test@notgmail.com", want: LinkPreview{Purpose: purposeInvite, Email: "test@notgmail.com"}},
 		{name: "malformed token", purpose: purposeInvite, token: func(string) string { return "not-a-token" }, wantErr: ErrInvalidToken},
-		{name: "unknown token", purpose: purposeInvite, token: func(string) string { _, tok := newToken(); return tok }, wantErr: ErrInvalidToken},
+		{name: "unknown token", purpose: purposeInvite, token: func(string) string { return "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }, wantErr: ErrInvalidToken},
 		{name: "expired", purpose: purposeInvite, setup: `UPDATE auth_tokens SET expires_at = now() - interval '1 second'`, wantErr: ErrInvalidToken},
 		{name: "disabled user", purpose: purposeInvite, setup: `UPDATE users SET disabled_at = now()`, wantErr: ErrInvalidToken},
 		{name: "used", purpose: purposeInvite, setup: `UPDATE auth_tokens SET consumed_at = now()`, wantErr: ErrInvalidToken},

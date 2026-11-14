@@ -2,7 +2,20 @@
 SELECT id, password_hash, password_changed_at, disabled_at FROM users WHERE email = @email;
 
 -- name: LockUser :one
-SELECT email, role, password_changed_at, disabled_at FROM users WHERE id = @id FOR UPDATE;
+SELECT email, role, password_changed_at, disabled_at, google_sub FROM users WHERE id = @id FOR UPDATE;
+
+-- name: GetGoogleUserBySub :one
+SELECT id FROM users WHERE google_sub = @google_sub;
+
+-- name: GetInvitedGoogleUser :one
+SELECT id FROM users WHERE email = @email AND disabled_at IS NULL
+	AND password_hash IS NULL AND google_sub IS NULL;
+
+-- name: LinkGoogleAndRecordLogin :exec
+UPDATE users SET google_sub = @google_sub, last_login_at = clock_timestamp() WHERE id = @id;
+
+-- name: RecordGoogleLogin :exec
+UPDATE users SET last_login_at = clock_timestamp() WHERE id = @id;
 
 -- name: RecordLogin :exec
 UPDATE users

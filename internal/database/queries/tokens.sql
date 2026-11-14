@@ -15,3 +15,10 @@ VALUES (@user_id, @purpose, @token_hash, now() + @lifetime::interval);
 
 -- name: DeleteUserTokens :exec
 DELETE FROM auth_tokens WHERE user_id = @user_id;
+
+-- name: DeleteOldExpiredTokens :execrows
+WITH doomed AS (
+	SELECT id FROM auth_tokens WHERE expires_at < clock_timestamp() - interval '7 days'
+	ORDER BY expires_at LIMIT @batch_size FOR UPDATE SKIP LOCKED
+)
+DELETE FROM auth_tokens t USING doomed WHERE t.id = doomed.id;

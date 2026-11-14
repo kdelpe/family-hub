@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/httpx"
@@ -24,14 +25,72 @@ type ResetRequester interface {
 	Request(ctx context.Context, email string)
 }
 
-type Auth struct {
-	svc    AuthService
-	resets ResetRequester
-	cookie SessionCookie
+type GoogleAuthService interface {
+	Start(ctx context.Context) (string, string, error)
+	Complete(ctx context.Context, in auth.GoogleCallbackInput) (string, auth.User, error)
 }
 
-func NewAuth(svc AuthService, resets ResetRequester, cookie SessionCookie) *Auth {
-	return &Auth{svc: svc, resets: resets, cookie: cookie}
+type Auth struct {
+	svc          AuthService
+	resets       ResetRequester
+	cookie       SessionCookie
+	google       GoogleAuthService
+	googleCookie googleFlowCookie
+}
+
+func NewAuth(svc AuthService, resets ResetRequester, cookie SessionCookie, google ...GoogleAuthService) *Auth {
+	a := &Auth{svc: svc, resets: resets, cookie: cookie, googleCookie: newGoogleFlowCookie(cookie.secure)}
+	if len(google) > 0 {
+		a.google = google[0]
+	}
+	return a
+}
+
+func (a *Auth) GoogleStart(w http.ResponseWriter, r *http.Request) {
+	if a.google == nil {
+		http.NotFound(w, r)
+		return
+	}
+	handle, destination, err := a.google.Start(r.Context())
+	if err != nil {
+		internalError(w, r, err, "start Google sign-in")
+		return
+	}
+	a.googleCookie.set(w, handle)
+	http.Redirect(w, r, destination, http.StatusFound)
+}
+
+func (a *Auth) GoogleCallback(w http.ResponseWriter, r *http.Request) {
+	a.googleCookie.clear(w)
+	if a.google == nil {
+		http.Redirect(w, r, "/login?google=unavailable", http.StatusSeeOther)
+		return
+	}
+	handle, err := r.Cookie("fh_oauth")
+	if err != nil {
+		http.Redirect(w, r, "/login?google=unavailable", http.StatusSeeOther)
+		return
+	}
+	code := r.URL.Query().Get("code")
+	if r.URL.Query().Get("error") != "" {
+		code = ""
+	}
+	token, _, err := a.google.Complete(r.Context(), auth.GoogleCallbackInput{
+		Handle: handle.Value, State: r.URL.Query().Get("state"), Code: code,
+		UserAgent: r.UserAgent(), ReplacesToken: a.cookieToken(r),
+	})
+	if err != nil {
+		if !errors.Is(err, auth.ErrGoogleAccess) && !clientGone(r) {
+			zerolog.Ctx(r.Context()).Error().Err(err).Msg("complete Google sign-in")
+		}
+		if clientGone(r) {
+			return
+		}
+		http.Redirect(w, r, "/login?google=unavailable", http.StatusSeeOther)
+		return
+	}
+	a.cookie.set(w, token)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 type loginRequest struct {

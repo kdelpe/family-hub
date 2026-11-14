@@ -33,8 +33,10 @@ type Config struct {
 	CookieSecure bool
 	TrustedProxy bool
 	// Only serve loads these (LoadSMTP, LoadBaseURL), so a mistake in them never blocks migrate up or admin create.
-	SMTP    mail.SMTPConfig
-	BaseURL string
+	SMTP               mail.SMTPConfig
+	BaseURL            string
+	GoogleClientID     string
+	GoogleClientSecret string
 }
 
 // Load reads settings through getenv (os.Getenv outside tests) and reports every problem at once.
@@ -74,6 +76,11 @@ func Load(getenv func(string) string) (Config, error) {
 		errs = append(errs, err)
 	}
 	cfg.TrustedProxy = trustedProxy
+	cfg.GoogleClientID = strings.TrimSpace(getenv("GOOGLE_CLIENT_ID"))
+	cfg.GoogleClientSecret = strings.TrimSpace(getenv("GOOGLE_CLIENT_SECRET"))
+	if (cfg.GoogleClientID == "") != (cfg.GoogleClientSecret == "") {
+		errs = append(errs, errors.New("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together"))
+	}
 
 	if len(errs) > 0 {
 		return Config{}, fmt.Errorf("invalid config: %w", errors.Join(errs...))

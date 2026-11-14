@@ -54,6 +54,29 @@ func (q *Queries) EmailTaken(ctx context.Context, email string) (bool, error) {
 	return exists, err
 }
 
+const getGoogleUserBySub = `-- name: GetGoogleUserBySub :one
+SELECT id FROM users WHERE google_sub = $1
+`
+
+func (q *Queries) GetGoogleUserBySub(ctx context.Context, googleSub *string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getGoogleUserBySub, googleSub)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getInvitedGoogleUser = `-- name: GetInvitedGoogleUser :one
+SELECT id FROM users WHERE email = $1 AND disabled_at IS NULL
+	AND password_hash IS NULL AND google_sub IS NULL
+`
+
+func (q *Queries) GetInvitedGoogleUser(ctx context.Context, email string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getInvitedGoogleUser, email)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getLoginUser = `-- name: GetLoginUser :one
 SELECT id, password_hash, password_changed_at, disabled_at FROM users WHERE email = $1
 `
@@ -117,6 +140,20 @@ func (q *Queries) GetUserPassword(ctx context.Context, id uuid.UUID) (GetUserPas
 	return i, err
 }
 
+const linkGoogleAndRecordLogin = `-- name: LinkGoogleAndRecordLogin :exec
+UPDATE users SET google_sub = $1, last_login_at = clock_timestamp() WHERE id = $2
+`
+
+type LinkGoogleAndRecordLoginParams struct {
+	GoogleSub *string
+	ID        uuid.UUID
+}
+
+func (q *Queries) LinkGoogleAndRecordLogin(ctx context.Context, arg LinkGoogleAndRecordLoginParams) error {
+	_, err := q.db.Exec(ctx, linkGoogleAndRecordLogin, arg.GoogleSub, arg.ID)
+	return err
+}
+
 const lockEnabledUserByEmail = `-- name: LockEnabledUserByEmail :one
 SELECT id FROM users WHERE email = $1 AND disabled_at IS NULL FOR UPDATE
 `
@@ -129,7 +166,7 @@ func (q *Queries) LockEnabledUserByEmail(ctx context.Context, email string) (uui
 }
 
 const lockUser = `-- name: LockUser :one
-SELECT email, role, password_changed_at, disabled_at FROM users WHERE id = $1 FOR UPDATE
+SELECT email, role, password_changed_at, disabled_at, google_sub FROM users WHERE id = $1 FOR UPDATE
 `
 
 type LockUserRow struct {
@@ -137,6 +174,7 @@ type LockUserRow struct {
 	Role              string
 	PasswordChangedAt *time.Time
 	DisabledAt        *time.Time
+	GoogleSub         *string
 }
 
 func (q *Queries) LockUser(ctx context.Context, id uuid.UUID) (LockUserRow, error) {
@@ -147,8 +185,18 @@ func (q *Queries) LockUser(ctx context.Context, id uuid.UUID) (LockUserRow, erro
 		&i.Role,
 		&i.PasswordChangedAt,
 		&i.DisabledAt,
+		&i.GoogleSub,
 	)
 	return i, err
+}
+
+const recordGoogleLogin = `-- name: RecordGoogleLogin :exec
+UPDATE users SET last_login_at = clock_timestamp() WHERE id = $1
+`
+
+func (q *Queries) RecordGoogleLogin(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, recordGoogleLogin, id)
+	return err
 }
 
 const recordLogin = `-- name: RecordLogin :exec

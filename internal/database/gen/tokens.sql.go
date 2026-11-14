@@ -34,6 +34,22 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) error 
 	return err
 }
 
+const deleteOldExpiredTokens = `-- name: DeleteOldExpiredTokens :execrows
+WITH doomed AS (
+	SELECT id FROM auth_tokens WHERE expires_at < clock_timestamp() - interval '7 days'
+	ORDER BY expires_at LIMIT $1 FOR UPDATE SKIP LOCKED
+)
+DELETE FROM auth_tokens t USING doomed WHERE t.id = doomed.id
+`
+
+func (q *Queries) DeleteOldExpiredTokens(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOldExpiredTokens, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteUserTokens = `-- name: DeleteUserTokens :exec
 DELETE FROM auth_tokens WHERE user_id = $1
 `

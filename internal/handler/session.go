@@ -22,6 +22,27 @@ type SessionCookie struct {
 	secure bool
 }
 
+type googleFlowCookie struct{ secure bool }
+
+func newGoogleFlowCookie(secure bool) googleFlowCookie {
+	return googleFlowCookie{secure: secure}
+}
+
+func (c googleFlowCookie) set(w http.ResponseWriter, value string) {
+	http.SetCookie(w, c.cookie(value, 600))
+}
+
+func (c googleFlowCookie) clear(w http.ResponseWriter) {
+	http.SetCookie(w, c.cookie("", -1))
+}
+
+func (c googleFlowCookie) cookie(value string, maxAge int) *http.Cookie {
+	return &http.Cookie{
+		Name: "fh_oauth", Value: value, Path: "/api/auth/google", MaxAge: maxAge,
+		HttpOnly: true, Secure: c.secure, SameSite: http.SameSiteLaxMode,
+	}
+}
+
 func NewSessionCookie(secure bool) SessionCookie {
 	if secure {
 		return SessionCookie{name: secureSessionCookie, secure: true}

@@ -31,6 +31,21 @@ func TestLoad(t *testing.T) {
 			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: "127.0.0.1:9000", AutoMigrate: true, CookieSecure: true},
 		},
 		{
+			name: "Google sign-in configured",
+			env:  map[string]string{"DATABASE_URL": validDatabaseURL, "GOOGLE_CLIENT_ID": "client-id", "GOOGLE_CLIENT_SECRET": "client-secret"},
+			want: Config{DatabaseURL: validDatabaseURL, HTTPAddr: ":8080", CookieSecure: true, GoogleClientID: "client-id", GoogleClientSecret: "client-secret"},
+		},
+		{
+			name:        "Google client ID without secret",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "GOOGLE_CLIENT_ID": "client-id"},
+			wantErrMsgs: []string{"GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together"},
+		},
+		{
+			name:        "Google secret without client ID",
+			env:         map[string]string{"DATABASE_URL": validDatabaseURL, "GOOGLE_CLIENT_SECRET": "client-secret"},
+			wantErrMsgs: []string{"GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together"},
+		},
+		{
 			name: "postgresql scheme",
 			env:  map[string]string{"DATABASE_URL": "postgresql://app@db/familyhub"},
 			want: Config{DatabaseURL: "postgresql://app@db/familyhub", HTTPAddr: ":8080", CookieSecure: true},

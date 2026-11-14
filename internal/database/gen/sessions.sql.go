@@ -12,6 +12,49 @@ import (
 	"time"
 )
 
+const consumeOAuthFlow = `-- name: ConsumeOAuthFlow :one
+UPDATE oauth_flows SET consumed_at = clock_timestamp()
+WHERE handle_hash = $1 AND consumed_at IS NULL AND expires_at > clock_timestamp()
+RETURNING state, nonce, pkce_verifier
+`
+
+type ConsumeOAuthFlowRow struct {
+	State        string
+	Nonce        string
+	PkceVerifier string
+}
+
+func (q *Queries) ConsumeOAuthFlow(ctx context.Context, handleHash []byte) (ConsumeOAuthFlowRow, error) {
+	row := q.db.QueryRow(ctx, consumeOAuthFlow, handleHash)
+	var i ConsumeOAuthFlowRow
+	err := row.Scan(&i.State, &i.Nonce, &i.PkceVerifier)
+	return i, err
+}
+
+const createOAuthFlow = `-- name: CreateOAuthFlow :exec
+INSERT INTO oauth_flows (handle_hash, state, nonce, pkce_verifier, expires_at)
+VALUES ($1, $2, $3, $4, now() + $5::interval)
+`
+
+type CreateOAuthFlowParams struct {
+	HandleHash   []byte
+	State        string
+	Nonce        string
+	PkceVerifier string
+	Lifetime     time.Duration
+}
+
+func (q *Queries) CreateOAuthFlow(ctx context.Context, arg CreateOAuthFlowParams) error {
+	_, err := q.db.Exec(ctx, createOAuthFlow,
+		arg.HandleHash,
+		arg.State,
+		arg.Nonce,
+		arg.PkceVerifier,
+		arg.Lifetime,
+	)
+	return err
+}
+
 const createSession = `-- name: CreateSession :exec
 INSERT INTO sessions (id_hash, user_id, expires_at, user_agent)
 VALUES ($1, $2, now() + $3::interval, $4)
@@ -34,6 +77,22 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 	return err
 }
 
+const deleteExpiredSessions = `-- name: DeleteExpiredSessions :execrows
+WITH doomed AS (
+  SELECT id_hash FROM sessions WHERE expires_at <= clock_timestamp()
+  ORDER BY expires_at LIMIT $1 FOR UPDATE SKIP LOCKED
+)
+DELETE FROM sessions s USING doomed WHERE s.id_hash = doomed.id_hash
+`
+
+func (q *Queries) DeleteExpiredSessions(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredSessions, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteSession = `-- name: DeleteSession :exec
 DELETE FROM sessions WHERE id_hash = $1
 `
@@ -41,6 +100,23 @@ DELETE FROM sessions WHERE id_hash = $1
 func (q *Queries) DeleteSession(ctx context.Context, idHash []byte) error {
 	_, err := q.db.Exec(ctx, deleteSession, idHash)
 	return err
+}
+
+const deleteStaleOAuthFlows = `-- name: DeleteStaleOAuthFlows :execrows
+WITH doomed AS (
+  SELECT handle_hash FROM oauth_flows
+  WHERE consumed_at IS NOT NULL OR expires_at <= clock_timestamp()
+  ORDER BY expires_at LIMIT $1 FOR UPDATE SKIP LOCKED
+)
+DELETE FROM oauth_flows f USING doomed WHERE f.handle_hash = doomed.handle_hash
+`
+
+func (q *Queries) DeleteStaleOAuthFlows(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteStaleOAuthFlows, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteUserSessions = `-- name: DeleteUserSessions :exec
