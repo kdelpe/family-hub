@@ -148,7 +148,11 @@ func (s *Persons) List(ctx context.Context, viewer Viewer, in ListInput) ([]Pers
 }
 
 func (s *Persons) Get(ctx context.Context, viewer Viewer, id uuid.UUID) (Person, error) {
-	row, err := gen.New(s.pool).GetPerson(ctx, gen.GetPersonParams{ViewerIsAdmin: viewer.IsAdmin, ViewerPersonID: viewer.PersonID, ID: id})
+	return get(ctx, gen.New(s.pool), viewer, id)
+}
+
+func get(ctx context.Context, q *gen.Queries, viewer Viewer, id uuid.UUID) (Person, error) {
+	row, err := q.GetPerson(ctx, gen.GetPersonParams{ViewerIsAdmin: viewer.IsAdmin, ViewerPersonID: viewer.PersonID, ID: id})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Person{}, ErrPersonNotFound
 	}
@@ -164,10 +168,10 @@ func (s *Persons) Create(ctx context.Context, createdBy uuid.UUID, in PersonInpu
 	if err != nil {
 		return Person{}, err
 	}
-	var id uuid.UUID
+	var person Person
 	// The created_by foreign key waits on the creator's users row, which sign-ins lock FOR UPDATE.
-	err = s.write(ctx, "create person", func(q *gen.Queries) (err error) {
-		id, err = q.CreatePerson(ctx, gen.CreatePersonParams{
+	err = s.write(ctx, "create person", func(q *gen.Queries) error {
+		id, err := q.CreatePerson(ctx, gen.CreatePersonParams{
 			FirstName: f.FirstName, MiddleName: f.MiddleName, LastName: f.LastName, MaidenName: f.MaidenName, Side: f.Side,
 			BirthPlace: f.BirthPlace, Gender: f.Gender, BirthDate: f.birthDate, BirthDatePrecision: f.BirthDatePrecision,
 			DeathDate: f.deathDate, DeathDatePrecision: f.DeathDatePrecision, IsDeceased: f.IsDeceased, Bio: f.Bio, CreatedBy: &createdBy,
@@ -175,16 +179,18 @@ func (s *Persons) Create(ctx context.Context, createdBy uuid.UUID, in PersonInpu
 		if err != nil {
 			return fmt.Errorf("create person: %w", err)
 		}
-		return nil
+		person, err = get(ctx, q, Viewer{IsAdmin: true}, id)
+		return err
 	})
 	if err != nil {
 		return Person{}, err
 	}
-	return s.Get(ctx, Viewer{IsAdmin: true}, id)
+	return person, nil
 }
 
 // Update is admin-only for now; a member editing their own bio comes with person linking (§5.1).
 func (s *Persons) Update(ctx context.Context, id uuid.UUID, patch PersonPatch) (Person, error) {
+	var person Person
 	err := s.write(ctx, "update person", func(q *gen.Queries) error {
 		row, err := q.LockPerson(ctx, id)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -205,12 +211,13 @@ func (s *Persons) Update(ctx context.Context, id uuid.UUID, patch PersonPatch) (
 		if err != nil {
 			return fmt.Errorf("update person: %w", err)
 		}
-		return nil
+		person, err = get(ctx, q, Viewer{IsAdmin: true}, id)
+		return err
 	})
 	if err != nil {
 		return Person{}, err
 	}
-	return s.Get(ctx, Viewer{IsAdmin: true}, id)
+	return person, nil
 }
 
 // Delete only hides the person; their relationships stay, so Restore puts them back where they were (§3.1).
@@ -228,6 +235,7 @@ func (s *Persons) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *Persons) Restore(ctx context.Context, id uuid.UUID) (Person, error) {
+	var person Person
 	err := s.write(ctx, "restore person", func(q *gen.Queries) error {
 		n, err := q.RestorePerson(ctx, id)
 		if err != nil {
@@ -236,16 +244,18 @@ func (s *Persons) Restore(ctx context.Context, id uuid.UUID) (Person, error) {
 		if n == 0 {
 			return ErrPersonNotFound
 		}
-		return nil
+		person, err = get(ctx, q, Viewer{IsAdmin: true}, id)
+		return err
 	})
 	if err != nil {
 		return Person{}, err
 	}
-	return s.Get(ctx, Viewer{IsAdmin: true}, id)
+	return person, nil
 }
 
 // write runs fn in a transaction whose lock waits give up after lockTimeout with ErrBusy,
-// so a held row can't pin a pool connection.
+// so a held row can't pin a pool connection. Writes read their result back inside fn, so
+// what they answer is what committed.
 func (s *Persons) write(ctx context.Context, what string, fn func(q *gen.Queries) error) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
