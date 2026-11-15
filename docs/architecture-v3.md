@@ -132,7 +132,7 @@ Conventions: **Postgres 18**. UUID PKs via the built-in `uuidv7()` (Postgres 18,
 
 ### 3.1 Full schema (written as one migration per PR, §6.2)
 
-Phase 2's migrations hold `users`, `auth_tokens` and `sessions` (`000001_create_auth_tables` also made the Google sign-in table and column that `000002_remove_google_sign_in` drops, §5). Phase 3's `000003_create_persons` adds `persons`, `pg_trgm` and `masked_birth_date`; `persons.avatar_media_id` waits for `media` (Phase 5), and `users.person_id`, its unique index and its foreign key come with account linking (§5.1).
+Phase 2's migrations hold `users`, `auth_tokens` and `sessions` (`000001_create_auth_tables` also made the Google sign-in table and column that `000002_remove_google_sign_in` drops, §5). Phase 3's `000003_create_persons` adds `persons`, `pg_trgm` and `masked_birth_date`, and `000004_create_relationships` adds `relationships`; `persons.avatar_media_id` waits for `media` (Phase 5), and `users.person_id`, its unique index and its foreign key come with account linking (§5.1).
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- fuzzy name search for tagging autocomplete
@@ -441,7 +441,7 @@ Down migrations are a local-dev convenience. In production, fix forward with a n
 
 - Relationships carry no start/end dates (marriage, divorce). A couple's `ended` flag says current vs former; that's all the tree needs. Add dates later only if needed.
 - A couple who divorce and remarry each other is one row (`rel_unique`); set `ended` back to false. Their history isn't modelled.
-- At most two **biological** parents per person. Enforced in the service (inside the relationship-write transaction, §10), since a row-count rule can't be a plain constraint. Adoptive and foster parents are not limited.
+- At most two **biological** parents per person. Enforced in the service (inside the relationship-write transaction, §10), since a row-count rule can't be a plain constraint. Links to soft-deleted parents count too, so a restore can't bring back a third. Adoptive and foster parents are not limited.
 - Gender is a free label for display, not used for tree logic.
 - Soft-deleted people keep their relationship rows; tree queries filter on `persons.deleted_at IS NULL`.
 - Contact visibility has three levels (`hidden`, `family`, and `on_request` for phones, WhatsApp and addresses, shared one person at a time through `contact_requests`, §5.2). Other audiences ("close family only", group allow lists) are deliberately out of scope; see §16.
@@ -1091,16 +1091,16 @@ GROUP BY p.id;
 -- name: IsAncestor :one
 WITH RECURSIVE anc(id) AS (
   SELECT person_a FROM relationships
-  WHERE type = 'parent_child' AND person_b = sqlc.arg(parent_id)
+  WHERE type = 'parent_child' AND person_b = sqlc.arg(parent_id)::uuid
   UNION
   SELECT r.person_a FROM relationships r
   JOIN anc ON r.person_b = anc.id
   WHERE r.type = 'parent_child'
 )
-SELECT EXISTS (SELECT 1 FROM anc WHERE id = sqlc.arg(child_id));
+SELECT EXISTS (SELECT 1 FROM anc WHERE id = sqlc.arg(child_id)::uuid);
 ```
 
-  Couple edges aren't traversed, so they can't create loops. The same locked transaction also rejects a third **biological** parent for the child (§3.3).
+  The `::uuid` casts are for sqlc, which can't infer a parameter's type inside a recursive CTE. Couple edges aren't traversed, so they can't create loops. The same locked transaction also rejects a third **biological** parent for the child (§3.3).
 - **Name search** queries the `search_name` generated column (§3.1), which the trigram index covers, so query and index can't drift apart. To make middle or maiden names searchable later, change the column's expression in a migration.
 - Direction convention is enforced by the service, not just documented: the API accepts `{type:"parent_child", parent_id, child_id}` and maps to `person_a/person_b`; for couples it sorts the pair so `person_a < person_b`.
 
