@@ -2,8 +2,9 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 
-import { authKeys, googleStartPath, login, providers } from '../../api/auth'
+import { googleStartPath, login, providersQuery } from '../../api/auth'
 import { ApiError } from '../../api/client'
+import { PasswordInput } from '../../components/PasswordInput/PasswordInput'
 import { errorMessage } from '../../lib/errorMessage'
 import page from '../../styles/signInForm.module.css'
 import styles from './Login.module.css'
@@ -16,7 +17,6 @@ const googleOffMessage = 'Signing in with Google isn’t available. Sign in with
 export function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [passwordShown, setPasswordShown] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   // Read once, then dropped from the address, so a reload doesn't show it again.
   const [googleFailed, setGoogleFailed] = useState(searchParams.get('google') === 'unavailable')
@@ -30,15 +30,7 @@ export function Login() {
     }
   }, [searchParams, setSearchParams])
 
-  const { data: available, isPending: providersPending } = useQuery({
-    queryKey: authKeys.providers,
-    queryFn: providers,
-    staleTime: Infinity,
-    // One quick check: retrying would hold back the Google button and message for seconds.
-    retry: false,
-    // Not paused while the browser says it's offline, which would keep the Google part hidden.
-    networkMode: 'always',
-  })
+  const { data: available, isPending: providersPending } = useQuery(providersQuery)
   const signIn = useMutation({
     mutationFn: () => login(email, password),
     onSuccess: () => void navigate('/', { replace: true }),
@@ -103,29 +95,16 @@ export function Login() {
                 Forgot password?
               </Link>
             </div>
-            <div className={styles.passwordBox}>
-              <input
-                id="si-pw"
-                type={passwordShown ? 'text' : 'password'}
-                autoComplete="current-password"
-                required
-                readOnly={signIn.isPending}
-                value={password}
-                onChange={(event) => {
-                  setPassword(event.target.value)
-                  clearError()
-                }}
-                className={styles.passwordInput}
-              />
-              <button
-                type="button"
-                aria-pressed={passwordShown}
-                onClick={() => setPasswordShown(!passwordShown)}
-                className={styles.reveal}
-              >
-                {passwordShown ? 'Hide' : 'Show'}
-              </button>
-            </div>
+            <PasswordInput
+              id="si-pw"
+              autoComplete="current-password"
+              readOnly={signIn.isPending}
+              value={password}
+              onChange={(value) => {
+                setPassword(value)
+                clearError()
+              }}
+            />
           </div>
 
           {error && (
@@ -148,12 +127,12 @@ export function Login() {
           {/* Shown too if the check failed: the link then either works or comes back here with a message. */}
           {available?.google !== false && (
             <div className={providersPending ? `${styles.google} ${styles.reserved}` : styles.google}>
-              <div aria-hidden="true" className={styles.divider}>
-                <span className={styles.rule} />
+              <div aria-hidden="true" className={page.divider}>
+                <span className={page.rule} />
                 or
-                <span className={styles.rule} />
+                <span className={page.rule} />
               </div>
-              <a href={googleStartPath} className={`pill ${page.secondary} ${styles.googleButton}`}>
+              <a href={googleStartPath} className={`pill ${page.secondary} ${page.googleButton}`}>
                 Continue with Google
               </a>
             </div>

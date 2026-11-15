@@ -76,6 +76,11 @@
   font-weight: 600;
   font-size: 18px;
   cursor: pointer;
+  text-decoration: none;
+}
+
+.primary:hover {
+  color: var(--on-accent);
 }
 
 .primary[aria-disabled='true'] {
@@ -94,6 +99,26 @@
 
 .secondary:hover {
   color: var(--text);
+}
+
+.googleButton {
+  height: 52px;
+  border-radius: 26px;
+  background: var(--surface);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.rule {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
 }
 
 @keyframes rise {
