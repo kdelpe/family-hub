@@ -292,7 +292,7 @@ CREATE TABLE access_requests (
   email           TEXT NOT NULL CHECK (email = lower(email)),
   side            TEXT CHECK (side IN ('first','second','married_in')),  -- labels from FAMILY_SIDES (§6.5)
   relationship    TEXT,                                 -- "daughter", "brother", … from the form's list
-  related_names   TEXT[] NOT NULL DEFAULT '{}',         -- names as typed, 1–4
+  related_names   TEXT[] NOT NULL DEFAULT '{}',         -- names as typed, up to 4 (the form asks for them "if you can")
   note            TEXT,
   source          TEXT NOT NULL CHECK (source IN ('self','member_suggestion')),
   suggested_by    UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -1202,7 +1202,7 @@ Either way: `TRUSTED_PROXY=true` only when behind Caddy/the platform proxy, `COO
 
 **MVP = Phases 1 through 5b**: a working tree, logins, access requests, contact visibility and upcoming birthdays, events with photos and video, and family stories, **deployed with backups and in the family's hands**. The transcoding worker (Phase 6) comes only once you've actually hit a playback problem.
 
-**Order (changed November 2026):** after Phase 2, Phase 4a starts with the shell and the five pages before sign-in (Login, Request access, Welcome, First setup, Forgot password), which need only the auth API, so the design can be seen early. Request access is wired to its endpoint when Phase 3 adds it. Then Phase 3, then the rest of 4a.
+**Order (changed November 2026):** after Phase 2, Phase 4a starts with the shell and the five pages before sign-in (Login, Request access, Welcome, First setup, Forgot password), which need only the auth API, so the design can be seen early. Request access already sends to `POST /api/access-requests`; until Phase 3 adds the endpoint, sending shows the general error. Its side labels are the sample family's until the frontend can read `FAMILY_SIDES`. Then Phase 3, then the rest of 4a.
 
 Real family data gets entered from Phase 4 onward, so Phase 4c deploys with backups before any media work starts, and the family can start using it then. Nothing precious should live only on a laptop. Phases 5 and 5b complete the MVP on that deployment.
 
