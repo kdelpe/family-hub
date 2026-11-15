@@ -8,8 +8,10 @@ import { ForgotPassword } from './ForgotPassword'
 
 const email = 'maya.pluviose@example.com'
 
-function renderPage(answer: Response | 'network error') {
-  const fetch = vi.fn(() => (answer === 'network error' ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve(answer)))
+function renderPage(answer: Response | Promise<Response> | 'network error') {
+  const fetch = vi.fn(() =>
+    answer === 'network error' ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve(answer),
+  )
   vi.stubGlobal('fetch', fetch)
   const router = createMemoryRouter([{ path: '/auth/forgot', element: <ForgotPassword /> }], {
     initialEntries: ['/auth/forgot'],
@@ -43,8 +45,19 @@ describe('ForgotPassword', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
-      signal: undefined,
     })
+  })
+
+  it('sends once and locks the email while sending', async () => {
+    const fetch = renderPage(new Promise<Response>(() => {}))
+
+    send()
+    fireEvent.click(await screen.findByRole('button', { name: 'Sending…' }))
+    // A second send would reach fetch a tick later, so give it one.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(screen.getByLabelText('Email')).toHaveAttribute('readonly')
   })
 
   it.each([

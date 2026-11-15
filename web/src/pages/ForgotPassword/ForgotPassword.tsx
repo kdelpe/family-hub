@@ -4,7 +4,7 @@ import { Link } from 'react-router'
 
 import { forgotPassword } from '../../api/auth'
 import { errorMessage } from '../../lib/errorMessage'
-import page from '../../components/SignInForm/SignInForm.module.css'
+import page from '../../styles/signInForm.module.css'
 import styles from './ForgotPassword.module.css'
 
 export function ForgotPassword() {
@@ -12,8 +12,7 @@ export function ForgotPassword() {
   const send = useMutation({ mutationFn: () => forgotPassword(email) })
   const sentHeading = useRef<HTMLHeadingElement>(null)
 
-  // aria-disabled, not disabled, keeps the button focused while sending. The form then goes away,
-  // so the heading takes focus: keyboard and screen-reader users land on the result.
+  // The focused button goes away with the form; the heading takes focus, so keyboard users land on the result.
   useEffect(() => {
     if (send.isSuccess) {
       sentHeading.current?.focus()
@@ -36,7 +35,7 @@ export function ForgotPassword() {
             <span aria-hidden="true">← </span>Back to sign in
           </Link>
           {send.isSuccess ? (
-            <div className={styles.sent}>
+            <div role="status" className={styles.sent}>
               <div className={styles.envelope}>
                 <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24">
                   <path d="M3 6 H21 V18 H3 Z M3 6 L12 13 L21 6" className={styles.envelopeLine} strokeWidth="2" />
@@ -87,6 +86,7 @@ export function ForgotPassword() {
                   {errorMessage(send.error)}
                 </p>
               )}
+              {/* aria-disabled, not disabled: it keeps keyboard focus while sending. */}
               <button type="submit" aria-disabled={send.isPending} className={`pill ${page.primary}`}>
                 {send.isPending ? 'Sending…' : 'Send me a reset link'}
               </button>

@@ -5,7 +5,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { authKeys, googleStartPath, login, providers } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { errorMessage } from '../../lib/errorMessage'
-import page from '../../components/SignInForm/SignInForm.module.css'
+import page from '../../styles/signInForm.module.css'
 import styles from './Login.module.css'
 
 // Not "try again": the account may be refused for good (not invited), which a retry can't fix.
@@ -54,7 +54,7 @@ export function Login() {
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    // The button is aria-disabled, not disabled, so it keeps keyboard focus while signing in.
+    // The button is aria-disabled, not disabled, so it keeps keyboard focus; this does its job.
     if (signIn.isPending) {
       return
     }
@@ -85,6 +85,7 @@ export function Login() {
               type="email"
               autoComplete="email"
               required
+              readOnly={signIn.isPending}
               value={email}
               onChange={(event) => {
                 setEmail(event.target.value)
@@ -108,6 +109,7 @@ export function Login() {
                 type={passwordShown ? 'text' : 'password'}
                 autoComplete="current-password"
                 required
+                readOnly={signIn.isPending}
                 value={password}
                 onChange={(event) => {
                   setPassword(event.target.value)

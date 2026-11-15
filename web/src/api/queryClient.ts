@@ -9,4 +9,11 @@ export function shouldRetry(failures: number, error: Error): boolean {
   return failures < maxRetries && error instanceof ApiError && (error.status >= 500 || error.status === networkErrorStatus)
 }
 
-export const createQueryClient = () => new QueryClient({ defaultOptions: { queries: { retry: shouldRetry } } })
+export const createQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: { retry: shouldRetry },
+      // Not paused while the browser says it's offline: the request fails, and the page says so.
+      mutations: { networkMode: 'always' },
+    },
+  })
