@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -24,6 +25,10 @@ type FamilyService interface {
 	CreateRelationship(ctx context.Context, in family.RelationshipInput) (family.Relationship, error)
 	UpdateRelationship(ctx context.Context, id uuid.UUID, patch family.RelationshipPatch) (family.Relationship, error)
 	DeleteRelationship(ctx context.Context, id uuid.UUID) error
+	Tree(ctx context.Context) (family.Tree, error)
+	Ancestors(ctx context.Context, viewer family.Viewer, id uuid.UUID, depth int) ([]family.Relative, error)
+	Descendants(ctx context.Context, viewer family.Viewer, id uuid.UUID, depth int) ([]family.Relative, error)
+	Summary(ctx context.Context) (family.Summary, error)
 }
 
 type Family struct {
@@ -133,6 +138,58 @@ type updateRelationshipRequest struct {
 	Subtype required[string]  `json:"subtype"`
 	Ended   required[bool]    `json:"ended"`
 	Notes   optional[*string] `json:"notes"`
+}
+
+type treeResponse struct {
+	Persons       []treePersonResponse `json:"persons"`
+	Relationships []treeLinkResponse   `json:"relationships"`
+}
+
+type treePersonResponse struct {
+	ID         uuid.UUID `json:"id"`
+	FirstName  string    `json:"first_name"`
+	LastName   *string   `json:"last_name"`
+	Side       *string   `json:"side"`
+	Gender     *string   `json:"gender"`
+	IsDeceased bool      `json:"is_deceased"`
+	BioExcerpt *string   `json:"bio_excerpt"`
+}
+
+// treeLinkResponse is a relationshipResponse without the notes.
+type treeLinkResponse struct {
+	ID        uuid.UUID   `json:"id"`
+	Type      string      `json:"type"`
+	Subtype   string      `json:"subtype"`
+	Ended     bool        `json:"ended"`
+	ParentID  uuid.UUID   `json:"parent_id,omitzero"`
+	ChildID   uuid.UUID   `json:"child_id,omitzero"`
+	PersonIDs []uuid.UUID `json:"person_ids,omitempty"`
+}
+
+type relativesResponse struct {
+	Persons []relativeResponse `json:"persons"`
+}
+
+type relativeResponse struct {
+	ID                 uuid.UUID `json:"id"`
+	FirstName          string    `json:"first_name"`
+	LastName           *string   `json:"last_name"`
+	IsDeceased         bool      `json:"is_deceased"`
+	BirthDate          *string   `json:"birth_date"`
+	BirthDatePrecision *string   `json:"birth_date_precision"`
+	Depth              int       `json:"depth"`
+}
+
+type summaryResponse struct {
+	People         int                     `json:"people"`
+	Generations    int                     `json:"generations"`
+	EarliestRecord *earliestRecordResponse `json:"earliest_record"`
+}
+
+type earliestRecordResponse struct {
+	Year  int     `json:"year"`
+	Circa bool    `json:"circa"`
+	Place *string `json:"place"`
 }
 
 func (f *Family) SearchPersons(w http.ResponseWriter, r *http.Request) {
@@ -276,6 +333,82 @@ func (f *Family) DeleteRelationship(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (f *Family) Tree(w http.ResponseWriter, r *http.Request) {
+	tree, err := f.svc.Tree(r.Context())
+	if err != nil {
+		f.fail(w, r, err, "tree")
+		return
+	}
+	resp := treeResponse{
+		Persons:       make([]treePersonResponse, 0, len(tree.Persons)),
+		Relationships: make([]treeLinkResponse, 0, len(tree.Relationships)),
+	}
+	for _, p := range tree.Persons {
+		resp.Persons = append(resp.Persons, treePersonResponse(p))
+	}
+	for _, l := range tree.Relationships {
+		link := treeLinkResponse{ID: l.ID, Type: l.Type, Subtype: l.Subtype, Ended: l.Ended}
+		if l.Type == family.ParentChild {
+			link.ParentID, link.ChildID = l.PersonA, l.PersonB
+		} else {
+			link.PersonIDs = []uuid.UUID{l.PersonA, l.PersonB}
+		}
+		resp.Relationships = append(resp.Relationships, link)
+	}
+	httpx.JSON(w, http.StatusOK, resp)
+}
+
+func (f *Family) Ancestors(w http.ResponseWriter, r *http.Request) {
+	f.relatives(w, r, "ancestors", f.svc.Ancestors)
+}
+
+func (f *Family) Descendants(w http.ResponseWriter, r *http.Request) {
+	f.relatives(w, r, "descendants", f.svc.Descendants)
+}
+
+func (f *Family) relatives(w http.ResponseWriter, r *http.Request, what string,
+	walk func(ctx context.Context, viewer family.Viewer, id uuid.UUID, depth int) ([]family.Relative, error)) {
+	viewer, ok := currentViewer(w, r)
+	if !ok {
+		return
+	}
+	id, ok := personID(w, r)
+	if !ok {
+		return
+	}
+	depth := family.DefaultDepth
+	if raw := r.URL.Query().Get("depth"); raw != "" {
+		var err error
+		if depth, err = strconv.Atoi(raw); err != nil {
+			httpx.Error(w, http.StatusBadRequest, "validation_error", "depth must be a whole number")
+			return
+		}
+	}
+	relatives, err := walk(r.Context(), viewer, id, depth)
+	if err != nil {
+		f.fail(w, r, err, what)
+		return
+	}
+	resp := relativesResponse{Persons: make([]relativeResponse, 0, len(relatives))}
+	for _, rel := range relatives {
+		resp.Persons = append(resp.Persons, relativeResponse(rel))
+	}
+	httpx.JSON(w, http.StatusOK, resp)
+}
+
+func (f *Family) Summary(w http.ResponseWriter, r *http.Request) {
+	sum, err := f.svc.Summary(r.Context())
+	if err != nil {
+		f.fail(w, r, err, "family summary")
+		return
+	}
+	resp := summaryResponse{People: sum.People, Generations: sum.Generations}
+	if sum.EarliestRecord != nil {
+		resp.EarliestRecord = (*earliestRecordResponse)(sum.EarliestRecord)
+	}
+	httpx.JSON(w, http.StatusOK, resp)
 }
 
 func (f *Family) answer(w http.ResponseWriter, r *http.Request, status int, person family.Person, err error, what string) {

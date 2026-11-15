@@ -72,6 +72,10 @@ func New(h Handlers, mw Middleware) http.Handler {
 			r.Post("/auth/password/change", h.Auth.ChangePassword)
 			r.Get("/persons", h.Family.SearchPersons)
 			r.Get("/persons/{id}", h.Family.GetPerson)
+			r.Get("/persons/{id}/ancestors", h.Family.Ancestors)
+			r.Get("/persons/{id}/descendants", h.Family.Descendants)
+			r.Get("/tree", h.Family.Tree)
+			r.Get("/family/summary", h.Family.Summary)
 
 			r.Group(func(r chi.Router) {
 				r.Use(handler.RequireAdmin)

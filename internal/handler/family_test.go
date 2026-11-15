@@ -437,3 +437,125 @@ func idOr(id string) string {
 	}
 	return testPersonID.String()
 }
+
+func TestTree(t *testing.T) {
+	tree := family.Tree{
+		Persons: []family.TreePerson{{ID: testPersonID, FirstName: "Rosa", LastName: new("Pierre"), BioExcerpt: new("Born in Jacmel")}},
+		Relationships: []family.TreeLink{
+			{ID: testRelationshipID, Type: family.ParentChild, Subtype: "biological", PersonA: testPersonID, PersonB: otherPersonID},
+			{ID: testRelationshipID, Type: family.Couple, Subtype: "married", Ended: true, PersonA: testPersonID, PersonB: otherPersonID},
+		},
+	}
+	tests := []struct {
+		name       string
+		tree       family.Tree
+		treeErr    error
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "people and links", tree: tree, wantStatus: http.StatusOK, wantBody: `{"persons":[{"id":"01890000-0000-7000-8000-0000000000aa",
+			"first_name":"Rosa","last_name":"Pierre","side":null,"gender":null,"is_deceased":false,"bio_excerpt":"Born in Jacmel"}],
+			"relationships":[
+			{"id":"01890000-0000-7000-8000-0000000000bb","type":"parent_child","subtype":"biological","ended":false,
+			 "parent_id":"01890000-0000-7000-8000-0000000000aa","child_id":"01890000-0000-7000-8000-0000000000cc"},
+			{"id":"01890000-0000-7000-8000-0000000000bb","type":"couple","subtype":"married","ended":true,
+			 "person_ids":["01890000-0000-7000-8000-0000000000aa","01890000-0000-7000-8000-0000000000cc"]}]}`},
+		{name: "an empty tree", wantStatus: http.StatusOK, wantBody: `{"persons":[],"relationships":[]}`},
+		{name: "busy", treeErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable, wantBody: busyBody},
+		{name: "database error", treeErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewFamilyService(t)
+			svc.EXPECT().Tree(mock.Anything).Return(tt.tree, tt.treeErr)
+
+			rec := serveAs(t, auth.RoleMember, handler.NewFamily(svc).Tree, httptest.NewRequest(http.MethodGet, "/api/tree", nil))
+
+			assertBody(t, rec, tt.wantStatus, tt.wantBody)
+		})
+	}
+}
+
+func TestAncestorsAndDescendants(t *testing.T) {
+	relatives := []family.Relative{{ID: otherPersonID, FirstName: "Jean", BirthDate: new("--03-14"), BirthDatePrecision: new("day"), Depth: 2}}
+	const relativesBody = `{"persons":[{"id":"01890000-0000-7000-8000-0000000000cc","first_name":"Jean","last_name":null,
+		"is_deceased":false,"birth_date":"--03-14","birth_date_precision":"day","depth":2}]}`
+
+	tests := []struct {
+		name       string
+		role       string
+		id         string
+		query      string
+		wantDepth  int
+		walkErr    error
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "the default depth, as a member", role: auth.RoleMember, wantDepth: family.DefaultDepth, wantStatus: http.StatusOK, wantBody: relativesBody},
+		{name: "a depth, as an admin", role: auth.RoleAdmin, query: "?depth=2", wantDepth: 2, wantStatus: http.StatusOK, wantBody: relativesBody},
+		{name: "depth not a number", role: auth.RoleMember, query: "?depth=all", wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"depth must be a whole number"}}`},
+		{name: "depth out of range", role: auth.RoleMember, query: "?depth=99", wantDepth: 99, walkErr: family.ErrInvalidFilter,
+			wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"validation_error","message":"invalid filter"}}`},
+		{name: "unknown or deleted", role: auth.RoleMember, wantDepth: family.DefaultDepth, walkErr: family.ErrPersonNotFound,
+			wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
+		{name: "not a person id", role: auth.RoleMember, id: "42", wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
+		{name: "database error", role: auth.RoleMember, wantDepth: family.DefaultDepth, walkErr: errors.New("db down"),
+			wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+		{name: "mounted without a session gate", wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+	}
+
+	for _, direction := range []string{"ancestors", "descendants"} {
+		for _, tt := range tests {
+			t.Run(direction+": "+tt.name, func(t *testing.T) {
+				svc := mocks.NewFamilyService(t)
+				h := handler.NewFamily(svc).Ancestors
+				if tt.wantDepth != 0 {
+					viewer := family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}
+					if direction == "ancestors" {
+						svc.EXPECT().Ancestors(mock.Anything, viewer, testPersonID, tt.wantDepth).Return(relatives, tt.walkErr)
+					} else {
+						svc.EXPECT().Descendants(mock.Anything, viewer, testPersonID, tt.wantDepth).Return(relatives, tt.walkErr)
+					}
+				}
+				if direction == "descendants" {
+					h = handler.NewFamily(svc).Descendants
+				}
+				id := idOr(tt.id)
+				req := withURLParam(httptest.NewRequest(http.MethodGet, "/api/persons/"+id+"/"+direction+tt.query, nil), "id", id)
+
+				rec := serveAs(t, tt.role, h, req)
+
+				assertBody(t, rec, tt.wantStatus, tt.wantBody)
+			})
+		}
+	}
+}
+
+func TestSummary(t *testing.T) {
+	tests := []struct {
+		name       string
+		summary    family.Summary
+		sumErr     error
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "with an earliest record", summary: family.Summary{People: 38, Generations: 5,
+			EarliestRecord: &family.EarliestRecord{Year: 1900, Circa: true, Place: new("Jacmel")}},
+			wantStatus: http.StatusOK, wantBody: `{"people":38,"generations":5,"earliest_record":{"year":1900,"circa":true,"place":"Jacmel"}}`},
+		{name: "nobody yet", wantStatus: http.StatusOK, wantBody: `{"people":0,"generations":0,"earliest_record":null}`},
+		{name: "database error", sumErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewFamilyService(t)
+			svc.EXPECT().Summary(mock.Anything).Return(tt.summary, tt.sumErr)
+
+			rec := serveAs(t, auth.RoleMember, handler.NewFamily(svc).Summary, httptest.NewRequest(http.MethodGet, "/api/family/summary", nil))
+
+			assertBody(t, rec, tt.wantStatus, tt.wantBody)
+		})
+	}
+}
