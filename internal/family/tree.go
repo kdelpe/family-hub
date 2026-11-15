@@ -13,7 +13,7 @@ import (
 
 const (
 	DefaultDepth = 5
-	// Each generation up can double the rows, so the walk stays short.
+	// A display bound, not a safety one: the walks keep one row per person and depth.
 	maxDepth = 10
 )
 
@@ -111,18 +111,22 @@ func (s *Service) Ancestors(ctx context.Context, viewer Viewer, id uuid.UUID, de
 func (s *Service) Descendants(ctx context.Context, viewer Viewer, id uuid.UUID, depth int) ([]Relative, error) {
 	return s.relatives(ctx, "descendants", id, depth, func(q *gen.Queries, max int32) ([]gen.AncestorsRow, error) {
 		rows, err := q.Descendants(ctx, gen.DescendantsParams{ViewerIsAdmin: viewer.IsAdmin, ViewerPersonID: viewer.PersonID, PersonID: id, MaxDepth: max})
+		if err != nil {
+			return nil, err
+		}
+		// Same columns as Ancestors, so the rows convert.
 		out := make([]gen.AncestorsRow, 0, len(rows))
 		for _, r := range rows {
 			out = append(out, gen.AncestorsRow(r))
 		}
-		return out, err
+		return out, nil
 	})
 }
 
 func (s *Service) relatives(ctx context.Context, what string, id uuid.UUID, depth int,
 	walk func(q *gen.Queries, max int32) ([]gen.AncestorsRow, error)) ([]Relative, error) {
 	if depth < 1 || depth > maxDepth {
-		return nil, fmt.Errorf("%w: depth must be between 1 and %d", ErrInvalidFilter, maxDepth)
+		return nil, fmt.Errorf("%w: depth must be a whole number from 1 to %d", ErrInvalidFilter, maxDepth)
 	}
 	var relatives []Relative
 	err := s.read(ctx, what, func(q *gen.Queries) error {

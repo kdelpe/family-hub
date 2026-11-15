@@ -495,7 +495,7 @@ func TestAncestorsAndDescendants(t *testing.T) {
 		{name: "the default depth, as a member", role: auth.RoleMember, wantDepth: family.DefaultDepth, wantStatus: http.StatusOK, wantBody: relativesBody},
 		{name: "a depth, as an admin", role: auth.RoleAdmin, query: "?depth=2", wantDepth: 2, wantStatus: http.StatusOK, wantBody: relativesBody},
 		{name: "depth not a number", role: auth.RoleMember, query: "?depth=all", wantStatus: http.StatusBadRequest,
-			wantBody: `{"error":{"code":"validation_error","message":"depth must be a whole number"}}`},
+			wantBody: `{"error":{"code":"validation_error","message":"depth must be a whole number from 1 to 10"}}`},
 		{name: "depth out of range", role: auth.RoleMember, query: "?depth=99", wantDepth: 99, walkErr: family.ErrInvalidFilter,
 			wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"validation_error","message":"invalid filter"}}`},
 		{name: "unknown or deleted", role: auth.RoleMember, wantDepth: family.DefaultDepth, walkErr: family.ErrPersonNotFound,

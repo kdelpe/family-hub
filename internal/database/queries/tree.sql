@@ -2,7 +2,7 @@
 -- name: TreePersons :many
 SELECT p.id, p.first_name, p.last_name, p.side, p.gender, p.is_deceased,
   -- sqlc types a function result as never NULL, so no bio comes back as ''.
-  coalesce(CASE WHEN length(p.bio) > 140 THEN rtrim(left(p.bio, 139)) || '…' ELSE p.bio END, '')::text AS bio_excerpt
+  coalesce(CASE WHEN length(p.bio) > 140 THEN rtrim(left(p.bio, 139), E' \t\r\n') || '…' ELSE p.bio END, '')::text AS bio_excerpt
 FROM persons p
 WHERE p.deleted_at IS NULL
 ORDER BY lower(p.search_name), p.id;
@@ -16,15 +16,15 @@ JOIN persons b ON b.id = r.person_b AND b.deleted_at IS NULL
 ORDER BY r.id;
 
 -- Ancestors and descendants follow family-parent links only, so a foster parent is never an ancestor (§3.4).
--- The walks stop at deleted people, as the tree does. The casts are for sqlc, which can't infer a
--- parameter's type inside a recursive CTE.
+-- The walks stop at deleted people, as the tree does. UNION keeps one row per person and depth, so shared
+-- ancestry can't multiply the rows. The casts are for sqlc, which can't infer a parameter's type inside a recursive CTE.
 -- name: Ancestors :many
 WITH RECURSIVE anc(id, depth) AS (
   SELECT r.person_a, 1
   FROM relationships r
   JOIN persons p ON p.id = r.person_a AND p.deleted_at IS NULL
   WHERE r.type = 'parent_child' AND r.subtype IN ('biological', 'adoptive') AND r.person_b = @person_id::uuid
-  UNION ALL
+  UNION
   SELECT r.person_a, anc.depth + 1
   FROM anc
   JOIN relationships r ON r.person_b = anc.id
@@ -44,7 +44,7 @@ WITH RECURSIVE des(id, depth) AS (
   FROM relationships r
   JOIN persons p ON p.id = r.person_b AND p.deleted_at IS NULL
   WHERE r.type = 'parent_child' AND r.subtype IN ('biological', 'adoptive') AND r.person_a = @person_id::uuid
-  UNION ALL
+  UNION
   SELECT r.person_b, des.depth + 1
   FROM des
   JOIN relationships r ON r.person_a = des.id

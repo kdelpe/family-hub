@@ -382,7 +382,7 @@ func (f *Family) relatives(w http.ResponseWriter, r *http.Request, what string,
 	if raw := r.URL.Query().Get("depth"); raw != "" {
 		var err error
 		if depth, err = strconv.Atoi(raw); err != nil {
-			httpx.Error(w, http.StatusBadRequest, "validation_error", "depth must be a whole number")
+			httpx.Error(w, http.StatusBadRequest, "validation_error", "depth must be a whole number from 1 to 10")
 			return
 		}
 	}
@@ -404,11 +404,9 @@ func (f *Family) Summary(w http.ResponseWriter, r *http.Request) {
 		f.fail(w, r, err, "family summary")
 		return
 	}
-	resp := summaryResponse{People: sum.People, Generations: sum.Generations}
-	if sum.EarliestRecord != nil {
-		resp.EarliestRecord = (*earliestRecordResponse)(sum.EarliestRecord)
-	}
-	httpx.JSON(w, http.StatusOK, resp)
+	httpx.JSON(w, http.StatusOK, summaryResponse{
+		People: sum.People, Generations: sum.Generations, EarliestRecord: (*earliestRecordResponse)(sum.EarliestRecord),
+	})
 }
 
 func (f *Family) answer(w http.ResponseWriter, r *http.Request, status int, person family.Person, err error, what string) {

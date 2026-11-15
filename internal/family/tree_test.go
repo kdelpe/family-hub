@@ -17,7 +17,7 @@ func TestTreeLeavesOutDatesNotesAndDeletedPeople(t *testing.T) {
 	rosa, err := svc.CreatePerson(t.Context(), admin, PersonInput{
 		FirstName: "Rosa", LastName: new("Pierre"), Side: new("first"), Gender: new("female"),
 		BirthDate: new("1950-03-14"), BirthDatePrecision: new("day"), BirthPlace: new("Jacmel"),
-		Bio: new(strings.Repeat("a", 138) + " bcd"),
+		Bio: new(strings.Repeat("a", 137) + "\n bcd"),
 	})
 	require.NoError(t, err)
 	ids := addPeople(t, svc, admin, "Jean", "Marie", "Gone")
@@ -33,7 +33,7 @@ func TestTreeLeavesOutDatesNotesAndDeletedPeople(t *testing.T) {
 		{ID: ids["Jean"], FirstName: "Jean"},
 		{ID: ids["Marie"], FirstName: "Marie"},
 		{ID: rosa.ID, FirstName: "Rosa", LastName: new("Pierre"), Side: new("first"), Gender: new("female"),
-			BioExcerpt: new(strings.Repeat("a", 138) + "…")},
+			BioExcerpt: new(strings.Repeat("a", 137) + "…")},
 	}, tree.Persons)
 	assert.ElementsMatch(t, []TreeLink{
 		{ID: married.ID, Type: Couple, Subtype: "married", PersonA: married.PersonA, PersonB: married.PersonB},
@@ -191,8 +191,8 @@ func TestLongestLineEndsOnALoop(t *testing.T) {
 
 	got := longestLine([]gen.FamilyParentLinksRow{{ParentID: a, ChildID: b}, {ParentID: b, ChildID: a}})
 
-	// Where the walk starts decides whether the loop counts 2 or 3; it only has to end.
-	assert.LessOrEqual(t, got, 3)
+	// Where the walk starts decides whether the loop counts 2 or 3; it has to end with one of them.
+	assert.Contains(t, []int{2, 3}, got)
 }
 
 func walker(t *testing.T, walk func(ctx context.Context, viewer Viewer, id uuid.UUID, depth int) ([]Relative, error)) func(Viewer, uuid.UUID, int) ([]Relative, error) {
