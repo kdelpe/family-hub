@@ -20,6 +20,28 @@ type AuthToken struct {
 	CreatedAt  time.Time
 }
 
+type Person struct {
+	ID                 uuid.UUID
+	FirstName          string
+	MiddleName         *string
+	LastName           *string
+	MaidenName         *string
+	Side               *string
+	BirthPlace         *string
+	Gender             *string
+	BirthDate          *time.Time
+	BirthDatePrecision *string
+	DeathDate          *time.Time
+	DeathDatePrecision *string
+	IsDeceased         bool
+	Bio                *string
+	SearchName         *string
+	CreatedBy          *uuid.UUID
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	DeletedAt          *time.Time
+}
+
 type Session struct {
 	IDHash     []byte
 	UserID     uuid.UUID
