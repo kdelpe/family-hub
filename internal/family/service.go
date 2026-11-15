@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kdelpe/family-hub/internal/auth"
@@ -41,4 +42,17 @@ func (s *Service) write(ctx context.Context, what string, fn func(q *gen.Queries
 		return fmt.Errorf("commit %s: %w", what, err)
 	}
 	return nil
+}
+
+// read runs fn's queries on one snapshot, so a link added between two of them can't name someone the other missed.
+func (s *Service) read(ctx context.Context, what string, fn func(q *gen.Queries) error) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return fmt.Errorf("begin %s: %w", what, err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if err := fn(gen.New(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
