@@ -37,7 +37,7 @@ describe('ForgotPassword', () => {
 
     send()
 
-    expect(await screen.findByRole('heading', { name: 'Check your email' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Check your email' })).toHaveFocus()
     expect(screen.getByRole('status')).toHaveTextContent('It works for 30 minutes.')
     expect(fetch).toHaveBeenCalledWith('/api/auth/password/forgot', {
       method: 'POST',

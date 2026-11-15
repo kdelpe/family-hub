@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 
 import { authKeys, googleStartPath, login, providers } from '../../api/auth'
 import { ApiError } from '../../api/client'
-import { errorMessage } from '../../api/errorMessage'
+import { errorMessage } from '../../lib/errorMessage'
 import page from '../../components/SignInLayout/SignInForm.module.css'
 import styles from './Login.module.css'
 
@@ -65,8 +65,8 @@ export function Login() {
       <title>Sign in — Pluviose-Monestime Family Hub</title>
       <main className={page.main}>
         <form className={page.form} onSubmit={onSubmit}>
-          <div className={styles.heading}>
-            <h1 lang="ht" className={styles.title}>
+          <div className={page.heading}>
+            <h1 lang="ht" className={`${page.title} ${styles.title}`}>
               Lakay se lakay
             </h1>
             <span className={styles.subtitle}>There’s no place like home.</span>
@@ -147,7 +147,7 @@ export function Login() {
                 or
                 <span className={styles.rule} />
               </div>
-              <a href={googleStartPath} className={`pill ${styles.secondary}`}>
+              <a href={googleStartPath} className={`pill ${page.secondary} ${styles.googleButton}`}>
                 Continue with Google
               </a>
             </div>

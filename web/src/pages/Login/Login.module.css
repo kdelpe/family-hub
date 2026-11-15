@@ -1,14 +1,5 @@
-.heading {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .title {
-  margin: 0;
-  font-family: var(--font-serif);
   font-size: 44px;
-  font-weight: 500;
   line-height: 1.1;
 }
 
@@ -101,21 +92,10 @@
   background: var(--border);
 }
 
-.secondary {
+.googleButton {
   height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--input-border);
   border-radius: 26px;
   background: var(--surface);
-  color: var(--text);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.secondary:hover {
-  color: var(--text);
 }
 
 .note {

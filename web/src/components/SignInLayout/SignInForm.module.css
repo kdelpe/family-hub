@@ -1,4 +1,4 @@
-/* What every page before sign-in shares: its <main>, the rising form, fields, the primary button and the error box. */
+/* Shared by every page before sign-in. */
 .main {
   flex: 1 1 480px;
   padding: 56px 40px;
@@ -14,6 +14,18 @@
   flex-direction: column;
   gap: 22px;
   animation: rise 0.7s ease-out 0.2s both;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 500;
 }
 
 .field {
@@ -68,6 +80,20 @@
 
 .primary:disabled {
   cursor: progress;
+}
+
+.secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--input-border);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.secondary:hover {
+  color: var(--text);
 }
 
 @keyframes rise {

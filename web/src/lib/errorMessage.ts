@@ -1,4 +1,4 @@
-import { ApiError, networkErrorStatus } from './client'
+import { ApiError, networkErrorStatus } from '../api/client'
 
 const somethingWrong = 'Something went wrong. Try again in a moment.'
 

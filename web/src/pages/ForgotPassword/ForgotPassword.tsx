@@ -1,15 +1,23 @@
 import { useMutation } from '@tanstack/react-query'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import { forgotPassword } from '../../api/auth'
-import { errorMessage } from '../../api/errorMessage'
+import { errorMessage } from '../../lib/errorMessage'
 import page from '../../components/SignInLayout/SignInForm.module.css'
 import styles from './ForgotPassword.module.css'
 
 export function ForgotPassword() {
   const [email, setEmail] = useState('')
   const send = useMutation({ mutationFn: () => forgotPassword(email) })
+  const sentHeading = useRef<HTMLHeadingElement>(null)
+
+  // The focused button goes away with the form; the heading takes focus, so keyboard and screen-reader users land on the result.
+  useEffect(() => {
+    if (send.isSuccess) {
+      sentHeading.current?.focus()
+    }
+  }, [send.isSuccess])
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -22,7 +30,7 @@ export function ForgotPassword() {
       <main className={page.main}>
         <div className={page.form}>
           <Link to="/auth/login" className={styles.back}>
-            ← Back to sign in
+            <span aria-hidden="true">← </span>Back to sign in
           </Link>
           {send.isSuccess ? (
             <div role="status" className={styles.sent}>
@@ -31,21 +39,23 @@ export function ForgotPassword() {
                   <path d="M3 6 H21 V18 H3 Z M3 6 L12 13 L21 6" className={styles.envelopeLine} strokeWidth="2" />
                 </svg>
               </div>
-              <h1 className={styles.sentTitle}>Check your email</h1>
+              <h1 ref={sentHeading} tabIndex={-1} className={`${page.title} ${styles.sentTitle}`}>
+                Check your email
+              </h1>
               <p className={styles.sentText}>
                 If that email is on our family list, a reset link is on its way. It works for 30 minutes.
               </p>
               <p className={`${styles.sentText} ${styles.muted}`}>
                 Nothing after a few minutes? Check your spam folder, or ask an admin to send you a new link.
               </p>
-              <Link to="/auth/login" className={`pill ${styles.backButton}`}>
+              <Link to="/auth/login" className={`pill ${page.secondary} ${styles.backButton}`}>
                 Back to sign in
               </Link>
             </div>
           ) : (
             <form className={styles.request} onSubmit={onSubmit}>
-              <div className={styles.heading}>
-                <h1 className={styles.title}>Forgot your password?</h1>
+              <div className={page.heading}>
+                <h1 className={`${page.title} ${styles.title}`}>Forgot your password?</h1>
                 <span className={styles.intro}>Enter your email and we’ll send you a link to choose a new password.</span>
               </div>
               <div className={page.field}>
