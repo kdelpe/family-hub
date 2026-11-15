@@ -1,0 +1,192 @@
+import { QueryClientProvider } from '@tanstack/react-query'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { createMemoryRouter } from 'react-router'
+import { RouterProvider } from 'react-router/dom'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import type { LinkPreview } from '../../api/auth'
+import { createQueryClient } from '../../api/queryClient'
+import { WelcomeInvite } from './WelcomeInvite'
+
+const invite: LinkPreview = {
+  purpose: 'invite',
+  invitee_email: 'darline.monestime@example.com',
+  invitee_first_name: 'Darline',
+  from_name: 'Nadège Pluviose',
+  google_eligible: true,
+}
+const reset: LinkPreview = { ...invite, purpose: 'password_reset', invitee_first_name: null, from_name: null }
+const invalidToken = () => Response.json({ error: { code: 'invalid_token', message: 'x' } }, { status: 400 })
+const user = { id: '01890000-0000-7000-8000-000000000001', email: invite.invitee_email, role: 'member' }
+
+type Answers = { preview?: Response; google?: boolean; providersDown?: boolean; reset?: Response }
+
+function renderPage(answers: Answers, url = '/auth/set-password#t=link-token') {
+  const fetch = vi.fn((path: string) => {
+    switch (path) {
+      case '/api/auth/providers':
+        return answers.providersDown
+          ? Promise.reject(new TypeError('Failed to fetch'))
+          : Promise.resolve(Response.json({ google: answers.google ?? false }))
+      case '/api/auth/invite/preview':
+        return Promise.resolve(answers.preview ?? Response.json(invite))
+      default:
+        return Promise.resolve(answers.reset ?? Response.json(user))
+    }
+  })
+  vi.stubGlobal('fetch', fetch)
+  const router = createMemoryRouter(
+    [
+      { path: '/auth/set-password', element: <WelcomeInvite /> },
+      { path: '/setup', element: <p>Setup page</p> },
+      { path: '/', element: <p>Home page</p> },
+    ],
+    { initialEntries: [url] },
+  )
+  render(
+    <QueryClientProvider client={createQueryClient()}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  )
+  return { fetch, router }
+}
+
+function choose(password: string) {
+  fireEvent.change(screen.getByLabelText('New password'), { target: { value: password } })
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+describe('WelcomeInvite', () => {
+  it.each([
+    { name: 'no token in the link', url: '/auth/set-password', answers: {}, why: 'Open it again from your email.' },
+    { name: 'a used or expired link', url: undefined, answers: { preview: invalidToken() }, why: 'It may have expired or already been used.' },
+  ])('explains $name', async ({ url, answers, why }) => {
+    renderPage(answers, url)
+
+    expect(await screen.findByRole('heading', { name: 'This link doesn’t work anymore' })).toBeInTheDocument()
+    expect(screen.getByText(why)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Get a new reset link' })).toHaveAttribute('href', '/auth/forgot')
+  })
+
+  it('welcomes an invitee by name, with who invited them and Google', async () => {
+    renderPage({ google: true })
+
+    expect(await screen.findByRole('heading', { name: 'Welcome to the family, Darline' })).toBeInTheDocument()
+    expect(screen.getByText('Nadège Pluviose')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Continue with Google instead' })).toBeInTheDocument()
+    expect(screen.getByText(/This link works for 7 days\. Not Darline\?/)).toBeInTheDocument()
+    expect(screen.getByLabelText('New password')).toHaveAttribute('type', 'text')
+  })
+
+  it('takes the token off the address bar once read', async () => {
+    const { router } = renderPage({})
+
+    expect(await screen.findByLabelText('New password')).toBeInTheDocument()
+    expect(router.state.location.hash).toBe('')
+  })
+
+  it('reads a new link pasted into the same tab', async () => {
+    const { router } = renderPage({}, '/auth/set-password')
+    await screen.findByRole('heading', { name: 'This link doesn’t work anymore' })
+
+    await act(() => router.navigate('/auth/set-password#t=new-token'))
+
+    expect(await screen.findByLabelText('New password')).toBeInTheDocument()
+    expect(router.state.location.hash).toBe('')
+  })
+
+  it('announces a refusal again when the same short password is resubmitted', async () => {
+    renderPage({})
+    await screen.findByLabelText('New password')
+    choose('kafe')
+    fireEvent.click(screen.getByRole('button', { name: 'Set password and continue' }))
+    const first = screen.getByRole('alert')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set password and continue' }))
+
+    expect(screen.getByRole('alert')).not.toBe(first)
+  })
+
+  it('still offers Google to a Gmail invitee when the providers check fails', async () => {
+    renderPage({ providersDown: true })
+
+    expect(await screen.findByRole('link', { name: 'Continue with Google instead' })).toBeInTheDocument()
+  })
+
+  it('welcomes an invitee without names yet, and without Google if not a Gmail address', async () => {
+    renderPage({ preview: Response.json({ ...invite, invitee_first_name: null, from_name: null, google_eligible: false }), google: true })
+
+    expect(await screen.findByRole('heading', { name: 'Welcome to the family' })).toBeInTheDocument()
+    expect(screen.queryByText(/invited you to the family hub/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Continue with Google instead' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Not you\?/)).toBeInTheDocument()
+  })
+
+  it('asks for a new password on a reset link', async () => {
+    renderPage({ preview: Response.json(reset), google: true })
+
+    expect(await screen.findByRole('heading', { name: 'Choose a new password' })).toBeInTheDocument()
+    expect(screen.getByText(/This link works for 30 minutes\./)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Continue with Google instead' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    { name: 'a short password', password: 'kafe', rule: 'Use at least 8 characters.' },
+    { name: 'an empty field', password: '', rule: 'Use at least 8 characters.' },
+    { name: 'a password over the limit', password: 'k'.repeat(129), rule: 'Use at most 128 characters.' },
+  ])('refuses $name before asking the server', async ({ password, rule }) => {
+    const { fetch } = renderPage({})
+    await screen.findByLabelText('New password')
+
+    choose(password)
+    fireEvent.click(screen.getByRole('button', { name: 'Set password and continue' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent(rule)
+    expect(screen.getByText(rule)).toHaveAttribute('id', 'wi-pw-error')
+    expect(screen.getByLabelText('New password')).toHaveAttribute('aria-describedby', 'wi-pw-error')
+    expect(fetch).not.toHaveBeenCalledWith('/api/auth/password/reset', expect.anything())
+  })
+
+  it('shows a password the server refuses under the field', async () => {
+    renderPage({ reset: Response.json({ error: { code: 'password_too_common', message: 'x' } }, { status: 400 }) })
+    await screen.findByLabelText('New password')
+
+    choose('password123')
+    fireEvent.click(screen.getByRole('button', { name: 'Set password and continue' }))
+
+    expect(await screen.findByText('That password is too common — try a short phrase.')).toBeInTheDocument()
+    expect(screen.getByLabelText('New password')).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it.each([
+    { name: 'an invitee goes on to setup', preview: invite, button: 'Set password and continue', next: 'Setup page' },
+    { name: 'a reset goes home', preview: reset, button: 'Set password and sign in', next: 'Home page' },
+  ])('$name', async ({ preview, button, next }) => {
+    const { fetch } = renderPage({ preview: Response.json(preview) })
+    await screen.findByLabelText('New password')
+
+    choose('mango tree on rue sainte-anne')
+    fireEvent.click(screen.getByRole('button', { name: button }))
+
+    expect(await screen.findByText(next)).toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith('/api/auth/password/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: 'link-token', password: 'mango tree on rue sainte-anne' }),
+    })
+  })
+
+  it('explains a link that stopped working while the page was open', async () => {
+    renderPage({ reset: invalidToken() })
+    await screen.findByLabelText('New password')
+
+    choose('mango tree on rue sainte-anne')
+    fireEvent.click(screen.getByRole('button', { name: 'Set password and continue' }))
+
+    expect(await screen.findByRole('heading', { name: 'This link doesn’t work anymore' })).toHaveFocus()
+    expect(document.title).toBe('This link doesn’t work anymore — Pluviose-Monestime Family Hub')
+  })
+})

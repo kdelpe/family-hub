@@ -14,6 +14,7 @@ it.each([
   { path: '/auth/login', heading: 'Lakay se lakay' },
   { path: '/auth/login?google=unavailable', heading: 'Lakay se lakay' },
   { path: '/auth/forgot', heading: 'Forgot your password?' },
+  { path: '/auth/set-password', heading: 'This link doesn’t work anymore' },
   { path: '/people', heading: 'Pluviose-Monestime Family Hub' },
 ])('$path shows the page with heading "$heading"', async ({ path, heading }) => {
   vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ google: false })))

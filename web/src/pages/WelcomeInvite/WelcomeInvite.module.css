@@ -1,0 +1,64 @@
+.column {
+  max-width: 440px;
+  gap: 20px;
+}
+
+.from {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--accent-tint);
+}
+
+.avatar {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--avatar);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+}
+
+.fromText {
+  line-height: 1.4;
+}
+
+.title {
+  font-size: 40px;
+  line-height: 1.1;
+}
+
+.intro {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.email {
+  color: var(--text);
+}
+
+.fieldError {
+  font-size: 15px;
+  color: var(--text);
+}
+
+.text {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.note {
+  align-self: center;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.title:focus {
+  outline: none;
+}
