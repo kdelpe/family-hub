@@ -98,6 +98,23 @@ describe('WelcomeInvite', () => {
     expect(router.state.location.hash).toBe('')
   })
 
+  it('gives a failed link check a heading and a way to try again', async () => {
+    renderPage({ preview: Response.json({ error: { code: 'rate_limited', message: 'x' } }, { status: 429 }) })
+
+    expect(await screen.findByRole('heading', { name: 'Welcome' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+  })
+
+  it('drops the token when the address changes to one without a link', async () => {
+    const { router } = renderPage({})
+    await screen.findByLabelText('New password')
+
+    await act(() => router.navigate('/auth/set-password'))
+
+    expect(await screen.findByText('Open it again from your email.')).toBeInTheDocument()
+  })
+
   it('announces a refusal again when the same short password is resubmitted', async () => {
     renderPage({})
     await screen.findByLabelText('New password')

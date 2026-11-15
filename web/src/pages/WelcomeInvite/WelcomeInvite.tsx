@@ -19,18 +19,19 @@ function tokenFrom(hash: string): string {
 }
 
 export function WelcomeInvite() {
-  const { hash, pathname, search } = useLocation()
+  const { hash, pathname, search, state } = useLocation()
   const navigate = useNavigate()
   const [token, setToken] = useState(() => tokenFrom(hash))
   const linkInAddress = tokenFrom(hash)
-  // A new link pasted into this tab changes only the fragment, so the page stays mounted.
-  if (linkInAddress !== '' && linkInAddress !== token) {
+  const tokenRemovedHere = (state as { tokenRead?: boolean } | null)?.tokenRead === true
+  // The page stays mounted when only the fragment changes: a pasted new link, or a bare address, replaces the token.
+  if (linkInAddress !== token && (linkInAddress !== '' || !tokenRemovedHere)) {
     setToken(linkInAddress)
   }
   // Off the address bar and this tab's Back button. The browser's history list has already recorded it.
   useEffect(() => {
     if (hash !== '') {
-      void navigate({ pathname, search }, { replace: true })
+      void navigate({ pathname, search }, { replace: true, state: { tokenRead: true } })
     }
   }, [hash, pathname, search, navigate])
   const preview = useQuery({
@@ -55,6 +56,7 @@ export function WelcomeInvite() {
       ) : preview.isError ? (
         <div className={`${page.form} ${styles.column}`}>
           <PageTitle>Welcome</PageTitle>
+          <h1 className={`${page.title} ${styles.title}`}>Welcome</h1>
           <p role="alert" className={page.error}>
             {errorMessage(preview.error)}
           </p>
