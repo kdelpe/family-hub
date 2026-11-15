@@ -131,3 +131,59 @@
     transform: none;
   }
 }
+
+.backLink {
+  align-self: flex-start;
+  font-weight: 600;
+}
+
+.hint {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.sentCard {
+  padding: 28px;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sentIcon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--accent-tint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sentIconLine {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linejoin: round;
+}
+
+.sentTitle {
+  font-size: 30px;
+  line-height: normal;
+}
+
+/* Focused from code when the card appears, not by the user. */
+.sentTitle:focus {
+  outline: none;
+}
+
+.sentText {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.muted {
+  color: var(--muted);
+}
