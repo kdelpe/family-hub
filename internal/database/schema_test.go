@@ -82,6 +82,48 @@ func TestPersonsSchemaConstraints(t *testing.T) {
 	}
 }
 
+func TestRelationshipsSchemaConstraints(t *testing.T) {
+	const (
+		twoPeople = `INSERT INTO persons (id, first_name) VALUES ('00000000-0000-7000-8000-000000000001', 'Rosa'), ('00000000-0000-7000-8000-000000000002', 'Jean');`
+		low       = `'00000000-0000-7000-8000-000000000001'`
+		high      = `'00000000-0000-7000-8000-000000000002'`
+		link      = `INSERT INTO relationships (type, subtype, ended, person_a, person_b) VALUES `
+	)
+	tests := []struct {
+		name     string
+		sql      string
+		wantCode string
+	}{
+		{name: "a parent link, either way round", sql: link + `('parent_child', 'foster', false, ` + high + `, ` + low + `)`},
+		{name: "a couple, lower id first", sql: link + `('couple', 'married', true, ` + low + `, ` + high + `)`},
+		{name: "a couple, higher id first", sql: link + `('couple', 'married', false, ` + high + `, ` + low + `)`, wantCode: checkViolation},
+		{name: "someone linked to themselves", sql: link + `('parent_child', 'biological', false, ` + low + `, ` + low + `)`, wantCode: checkViolation},
+		{name: "a couple's subtype on a parent link", sql: link + `('parent_child', 'married', false, ` + low + `, ` + high + `)`, wantCode: checkViolation},
+		{name: "an ended parent link", sql: link + `('parent_child', 'biological', true, ` + low + `, ` + high + `)`, wantCode: checkViolation},
+		{name: "the same pair twice", sql: link + `('couple', 'married', false, ` + low + `, ` + high + `), ('couple', 'partner', false, ` + low + `, ` + high + `)`,
+			wantCode: UniqueViolation},
+	}
+
+	db := authSchema(t)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := db.begin(t)
+			_, err := tx.Exec(t.Context(), twoPeople)
+			require.NoError(t, err)
+
+			_, err = tx.Exec(t.Context(), tt.sql)
+
+			if tt.wantCode == "" {
+				require.NoError(t, err)
+				return
+			}
+			var pgErr *pgconn.PgError
+			require.ErrorAs(t, err, &pgErr)
+			assert.Equal(t, tt.wantCode, pgErr.Code)
+		})
+	}
+}
+
 func TestDeletingAUserDeletesTheirTokensAndSessions(t *testing.T) {
 	tx := authSchema(t).begin(t)
 

@@ -1,4 +1,3 @@
-// Package family holds the people in the tree and, later, their relationships (architecture §3, §10).
 package family
 
 import (
@@ -12,9 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/database/gen"
 )
 
@@ -111,18 +108,12 @@ type ListInput struct {
 	Deceased *bool
 }
 
-type Persons struct {
-	pool        *pgxpool.Pool
-	lockTimeout time.Duration
-}
-
-func NewPersons(pool *pgxpool.Pool) *Persons {
-	return &Persons{pool: pool, lockTimeout: auth.LockTimeout}
-}
-
-// List searches by name when Query is set (best matches first), otherwise lists everyone A–Z.
-func (s *Persons) List(ctx context.Context, viewer Viewer, in ListInput) ([]Person, error) {
+// ListPersons searches by name when Query is set (best matches first), otherwise lists everyone A–Z.
+func (s *Service) ListPersons(ctx context.Context, viewer Viewer, in ListInput) ([]Person, error) {
 	query := strings.TrimSpace(in.Query)
+	if !storable(query) {
+		return nil, fmt.Errorf("%w: search contains a character that isn't allowed", ErrInvalidFilter)
+	}
 	if utf8.RuneCountInString(query) > maxQueryLength {
 		return nil, fmt.Errorf("%w: search is longer than %d characters", ErrInvalidFilter, maxQueryLength)
 	}
@@ -147,7 +138,7 @@ func (s *Persons) List(ctx context.Context, viewer Viewer, in ListInput) ([]Pers
 	return people, nil
 }
 
-func (s *Persons) Get(ctx context.Context, viewer Viewer, id uuid.UUID) (Person, error) {
+func (s *Service) GetPerson(ctx context.Context, viewer Viewer, id uuid.UUID) (Person, error) {
 	return get(ctx, gen.New(s.pool), viewer, id)
 }
 
@@ -162,8 +153,8 @@ func get(ctx context.Context, q *gen.Queries, viewer Viewer, id uuid.UUID) (Pers
 	return toPerson(row), nil
 }
 
-// Create is admin-only; the router checks the role.
-func (s *Persons) Create(ctx context.Context, createdBy uuid.UUID, in PersonInput) (Person, error) {
+// CreatePerson is admin-only; the router checks the role.
+func (s *Service) CreatePerson(ctx context.Context, createdBy uuid.UUID, in PersonInput) (Person, error) {
 	f, err := normalize(in)
 	if err != nil {
 		return Person{}, err
@@ -188,8 +179,8 @@ func (s *Persons) Create(ctx context.Context, createdBy uuid.UUID, in PersonInpu
 	return person, nil
 }
 
-// Update is admin-only for now; a member editing their own bio comes with person linking (§5.1).
-func (s *Persons) Update(ctx context.Context, id uuid.UUID, patch PersonPatch) (Person, error) {
+// UpdatePerson is admin-only for now; a member editing their own bio comes with person linking (§5.1).
+func (s *Service) UpdatePerson(ctx context.Context, id uuid.UUID, patch PersonPatch) (Person, error) {
 	var person Person
 	err := s.write(ctx, "update person", func(q *gen.Queries) error {
 		row, err := q.LockPerson(ctx, id)
@@ -220,8 +211,8 @@ func (s *Persons) Update(ctx context.Context, id uuid.UUID, patch PersonPatch) (
 	return person, nil
 }
 
-// Delete only hides the person; their relationships stay, so Restore puts them back where they were (§3.1).
-func (s *Persons) Delete(ctx context.Context, id uuid.UUID) error {
+// DeletePerson only hides the person; their relationships stay, so RestorePerson puts them back where they were (§3.1).
+func (s *Service) DeletePerson(ctx context.Context, id uuid.UUID) error {
 	return s.write(ctx, "delete person", func(q *gen.Queries) error {
 		n, err := q.SoftDeletePerson(ctx, id)
 		if err != nil {
@@ -234,7 +225,7 @@ func (s *Persons) Delete(ctx context.Context, id uuid.UUID) error {
 	})
 }
 
-func (s *Persons) Restore(ctx context.Context, id uuid.UUID) (Person, error) {
+func (s *Service) RestorePerson(ctx context.Context, id uuid.UUID) (Person, error) {
 	var person Person
 	err := s.write(ctx, "restore person", func(q *gen.Queries) error {
 		n, err := q.RestorePerson(ctx, id)
@@ -251,27 +242,6 @@ func (s *Persons) Restore(ctx context.Context, id uuid.UUID) (Person, error) {
 		return Person{}, err
 	}
 	return person, nil
-}
-
-// write runs fn in a transaction whose lock waits give up after lockTimeout with ErrBusy,
-// so a held row can't pin a pool connection. Writes read their result back inside fn, so
-// what they answer is what committed.
-func (s *Persons) write(ctx context.Context, what string, fn func(q *gen.Queries) error) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin %s: %w", what, err)
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-	if err := auth.SetLockTimeout(ctx, tx, s.lockTimeout); err != nil {
-		return err
-	}
-	if err := fn(gen.New(tx)); err != nil {
-		return auth.BusyIfContended(err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit %s: %w", what, err)
-	}
-	return nil
 }
 
 func (p PersonPatch) apply(in PersonInput) PersonInput {
@@ -320,9 +290,18 @@ func normalize(in PersonInput) (fields, error) {
 		{"bio", &f.Bio, maxBioLength},
 	} {
 		*field.value = trimmed(*field.value)
-		if *field.value != nil && utf8.RuneCountInString(**field.value) > field.max {
+		if *field.value == nil {
+			continue
+		}
+		if !storable(**field.value) {
+			return fields{}, fmt.Errorf("%w: the %s contains a character that isn't allowed", ErrInvalidPerson, field.name)
+		}
+		if utf8.RuneCountInString(**field.value) > field.max {
 			return fields{}, fmt.Errorf("%w: the %s is longer than %d characters", ErrInvalidPerson, field.name, field.max)
 		}
+	}
+	if !storable(f.FirstName) {
+		return fields{}, fmt.Errorf("%w: the first name contains a character that isn't allowed", ErrInvalidPerson)
 	}
 	if utf8.RuneCountInString(f.FirstName) > maxNameLength {
 		return fields{}, fmt.Errorf("%w: the first name is longer than %d characters", ErrInvalidPerson, maxNameLength)
@@ -421,6 +400,11 @@ func trimmed(s *string) *string {
 		return nil
 	}
 	return &t
+}
+
+// storable is text Postgres can keep: TEXT refuses NUL and invalid UTF-8, which would otherwise surface as a 500.
+func storable(s string) bool {
+	return utf8.ValidString(s) && !strings.ContainsRune(s, 0)
 }
 
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)

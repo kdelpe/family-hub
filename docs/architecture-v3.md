@@ -132,7 +132,7 @@ Conventions: **Postgres 18**. UUID PKs via the built-in `uuidv7()` (Postgres 18,
 
 ### 3.1 Full schema (written as one migration per PR, §6.2)
 
-Phase 2's migrations hold `users`, `auth_tokens` and `sessions` (`000001_create_auth_tables` also made the Google sign-in table and column that `000002_remove_google_sign_in` drops, §5). Phase 3's `000003_create_persons` adds `persons`, `pg_trgm` and `masked_birth_date`; `persons.avatar_media_id` waits for `media` (Phase 5), and `users.person_id`, its unique index and its foreign key come with account linking (§5.1).
+Phase 2's migrations hold `users`, `auth_tokens` and `sessions` (`000001_create_auth_tables` also made the Google sign-in table and column that `000002_remove_google_sign_in` drops, §5). Phase 3's `000003_create_persons` adds `persons`, `pg_trgm` and `masked_birth_date`, and `000004_create_relationships` adds `relationships`; `persons.avatar_media_id` waits for `media` (Phase 5), and `users.person_id`, its unique index and its foreign key come with account linking (§5.1).
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- fuzzy name search for tagging autocomplete
@@ -441,7 +441,7 @@ Down migrations are a local-dev convenience. In production, fix forward with a n
 
 - Relationships carry no start/end dates (marriage, divorce). A couple's `ended` flag says current vs former; that's all the tree needs. Add dates later only if needed.
 - A couple who divorce and remarry each other is one row (`rel_unique`); set `ended` back to false. Their history isn't modelled.
-- At most two **biological** parents per person. Enforced in the service (inside the relationship-write transaction, §10), since a row-count rule can't be a plain constraint. Adoptive and foster parents are not limited.
+- At most two **biological** parents per person. Enforced in the service (inside the relationship-write transaction, §10), since a row-count rule can't be a plain constraint. Links to soft-deleted parents count too, so a restore can't bring back a third. Adoptive and foster parents are not limited.
 - Gender is a free label for display, not used for tree logic.
 - Soft-deleted people keep their relationship rows; tree queries filter on `persons.deleted_at IS NULL`.
 - Contact visibility has three levels (`hidden`, `family`, and `on_request` for phones, WhatsApp and addresses, shared one person at a time through `contact_requests`, §5.2). Other audiences ("close family only", group allow lists) are deliberately out of scope; see §16.
@@ -520,9 +520,9 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | POST | `/api/persons/{id}/contact-requests` | session | `{kind: phone\|whatsapp\|address}`; only if that person has an `on_request` method of that kind; idempotent; 20 per day per requester |
 | GET | `/api/me/contact-requests` | session | Requests for my details, pending first |
 | POST | `/api/me/contact-requests/{rid}/share\|decline\|revoke` | session (own) | Share with that one person, decline silently, or take a share back |
-| POST | `/api/relationships` | admin | `{type:"parent_child", parent_id, child_id, subtype}` or `{type:"couple", person_ids:[id1,id2], subtype, ended}`. `person_ids` must hold **exactly two distinct** existing, non-deleted people, in any order (the service sorts them). `subtype` is optional for `parent_child` (defaults to `biological`) and required for `couple` (`married` or `partner`, no guessing). Invalid input is a `400 validation_error`, never a database error. Validates direction, duplicates, ancestry cycles, at most two biological parents |
-| PATCH | `/api/relationships/{id}` | admin | Subtype, `ended`, notes. Type and people can't change (delete and re-create instead). A subtype change runs the same locked validation as POST, so switching a link to `biological` can't create a third biological parent |
-| DELETE | `/api/relationships/{id}` | admin | Hard delete |
+| POST | `/api/relationships` | admin | `{type:"parent_child", parent_id, child_id, subtype}` or `{type:"couple", person_ids:[id1,id2], subtype, ended}`, plus optional `notes` → `201` with the link in the same shape. `person_ids` must hold **exactly two distinct** existing, non-deleted people, in any order (the service sorts them). `subtype` is optional for `parent_child` (defaults to `biological`) and required for `couple` (`married` or `partner`, no guessing). Invalid input is a `400 validation_error`, never a database error. A link that clashes with stored ones is a `409 conflict`: a duplicate (any subtype; edit that link instead), an ancestry cycle, or a third biological parent. `503 busy` |
+| PATCH | `/api/relationships/{id}` | admin | Subtype, `ended`, notes → `200` with the link. Type and people can't change (delete and re-create instead), and only `notes` can be cleared with `null`. A subtype change runs the same locked validation as POST, so switching a link to `biological` can't create a third biological parent (`409 conflict`). `404 not_found`, `503 busy` |
+| DELETE | `/api/relationships/{id}` | admin | Hard delete → `204`; `404 not_found`, `503 busy` |
 | GET | `/api/events` | session | Chronological feed |
 | POST | `/api/events` | admin (members when `MEMBERS_CAN_CONTRIBUTE=true`) | Create (with `person_ids`) |
 | GET/PATCH | `/api/events/{id}` | GET: session; PATCH: admin, or the creator when contributions are enabled | Read / update |
@@ -1091,16 +1091,16 @@ GROUP BY p.id;
 -- name: IsAncestor :one
 WITH RECURSIVE anc(id) AS (
   SELECT person_a FROM relationships
-  WHERE type = 'parent_child' AND person_b = sqlc.arg(parent_id)
+  WHERE type = 'parent_child' AND person_b = sqlc.arg(parent_id)::uuid
   UNION
   SELECT r.person_a FROM relationships r
   JOIN anc ON r.person_b = anc.id
   WHERE r.type = 'parent_child'
 )
-SELECT EXISTS (SELECT 1 FROM anc WHERE id = sqlc.arg(child_id));
+SELECT EXISTS (SELECT 1 FROM anc WHERE id = sqlc.arg(child_id)::uuid);
 ```
 
-  Couple edges aren't traversed, so they can't create loops. The same locked transaction also rejects a third **biological** parent for the child (§3.3).
+  The `::uuid` casts are for sqlc, which can't infer a parameter's type inside a recursive CTE. Couple edges aren't traversed, so they can't create loops. The same locked transaction also rejects a third **biological** parent for the child (§3.3).
 - **Name search** queries the `search_name` generated column (§3.1), which the trigram index covers, so query and index can't drift apart. To make middle or maiden names searchable later, change the column's expression in a migration.
 - Direction convention is enforced by the service, not just documented: the API accepts `{type:"parent_child", parent_id, child_id}` and maps to `person_a/person_b`; for couples it sorts the pair so `person_a < person_b`.
 

@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,6 +24,11 @@ var (
 		ID: testPersonID, FirstName: "Rosa", LastName: new("Pierre"), Side: new("first"),
 		BirthDate: new("--03-14"), BirthDatePrecision: new("day"),
 	}
+	otherPersonID      = uuid.MustParse("01890000-0000-7000-8000-0000000000cc")
+	testRelationshipID = uuid.MustParse("01890000-0000-7000-8000-0000000000bb")
+	testParentLink     = family.Relationship{ID: testRelationshipID, Type: family.ParentChild, Subtype: "biological", PersonA: testPersonID, PersonB: otherPersonID}
+	testCouple         = family.Relationship{ID: testRelationshipID, Type: family.Couple, Subtype: "married", Ended: true,
+		PersonA: testPersonID, PersonB: otherPersonID, Notes: new("Married in Jacmel")}
 )
 
 const (
@@ -31,6 +37,12 @@ const (
 		"death_date":null,"death_date_precision":null,"is_deceased":false,"bio":null}`
 	personNotFoundBody = `{"error":{"code":"not_found","message":"person not found"}}`
 	busyBody           = `{"error":{"code":"busy","message":"try again in a moment"}}`
+	parentLinkBody     = `{"id":"01890000-0000-7000-8000-0000000000bb","type":"parent_child","subtype":"biological","ended":false,
+		"parent_id":"01890000-0000-7000-8000-0000000000aa","child_id":"01890000-0000-7000-8000-0000000000cc","notes":null}`
+	coupleBody = `{"id":"01890000-0000-7000-8000-0000000000bb","type":"couple","subtype":"married","ended":true,
+		"person_ids":["01890000-0000-7000-8000-0000000000aa","01890000-0000-7000-8000-0000000000cc"],"notes":"Married in Jacmel"}`
+	relationshipNotFoundBody = `{"error":{"code":"not_found","message":"relationship not found"}}`
+	badJSONBody              = `{"error":{"code":"bad_request","message":"invalid JSON body"}}`
 )
 
 func TestSearchPersons(t *testing.T) {
@@ -62,7 +74,7 @@ func TestSearchPersons(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantIn != nil {
-				svc.EXPECT().List(mock.Anything, family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}, *tt.wantIn).Return(tt.people, tt.listErr)
+				svc.EXPECT().ListPersons(mock.Anything, family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}, *tt.wantIn).Return(tt.people, tt.listErr)
 			}
 			req := httptest.NewRequest(http.MethodGet, "/api/persons"+tt.query, nil)
 
@@ -95,7 +107,7 @@ func TestGetPerson(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantGet {
-				svc.EXPECT().Get(mock.Anything, family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}, testPersonID).Return(testPerson, tt.getErr)
+				svc.EXPECT().GetPerson(mock.Anything, family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}, testPersonID).Return(testPerson, tt.getErr)
 			}
 			id := idOr(tt.id)
 			req := withURLParam(httptest.NewRequest(http.MethodGet, "/api/persons/"+id, nil), "id", id)
@@ -134,7 +146,7 @@ func TestCreatePerson(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantCreate {
-				svc.EXPECT().Create(mock.Anything, testUser.ID, want).Return(testPerson, tt.createErr)
+				svc.EXPECT().CreatePerson(mock.Anything, testUser.ID, want).Return(testPerson, tt.createErr)
 			}
 			req := httptest.NewRequest(http.MethodPost, "/api/persons", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -188,7 +200,7 @@ func TestUpdatePerson(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantPatch != nil {
-				svc.EXPECT().Update(mock.Anything, testPersonID, *tt.wantPatch).Return(testPerson, tt.updateErr)
+				svc.EXPECT().UpdatePerson(mock.Anything, testPersonID, *tt.wantPatch).Return(testPerson, tt.updateErr)
 			}
 			id := idOr(tt.id)
 			req := httptest.NewRequest(http.MethodPatch, "/api/persons/"+id, strings.NewReader(tt.body))
@@ -222,7 +234,7 @@ func TestDeletePerson(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantDelete {
-				svc.EXPECT().Delete(mock.Anything, testPersonID).Return(tt.deleteErr)
+				svc.EXPECT().DeletePerson(mock.Anything, testPersonID).Return(tt.deleteErr)
 			}
 			id := idOr(tt.id)
 			req := withURLParam(httptest.NewRequest(http.MethodDelete, "/api/persons/"+id, nil), "id", id)
@@ -254,12 +266,140 @@ func TestRestorePerson(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantRestore {
-				svc.EXPECT().Restore(mock.Anything, testPersonID).Return(testPerson, tt.restoreErr)
+				svc.EXPECT().RestorePerson(mock.Anything, testPersonID).Return(testPerson, tt.restoreErr)
 			}
 			id := idOr(tt.id)
 			req := withURLParam(httptest.NewRequest(http.MethodPost, "/api/persons/"+id+"/restore", nil), "id", id)
 
 			rec := serveAs(t, auth.RoleAdmin, handler.NewFamily(svc).RestorePerson, req)
+
+			assertBody(t, rec, tt.wantStatus, tt.wantBody)
+		})
+	}
+}
+
+func TestCreateRelationship(t *testing.T) {
+	const (
+		parentBody = `{"type":"parent_child","parent_id":"01890000-0000-7000-8000-0000000000aa","child_id":"01890000-0000-7000-8000-0000000000cc"}`
+		couple     = `{"type":"couple","person_ids":["01890000-0000-7000-8000-0000000000cc","01890000-0000-7000-8000-0000000000aa"],
+			"subtype":"married","ended":true,"notes":"Married in Jacmel"}`
+	)
+	parentIn := family.RelationshipInput{Type: family.ParentChild, ParentID: testPersonID, ChildID: otherPersonID}
+	coupleIn := family.RelationshipInput{Type: family.Couple, PersonIDs: []uuid.UUID{otherPersonID, testPersonID},
+		Subtype: new("married"), Ended: true, Notes: new("Married in Jacmel")}
+
+	tests := []struct {
+		name       string
+		body       string
+		wantIn     *family.RelationshipInput
+		created    family.Relationship
+		createErr  error
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "a parent link", body: parentBody, wantIn: &parentIn, created: testParentLink, wantStatus: http.StatusCreated, wantBody: parentLinkBody},
+		{name: "a couple", body: couple, wantIn: &coupleIn, created: testCouple, wantStatus: http.StatusCreated, wantBody: coupleBody},
+		{name: "refused by the rules", body: parentBody, wantIn: &parentIn, createErr: family.ErrInvalidRelationship, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"invalid relationship"}}`},
+		{name: "a loop", body: parentBody, wantIn: &parentIn, createErr: fmt.Errorf("%w: the child is already an ancestor of the parent", family.ErrRelationshipConflict),
+			wantStatus: http.StatusConflict, wantBody: `{"error":{"code":"conflict","message":"relationship conflict: the child is already an ancestor of the parent"}}`},
+		{name: "busy", body: parentBody, wantIn: &parentIn, createErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable, wantBody: busyBody},
+		{name: "database error", body: parentBody, wantIn: &parentIn, createErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+		{name: "an id that isn't a UUID", body: `{"type":"parent_child","parent_id":"42"}`, wantStatus: http.StatusBadRequest, wantBody: badJSONBody},
+		{name: "unknown field", body: `{"type":"sibling","sibling_id":"01890000-0000-7000-8000-0000000000cc"}`, wantStatus: http.StatusBadRequest, wantBody: badJSONBody},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewFamilyService(t)
+			if tt.wantIn != nil {
+				svc.EXPECT().CreateRelationship(mock.Anything, *tt.wantIn).Return(tt.created, tt.createErr)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/relationships", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+
+			rec := serveAs(t, auth.RoleAdmin, handler.NewFamily(svc).CreateRelationship, req)
+
+			assertBody(t, rec, tt.wantStatus, tt.wantBody)
+		})
+	}
+}
+
+func TestUpdateRelationship(t *testing.T) {
+	tests := []struct {
+		name       string
+		id         string
+		body       string
+		wantPatch  *family.RelationshipPatch
+		updateErr  error
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "only the fields sent change; null clears the notes", body: `{"ended":true,"notes":null}`,
+			wantPatch:  &family.RelationshipPatch{Ended: family.Opt[bool]{Set: true, Value: true}, Notes: family.Opt[*string]{Set: true}},
+			wantStatus: http.StatusOK, wantBody: coupleBody},
+		{name: "a subtype", body: `{"subtype":"partner"}`, wantPatch: &family.RelationshipPatch{Subtype: family.Opt[string]{Set: true, Value: "partner"}},
+			wantStatus: http.StatusOK, wantBody: coupleBody},
+		{name: "a third biological parent", body: `{"subtype":"biological"}`, wantPatch: &family.RelationshipPatch{Subtype: family.Opt[string]{Set: true, Value: "biological"}},
+			updateErr: fmt.Errorf("%w: the child already has two biological parents", family.ErrRelationshipConflict), wantStatus: http.StatusConflict,
+			wantBody: `{"error":{"code":"conflict","message":"relationship conflict: the child already has two biological parents"}}`},
+		{name: "unknown", body: `{}`, wantPatch: &family.RelationshipPatch{}, updateErr: family.ErrRelationshipNotFound, wantStatus: http.StatusNotFound, wantBody: relationshipNotFoundBody},
+		{name: "not a relationship id", id: "42", body: `{}`, wantStatus: http.StatusNotFound, wantBody: relationshipNotFoundBody},
+		{name: "busy", body: `{}`, wantPatch: &family.RelationshipPatch{}, updateErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable, wantBody: busyBody},
+		{name: "the people can't change", body: `{"parent_id":"01890000-0000-7000-8000-0000000000cc"}`, wantStatus: http.StatusBadRequest, wantBody: badJSONBody},
+		{name: "a subtype can't be cleared", body: `{"subtype":null}`, wantStatus: http.StatusBadRequest, wantBody: badJSONBody},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewFamilyService(t)
+			if tt.wantPatch != nil {
+				svc.EXPECT().UpdateRelationship(mock.Anything, testRelationshipID, *tt.wantPatch).Return(testCouple, tt.updateErr)
+			}
+			id := testRelationshipID.String()
+			if tt.id != "" {
+				id = tt.id
+			}
+			req := httptest.NewRequest(http.MethodPatch, "/api/relationships/"+id, strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			req = withURLParam(req, "id", id)
+
+			rec := serveAs(t, auth.RoleAdmin, handler.NewFamily(svc).UpdateRelationship, req)
+
+			assertBody(t, rec, tt.wantStatus, tt.wantBody)
+		})
+	}
+}
+
+func TestDeleteRelationship(t *testing.T) {
+	tests := []struct {
+		name       string
+		id         string
+		deleteErr  error
+		wantDelete bool
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "deleted", wantDelete: true, wantStatus: http.StatusNoContent},
+		{name: "unknown", wantDelete: true, deleteErr: family.ErrRelationshipNotFound, wantStatus: http.StatusNotFound, wantBody: relationshipNotFoundBody},
+		{name: "not a relationship id", id: "42", wantStatus: http.StatusNotFound, wantBody: relationshipNotFoundBody},
+		{name: "busy", wantDelete: true, deleteErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable, wantBody: busyBody},
+		{name: "database error", wantDelete: true, deleteErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewFamilyService(t)
+			if tt.wantDelete {
+				svc.EXPECT().DeleteRelationship(mock.Anything, testRelationshipID).Return(tt.deleteErr)
+			}
+			id := testRelationshipID.String()
+			if tt.id != "" {
+				id = tt.id
+			}
+			req := withURLParam(httptest.NewRequest(http.MethodDelete, "/api/relationships/"+id, nil), "id", id)
+
+			rec := serveAs(t, auth.RoleAdmin, handler.NewFamily(svc).DeleteRelationship, req)
 
 			assertBody(t, rec, tt.wantStatus, tt.wantBody)
 		})

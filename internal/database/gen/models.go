@@ -42,6 +42,18 @@ type Person struct {
 	DeletedAt          *time.Time
 }
 
+type Relationship struct {
+	ID        uuid.UUID
+	Type      string
+	Subtype   string
+	Ended     bool
+	PersonA   uuid.UUID
+	PersonB   uuid.UUID
+	Notes     *string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type Session struct {
 	IDHash     []byte
 	UserID     uuid.UUID

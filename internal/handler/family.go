@@ -15,12 +15,15 @@ import (
 )
 
 type FamilyService interface {
-	List(ctx context.Context, viewer family.Viewer, in family.ListInput) ([]family.Person, error)
-	Get(ctx context.Context, viewer family.Viewer, id uuid.UUID) (family.Person, error)
-	Create(ctx context.Context, createdBy uuid.UUID, in family.PersonInput) (family.Person, error)
-	Update(ctx context.Context, id uuid.UUID, patch family.PersonPatch) (family.Person, error)
-	Delete(ctx context.Context, id uuid.UUID) error
-	Restore(ctx context.Context, id uuid.UUID) (family.Person, error)
+	ListPersons(ctx context.Context, viewer family.Viewer, in family.ListInput) ([]family.Person, error)
+	GetPerson(ctx context.Context, viewer family.Viewer, id uuid.UUID) (family.Person, error)
+	CreatePerson(ctx context.Context, createdBy uuid.UUID, in family.PersonInput) (family.Person, error)
+	UpdatePerson(ctx context.Context, id uuid.UUID, patch family.PersonPatch) (family.Person, error)
+	DeletePerson(ctx context.Context, id uuid.UUID) error
+	RestorePerson(ctx context.Context, id uuid.UUID) (family.Person, error)
+	CreateRelationship(ctx context.Context, in family.RelationshipInput) (family.Relationship, error)
+	UpdateRelationship(ctx context.Context, id uuid.UUID, patch family.RelationshipPatch) (family.Relationship, error)
+	DeleteRelationship(ctx context.Context, id uuid.UUID) error
 }
 
 type Family struct {
@@ -103,6 +106,35 @@ func (o *required[T]) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &o.Value)
 }
 
+// relationshipResponse has parent_id and child_id for a parent link, person_ids for a couple, as the request does.
+type relationshipResponse struct {
+	ID        uuid.UUID   `json:"id"`
+	Type      string      `json:"type"`
+	Subtype   string      `json:"subtype"`
+	Ended     bool        `json:"ended"`
+	ParentID  uuid.UUID   `json:"parent_id,omitzero"`
+	ChildID   uuid.UUID   `json:"child_id,omitzero"`
+	PersonIDs []uuid.UUID `json:"person_ids,omitempty"`
+	Notes     *string     `json:"notes"`
+}
+
+type createRelationshipRequest struct {
+	Type      string      `json:"type"`
+	ParentID  uuid.UUID   `json:"parent_id"`
+	ChildID   uuid.UUID   `json:"child_id"`
+	PersonIDs []uuid.UUID `json:"person_ids"`
+	Subtype   *string     `json:"subtype"`
+	Ended     bool        `json:"ended"`
+	Notes     *string     `json:"notes"`
+}
+
+// The type and people of a link never change, so a PATCH naming them is refused as an unknown field.
+type updateRelationshipRequest struct {
+	Subtype required[string]  `json:"subtype"`
+	Ended   required[bool]    `json:"ended"`
+	Notes   optional[*string] `json:"notes"`
+}
+
 func (f *Family) SearchPersons(w http.ResponseWriter, r *http.Request) {
 	viewer, ok := currentViewer(w, r)
 	if !ok {
@@ -120,7 +152,7 @@ func (f *Family) SearchPersons(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "validation_error", "living must be true or false")
 		return
 	}
-	people, err := f.svc.List(r.Context(), viewer, in)
+	people, err := f.svc.ListPersons(r.Context(), viewer, in)
 	if err != nil {
 		f.fail(w, r, err, "list persons")
 		return
@@ -141,7 +173,7 @@ func (f *Family) GetPerson(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	person, err := f.svc.Get(r.Context(), viewer, id)
+	person, err := f.svc.GetPerson(r.Context(), viewer, id)
 	f.answer(w, r, http.StatusOK, person, err, "get person")
 }
 
@@ -155,7 +187,7 @@ func (f *Family) CreatePerson(w http.ResponseWriter, r *http.Request) {
 	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
-	person, err := f.svc.Create(r.Context(), session.UserID, family.PersonInput(req))
+	person, err := f.svc.CreatePerson(r.Context(), session.UserID, family.PersonInput(req))
 	f.answer(w, r, http.StatusCreated, person, err, "create person")
 }
 
@@ -176,7 +208,7 @@ func (f *Family) UpdatePerson(w http.ResponseWriter, r *http.Request) {
 		DeathDate: family.Opt[*string](req.DeathDate), DeathDatePrecision: family.Opt[*string](req.DeathDatePrecision),
 		IsDeceased: family.Opt[bool](req.IsDeceased), Bio: family.Opt[*string](req.Bio),
 	}
-	person, err := f.svc.Update(r.Context(), id, patch)
+	person, err := f.svc.UpdatePerson(r.Context(), id, patch)
 	f.answer(w, r, http.StatusOK, person, err, "update person")
 }
 
@@ -185,7 +217,7 @@ func (f *Family) DeletePerson(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := f.svc.Delete(r.Context(), id); err != nil {
+	if err := f.svc.DeletePerson(r.Context(), id); err != nil {
 		f.fail(w, r, err, "delete person")
 		return
 	}
@@ -197,8 +229,53 @@ func (f *Family) RestorePerson(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	person, err := f.svc.Restore(r.Context(), id)
+	person, err := f.svc.RestorePerson(r.Context(), id)
 	f.answer(w, r, http.StatusOK, person, err, "restore person")
+}
+
+func (f *Family) CreateRelationship(w http.ResponseWriter, r *http.Request) {
+	var req createRelationshipRequest
+	if !httpx.DecodeJSON(w, r, &req) {
+		return
+	}
+	rel, err := f.svc.CreateRelationship(r.Context(), family.RelationshipInput(req))
+	if err != nil {
+		f.fail(w, r, err, "create relationship")
+		return
+	}
+	httpx.JSON(w, http.StatusCreated, toRelationshipResponse(rel))
+}
+
+func (f *Family) UpdateRelationship(w http.ResponseWriter, r *http.Request) {
+	id, ok := relationshipID(w, r)
+	if !ok {
+		return
+	}
+	var req updateRelationshipRequest
+	if !httpx.DecodeJSON(w, r, &req) {
+		return
+	}
+	patch := family.RelationshipPatch{
+		Subtype: family.Opt[string](req.Subtype), Ended: family.Opt[bool](req.Ended), Notes: family.Opt[*string](req.Notes),
+	}
+	rel, err := f.svc.UpdateRelationship(r.Context(), id, patch)
+	if err != nil {
+		f.fail(w, r, err, "update relationship")
+		return
+	}
+	httpx.JSON(w, http.StatusOK, toRelationshipResponse(rel))
+}
+
+func (f *Family) DeleteRelationship(w http.ResponseWriter, r *http.Request) {
+	id, ok := relationshipID(w, r)
+	if !ok {
+		return
+	}
+	if err := f.svc.DeleteRelationship(r.Context(), id); err != nil {
+		f.fail(w, r, err, "delete relationship")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (f *Family) answer(w http.ResponseWriter, r *http.Request, status int, person family.Person, err error, what string) {
@@ -212,10 +289,12 @@ func (f *Family) answer(w http.ResponseWriter, r *http.Request, status int, pers
 func (f *Family) fail(w http.ResponseWriter, r *http.Request, err error, what string) {
 	switch {
 	case clientGone(r):
-	case errors.Is(err, family.ErrInvalidPerson), errors.Is(err, family.ErrInvalidFilter):
+	case errors.Is(err, family.ErrInvalidPerson), errors.Is(err, family.ErrInvalidFilter), errors.Is(err, family.ErrInvalidRelationship):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
-	case errors.Is(err, family.ErrPersonNotFound):
+	case errors.Is(err, family.ErrPersonNotFound), errors.Is(err, family.ErrRelationshipNotFound):
 		httpx.Error(w, http.StatusNotFound, "not_found", err.Error())
+	case errors.Is(err, family.ErrRelationshipConflict):
+		httpx.Error(w, http.StatusConflict, "conflict", err.Error())
 	case errors.Is(err, auth.ErrBusy):
 		busy(w)
 	default:
@@ -234,9 +313,18 @@ func currentViewer(w http.ResponseWriter, r *http.Request) (family.Viewer, bool)
 }
 
 func personID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	return pathID(w, r, family.ErrPersonNotFound)
+}
+
+func relationshipID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	return pathID(w, r, family.ErrRelationshipNotFound)
+}
+
+// pathID answers 404 for an id that isn't a UUID: no such thing can exist.
+func pathID(w http.ResponseWriter, r *http.Request, notFound error) (uuid.UUID, bool) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		httpx.Error(w, http.StatusNotFound, "not_found", family.ErrPersonNotFound.Error())
+		httpx.Error(w, http.StatusNotFound, "not_found", notFound.Error())
 		return uuid.Nil, false
 	}
 	return id, true
@@ -244,4 +332,14 @@ func personID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 
 func toPersonResponse(p family.Person) personResponse {
 	return personResponse(p)
+}
+
+func toRelationshipResponse(rel family.Relationship) relationshipResponse {
+	resp := relationshipResponse{ID: rel.ID, Type: rel.Type, Subtype: rel.Subtype, Ended: rel.Ended, Notes: rel.Notes}
+	if rel.Type == family.ParentChild {
+		resp.ParentID, resp.ChildID = rel.PersonA, rel.PersonB
+	} else {
+		resp.PersonIDs = []uuid.UUID{rel.PersonA, rel.PersonB}
+	}
+	return resp
 }

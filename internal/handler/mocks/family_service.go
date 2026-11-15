@@ -48,12 +48,12 @@ func (_m *FamilyService) EXPECT() *FamilyService_Expecter {
 	return &FamilyService_Expecter{mock: &_m.Mock}
 }
 
-// Create provides a mock function for the type FamilyService
-func (_mock *FamilyService) Create(ctx context.Context, createdBy uuid.UUID, in family.PersonInput) (family.Person, error) {
+// CreatePerson provides a mock function for the type FamilyService
+func (_mock *FamilyService) CreatePerson(ctx context.Context, createdBy uuid.UUID, in family.PersonInput) (family.Person, error) {
 	ret := _mock.Called(ctx, createdBy, in)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Create")
+		panic("no return value specified for CreatePerson")
 	}
 
 	var r0 family.Person
@@ -74,20 +74,20 @@ func (_mock *FamilyService) Create(ctx context.Context, createdBy uuid.UUID, in 
 	return r0, r1
 }
 
-// FamilyService_Create_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Create'
-type FamilyService_Create_Call struct {
+// FamilyService_CreatePerson_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreatePerson'
+type FamilyService_CreatePerson_Call struct {
 	*mock.Call
 }
 
-// Create is a helper method to define mock.On call
+// CreatePerson is a helper method to define mock.On call
 //   - ctx context.Context
 //   - createdBy uuid.UUID
 //   - in family.PersonInput
-func (_e *FamilyService_Expecter) Create(ctx any, createdBy any, in any) *FamilyService_Create_Call {
-	return &FamilyService_Create_Call{Call: _e.mock.On("Create", ctx, createdBy, in)}
+func (_e *FamilyService_Expecter) CreatePerson(ctx any, createdBy any, in any) *FamilyService_CreatePerson_Call {
+	return &FamilyService_CreatePerson_Call{Call: _e.mock.On("CreatePerson", ctx, createdBy, in)}
 }
 
-func (_c *FamilyService_Create_Call) Run(run func(ctx context.Context, createdBy uuid.UUID, in family.PersonInput)) *FamilyService_Create_Call {
+func (_c *FamilyService_CreatePerson_Call) Run(run func(ctx context.Context, createdBy uuid.UUID, in family.PersonInput)) *FamilyService_CreatePerson_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -110,22 +110,88 @@ func (_c *FamilyService_Create_Call) Run(run func(ctx context.Context, createdBy
 	return _c
 }
 
-func (_c *FamilyService_Create_Call) Return(person family.Person, err error) *FamilyService_Create_Call {
+func (_c *FamilyService_CreatePerson_Call) Return(person family.Person, err error) *FamilyService_CreatePerson_Call {
 	_c.Call.Return(person, err)
 	return _c
 }
 
-func (_c *FamilyService_Create_Call) RunAndReturn(run func(ctx context.Context, createdBy uuid.UUID, in family.PersonInput) (family.Person, error)) *FamilyService_Create_Call {
+func (_c *FamilyService_CreatePerson_Call) RunAndReturn(run func(ctx context.Context, createdBy uuid.UUID, in family.PersonInput) (family.Person, error)) *FamilyService_CreatePerson_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// Delete provides a mock function for the type FamilyService
-func (_mock *FamilyService) Delete(ctx context.Context, id uuid.UUID) error {
+// CreateRelationship provides a mock function for the type FamilyService
+func (_mock *FamilyService) CreateRelationship(ctx context.Context, in family.RelationshipInput) (family.Relationship, error) {
+	ret := _mock.Called(ctx, in)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateRelationship")
+	}
+
+	var r0 family.Relationship
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.RelationshipInput) (family.Relationship, error)); ok {
+		return returnFunc(ctx, in)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.RelationshipInput) family.Relationship); ok {
+		r0 = returnFunc(ctx, in)
+	} else {
+		r0 = ret.Get(0).(family.Relationship)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, family.RelationshipInput) error); ok {
+		r1 = returnFunc(ctx, in)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// FamilyService_CreateRelationship_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateRelationship'
+type FamilyService_CreateRelationship_Call struct {
+	*mock.Call
+}
+
+// CreateRelationship is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in family.RelationshipInput
+func (_e *FamilyService_Expecter) CreateRelationship(ctx any, in any) *FamilyService_CreateRelationship_Call {
+	return &FamilyService_CreateRelationship_Call{Call: _e.mock.On("CreateRelationship", ctx, in)}
+}
+
+func (_c *FamilyService_CreateRelationship_Call) Run(run func(ctx context.Context, in family.RelationshipInput)) *FamilyService_CreateRelationship_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 family.RelationshipInput
+		if args[1] != nil {
+			arg1 = args[1].(family.RelationshipInput)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *FamilyService_CreateRelationship_Call) Return(relationship family.Relationship, err error) *FamilyService_CreateRelationship_Call {
+	_c.Call.Return(relationship, err)
+	return _c
+}
+
+func (_c *FamilyService_CreateRelationship_Call) RunAndReturn(run func(ctx context.Context, in family.RelationshipInput) (family.Relationship, error)) *FamilyService_CreateRelationship_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeletePerson provides a mock function for the type FamilyService
+func (_mock *FamilyService) DeletePerson(ctx context.Context, id uuid.UUID) error {
 	ret := _mock.Called(ctx, id)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Delete")
+		panic("no return value specified for DeletePerson")
 	}
 
 	var r0 error
@@ -137,19 +203,19 @@ func (_mock *FamilyService) Delete(ctx context.Context, id uuid.UUID) error {
 	return r0
 }
 
-// FamilyService_Delete_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Delete'
-type FamilyService_Delete_Call struct {
+// FamilyService_DeletePerson_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeletePerson'
+type FamilyService_DeletePerson_Call struct {
 	*mock.Call
 }
 
-// Delete is a helper method to define mock.On call
+// DeletePerson is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id uuid.UUID
-func (_e *FamilyService_Expecter) Delete(ctx any, id any) *FamilyService_Delete_Call {
-	return &FamilyService_Delete_Call{Call: _e.mock.On("Delete", ctx, id)}
+func (_e *FamilyService_Expecter) DeletePerson(ctx any, id any) *FamilyService_DeletePerson_Call {
+	return &FamilyService_DeletePerson_Call{Call: _e.mock.On("DeletePerson", ctx, id)}
 }
 
-func (_c *FamilyService_Delete_Call) Run(run func(ctx context.Context, id uuid.UUID)) *FamilyService_Delete_Call {
+func (_c *FamilyService_DeletePerson_Call) Run(run func(ctx context.Context, id uuid.UUID)) *FamilyService_DeletePerson_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -167,22 +233,79 @@ func (_c *FamilyService_Delete_Call) Run(run func(ctx context.Context, id uuid.U
 	return _c
 }
 
-func (_c *FamilyService_Delete_Call) Return(err error) *FamilyService_Delete_Call {
+func (_c *FamilyService_DeletePerson_Call) Return(err error) *FamilyService_DeletePerson_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *FamilyService_Delete_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) error) *FamilyService_Delete_Call {
+func (_c *FamilyService_DeletePerson_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) error) *FamilyService_DeletePerson_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// Get provides a mock function for the type FamilyService
-func (_mock *FamilyService) Get(ctx context.Context, viewer family.Viewer, id uuid.UUID) (family.Person, error) {
+// DeleteRelationship provides a mock function for the type FamilyService
+func (_mock *FamilyService) DeleteRelationship(ctx context.Context, id uuid.UUID) error {
+	ret := _mock.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteRelationship")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) error); ok {
+		r0 = returnFunc(ctx, id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// FamilyService_DeleteRelationship_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteRelationship'
+type FamilyService_DeleteRelationship_Call struct {
+	*mock.Call
+}
+
+// DeleteRelationship is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id uuid.UUID
+func (_e *FamilyService_Expecter) DeleteRelationship(ctx any, id any) *FamilyService_DeleteRelationship_Call {
+	return &FamilyService_DeleteRelationship_Call{Call: _e.mock.On("DeleteRelationship", ctx, id)}
+}
+
+func (_c *FamilyService_DeleteRelationship_Call) Run(run func(ctx context.Context, id uuid.UUID)) *FamilyService_DeleteRelationship_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *FamilyService_DeleteRelationship_Call) Return(err error) *FamilyService_DeleteRelationship_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *FamilyService_DeleteRelationship_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) error) *FamilyService_DeleteRelationship_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetPerson provides a mock function for the type FamilyService
+func (_mock *FamilyService) GetPerson(ctx context.Context, viewer family.Viewer, id uuid.UUID) (family.Person, error) {
 	ret := _mock.Called(ctx, viewer, id)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Get")
+		panic("no return value specified for GetPerson")
 	}
 
 	var r0 family.Person
@@ -203,20 +326,20 @@ func (_mock *FamilyService) Get(ctx context.Context, viewer family.Viewer, id uu
 	return r0, r1
 }
 
-// FamilyService_Get_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Get'
-type FamilyService_Get_Call struct {
+// FamilyService_GetPerson_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPerson'
+type FamilyService_GetPerson_Call struct {
 	*mock.Call
 }
 
-// Get is a helper method to define mock.On call
+// GetPerson is a helper method to define mock.On call
 //   - ctx context.Context
 //   - viewer family.Viewer
 //   - id uuid.UUID
-func (_e *FamilyService_Expecter) Get(ctx any, viewer any, id any) *FamilyService_Get_Call {
-	return &FamilyService_Get_Call{Call: _e.mock.On("Get", ctx, viewer, id)}
+func (_e *FamilyService_Expecter) GetPerson(ctx any, viewer any, id any) *FamilyService_GetPerson_Call {
+	return &FamilyService_GetPerson_Call{Call: _e.mock.On("GetPerson", ctx, viewer, id)}
 }
 
-func (_c *FamilyService_Get_Call) Run(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID)) *FamilyService_Get_Call {
+func (_c *FamilyService_GetPerson_Call) Run(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID)) *FamilyService_GetPerson_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -239,22 +362,22 @@ func (_c *FamilyService_Get_Call) Run(run func(ctx context.Context, viewer famil
 	return _c
 }
 
-func (_c *FamilyService_Get_Call) Return(person family.Person, err error) *FamilyService_Get_Call {
+func (_c *FamilyService_GetPerson_Call) Return(person family.Person, err error) *FamilyService_GetPerson_Call {
 	_c.Call.Return(person, err)
 	return _c
 }
 
-func (_c *FamilyService_Get_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID) (family.Person, error)) *FamilyService_Get_Call {
+func (_c *FamilyService_GetPerson_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID) (family.Person, error)) *FamilyService_GetPerson_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// List provides a mock function for the type FamilyService
-func (_mock *FamilyService) List(ctx context.Context, viewer family.Viewer, in family.ListInput) ([]family.Person, error) {
+// ListPersons provides a mock function for the type FamilyService
+func (_mock *FamilyService) ListPersons(ctx context.Context, viewer family.Viewer, in family.ListInput) ([]family.Person, error) {
 	ret := _mock.Called(ctx, viewer, in)
 
 	if len(ret) == 0 {
-		panic("no return value specified for List")
+		panic("no return value specified for ListPersons")
 	}
 
 	var r0 []family.Person
@@ -277,20 +400,20 @@ func (_mock *FamilyService) List(ctx context.Context, viewer family.Viewer, in f
 	return r0, r1
 }
 
-// FamilyService_List_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'List'
-type FamilyService_List_Call struct {
+// FamilyService_ListPersons_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListPersons'
+type FamilyService_ListPersons_Call struct {
 	*mock.Call
 }
 
-// List is a helper method to define mock.On call
+// ListPersons is a helper method to define mock.On call
 //   - ctx context.Context
 //   - viewer family.Viewer
 //   - in family.ListInput
-func (_e *FamilyService_Expecter) List(ctx any, viewer any, in any) *FamilyService_List_Call {
-	return &FamilyService_List_Call{Call: _e.mock.On("List", ctx, viewer, in)}
+func (_e *FamilyService_Expecter) ListPersons(ctx any, viewer any, in any) *FamilyService_ListPersons_Call {
+	return &FamilyService_ListPersons_Call{Call: _e.mock.On("ListPersons", ctx, viewer, in)}
 }
 
-func (_c *FamilyService_List_Call) Run(run func(ctx context.Context, viewer family.Viewer, in family.ListInput)) *FamilyService_List_Call {
+func (_c *FamilyService_ListPersons_Call) Run(run func(ctx context.Context, viewer family.Viewer, in family.ListInput)) *FamilyService_ListPersons_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -313,22 +436,22 @@ func (_c *FamilyService_List_Call) Run(run func(ctx context.Context, viewer fami
 	return _c
 }
 
-func (_c *FamilyService_List_Call) Return(persons []family.Person, err error) *FamilyService_List_Call {
+func (_c *FamilyService_ListPersons_Call) Return(persons []family.Person, err error) *FamilyService_ListPersons_Call {
 	_c.Call.Return(persons, err)
 	return _c
 }
 
-func (_c *FamilyService_List_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, in family.ListInput) ([]family.Person, error)) *FamilyService_List_Call {
+func (_c *FamilyService_ListPersons_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, in family.ListInput) ([]family.Person, error)) *FamilyService_ListPersons_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// Restore provides a mock function for the type FamilyService
-func (_mock *FamilyService) Restore(ctx context.Context, id uuid.UUID) (family.Person, error) {
+// RestorePerson provides a mock function for the type FamilyService
+func (_mock *FamilyService) RestorePerson(ctx context.Context, id uuid.UUID) (family.Person, error) {
 	ret := _mock.Called(ctx, id)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Restore")
+		panic("no return value specified for RestorePerson")
 	}
 
 	var r0 family.Person
@@ -349,19 +472,19 @@ func (_mock *FamilyService) Restore(ctx context.Context, id uuid.UUID) (family.P
 	return r0, r1
 }
 
-// FamilyService_Restore_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Restore'
-type FamilyService_Restore_Call struct {
+// FamilyService_RestorePerson_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RestorePerson'
+type FamilyService_RestorePerson_Call struct {
 	*mock.Call
 }
 
-// Restore is a helper method to define mock.On call
+// RestorePerson is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id uuid.UUID
-func (_e *FamilyService_Expecter) Restore(ctx any, id any) *FamilyService_Restore_Call {
-	return &FamilyService_Restore_Call{Call: _e.mock.On("Restore", ctx, id)}
+func (_e *FamilyService_Expecter) RestorePerson(ctx any, id any) *FamilyService_RestorePerson_Call {
+	return &FamilyService_RestorePerson_Call{Call: _e.mock.On("RestorePerson", ctx, id)}
 }
 
-func (_c *FamilyService_Restore_Call) Run(run func(ctx context.Context, id uuid.UUID)) *FamilyService_Restore_Call {
+func (_c *FamilyService_RestorePerson_Call) Run(run func(ctx context.Context, id uuid.UUID)) *FamilyService_RestorePerson_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -379,22 +502,22 @@ func (_c *FamilyService_Restore_Call) Run(run func(ctx context.Context, id uuid.
 	return _c
 }
 
-func (_c *FamilyService_Restore_Call) Return(person family.Person, err error) *FamilyService_Restore_Call {
+func (_c *FamilyService_RestorePerson_Call) Return(person family.Person, err error) *FamilyService_RestorePerson_Call {
 	_c.Call.Return(person, err)
 	return _c
 }
 
-func (_c *FamilyService_Restore_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) (family.Person, error)) *FamilyService_Restore_Call {
+func (_c *FamilyService_RestorePerson_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) (family.Person, error)) *FamilyService_RestorePerson_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// Update provides a mock function for the type FamilyService
-func (_mock *FamilyService) Update(ctx context.Context, id uuid.UUID, patch family.PersonPatch) (family.Person, error) {
+// UpdatePerson provides a mock function for the type FamilyService
+func (_mock *FamilyService) UpdatePerson(ctx context.Context, id uuid.UUID, patch family.PersonPatch) (family.Person, error) {
 	ret := _mock.Called(ctx, id, patch)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Update")
+		panic("no return value specified for UpdatePerson")
 	}
 
 	var r0 family.Person
@@ -415,20 +538,20 @@ func (_mock *FamilyService) Update(ctx context.Context, id uuid.UUID, patch fami
 	return r0, r1
 }
 
-// FamilyService_Update_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Update'
-type FamilyService_Update_Call struct {
+// FamilyService_UpdatePerson_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdatePerson'
+type FamilyService_UpdatePerson_Call struct {
 	*mock.Call
 }
 
-// Update is a helper method to define mock.On call
+// UpdatePerson is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id uuid.UUID
 //   - patch family.PersonPatch
-func (_e *FamilyService_Expecter) Update(ctx any, id any, patch any) *FamilyService_Update_Call {
-	return &FamilyService_Update_Call{Call: _e.mock.On("Update", ctx, id, patch)}
+func (_e *FamilyService_Expecter) UpdatePerson(ctx any, id any, patch any) *FamilyService_UpdatePerson_Call {
+	return &FamilyService_UpdatePerson_Call{Call: _e.mock.On("UpdatePerson", ctx, id, patch)}
 }
 
-func (_c *FamilyService_Update_Call) Run(run func(ctx context.Context, id uuid.UUID, patch family.PersonPatch)) *FamilyService_Update_Call {
+func (_c *FamilyService_UpdatePerson_Call) Run(run func(ctx context.Context, id uuid.UUID, patch family.PersonPatch)) *FamilyService_UpdatePerson_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -451,12 +574,84 @@ func (_c *FamilyService_Update_Call) Run(run func(ctx context.Context, id uuid.U
 	return _c
 }
 
-func (_c *FamilyService_Update_Call) Return(person family.Person, err error) *FamilyService_Update_Call {
+func (_c *FamilyService_UpdatePerson_Call) Return(person family.Person, err error) *FamilyService_UpdatePerson_Call {
 	_c.Call.Return(person, err)
 	return _c
 }
 
-func (_c *FamilyService_Update_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID, patch family.PersonPatch) (family.Person, error)) *FamilyService_Update_Call {
+func (_c *FamilyService_UpdatePerson_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID, patch family.PersonPatch) (family.Person, error)) *FamilyService_UpdatePerson_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateRelationship provides a mock function for the type FamilyService
+func (_mock *FamilyService) UpdateRelationship(ctx context.Context, id uuid.UUID, patch family.RelationshipPatch) (family.Relationship, error) {
+	ret := _mock.Called(ctx, id, patch)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateRelationship")
+	}
+
+	var r0 family.Relationship
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, family.RelationshipPatch) (family.Relationship, error)); ok {
+		return returnFunc(ctx, id, patch)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, family.RelationshipPatch) family.Relationship); ok {
+		r0 = returnFunc(ctx, id, patch)
+	} else {
+		r0 = ret.Get(0).(family.Relationship)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uuid.UUID, family.RelationshipPatch) error); ok {
+		r1 = returnFunc(ctx, id, patch)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// FamilyService_UpdateRelationship_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateRelationship'
+type FamilyService_UpdateRelationship_Call struct {
+	*mock.Call
+}
+
+// UpdateRelationship is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id uuid.UUID
+//   - patch family.RelationshipPatch
+func (_e *FamilyService_Expecter) UpdateRelationship(ctx any, id any, patch any) *FamilyService_UpdateRelationship_Call {
+	return &FamilyService_UpdateRelationship_Call{Call: _e.mock.On("UpdateRelationship", ctx, id, patch)}
+}
+
+func (_c *FamilyService_UpdateRelationship_Call) Run(run func(ctx context.Context, id uuid.UUID, patch family.RelationshipPatch)) *FamilyService_UpdateRelationship_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		var arg2 family.RelationshipPatch
+		if args[2] != nil {
+			arg2 = args[2].(family.RelationshipPatch)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *FamilyService_UpdateRelationship_Call) Return(relationship family.Relationship, err error) *FamilyService_UpdateRelationship_Call {
+	_c.Call.Return(relationship, err)
+	return _c
+}
+
+func (_c *FamilyService_UpdateRelationship_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID, patch family.RelationshipPatch) (family.Relationship, error)) *FamilyService_UpdateRelationship_Call {
 	_c.Call.Return(run)
 	return _c
 }
