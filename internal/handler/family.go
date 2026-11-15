@@ -15,12 +15,12 @@ import (
 )
 
 type FamilyService interface {
-	List(ctx context.Context, viewer family.Viewer, in family.ListInput) ([]family.Person, error)
-	Get(ctx context.Context, viewer family.Viewer, id uuid.UUID) (family.Person, error)
-	Create(ctx context.Context, createdBy uuid.UUID, in family.PersonInput) (family.Person, error)
-	Update(ctx context.Context, id uuid.UUID, patch family.PersonPatch) (family.Person, error)
-	Delete(ctx context.Context, id uuid.UUID) error
-	Restore(ctx context.Context, id uuid.UUID) (family.Person, error)
+	ListPersons(ctx context.Context, viewer family.Viewer, in family.ListInput) ([]family.Person, error)
+	GetPerson(ctx context.Context, viewer family.Viewer, id uuid.UUID) (family.Person, error)
+	CreatePerson(ctx context.Context, createdBy uuid.UUID, in family.PersonInput) (family.Person, error)
+	UpdatePerson(ctx context.Context, id uuid.UUID, patch family.PersonPatch) (family.Person, error)
+	DeletePerson(ctx context.Context, id uuid.UUID) error
+	RestorePerson(ctx context.Context, id uuid.UUID) (family.Person, error)
 }
 
 type Family struct {
@@ -120,7 +120,7 @@ func (f *Family) SearchPersons(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "validation_error", "living must be true or false")
 		return
 	}
-	people, err := f.svc.List(r.Context(), viewer, in)
+	people, err := f.svc.ListPersons(r.Context(), viewer, in)
 	if err != nil {
 		f.fail(w, r, err, "list persons")
 		return
@@ -141,7 +141,7 @@ func (f *Family) GetPerson(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	person, err := f.svc.Get(r.Context(), viewer, id)
+	person, err := f.svc.GetPerson(r.Context(), viewer, id)
 	f.answer(w, r, http.StatusOK, person, err, "get person")
 }
 
@@ -155,7 +155,7 @@ func (f *Family) CreatePerson(w http.ResponseWriter, r *http.Request) {
 	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
-	person, err := f.svc.Create(r.Context(), session.UserID, family.PersonInput(req))
+	person, err := f.svc.CreatePerson(r.Context(), session.UserID, family.PersonInput(req))
 	f.answer(w, r, http.StatusCreated, person, err, "create person")
 }
 
@@ -176,7 +176,7 @@ func (f *Family) UpdatePerson(w http.ResponseWriter, r *http.Request) {
 		DeathDate: family.Opt[*string](req.DeathDate), DeathDatePrecision: family.Opt[*string](req.DeathDatePrecision),
 		IsDeceased: family.Opt[bool](req.IsDeceased), Bio: family.Opt[*string](req.Bio),
 	}
-	person, err := f.svc.Update(r.Context(), id, patch)
+	person, err := f.svc.UpdatePerson(r.Context(), id, patch)
 	f.answer(w, r, http.StatusOK, person, err, "update person")
 }
 
@@ -185,7 +185,7 @@ func (f *Family) DeletePerson(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := f.svc.Delete(r.Context(), id); err != nil {
+	if err := f.svc.DeletePerson(r.Context(), id); err != nil {
 		f.fail(w, r, err, "delete person")
 		return
 	}
@@ -197,7 +197,7 @@ func (f *Family) RestorePerson(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	person, err := f.svc.Restore(r.Context(), id)
+	person, err := f.svc.RestorePerson(r.Context(), id)
 	f.answer(w, r, http.StatusOK, person, err, "restore person")
 }
 

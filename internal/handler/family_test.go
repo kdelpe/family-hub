@@ -62,7 +62,7 @@ func TestSearchPersons(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantIn != nil {
-				svc.EXPECT().List(mock.Anything, family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}, *tt.wantIn).Return(tt.people, tt.listErr)
+				svc.EXPECT().ListPersons(mock.Anything, family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}, *tt.wantIn).Return(tt.people, tt.listErr)
 			}
 			req := httptest.NewRequest(http.MethodGet, "/api/persons"+tt.query, nil)
 
@@ -95,7 +95,7 @@ func TestGetPerson(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantGet {
-				svc.EXPECT().Get(mock.Anything, family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}, testPersonID).Return(testPerson, tt.getErr)
+				svc.EXPECT().GetPerson(mock.Anything, family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}, testPersonID).Return(testPerson, tt.getErr)
 			}
 			id := idOr(tt.id)
 			req := withURLParam(httptest.NewRequest(http.MethodGet, "/api/persons/"+id, nil), "id", id)
@@ -134,7 +134,7 @@ func TestCreatePerson(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantCreate {
-				svc.EXPECT().Create(mock.Anything, testUser.ID, want).Return(testPerson, tt.createErr)
+				svc.EXPECT().CreatePerson(mock.Anything, testUser.ID, want).Return(testPerson, tt.createErr)
 			}
 			req := httptest.NewRequest(http.MethodPost, "/api/persons", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -188,7 +188,7 @@ func TestUpdatePerson(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantPatch != nil {
-				svc.EXPECT().Update(mock.Anything, testPersonID, *tt.wantPatch).Return(testPerson, tt.updateErr)
+				svc.EXPECT().UpdatePerson(mock.Anything, testPersonID, *tt.wantPatch).Return(testPerson, tt.updateErr)
 			}
 			id := idOr(tt.id)
 			req := httptest.NewRequest(http.MethodPatch, "/api/persons/"+id, strings.NewReader(tt.body))
@@ -222,7 +222,7 @@ func TestDeletePerson(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantDelete {
-				svc.EXPECT().Delete(mock.Anything, testPersonID).Return(tt.deleteErr)
+				svc.EXPECT().DeletePerson(mock.Anything, testPersonID).Return(tt.deleteErr)
 			}
 			id := idOr(tt.id)
 			req := withURLParam(httptest.NewRequest(http.MethodDelete, "/api/persons/"+id, nil), "id", id)
@@ -254,7 +254,7 @@ func TestRestorePerson(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantRestore {
-				svc.EXPECT().Restore(mock.Anything, testPersonID).Return(testPerson, tt.restoreErr)
+				svc.EXPECT().RestorePerson(mock.Anything, testPersonID).Return(testPerson, tt.restoreErr)
 			}
 			id := idOr(tt.id)
 			req := withURLParam(httptest.NewRequest(http.MethodPost, "/api/persons/"+id+"/restore", nil), "id", id)

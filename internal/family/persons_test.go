@@ -45,7 +45,7 @@ func TestCreateRefusesAnInvalidPerson(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewPersons(nil).Create(t.Context(), uuid.New(), tt.in)
+			_, err := NewService(nil).CreatePerson(t.Context(), uuid.New(), tt.in)
 
 			require.ErrorIs(t, err, ErrInvalidPerson)
 			assert.Equal(t, "invalid person: "+tt.wantErrMsg, err.Error())
@@ -85,9 +85,9 @@ func TestPartialDatesAreComparedAsRanges(t *testing.T) {
 }
 
 func TestCreateStoresTrimmedNames(t *testing.T) {
-	persons, admin := newPersons(t)
+	svc, admin := newService(t)
 
-	got, err := persons.Create(t.Context(), admin, PersonInput{
+	got, err := svc.CreatePerson(t.Context(), admin, PersonInput{
 		FirstName: "  Rosa ", LastName: new("   "), MaidenName: new(" Pierre "), Bio: new(""),
 		BirthDate: new("1950-03-14"), BirthDatePrecision: new("day"),
 		DeathDate: new("2001-06"), DeathDatePrecision: new("month"), IsDeceased: true,
@@ -124,16 +124,16 @@ func TestBirthYearIsHiddenForLivingPeople(t *testing.T) {
 		{name: "people see their own year", date: "1950-03", precision: "month", viewer: "self", wantDate: new("1950-03"), wantPrecision: new("month")},
 	}
 
-	persons, admin := newPersons(t)
+	svc, admin := newService(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			created, err := persons.Create(t.Context(), admin, PersonInput{FirstName: "Rosa", BirthDate: &tt.date, BirthDatePrecision: &tt.precision, IsDeceased: tt.deceased})
+			created, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosa", BirthDate: &tt.date, BirthDatePrecision: &tt.precision, IsDeceased: tt.deceased})
 			require.NoError(t, err)
 			viewer := map[string]Viewer{"member": {}, "admin": {IsAdmin: true}, "self": {PersonID: &created.ID}}[tt.viewer]
 
-			got, err := persons.Get(t.Context(), viewer, created.ID)
+			got, err := svc.GetPerson(t.Context(), viewer, created.ID)
 			require.NoError(t, err)
-			listed, err := persons.List(t.Context(), viewer, ListInput{Query: "Rosa"})
+			listed, err := svc.ListPersons(t.Context(), viewer, ListInput{Query: "Rosa"})
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.wantDate, got.BirthDate)
@@ -146,19 +146,19 @@ func TestBirthYearIsHiddenForLivingPeople(t *testing.T) {
 }
 
 func TestListSearchesAndFilters(t *testing.T) {
-	persons, admin := newPersons(t)
+	svc, admin := newService(t)
 	for _, in := range []PersonInput{
 		{FirstName: "Rosa", LastName: new("Pierre"), Side: new("first")},
 		{FirstName: "Jean", LastName: new("Pierre"), Side: new("second"), IsDeceased: true},
 		{FirstName: "Marie", Side: new("both")},
 		{FirstName: "Paul", LastName: new("100%_sure")},
 	} {
-		_, err := persons.Create(t.Context(), admin, in)
+		_, err := svc.CreatePerson(t.Context(), admin, in)
 		require.NoError(t, err)
 	}
-	gone, err := persons.Create(t.Context(), admin, PersonInput{FirstName: "Rosalie"})
+	gone, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosalie"})
 	require.NoError(t, err)
-	require.NoError(t, persons.Delete(t.Context(), gone.ID))
+	require.NoError(t, svc.DeletePerson(t.Context(), gone.ID))
 
 	tests := []struct {
 		name string
@@ -179,7 +179,7 @@ func TestListSearchesAndFilters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := persons.List(t.Context(), Viewer{}, tt.in)
+			got, err := svc.ListPersons(t.Context(), Viewer{}, tt.in)
 
 			require.NoError(t, err)
 			names := []string{}
@@ -202,7 +202,7 @@ func TestListRefusesABadFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewPersons(nil).List(t.Context(), Viewer{}, tt.in)
+			_, err := NewService(nil).ListPersons(t.Context(), Viewer{}, tt.in)
 
 			assert.ErrorIs(t, err, ErrInvalidFilter)
 		})
@@ -228,18 +228,18 @@ func TestUpdateChangesOnlyTheFieldsSent(t *testing.T) {
 		{name: "a birth date without its precision", patch: PersonPatch{BirthDatePrecision: Opt[*string]{Set: true}}, wantErr: ErrInvalidPerson},
 	}
 
-	persons, admin := newPersons(t)
+	svc, admin := newService(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			before, err := persons.Create(t.Context(), admin, PersonInput{
+			before, err := svc.CreatePerson(t.Context(), admin, PersonInput{
 				FirstName: "Rosa", MiddleName: new("Anne"), LastName: new("Pierre"), Bio: new("Old bio"),
 				BirthDate: new("1950-03-14"), BirthDatePrecision: new("day"),
 			})
 			require.NoError(t, err)
 
-			got, err := persons.Update(t.Context(), before.ID, tt.patch)
+			got, err := svc.UpdatePerson(t.Context(), before.ID, tt.patch)
 
-			stored, getErr := persons.Get(t.Context(), Viewer{IsAdmin: true}, before.ID)
+			stored, getErr := svc.GetPerson(t.Context(), Viewer{IsAdmin: true}, before.ID)
 			require.NoError(t, getErr)
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
@@ -256,62 +256,62 @@ func TestUpdateChangesOnlyTheFieldsSent(t *testing.T) {
 }
 
 func TestDeleteAndRestore(t *testing.T) {
-	persons, admin := newPersons(t)
-	rosa, err := persons.Create(t.Context(), admin, PersonInput{FirstName: "Rosa"})
+	svc, admin := newService(t)
+	rosa, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosa"})
 	require.NoError(t, err)
 
-	require.NoError(t, persons.Delete(t.Context(), rosa.ID))
+	require.NoError(t, svc.DeletePerson(t.Context(), rosa.ID))
 
-	_, err = persons.Get(t.Context(), Viewer{IsAdmin: true}, rosa.ID)
+	_, err = svc.GetPerson(t.Context(), Viewer{IsAdmin: true}, rosa.ID)
 	assert.ErrorIs(t, err, ErrPersonNotFound, "a deleted person is gone from reads")
-	_, err = persons.Update(t.Context(), rosa.ID, PersonPatch{})
+	_, err = svc.UpdatePerson(t.Context(), rosa.ID, PersonPatch{})
 	assert.ErrorIs(t, err, ErrPersonNotFound, "and from edits")
-	assert.ErrorIs(t, persons.Delete(t.Context(), rosa.ID), ErrPersonNotFound, "deleting twice")
+	assert.ErrorIs(t, svc.DeletePerson(t.Context(), rosa.ID), ErrPersonNotFound, "deleting twice")
 
-	restored, err := persons.Restore(t.Context(), rosa.ID)
+	restored, err := svc.RestorePerson(t.Context(), rosa.ID)
 	require.NoError(t, err)
 	assert.Equal(t, rosa, restored)
-	_, err = persons.Restore(t.Context(), rosa.ID)
+	_, err = svc.RestorePerson(t.Context(), rosa.ID)
 	assert.ErrorIs(t, err, ErrPersonNotFound, "restoring someone not deleted")
 }
 
 func TestUnknownPersonIsNotFound(t *testing.T) {
-	persons, _ := newPersons(t)
+	svc, _ := newService(t)
 	id := uuid.New()
 
-	_, getErr := persons.Get(t.Context(), Viewer{}, id)
-	_, updateErr := persons.Update(t.Context(), id, PersonPatch{})
-	deleteErr := persons.Delete(t.Context(), id)
-	_, restoreErr := persons.Restore(t.Context(), id)
+	_, getErr := svc.GetPerson(t.Context(), Viewer{}, id)
+	_, updateErr := svc.UpdatePerson(t.Context(), id, PersonPatch{})
+	deleteErr := svc.DeletePerson(t.Context(), id)
+	_, restoreErr := svc.RestorePerson(t.Context(), id)
 
 	for _, err := range []error{getErr, updateErr, deleteErr, restoreErr} {
 		assert.ErrorIs(t, err, ErrPersonNotFound)
 	}
 }
 
-func TestWritesAreBusyWhileARowStaysLocked(t *testing.T) {
+func TestPersonWritesAreBusyWhileARowStaysLocked(t *testing.T) {
 	const lockPersons = `SELECT 1 FROM persons FOR UPDATE`
 	tests := []struct {
 		name    string
 		lock    string
 		deleted bool
-		write   func(ctx context.Context, s *Persons, id, admin uuid.UUID) error
+		write   func(ctx context.Context, s *Service, id, admin uuid.UUID) error
 	}{
 		{name: "create, while the creator's user row is locked", lock: `SELECT 1 FROM users FOR UPDATE`,
-			write: func(ctx context.Context, s *Persons, _, admin uuid.UUID) error {
-				_, err := s.Create(ctx, admin, PersonInput{FirstName: "Jean"})
+			write: func(ctx context.Context, s *Service, _, admin uuid.UUID) error {
+				_, err := s.CreatePerson(ctx, admin, PersonInput{FirstName: "Jean"})
 				return err
 			}},
 		{name: "update", lock: lockPersons,
-			write: func(ctx context.Context, s *Persons, id, _ uuid.UUID) error {
-				_, err := s.Update(ctx, id, PersonPatch{})
+			write: func(ctx context.Context, s *Service, id, _ uuid.UUID) error {
+				_, err := s.UpdatePerson(ctx, id, PersonPatch{})
 				return err
 			}},
 		{name: "delete", lock: lockPersons,
-			write: func(ctx context.Context, s *Persons, id, _ uuid.UUID) error { return s.Delete(ctx, id) }},
+			write: func(ctx context.Context, s *Service, id, _ uuid.UUID) error { return s.DeletePerson(ctx, id) }},
 		{name: "restore", lock: lockPersons, deleted: true,
-			write: func(ctx context.Context, s *Persons, id, _ uuid.UUID) error {
-				_, err := s.Restore(ctx, id)
+			write: func(ctx context.Context, s *Service, id, _ uuid.UUID) error {
+				_, err := s.RestorePerson(ctx, id)
 				return err
 			}},
 	}
@@ -319,12 +319,12 @@ func TestWritesAreBusyWhileARowStaysLocked(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := testdb.MigratedPool(t, database.MigrateUp)
-			persons, admin := NewPersons(pool), insertAdmin(t, pool)
-			persons.lockTimeout = 100 * time.Millisecond
-			rosa, err := persons.Create(t.Context(), admin, PersonInput{FirstName: "Rosa"})
+			svc, admin := NewService(pool), insertAdmin(t, pool)
+			svc.lockTimeout = 100 * time.Millisecond
+			rosa, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosa"})
 			require.NoError(t, err)
 			if tt.deleted {
-				require.NoError(t, persons.Delete(t.Context(), rosa.ID))
+				require.NoError(t, svc.DeletePerson(t.Context(), rosa.ID))
 			}
 			holder, err := pool.Begin(t.Context())
 			require.NoError(t, err)
@@ -332,18 +332,18 @@ func TestWritesAreBusyWhileARowStaysLocked(t *testing.T) {
 			_, err = holder.Exec(t.Context(), tt.lock)
 			require.NoError(t, err)
 
-			err = tt.write(t.Context(), persons, rosa.ID, admin)
+			err = tt.write(t.Context(), svc, rosa.ID, admin)
 
 			assert.ErrorIs(t, err, auth.ErrBusy)
 		})
 	}
 }
 
-// newPersons returns the service on a fresh schema, and an admin user to create people as.
-func newPersons(t *testing.T) (*Persons, uuid.UUID) {
+// newService returns the service on a fresh schema, and an admin user to create people as.
+func newService(t *testing.T) (*Service, uuid.UUID) {
 	t.Helper()
 	pool := testdb.MigratedPool(t, database.MigrateUp)
-	return NewPersons(pool), insertAdmin(t, pool)
+	return NewService(pool), insertAdmin(t, pool)
 }
 
 func insertAdmin(t *testing.T, pool *pgxpool.Pool) uuid.UUID {

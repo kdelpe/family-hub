@@ -97,7 +97,7 @@ func newServer(pool *pgxpool.Pool, cfg config.Config) (*http.Server, *auth.Reset
 			Health: handler.NewHealth(pool),
 			Auth:   handler.NewAuth(svc, resets, cookie),
 			Admin:  handler.NewAdmin(admin.NewUsers(pool, mailer, cfg.BaseURL)),
-			Family: handler.NewFamily(family.NewPersons(pool)),
+			Family: handler.NewFamily(family.NewService(pool)),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(auth.NewSessions(pool), cookie).Require,
