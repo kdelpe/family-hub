@@ -16,8 +16,7 @@ func TestTreeLeavesOutDatesNotesAndDeletedPeople(t *testing.T) {
 	svc, admin := newService(t)
 	rosa, err := svc.CreatePerson(t.Context(), admin, PersonInput{
 		FirstName: "Rosa", LastName: new("Pierre"), Side: new("first"), Gender: new("female"),
-		BirthDate: new("1950-03-14"), BirthDatePrecision: new("day"), BirthPlace: new("Jacmel"),
-		Bio: new(strings.Repeat("a", 137) + "\n bcd"),
+		BirthDate: new("1950-03-14"), BirthDatePrecision: new("day"), BirthPlace: new("Jacmel"), Bio: new("Born in Jacmel"),
 	})
 	require.NoError(t, err)
 	ids := addPeople(t, svc, admin, "Jean", "Marie", "Gone")
@@ -32,8 +31,7 @@ func TestTreeLeavesOutDatesNotesAndDeletedPeople(t *testing.T) {
 	assert.Equal(t, []TreePerson{
 		{ID: ids["Jean"], FirstName: "Jean"},
 		{ID: ids["Marie"], FirstName: "Marie"},
-		{ID: rosa.ID, FirstName: "Rosa", LastName: new("Pierre"), Side: new("first"), Gender: new("female"),
-			BioExcerpt: new(strings.Repeat("a", 137) + "…")},
+		{ID: rosa.ID, FirstName: "Rosa", LastName: new("Pierre"), Side: new("first"), Gender: new("female"), BioExcerpt: new("Born in Jacmel")},
 	}, tree.Persons)
 	assert.ElementsMatch(t, []TreeLink{
 		{ID: married.ID, Type: Couple, Subtype: "married", PersonA: married.PersonA, PersonB: married.PersonB},
@@ -41,17 +39,30 @@ func TestTreeLeavesOutDatesNotesAndDeletedPeople(t *testing.T) {
 	}, tree.Relationships)
 }
 
-func TestBioExcerptKeepsShortBios(t *testing.T) {
-	svc, admin := newService(t)
-	bio := strings.Repeat("é", 140)
-	_, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosa", Bio: &bio})
-	require.NoError(t, err)
+func TestBioExcerpt(t *testing.T) {
+	tests := []struct {
+		name string
+		bio  *string
+		want *string
+	}{
+		{name: "a bio of 140 characters is kept whole", bio: new(strings.Repeat("é", 140)), want: new(strings.Repeat("é", 140))},
+		{name: "a longer bio is cut, without the space before the cut", bio: new(strings.Repeat("a", 137) + "\n bcd"), want: new(strings.Repeat("a", 137) + "…")},
+		{name: "no bio", bio: nil, want: nil},
+	}
 
-	tree, err := svc.Tree(t.Context())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, admin := newService(t)
+			_, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosa", Bio: tt.bio})
+			require.NoError(t, err)
 
-	require.NoError(t, err)
-	require.Len(t, tree.Persons, 1)
-	assert.Equal(t, &bio, tree.Persons[0].BioExcerpt)
+			tree, err := svc.Tree(t.Context())
+
+			require.NoError(t, err)
+			require.Len(t, tree.Persons, 1)
+			assert.Equal(t, tt.want, tree.Persons[0].BioExcerpt)
+		})
+	}
 }
 
 func TestAncestorsAndDescendants(t *testing.T) {
@@ -179,6 +190,7 @@ func TestLongestLine(t *testing.T) {
 			{ParentID: a, ChildID: b}, {ParentID: b, ChildID: c}, {ParentID: a, ChildID: d},
 		}, want: 3},
 		{name: "two parents of one child", links: []gen.FamilyParentLinksRow{{ParentID: a, ChildID: c}, {ParentID: b, ChildID: c}}, want: 2},
+		{name: "a loop in damaged data counts each person once", links: []gen.FamilyParentLinksRow{{ParentID: a, ChildID: b}, {ParentID: b, ChildID: a}}, want: 2},
 	}
 
 	for _, tt := range tests {
@@ -186,15 +198,6 @@ func TestLongestLine(t *testing.T) {
 			assert.Equal(t, tt.want, longestLine(tt.links))
 		})
 	}
-}
-
-func TestLongestLineEndsOnALoop(t *testing.T) {
-	a, b := uuid.New(), uuid.New()
-
-	got := longestLine([]gen.FamilyParentLinksRow{{ParentID: a, ChildID: b}, {ParentID: b, ChildID: a}})
-
-	// Where the walk starts decides whether the loop counts 2 or 3; it has to end with one of them.
-	assert.Contains(t, []int{2, 3}, got)
 }
 
 func walker(t *testing.T, walk func(ctx context.Context, viewer Viewer, id uuid.UUID, depth int) ([]Relative, error)) func(Viewer, uuid.UUID, int) ([]Relative, error) {

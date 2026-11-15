@@ -188,7 +188,7 @@ func (s *Service) Summary(ctx context.Context) (Summary, error) {
 }
 
 // longestLine counts the people in the longest parent-to-child line; someone without links is a line of one.
-// A person met again mid-walk counts once, so a loop in damaged data can't make it spin.
+// A loop in damaged data ends where it meets someone still being walked, so nobody counts twice.
 func longestLine(links []gen.FamilyParentLinksRow) int {
 	children := map[uuid.UUID][]uuid.UUID{}
 	for _, l := range links {
@@ -200,7 +200,7 @@ func longestLine(links []gen.FamilyParentLinksRow) int {
 		if n, ok := lengths[id]; ok {
 			return n
 		}
-		lengths[id] = 1
+		lengths[id] = 0 // still being walked: a loop back here adds nobody
 		longest := 0
 		for _, child := range children[id] {
 			longest = max(longest, walk(child))

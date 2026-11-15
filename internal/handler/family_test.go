@@ -450,6 +450,7 @@ func TestTree(t *testing.T) {
 		name       string
 		tree       family.Tree
 		treeErr    error
+		noSession  bool
 		wantStatus int
 		wantBody   string
 	}{
@@ -463,14 +464,20 @@ func TestTree(t *testing.T) {
 		{name: "an empty tree", wantStatus: http.StatusOK, wantBody: `{"persons":[],"relationships":[]}`},
 		{name: "busy", treeErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable, wantBody: busyBody},
 		{name: "database error", treeErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+		{name: "mounted without a session gate", noSession: true, wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
-			svc.EXPECT().Tree(mock.Anything).Return(tt.tree, tt.treeErr)
+			role := auth.RoleMember
+			if tt.noSession {
+				role = ""
+			} else {
+				svc.EXPECT().Tree(mock.Anything).Return(tt.tree, tt.treeErr)
+			}
 
-			rec := serveAs(t, auth.RoleMember, handler.NewFamily(svc).Tree, httptest.NewRequest(http.MethodGet, "/api/tree", nil))
+			rec := serveAs(t, role, handler.NewFamily(svc).Tree, httptest.NewRequest(http.MethodGet, "/api/tree", nil))
 
 			assertBody(t, rec, tt.wantStatus, tt.wantBody)
 		})
@@ -539,6 +546,7 @@ func TestSummary(t *testing.T) {
 		name       string
 		summary    family.Summary
 		sumErr     error
+		noSession  bool
 		wantStatus int
 		wantBody   string
 	}{
@@ -547,14 +555,20 @@ func TestSummary(t *testing.T) {
 			wantStatus: http.StatusOK, wantBody: `{"people":38,"generations":5,"earliest_record":{"year":1900,"circa":true,"place":"Jacmel"}}`},
 		{name: "nobody yet", wantStatus: http.StatusOK, wantBody: `{"people":0,"generations":0,"earliest_record":null}`},
 		{name: "database error", sumErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+		{name: "mounted without a session gate", noSession: true, wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
-			svc.EXPECT().Summary(mock.Anything).Return(tt.summary, tt.sumErr)
+			role := auth.RoleMember
+			if tt.noSession {
+				role = ""
+			} else {
+				svc.EXPECT().Summary(mock.Anything).Return(tt.summary, tt.sumErr)
+			}
 
-			rec := serveAs(t, auth.RoleMember, handler.NewFamily(svc).Summary, httptest.NewRequest(http.MethodGet, "/api/family/summary", nil))
+			rec := serveAs(t, role, handler.NewFamily(svc).Summary, httptest.NewRequest(http.MethodGet, "/api/family/summary", nil))
 
 			assertBody(t, rec, tt.wantStatus, tt.wantBody)
 		})

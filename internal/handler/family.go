@@ -336,6 +336,9 @@ func (f *Family) DeleteRelationship(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *Family) Tree(w http.ResponseWriter, r *http.Request) {
+	if _, ok := currentViewer(w, r); !ok {
+		return
+	}
 	tree, err := f.svc.Tree(r.Context())
 	if err != nil {
 		f.fail(w, r, err, "tree")
@@ -380,11 +383,8 @@ func (f *Family) relatives(w http.ResponseWriter, r *http.Request, what string,
 	}
 	depth := family.DefaultDepth
 	if raw := r.URL.Query().Get("depth"); raw != "" {
-		var err error
-		// Zero is out of range, so the service refuses it with the same message as any bad depth.
-		if depth, err = strconv.Atoi(raw); err != nil {
-			depth = 0
-		}
+		// Anything but a number parses as 0, which the service refuses like any bad depth.
+		depth, _ = strconv.Atoi(raw)
 	}
 	relatives, err := walk(r.Context(), viewer, id, depth)
 	if err != nil {
@@ -399,6 +399,9 @@ func (f *Family) relatives(w http.ResponseWriter, r *http.Request, what string,
 }
 
 func (f *Family) Summary(w http.ResponseWriter, r *http.Request) {
+	if _, ok := currentViewer(w, r); !ok {
+		return
+	}
 	sum, err := f.svc.Summary(r.Context())
 	if err != nil {
 		f.fail(w, r, err, "family summary")
