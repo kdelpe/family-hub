@@ -4,7 +4,7 @@ The agreed look and behaviour for the Pluviose-Monestime Family Hub frontend (Ph
 
 All names, dates, stories, phone numbers and addresses in the mockups are **made up** sample data.
 
-**Continue with Google is dropped** (owner's decision, November 2026): the Sign in and Welcome mockups still show it and its "or" divider; build both pages without them.
+**Continue with Google is dropped** (owner's decision, November 2026): leave out every Google button, divider and line of Google copy the mockups still show (Sign in, Welcome, Forgot password, the invite email in Members & invites).
 
 ## Scope for the MVP
 

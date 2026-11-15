@@ -546,7 +546,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 
 One way to sign in: **email + password**, set from the invite email and reset by email, ending in a server-side session. `password_hash` is NULL until the invite is accepted.
 
-**Continue with Google was dropped (November 2026, owner's decision):** it was built in Phase 2, then removed to keep a single sign-in path. It can come back later as its own change; the down step of `000002_remove_google_sign_in` recreates the table and column it used.
+**Continue with Google was dropped (November 2026, owner's decision):** it was built in Phase 2, then removed to keep a single sign-in path. It can come back later as its own change. `000002_remove_google_sign_in` drops its table and column and signs out anyone who had only Google; its down step recreates the schema, not the links, so those users set a password through Forgot password.
 
 **Email links (invite and password reset).** Both use the same single-use token mechanism, stored in `auth_tokens` with a `purpose`:
 
