@@ -203,6 +203,7 @@ func (a *Auth) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	in := auth.SetPasswordInput{Token: req.Token, Password: req.Password, UserAgent: r.UserAgent(), ReplacesToken: a.cookieToken(r)}
 	token, user, err := a.svc.SetPasswordWithToken(r.Context(), in)
+	refused := passwordRefusedCode(err)
 	switch {
 	case err == nil:
 		a.cookie.set(w, token)
@@ -210,8 +211,8 @@ func (a *Auth) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	case clientGone(r):
 	case errors.Is(err, auth.ErrInvalidToken):
 		invalidToken(w)
-	case passwordRefused(err):
-		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
+	case refused != "":
+		httpx.Error(w, http.StatusBadRequest, refused, err.Error())
 	case errors.Is(err, auth.ErrBusy):
 		busy(w)
 	default:
@@ -252,6 +253,7 @@ func (a *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		UserID: session.UserID, SessionToken: a.cookieToken(r), CurrentPassword: req.CurrentPassword, NewPassword: req.NewPassword, UserAgent: r.UserAgent(),
 	}
 	token, err := a.svc.ChangePassword(r.Context(), in)
+	refused := passwordRefusedCode(err)
 	var limited *auth.RateLimitedError
 	switch {
 	case err == nil:
@@ -263,8 +265,8 @@ func (a *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		httpx.TooManyRequests(w, limited.RetryAfter)
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		httpx.Error(w, http.StatusBadRequest, "wrong_password", "current password is incorrect")
-	case passwordRefused(err):
-		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
+	case refused != "":
+		httpx.Error(w, http.StatusBadRequest, refused, err.Error())
 	case errors.Is(err, auth.ErrNoSession):
 		// Not cleared: a double-submit's winner may have just set a newer cookie.
 		unauthorized(w)
@@ -310,8 +312,19 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func passwordRefused(err error) bool {
-	return errors.Is(err, auth.ErrPasswordTooShort) || errors.Is(err, auth.ErrPasswordTooLong) || errors.Is(err, auth.ErrPasswordTooCommon)
+// passwordRefusedCode names the rule a refused password broke, so the page can say which in plain words;
+// "" when err isn't a refusal.
+func passwordRefusedCode(err error) string {
+	switch {
+	case errors.Is(err, auth.ErrPasswordTooShort):
+		return "password_too_short"
+	case errors.Is(err, auth.ErrPasswordTooLong):
+		return "password_too_long"
+	case errors.Is(err, auth.ErrPasswordTooCommon):
+		return "password_too_common"
+	default:
+		return ""
+	}
 }
 
 func invalidToken(w http.ResponseWriter) {
