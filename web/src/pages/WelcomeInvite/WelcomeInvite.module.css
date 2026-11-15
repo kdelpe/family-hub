@@ -58,7 +58,3 @@
   font-size: 14px;
   color: var(--muted);
 }
-
-.title:focus {
-  outline: none;
-}

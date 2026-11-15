@@ -7,6 +7,11 @@
   justify-content: center;
 }
 
+/* The two long forms (Request access, First setup) sit closer to the top and bottom. */
+.tallMain {
+  padding-block: 48px;
+}
+
 .form {
   width: 100%;
   max-width: 420px;
@@ -26,6 +31,11 @@
   margin: 0;
   font-family: var(--font-serif);
   font-weight: 500;
+}
+
+/* A heading focused from code (tabIndex -1) when the view changes, not by the user. */
+.title[tabindex='-1']:focus {
+  outline: none;
 }
 
 .field {
@@ -174,10 +184,6 @@
   line-height: normal;
 }
 
-/* Focused from code when the card appears, not by the user. */
-.sentTitle:focus {
-  outline: none;
-}
 
 .sentText {
   margin: 0;
