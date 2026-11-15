@@ -111,6 +111,9 @@ type ListInput struct {
 // ListPersons searches by name when Query is set (best matches first), otherwise lists everyone A–Z.
 func (s *Service) ListPersons(ctx context.Context, viewer Viewer, in ListInput) ([]Person, error) {
 	query := strings.TrimSpace(in.Query)
+	if !storable(query) {
+		return nil, fmt.Errorf("%w: search contains a character that isn't allowed", ErrInvalidFilter)
+	}
 	if utf8.RuneCountInString(query) > maxQueryLength {
 		return nil, fmt.Errorf("%w: search is longer than %d characters", ErrInvalidFilter, maxQueryLength)
 	}
@@ -287,9 +290,18 @@ func normalize(in PersonInput) (fields, error) {
 		{"bio", &f.Bio, maxBioLength},
 	} {
 		*field.value = trimmed(*field.value)
-		if *field.value != nil && utf8.RuneCountInString(**field.value) > field.max {
+		if *field.value == nil {
+			continue
+		}
+		if !storable(**field.value) {
+			return fields{}, fmt.Errorf("%w: the %s contains a character that isn't allowed", ErrInvalidPerson, field.name)
+		}
+		if utf8.RuneCountInString(**field.value) > field.max {
 			return fields{}, fmt.Errorf("%w: the %s is longer than %d characters", ErrInvalidPerson, field.name, field.max)
 		}
+	}
+	if !storable(f.FirstName) {
+		return fields{}, fmt.Errorf("%w: the first name contains a character that isn't allowed", ErrInvalidPerson)
 	}
 	if utf8.RuneCountInString(f.FirstName) > maxNameLength {
 		return fields{}, fmt.Errorf("%w: the first name is longer than %d characters", ErrInvalidPerson, maxNameLength)
@@ -388,6 +400,11 @@ func trimmed(s *string) *string {
 		return nil
 	}
 	return &t
+}
+
+// storable is text Postgres can keep: TEXT refuses NUL and invalid UTF-8, which would otherwise surface as a 500.
+func storable(s string) bool {
+	return utf8.ValidString(s) && !strings.ContainsRune(s, 0)
 }
 
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)

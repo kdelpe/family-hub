@@ -41,6 +41,9 @@ func TestCreateRefusesAnInvalidPerson(t *testing.T) {
 			wantErrMsg: "a death date needs is_deceased"},
 		{name: "died before being born", in: PersonInput{FirstName: "Rosa", BirthDate: new("1950"), BirthDatePrecision: new("year"),
 			DeathDate: new("1949"), DeathDatePrecision: new("year"), IsDeceased: true}, wantErrMsg: "the death date is before the birth date"},
+		{name: "a NUL in the first name", in: PersonInput{FirstName: "Ro\x00sa"}, wantErrMsg: "the first name contains a character that isn't allowed"},
+		{name: "a NUL in the bio", in: PersonInput{FirstName: "Rosa", Bio: new("Tells\x00stories")}, wantErrMsg: "the bio contains a character that isn't allowed"},
+		{name: "a last name that isn't UTF-8", in: PersonInput{FirstName: "Rosa", LastName: new("Pi\xffrre")}, wantErrMsg: "the last name contains a character that isn't allowed"},
 	}
 
 	for _, tt := range tests {
@@ -197,6 +200,8 @@ func TestListRefusesABadFilter(t *testing.T) {
 		in   ListInput
 	}{
 		{name: "search too long", in: ListInput{Query: strings.Repeat("a", maxQueryLength+1)}},
+		{name: "a NUL in the search", in: ListInput{Query: "Ro\x00sa"}},
+		{name: "a search that isn't UTF-8", in: ListInput{Query: "\xff"}},
 		{name: "unknown side", in: ListInput{Side: "north"}},
 	}
 

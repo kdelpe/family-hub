@@ -238,6 +238,9 @@ func (r Relationship) checked() (Relationship, error) {
 		return Relationship{}, invalidRelationship("only a couple can be ended")
 	}
 	r.Notes = trimmed(r.Notes)
+	if r.Notes != nil && !storable(*r.Notes) {
+		return Relationship{}, invalidRelationship("the notes contain a character that isn't allowed")
+	}
 	if r.Notes != nil && utf8.RuneCountInString(*r.Notes) > maxNotesLength {
 		return Relationship{}, invalidRelationship(fmt.Sprintf("the notes are longer than %d characters", maxNotesLength))
 	}

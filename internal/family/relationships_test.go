@@ -44,6 +44,8 @@ func TestCreateRelationshipRefusesInvalidInput(t *testing.T) {
 			wantErrMsg: "subtype must be one of married, partner"},
 		{name: "notes too long", in: RelationshipInput{Type: ParentChild, ParentID: a, ChildID: b, Notes: new(strings.Repeat("é", maxNotesLength+1))},
 			wantErrMsg: "the notes are longer than 1000 characters"},
+		{name: "a NUL in the notes", in: RelationshipInput{Type: ParentChild, ParentID: a, ChildID: b, Notes: new("Raised\x00by her aunt")},
+			wantErrMsg: "the notes contain a character that isn't allowed"},
 	}
 
 	for _, tt := range tests {
@@ -254,6 +256,8 @@ func TestUpdateRelationship(t *testing.T) {
 			wantErrMsg: "invalid relationship: subtype must be one of biological, adoptive, foster"},
 		{name: "a parent link's subtype on a couple", couple: true, patch: RelationshipPatch{Subtype: Opt[string]{Set: true, Value: "biological"}},
 			wantErrMsg: "invalid relationship: subtype must be one of married, partner"},
+		{name: "a NUL in the notes", patch: RelationshipPatch{Notes: Opt[*string]{Set: true, Value: new("Raised\x00by her aunt")}},
+			wantErrMsg: "invalid relationship: the notes contain a character that isn't allowed"},
 	}
 
 	for _, tt := range tests {
