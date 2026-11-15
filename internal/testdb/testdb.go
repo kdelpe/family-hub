@@ -58,6 +58,33 @@ func UnreachablePool(t testing.TB) *pgxpool.Pool {
 	return pool
 }
 
+// InstallExtensions puts the migrations' extensions in public, where every test schema finds them
+// through SearchPath: one made inside a test schema would vanish when that schema is dropped.
+func InstallExtensions(t testing.TB, conn *pgx.Conn) {
+	t.Helper()
+	ctx := t.Context()
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	// Test packages run in parallel, and two concurrent CREATE EXTENSION IF NOT EXISTS can still collide.
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext('testdb.extensions'))"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS pg_trgm SCHEMA public"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// SearchPath is a test schema's search_path, with public after it for the shared extensions.
+func SearchPath(schema string) string {
+	return schema + ",public"
+}
+
 // MigratedPool connects to a throwaway schema, dropped when the test ends, after running migrate on it.
 func MigratedPool(t testing.TB, migrate func(ctx context.Context, url string) error) *pgxpool.Pool {
 	t.Helper()
@@ -70,6 +97,7 @@ func MigratedPool(t testing.TB, migrate func(ctx context.Context, url string) er
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = admin.Close(ctx) })
+	InstallExtensions(t, admin)
 	schema := "test_" + strings.ToLower(rand.Text())
 	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
 		t.Fatal(err)
@@ -84,7 +112,7 @@ func MigratedPool(t testing.TB, migrate func(ctx context.Context, url string) er
 	if u.RawQuery != "" {
 		u.RawQuery += "&"
 	}
-	u.RawQuery += "search_path=" + schema
+	u.RawQuery += "search_path=" + SearchPath(schema)
 	if err := migrate(t.Context(), u.String()); err != nil {
 		t.Fatal(err)
 	}

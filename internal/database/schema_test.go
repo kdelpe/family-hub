@@ -50,6 +50,38 @@ func TestAuthSchemaConstraints(t *testing.T) {
 	}
 }
 
+func TestPersonsSchemaConstraints(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		wantCode string
+	}{
+		{name: "a first name is enough", sql: `INSERT INTO persons (first_name) VALUES ('Rosa')`},
+		{name: "a blank first name", sql: `INSERT INTO persons (first_name) VALUES ('  ')`, wantCode: checkViolation},
+		{name: "a blank last name", sql: `INSERT INTO persons (first_name, last_name) VALUES ('Rosa', ' ')`, wantCode: checkViolation},
+		{name: "a date without its precision", sql: `INSERT INTO persons (first_name, birth_date) VALUES ('Rosa', '1950-01-01')`, wantCode: checkViolation},
+		{name: "a death date for someone living", sql: `INSERT INTO persons (first_name, death_date, death_date_precision) VALUES ('Rosa', '2001-01-01', 'year')`, wantCode: checkViolation},
+		{name: "an unknown side", sql: `INSERT INTO persons (first_name, side) VALUES ('Rosa', 'north')`, wantCode: checkViolation},
+	}
+
+	db := authSchema(t)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := db.begin(t)
+
+			_, err := tx.Exec(t.Context(), tt.sql)
+
+			if tt.wantCode == "" {
+				require.NoError(t, err)
+				return
+			}
+			var pgErr *pgconn.PgError
+			require.ErrorAs(t, err, &pgErr)
+			assert.Equal(t, tt.wantCode, pgErr.Code)
+		})
+	}
+}
+
 func TestDeletingAUserDeletesTheirTokensAndSessions(t *testing.T) {
 	tx := authSchema(t).begin(t)
 
@@ -83,7 +115,7 @@ func (s testSchema) begin(t *testing.T) pgx.Tx {
 	tx, err := s.conn.Begin(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
-	_, err = tx.Exec(t.Context(), "SET LOCAL search_path TO "+pgx.Identifier{s.name}.Sanitize())
+	_, err = tx.Exec(t.Context(), "SET LOCAL search_path TO "+pgx.Identifier{s.name}.Sanitize()+", public")
 	require.NoError(t, err)
 	return tx
 }

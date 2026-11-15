@@ -233,6 +233,7 @@ func newTestSchema(t *testing.T) testSchema {
 	conn, err := pgx.Connect(ctx, base)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close(ctx) })
+	testdb.InstallExtensions(t, conn)
 
 	name := "test_" + strings.ToLower(rand.Text())
 	_, err = conn.Exec(ctx, "CREATE SCHEMA "+pgx.Identifier{name}.Sanitize())
@@ -243,14 +244,14 @@ func newTestSchema(t *testing.T) testSchema {
 
 	u, err := url.Parse(base)
 	require.NoError(t, err)
-	appendRawQuery(u, "search_path", name)
+	appendRawQuery(u, "search_path", testdb.SearchPath(name))
 
 	return testSchema{url: u.String(), conn: conn, name: name}
 }
 
 func (s testSchema) exec(t *testing.T, sql string) {
 	t.Helper()
-	_, err := s.conn.Exec(context.Background(), "SET search_path TO "+pgx.Identifier{s.name}.Sanitize()+"; "+sql)
+	_, err := s.conn.Exec(context.Background(), "SET search_path TO "+pgx.Identifier{s.name}.Sanitize()+", public; "+sql)
 	require.NoError(t, err)
 }
 
