@@ -21,6 +21,7 @@ type Handlers struct {
 	Health *handler.Health
 	Auth   *handler.Auth
 	Admin  *handler.Admin
+	Family *handler.Family
 }
 
 type Middleware struct {
@@ -69,6 +70,8 @@ func New(h Handlers, mw Middleware) http.Handler {
 			r.Use(mw.RequireSession)
 			r.Get("/auth/me", h.Auth.Me)
 			r.Post("/auth/password/change", h.Auth.ChangePassword)
+			r.Get("/persons", h.Family.SearchPersons)
+			r.Get("/persons/{id}", h.Family.GetPerson)
 
 			r.Group(func(r chi.Router) {
 				r.Use(handler.RequireAdmin)
@@ -76,6 +79,11 @@ func New(h Handlers, mw Middleware) http.Handler {
 				r.Post("/admin/users", h.Admin.InviteUser)
 				r.Patch("/admin/users/{id}", h.Admin.UpdateUser)
 				r.Post("/admin/users/{id}/send-reset", h.Admin.SendReset)
+				r.Post("/persons", h.Family.CreatePerson)
+				// Admins only until logins link to people; then members may edit their own bio (§4).
+				r.Patch("/persons/{id}", h.Family.UpdatePerson)
+				r.Delete("/persons/{id}", h.Family.DeletePerson)
+				r.Post("/persons/{id}/restore", h.Family.RestorePerson)
 			})
 		})
 	})

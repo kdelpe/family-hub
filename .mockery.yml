@@ -11,6 +11,7 @@ packages:
       AuthService: {}
       AdminService: {}
       ResetRequester: {}
+      FamilyService: {}
   github.com/kdelpe/family-hub/internal/admin:
     interfaces:
       Terminal: {}

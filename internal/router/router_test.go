@@ -6,9 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/handler"
 	"github.com/kdelpe/family-hub/internal/handler/mocks"
 	"github.com/kdelpe/family-hub/internal/httpx"
@@ -16,6 +19,8 @@ import (
 	"github.com/kdelpe/family-hub/internal/router"
 	"github.com/kdelpe/family-hub/internal/testdb"
 )
+
+const testID = "01890000-0000-7000-8000-000000000001"
 
 func TestRoutes(t *testing.T) {
 	tests := []struct {
@@ -44,6 +49,9 @@ func TestRoutes(t *testing.T) {
 		{name: "changing a user needs a session", method: http.MethodPatch, path: "/api/admin/users/01890000-0000-7000-8000-000000000001", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "sending a reset needs a session", method: http.MethodPost, path: "/api/admin/users/01890000-0000-7000-8000-000000000001/send-reset", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "inviting needs a session", method: http.MethodPost, path: "/api/admin/users", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
+		{name: "listing people needs a session", method: http.MethodGet, path: "/api/persons", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
+		{name: "a profile needs a session", method: http.MethodGet, path: "/api/persons/" + testID, wantStatus: http.StatusUnauthorized, wantType: "application/json"},
+		{name: "adding a person needs a session", method: http.MethodPost, path: "/api/persons", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "logout without a session still clears", method: http.MethodPost, path: "/api/auth/logout", wantStatus: http.StatusNoContent},
 		{name: "cross-site POST to /api is refused", method: http.MethodPost, path: "/api/auth/login", header: http.Header{"Sec-Fetch-Site": {"cross-site"}}, wantStatus: http.StatusForbidden, wantType: "application/json"},
 		{name: "any other path is the app", method: http.MethodGet, path: "/persons/42", wantStatus: http.StatusOK, wantType: "text/html; charset=utf-8"},
@@ -118,7 +126,47 @@ func TestSignInRoutesAreRateLimitedPerClientIP(t *testing.T) {
 	}
 }
 
+func TestPersonWritesAreAdminOnly(t *testing.T) {
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		role       string
+		wantStatus int
+	}{
+		{name: "a member can't add", method: http.MethodPost, path: "/api/persons", role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "a member can't edit", method: http.MethodPatch, path: "/api/persons/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "a member can't delete", method: http.MethodDelete, path: "/api/persons/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "a member can't restore", method: http.MethodPost, path: "/api/persons/" + testID + "/restore", role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "a member can read a profile", method: http.MethodGet, path: "/api/persons/42", role: auth.RoleMember, wantStatus: http.StatusNotFound},
+		{name: "an admin can add", method: http.MethodPost, path: "/api/persons", role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "an admin can edit", method: http.MethodPatch, path: "/api/persons/" + testID, role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "an admin can delete", method: http.MethodDelete, path: "/api/persons/42", role: auth.RoleAdmin, wantStatus: http.StatusNotFound},
+		{name: "an admin can restore", method: http.MethodPost, path: "/api/persons/42/restore", role: auth.RoleAdmin, wantStatus: http.StatusNotFound},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sessions := mocks.NewSessionAuthenticator(t)
+			sessions.EXPECT().Authenticate(mock.Anything, "tok").Return(auth.Session{UserID: uuid.New(), Role: tt.role}, nil)
+			routes := newRoutesWith(t, sessions, 100, false)
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req.AddCookie(&http.Cookie{Name: "__Host-fh_session", Value: "tok"})
+			rec := httptest.NewRecorder()
+
+			routes.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+		})
+	}
+}
+
 func newRoutes(t *testing.T, perHour int, trustedProxy bool) http.Handler {
+	t.Helper()
+	return newRoutesWith(t, mocks.NewSessionAuthenticator(t), perHour, trustedProxy)
+}
+
+func newRoutesWith(t *testing.T, sessions handler.SessionAuthenticator, perHour int, trustedProxy bool) http.Handler {
 	t.Helper()
 	cookie := handler.NewSessionCookie(true)
 	return router.New(
@@ -127,9 +175,10 @@ func newRoutes(t *testing.T, perHour int, trustedProxy bool) http.Handler {
 			Health: handler.NewHealth(testdb.UnreachablePool(t)),
 			Auth:   handler.NewAuth(mocks.NewAuthService(t), mocks.NewResetRequester(t), cookie),
 			Admin:  handler.NewAdmin(mocks.NewAdminService(t)),
+			Family: handler.NewFamily(mocks.NewFamilyService(t)),
 		},
 		router.Middleware{
-			RequireSession: handler.NewSessionGate(mocks.NewSessionAuthenticator(t), cookie).Require,
+			RequireSession: handler.NewSessionGate(sessions, cookie).Require,
 			LimitLogin:     httpx.LimitByIP(ratelimit.New(perHour, time.Hour)),
 			LimitForgot:    httpx.LimitByIP(ratelimit.New(perHour, time.Hour)),
 			LimitReset:     httpx.LimitByIP(ratelimit.New(perHour, time.Hour)),
