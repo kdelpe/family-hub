@@ -112,7 +112,6 @@ func (s *Service) changePassword(ctx context.Context, in ChangePasswordInput, se
 		return "", err
 	}
 	if found.PasswordHash == nil || found.PasswordChangedAt == nil {
-		// No password to check against; refused like a wrong one.
 		return "", s.refuse(ctx, in.CurrentPassword)
 	}
 	ok, _, err := s.hasher.Verify(ctx, *found.PasswordHash, in.CurrentPassword)
