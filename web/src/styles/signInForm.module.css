@@ -111,9 +111,6 @@
   color: var(--text);
 }
 
-
-
-
 @keyframes rise {
   from {
     opacity: 0;
@@ -166,7 +163,6 @@
   font-size: 30px;
   line-height: normal;
 }
-
 
 .sentText {
   margin: 0;
