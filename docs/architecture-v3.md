@@ -1082,7 +1082,8 @@ SELECT p.id, p.first_name, p.last_name, p.is_deceased,
        masked_birth_date(p, sqlc.arg(viewer_is_admin), sqlc.arg(viewer_person_id)) AS birth_date,
        p.birth_date_precision, min(anc.depth) AS depth
 FROM anc JOIN persons p ON p.id = anc.id AND p.deleted_at IS NULL
-GROUP BY p.id;
+GROUP BY p.id
+ORDER BY depth;  -- closest first; the service drops the precision when the date is hidden
 ```
 
 - **Cycle prevention at write time.** Inside one transaction that first takes `pg_advisory_xact_lock(<constant>)` (relationship writes are rare, so serializing them is free, and it stops two concurrent inserts from jointly forming a loop), reject "A is parent of B" if B is already an ancestor of A. Unlike the display queries, this walk has **no depth bound**, follows **every** parent link (foster included) and ignores `deleted_at`, so it is a guarantee rather than a heuristic. It uses `UNION`, not `UNION ALL`: already-visited people are dropped, so the recursion always terminates, even on damaged data.
