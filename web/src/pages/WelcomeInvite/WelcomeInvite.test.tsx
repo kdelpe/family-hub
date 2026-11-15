@@ -13,21 +13,16 @@ const invite: LinkPreview = {
   invitee_email: 'darline.monestime@example.com',
   invitee_first_name: 'Darline',
   from_name: 'Nadège Pluviose',
-  google_eligible: true,
 }
 const reset: LinkPreview = { ...invite, purpose: 'password_reset', invitee_first_name: null, from_name: null }
 const invalidToken = () => Response.json({ error: { code: 'invalid_token', message: 'x' } }, { status: 400 })
 const user = { id: '01890000-0000-7000-8000-000000000001', email: invite.invitee_email, role: 'member' }
 
-type Answers = { preview?: Response; google?: boolean; providersDown?: boolean; reset?: Response }
+type Answers = { preview?: Response; reset?: Response }
 
 function renderPage(answers: Answers, url = '/auth/set-password#t=link-token') {
   const fetch = vi.fn((path: string) => {
     switch (path) {
-      case '/api/auth/providers':
-        return answers.providersDown
-          ? Promise.reject(new TypeError('Failed to fetch'))
-          : Promise.resolve(Response.json({ google: answers.google ?? false }))
       case '/api/auth/invite/preview':
         return Promise.resolve(answers.preview ?? Response.json(invite))
       default:
@@ -71,12 +66,11 @@ describe('WelcomeInvite', () => {
     expect(screen.getByRole('link', { name: 'Get a new reset link' })).toHaveAttribute('href', '/auth/forgot')
   })
 
-  it('welcomes an invitee by name, with who invited them and Google', async () => {
-    renderPage({ google: true })
+  it('welcomes an invitee by name, with who invited them', async () => {
+    renderPage({})
 
     expect(await screen.findByRole('heading', { name: 'Welcome to the family, Darline' })).toBeInTheDocument()
     expect(screen.getByText('Nadège Pluviose')).toBeInTheDocument()
-    expect(await screen.findByRole('link', { name: 'Continue with Google instead' })).toBeInTheDocument()
     expect(screen.getByText(/This link works for 7 days\. Not Darline\?/)).toBeInTheDocument()
     expect(screen.getByLabelText('New password')).toHaveAttribute('type', 'text')
   })
@@ -127,27 +121,19 @@ describe('WelcomeInvite', () => {
     expect(screen.getByRole('alert')).not.toBe(first)
   })
 
-  it('still offers Google to a Gmail invitee when the providers check fails', async () => {
-    renderPage({ providersDown: true })
-
-    expect(await screen.findByRole('link', { name: 'Continue with Google instead' })).toBeInTheDocument()
-  })
-
-  it('welcomes an invitee without names yet, and without Google if not a Gmail address', async () => {
-    renderPage({ preview: Response.json({ ...invite, invitee_first_name: null, from_name: null, google_eligible: false }), google: true })
+  it('welcomes an invitee without names yet', async () => {
+    renderPage({ preview: Response.json({ ...invite, invitee_first_name: null, from_name: null }) })
 
     expect(await screen.findByRole('heading', { name: 'Welcome to the family' })).toBeInTheDocument()
     expect(screen.queryByText(/invited you to the family hub/)).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Continue with Google instead' })).not.toBeInTheDocument()
     expect(screen.getByText(/Not you\?/)).toBeInTheDocument()
   })
 
   it('asks for a new password on a reset link', async () => {
-    renderPage({ preview: Response.json(reset), google: true })
+    renderPage({ preview: Response.json(reset) })
 
     expect(await screen.findByRole('heading', { name: 'Choose a new password' })).toBeInTheDocument()
     expect(screen.getByText(/This link works for 30 minutes\./)).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Continue with Google instead' })).not.toBeInTheDocument()
   })
 
   it.each([

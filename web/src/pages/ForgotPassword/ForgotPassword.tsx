@@ -90,10 +90,6 @@ export function ForgotPassword() {
               <button type="submit" aria-disabled={send.isPending} className={`pill ${page.primary}`}>
                 {send.isPending ? 'Sending…' : 'Send me a reset link'}
               </button>
-              <span className={page.hint}>
-                Signed up with Google? You can still use “Continue with Google” on the sign-in page, or use this to add a
-                password.
-              </span>
             </form>
           )}
         </div>

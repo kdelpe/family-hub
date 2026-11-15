@@ -111,25 +111,8 @@
   color: var(--text);
 }
 
-.googleButton {
-  height: 52px;
-  border-radius: 26px;
-  background: var(--surface);
-}
 
-.divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--muted);
-  font-size: 14px;
-}
 
-.rule {
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
 
 @keyframes rise {
   from {

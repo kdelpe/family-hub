@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 
-import { authKeys, googleStartPath, type LinkPreview, previewLink, providersQuery, setPassword } from '../../api/auth'
+import { authKeys, type LinkPreview, previewLink, setPassword } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { PasswordInput } from '../../components/PasswordInput/PasswordInput'
 import { PasswordStrength } from '../../components/PasswordStrength/PasswordStrength'
@@ -43,11 +43,8 @@ export function WelcomeInvite() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   })
-  // Fetched alongside the preview, so the Google button can be in place before the form shows.
-  const providers = useQuery(providersQuery)
 
   const linkBroken = token === '' || (preview.error instanceof ApiError && preview.error.code === 'invalid_token')
-  const mayOfferGoogle = preview.data?.purpose === 'invite' && preview.data.google_eligible
 
   return (
     <main className={page.main}>
@@ -73,9 +70,8 @@ export function WelcomeInvite() {
             {preview.isFetching ? 'Trying…' : 'Try again'}
           </button>
         </div>
-      ) : preview.data && !(mayOfferGoogle && providers.isPending) ? (
-        // As on the sign-in page, a failed check still offers Google: the link either works or explains.
-        <SetPassword key={token} token={token} link={preview.data} googleAvailable={providers.data?.google !== false} />
+      ) : preview.data ? (
+        <SetPassword key={token} token={token} link={preview.data} />
       ) : (
         <PageTitle>Welcome</PageTitle>
       )}
@@ -88,7 +84,7 @@ function PageTitle({ children }: { children: string }) {
   return <title>{`${children} — Pluviose-Monestime Family Hub`}</title>
 }
 
-function SetPassword({ token, link, googleAvailable }: { token: string; link: LinkPreview; googleAvailable: boolean }) {
+function SetPassword({ token, link }: { token: string; link: LinkPreview }) {
   const invite = link.purpose === 'invite'
   const [password, setPasswordValue] = useState('')
   const [refusedHere, setRefusedHere] = useState<{ code: string; attempt: number } | null>(null)
@@ -118,7 +114,6 @@ function SetPassword({ token, link, googleAvailable }: { token: string; link: Li
   const fieldError = passwordRule(refusedHere?.code ?? errorCode)
   const otherError = save.isError && !fieldError ? errorMessage(save.error) : null
   const firstName = link.invitee_first_name
-  const withGoogle = invite && link.google_eligible && googleAvailable
 
   return (
     // noValidate: an empty field gets the plain-language error under it, not the browser's bubble.
@@ -145,19 +140,6 @@ function SetPassword({ token, link, googleAvailable }: { token: string; link: Li
           <strong className={styles.email}>{link.invitee_email}</strong>.
         </span>
       </div>
-
-      {withGoogle && (
-        <>
-          <a href={googleStartPath} className={`pill ${page.secondary} ${page.googleButton}`}>
-            Continue with Google instead
-          </a>
-          <div aria-hidden="true" className={page.divider}>
-            <span className={page.rule} />
-            or choose a password
-            <span className={page.rule} />
-          </div>
-        </>
-      )}
 
       <div className={page.field}>
         <label htmlFor="wi-pw" className={page.label}>
