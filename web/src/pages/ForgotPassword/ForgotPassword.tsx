@@ -31,23 +31,23 @@ export function ForgotPassword() {
       <title>Forgot password — Pluviose-Monestime Family Hub</title>
       <main className={page.main}>
         <div className={page.form}>
-          <Link to="/auth/login" className={styles.back}>
+          <Link to="/auth/login" className={page.backLink}>
             <span aria-hidden="true">← </span>Back to sign in
           </Link>
           {send.isSuccess ? (
-            <div role="status" className={styles.sent}>
-              <div className={styles.envelope}>
+            <div role="status" className={page.sentCard}>
+              <div className={page.sentIcon}>
                 <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24">
-                  <path d="M3 6 H21 V18 H3 Z M3 6 L12 13 L21 6" className={styles.envelopeLine} strokeWidth="2" />
+                  <path d="M3 6 H21 V18 H3 Z M3 6 L12 13 L21 6" className={page.sentIconLine} strokeWidth="2" />
                 </svg>
               </div>
-              <h1 ref={sentHeading} tabIndex={-1} className={`${page.title} ${styles.sentTitle}`}>
+              <h1 ref={sentHeading} tabIndex={-1} className={`${page.title} ${page.sentTitle}`}>
                 Check your email
               </h1>
-              <p className={styles.sentText}>
+              <p className={page.sentText}>
                 If that email is on our family list, a reset link is on its way. It works for 30 minutes.
               </p>
-              <p className={`${styles.sentText} ${styles.muted}`}>
+              <p className={`${page.sentText} ${page.muted}`}>
                 Nothing after a few minutes? Check your spam folder, or ask an admin to send you a new link.
               </p>
               <Link to="/auth/login" className={`pill ${page.secondary} ${styles.backButton}`}>
@@ -90,7 +90,7 @@ export function ForgotPassword() {
               <button type="submit" aria-disabled={send.isPending} className={`pill ${page.primary}`}>
                 {send.isPending ? 'Sending…' : 'Send me a reset link'}
               </button>
-              <span className={styles.hint}>
+              <span className={page.hint}>
                 Signed up with Google? You can still use “Continue with Google” on the sign-in page, or use this to add a
                 password.
               </span>

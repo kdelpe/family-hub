@@ -13,7 +13,7 @@ export function PasswordStrength({ password }: { password: string }) {
         ))}
       </div>
       <span aria-live="polite" aria-atomic="true" className={level === 1 ? `${styles.label} ${styles.short}` : styles.label}>
-        {label && <span className={styles.hidden}>Password strength: </span>}
+        {label && <span className="visually-hidden">Password strength: </span>}
         {label}
       </span>
     </div>

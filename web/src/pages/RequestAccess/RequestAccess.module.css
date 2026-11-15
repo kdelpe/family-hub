@@ -1,0 +1,145 @@
+.column {
+  max-width: 460px;
+  gap: 20px;
+}
+
+.request {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.heading {
+  gap: 8px;
+}
+
+.title {
+  font-size: 40px;
+  line-height: normal;
+}
+
+.intro {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sideLegend {
+  padding: 0;
+  margin-bottom: 10px;
+}
+
+.relatedLegend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+.sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.side {
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 15px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+}
+
+.side:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* One pixel less padding for the thicker border, so the choice doesn't shift the text. */
+.side:has(:checked) {
+  padding: 7px 11px;
+  border: 2px solid var(--accent);
+  background: var(--accent-tint);
+}
+
+.sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Lets each "and" and name input wrap as items of the sentence. */
+.name {
+  display: contents;
+}
+
+.words {
+  color: var(--text-2);
+}
+
+.select,
+.nameInput,
+.note {
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  color: var(--text);
+}
+
+.select {
+  height: 48px;
+  padding: 0 12px;
+}
+
+.nameInput {
+  flex: 1 1 170px;
+  min-width: 0;
+  height: 48px;
+  padding: 0 14px;
+}
+
+.note {
+  padding: 12px 16px;
+  resize: vertical;
+}
+
+.addName {
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.select:focus-visible,
+.nameInput:focus-visible,
+.note:focus-visible,
+.addName:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--muted);
+}
