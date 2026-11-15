@@ -119,7 +119,7 @@ describe('Login', () => {
     signIn()
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'typo@example.com' } })
 
-    expect(screen.getByRole('button', { name: 'Signing in…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Signing in…' })).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('clears a shown error once the user types', async () => {

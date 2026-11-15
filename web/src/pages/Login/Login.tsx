@@ -3,7 +3,9 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 
 import { authKeys, googleStartPath, login, providers } from '../../api/auth'
-import { ApiError, networkErrorStatus } from '../../api/client'
+import { ApiError } from '../../api/client'
+import { errorMessage } from '../../lib/errorMessage'
+import page from '../../styles/signInForm.module.css'
 import styles from './Login.module.css'
 
 // Not "try again": the account may be refused for good (not invited), which a retry can't fix.
@@ -52,6 +54,10 @@ export function Login() {
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    // The button is aria-disabled, not disabled, so it keeps keyboard focus; this does its job.
+    if (signIn.isPending) {
+      return
+    }
     setGoogleFailed(false)
     signIn.mutate()
   }
@@ -61,17 +67,17 @@ export function Login() {
   return (
     <>
       <title>Sign in — Pluviose-Monestime Family Hub</title>
-      <main className={styles.main}>
-        <form className={styles.form} onSubmit={onSubmit}>
-          <div className={styles.heading}>
-            <h1 lang="ht" className={styles.title}>
+      <main className={page.main}>
+        <form className={page.form} onSubmit={onSubmit}>
+          <div className={page.heading}>
+            <h1 lang="ht" className={`${page.title} ${styles.title}`}>
               Lakay se lakay
             </h1>
             <span className={styles.subtitle}>There’s no place like home.</span>
           </div>
 
-          <div className={styles.field}>
-            <label htmlFor="si-email" className={styles.label}>
+          <div className={page.field}>
+            <label htmlFor="si-email" className={page.label}>
               Email
             </label>
             <input
@@ -79,17 +85,18 @@ export function Login() {
               type="email"
               autoComplete="email"
               required
+              readOnly={signIn.isPending}
               value={email}
               onChange={(event) => {
                 setEmail(event.target.value)
                 clearError()
               }}
-              className={styles.input}
+              className={page.input}
             />
           </div>
-          <div className={styles.field}>
+          <div className={page.field}>
             <div className={styles.labelRow}>
-              <label htmlFor="si-pw" className={styles.label}>
+              <label htmlFor="si-pw" className={page.label}>
                 Password
               </label>
               <Link to="/auth/forgot" className={styles.small}>
@@ -102,6 +109,7 @@ export function Login() {
                 type={passwordShown ? 'text' : 'password'}
                 autoComplete="current-password"
                 required
+                readOnly={signIn.isPending}
                 value={password}
                 onChange={(event) => {
                   setPassword(event.target.value)
@@ -121,12 +129,12 @@ export function Login() {
           </div>
 
           {error && (
-            <p role="alert" className={styles.error}>
+            <p role="alert" className={page.error}>
               {error}
             </p>
           )}
 
-          <button type="submit" disabled={signIn.isPending} className={`pill ${styles.primary}`}>
+          <button type="submit" aria-disabled={signIn.isPending} className={`pill ${page.primary}`}>
             {signIn.isPending ? 'Signing in…' : 'Sign in'}
           </button>
           <span className={styles.requestAccess}>
@@ -145,7 +153,7 @@ export function Login() {
                 or
                 <span className={styles.rule} />
               </div>
-              <a href={googleStartPath} className={`pill ${styles.secondary}`}>
+              <a href={googleStartPath} className={`pill ${page.secondary} ${styles.googleButton}`}>
                 Continue with Google
               </a>
             </div>
@@ -175,21 +183,8 @@ function alertMessage(
 }
 
 function loginErrorMessage(error: Error): string {
-  if (!(error instanceof ApiError)) {
-    return 'Something went wrong. Try again in a moment.'
+  if (error instanceof ApiError && error.status === 401) {
+    return 'That email and password don’t match. Check them and try again, or use Forgot password.'
   }
-  switch (error.status) {
-    case 401:
-      return 'That email and password don’t match. Check them and try again, or use Forgot password.'
-    case 429: {
-      const minutes = Math.max(1, Math.ceil((error.retryAfterSeconds ?? 60) / 60))
-      return `Too many tries. Wait ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} and try again.`
-    }
-    case 503:
-      return 'The family hub is busy right now. Try again in a moment.'
-    case networkErrorStatus:
-      return 'Can’t reach the family hub. Check your connection and try again.'
-    default:
-      return 'Something went wrong. Try again in a moment.'
-  }
+  return errorMessage(error)
 }

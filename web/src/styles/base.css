@@ -35,13 +35,13 @@ a:hover {
     translate 0.15s ease;
 }
 
-.pill:not(:disabled):hover,
-.pill:focus-visible {
+.pill:not(:disabled, [aria-disabled='true']):hover,
+.pill:not(:disabled, [aria-disabled='true']):focus-visible {
   box-shadow: 0 4px 12px var(--shadow-lift);
   translate: 0 -1px;
 }
 
-.pill:not(:disabled):active {
+.pill:not(:disabled, [aria-disabled='true']):active {
   translate: 0 0;
   box-shadow: 0 1px 3px var(--shadow-press);
 }
