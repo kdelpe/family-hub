@@ -58,15 +58,17 @@ func TestAncestorsAndDescendants(t *testing.T) {
 	svc, admin := newService(t)
 	great, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Great", BirthDate: new("1960-03-14"), BirthDatePrecision: new("day")})
 	require.NoError(t, err)
-	ids := addPeople(t, svc, admin, "Grand", "Adopter", "Foster", "Parent", "Child", "Hidden", "Above")
+	ids := addPeople(t, svc, admin, "Grand", "Adopter", "Foster", "Parent", "Other", "Child", "Hidden", "Above")
 	ids["Great"] = great.ID
 	addLink(t, svc, parentLink(ids["Great"], ids["Grand"], "biological"))
 	addLink(t, svc, parentLink(ids["Grand"], ids["Parent"], "biological"))
 	addLink(t, svc, parentLink(ids["Adopter"], ids["Parent"], "adoptive"))
 	addLink(t, svc, parentLink(ids["Foster"], ids["Child"], "foster"))
 	addLink(t, svc, parentLink(ids["Parent"], ids["Child"], "biological"))
-	// Great is also Child's other parent's parent, so Great is met at two depths; the closest counts.
-	addLink(t, svc, parentLink(ids["Great"], ids["Hidden"], "biological"))
+	// Great is also Other's parent, so Great is met at depths 2 and 3; the closest counts.
+	addLink(t, svc, parentLink(ids["Great"], ids["Other"], "biological"))
+	addLink(t, svc, parentLink(ids["Other"], ids["Child"], "adoptive"))
+	// Above is reached only through Hidden, who is deleted.
 	addLink(t, svc, parentLink(ids["Hidden"], ids["Child"], "biological"))
 	addLink(t, svc, parentLink(ids["Above"], ids["Hidden"], "biological"))
 	require.NoError(t, svc.DeletePerson(t.Context(), ids["Hidden"]))
@@ -89,14 +91,14 @@ func TestAncestorsAndDescendants(t *testing.T) {
 		want   []Relative
 	}{
 		{name: "ancestors skip foster parents and stop at deleted people", walk: walker(t, svc.Ancestors), from: "Child", depth: DefaultDepth,
-			want: []Relative{relative("Parent", 1), relative("Adopter", 2), relative("Grand", 2), greatAs("--03-14", 3)}},
+			want: []Relative{relative("Other", 1), relative("Parent", 1), relative("Adopter", 2), relative("Grand", 2), greatAs("--03-14", 2)}},
 		{name: "an admin sees a living person's birth year", walk: walker(t, svc.Ancestors), viewer: Viewer{IsAdmin: true}, from: "Child", depth: DefaultDepth,
-			want: []Relative{relative("Parent", 1), relative("Adopter", 2), relative("Grand", 2), greatAs("1960-03-14", 3)}},
-		{name: "ancestors stop at the depth", walk: walker(t, svc.Ancestors), from: "Child", depth: 1, want: []Relative{relative("Parent", 1)}},
+			want: []Relative{relative("Other", 1), relative("Parent", 1), relative("Adopter", 2), relative("Grand", 2), greatAs("1960-03-14", 2)}},
+		{name: "ancestors stop at the depth", walk: walker(t, svc.Ancestors), from: "Child", depth: 1, want: []Relative{relative("Other", 1), relative("Parent", 1)}},
 		{name: "descendants skip foster children", walk: walker(t, svc.Descendants), from: "Grand", depth: DefaultDepth,
 			want: []Relative{relative("Parent", 1), relative("Child", 2)}},
 		{name: "descendants stop at the depth", walk: walker(t, svc.Descendants), from: "Great", depth: 2,
-			want: []Relative{relative("Grand", 1), relative("Parent", 2)}},
+			want: []Relative{relative("Grand", 1), relative("Other", 1), relative("Child", 2), relative("Parent", 2)}},
 		{name: "nobody above", walk: walker(t, svc.Ancestors), from: "Great", depth: DefaultDepth, want: []Relative{}},
 	}
 

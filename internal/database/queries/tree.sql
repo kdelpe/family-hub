@@ -15,9 +15,8 @@ JOIN persons a ON a.id = r.person_a AND a.deleted_at IS NULL
 JOIN persons b ON b.id = r.person_b AND b.deleted_at IS NULL
 ORDER BY r.id;
 
--- Ancestors and descendants follow family-parent links only, so a foster parent is never an ancestor (§3.4).
--- The walks stop at deleted people, as the tree does. UNION keeps one row per person and depth, so shared
--- ancestry can't multiply the rows. The casts are for sqlc, which can't infer a parameter's type inside a recursive CTE.
+-- Family-parent links only, so a foster parent is never an ancestor (§3.4); the walks stop at deleted people.
+-- UNION keeps one row per person and depth. The casts are for sqlc, which can't type parameters in a recursive CTE.
 -- name: Ancestors :many
 WITH RECURSIVE anc(id, depth) AS (
   SELECT r.person_a, 1

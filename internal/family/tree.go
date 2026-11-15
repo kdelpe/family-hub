@@ -102,29 +102,22 @@ func (s *Service) Tree(ctx context.Context) (Tree, error) {
 
 // Ancestors walks up to depth generations, closest first.
 func (s *Service) Ancestors(ctx context.Context, viewer Viewer, id uuid.UUID, depth int) ([]Relative, error) {
-	return s.relatives(ctx, "ancestors", id, depth, func(q *gen.Queries, max int32) ([]gen.AncestorsRow, error) {
-		return q.Ancestors(ctx, gen.AncestorsParams{ViewerIsAdmin: viewer.IsAdmin, ViewerPersonID: viewer.PersonID, PersonID: id, MaxDepth: max})
+	return s.relatives(ctx, "ancestors", id, depth, func(q *gen.Queries, limit int32) ([]Relative, error) {
+		rows, err := q.Ancestors(ctx, gen.AncestorsParams{ViewerIsAdmin: viewer.IsAdmin, ViewerPersonID: viewer.PersonID, PersonID: id, MaxDepth: limit})
+		return toRelatives(rows), err
 	})
 }
 
 // Descendants walks down to depth generations, closest first.
 func (s *Service) Descendants(ctx context.Context, viewer Viewer, id uuid.UUID, depth int) ([]Relative, error) {
-	return s.relatives(ctx, "descendants", id, depth, func(q *gen.Queries, max int32) ([]gen.AncestorsRow, error) {
-		rows, err := q.Descendants(ctx, gen.DescendantsParams{ViewerIsAdmin: viewer.IsAdmin, ViewerPersonID: viewer.PersonID, PersonID: id, MaxDepth: max})
-		if err != nil {
-			return nil, err
-		}
-		// Same columns as Ancestors, so the rows convert.
-		out := make([]gen.AncestorsRow, 0, len(rows))
-		for _, r := range rows {
-			out = append(out, gen.AncestorsRow(r))
-		}
-		return out, nil
+	return s.relatives(ctx, "descendants", id, depth, func(q *gen.Queries, limit int32) ([]Relative, error) {
+		rows, err := q.Descendants(ctx, gen.DescendantsParams{ViewerIsAdmin: viewer.IsAdmin, ViewerPersonID: viewer.PersonID, PersonID: id, MaxDepth: limit})
+		return toRelatives(rows), err
 	})
 }
 
 func (s *Service) relatives(ctx context.Context, what string, id uuid.UUID, depth int,
-	walk func(q *gen.Queries, max int32) ([]gen.AncestorsRow, error)) ([]Relative, error) {
+	walk func(q *gen.Queries, limit int32) ([]Relative, error)) ([]Relative, error) {
 	if depth < 1 || depth > maxDepth {
 		return nil, fmt.Errorf("%w: depth must be a whole number from 1 to %d", ErrInvalidFilter, maxDepth)
 	}
@@ -137,18 +130,8 @@ func (s *Service) relatives(ctx context.Context, what string, id uuid.UUID, dept
 		if n == 0 {
 			return ErrPersonNotFound
 		}
-		rows, err := walk(q, int32(depth))
-		if err != nil {
+		if relatives, err = walk(q, int32(depth)); err != nil {
 			return fmt.Errorf("%s: %w", what, err)
-		}
-		relatives = make([]Relative, 0, len(rows))
-		for _, r := range rows {
-			rel := Relative{ID: r.ID, FirstName: r.FirstName, LastName: r.LastName, IsDeceased: r.IsDeceased, Depth: int(r.Depth)}
-			// The precision only goes out with a date the viewer may see.
-			if r.BirthDate != "" {
-				rel.BirthDate, rel.BirthDatePrecision = &r.BirthDate, r.BirthDatePrecision
-			}
-			relatives = append(relatives, rel)
 		}
 		return nil
 	})
@@ -156,6 +139,21 @@ func (s *Service) relatives(ctx context.Context, what string, id uuid.UUID, dept
 		return nil, err
 	}
 	return relatives, nil
+}
+
+// The two walks return the same columns, so both row types convert to AncestorsRow.
+func toRelatives[R gen.AncestorsRow | gen.DescendantsRow](rows []R) []Relative {
+	relatives := make([]Relative, 0, len(rows))
+	for _, row := range rows {
+		r := gen.AncestorsRow(row)
+		rel := Relative{ID: r.ID, FirstName: r.FirstName, LastName: r.LastName, IsDeceased: r.IsDeceased, Depth: int(r.Depth)}
+		// The precision only goes out with a date the viewer may see.
+		if r.BirthDate != "" {
+			rel.BirthDate, rel.BirthDatePrecision = &r.BirthDate, r.BirthDatePrecision
+		}
+		relatives = append(relatives, rel)
+	}
+	return relatives
 }
 
 func (s *Service) Summary(ctx context.Context) (Summary, error) {
@@ -190,8 +188,7 @@ func (s *Service) Summary(ctx context.Context) (Summary, error) {
 }
 
 // longestLine counts the people in the longest parent-to-child line; someone without links is a line of one.
-// Writes refuse loops, but a person met again while still being walked is counted once, so damaged data
-// can't make it spin.
+// A person met again mid-walk counts once, so a loop in damaged data can't make it spin.
 func longestLine(links []gen.FamilyParentLinksRow) int {
 	children := map[uuid.UUID][]uuid.UUID{}
 	for _, l := range links {

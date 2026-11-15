@@ -50,9 +50,8 @@ type AncestorsRow struct {
 	Depth              int32
 }
 
-// Ancestors and descendants follow family-parent links only, so a foster parent is never an ancestor (§3.4).
-// The walks stop at deleted people, as the tree does. UNION keeps one row per person and depth, so shared
-// ancestry can't multiply the rows. The casts are for sqlc, which can't infer a parameter's type inside a recursive CTE.
+// Family-parent links only, so a foster parent is never an ancestor (§3.4); the walks stop at deleted people.
+// UNION keeps one row per person and depth. The casts are for sqlc, which can't type parameters in a recursive CTE.
 func (q *Queries) Ancestors(ctx context.Context, arg AncestorsParams) ([]AncestorsRow, error) {
 	rows, err := q.db.Query(ctx, ancestors,
 		arg.ViewerIsAdmin,

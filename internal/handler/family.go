@@ -381,9 +381,9 @@ func (f *Family) relatives(w http.ResponseWriter, r *http.Request, what string,
 	depth := family.DefaultDepth
 	if raw := r.URL.Query().Get("depth"); raw != "" {
 		var err error
+		// Zero is out of range, so the service refuses it with the same message as any bad depth.
 		if depth, err = strconv.Atoi(raw); err != nil {
-			httpx.Error(w, http.StatusBadRequest, "validation_error", "depth must be a whole number from 1 to 10")
-			return
+			depth = 0
 		}
 	}
 	relatives, err := walk(r.Context(), viewer, id, depth)

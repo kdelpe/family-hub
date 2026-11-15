@@ -488,22 +488,23 @@ func TestAncestorsAndDescendants(t *testing.T) {
 		id         string
 		query      string
 		wantDepth  int
+		noWalk     bool
 		walkErr    error
 		wantStatus int
 		wantBody   string
 	}{
 		{name: "the default depth, as a member", role: auth.RoleMember, wantDepth: family.DefaultDepth, wantStatus: http.StatusOK, wantBody: relativesBody},
 		{name: "a depth, as an admin", role: auth.RoleAdmin, query: "?depth=2", wantDepth: 2, wantStatus: http.StatusOK, wantBody: relativesBody},
-		{name: "depth not a number", role: auth.RoleMember, query: "?depth=all", wantStatus: http.StatusBadRequest,
-			wantBody: `{"error":{"code":"validation_error","message":"depth must be a whole number from 1 to 10"}}`},
+		{name: "depth not a number goes to the service as out of range", role: auth.RoleMember, query: "?depth=all", wantDepth: 0,
+			walkErr: family.ErrInvalidFilter, wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"validation_error","message":"invalid filter"}}`},
 		{name: "depth out of range", role: auth.RoleMember, query: "?depth=99", wantDepth: 99, walkErr: family.ErrInvalidFilter,
 			wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"validation_error","message":"invalid filter"}}`},
 		{name: "unknown or deleted", role: auth.RoleMember, wantDepth: family.DefaultDepth, walkErr: family.ErrPersonNotFound,
 			wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
-		{name: "not a person id", role: auth.RoleMember, id: "42", wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
+		{name: "not a person id", role: auth.RoleMember, id: "42", noWalk: true, wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
 		{name: "database error", role: auth.RoleMember, wantDepth: family.DefaultDepth, walkErr: errors.New("db down"),
 			wantStatus: http.StatusInternalServerError, wantBody: internalBody},
-		{name: "mounted without a session gate", wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+		{name: "mounted without a session gate", noWalk: true, wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 	}
 
 	for _, direction := range []string{"ancestors", "descendants"} {
@@ -511,7 +512,7 @@ func TestAncestorsAndDescendants(t *testing.T) {
 			t.Run(direction+": "+tt.name, func(t *testing.T) {
 				svc := mocks.NewFamilyService(t)
 				h := handler.NewFamily(svc).Ancestors
-				if tt.wantDepth != 0 {
+				if !tt.noWalk {
 					viewer := family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}
 					if direction == "ancestors" {
 						svc.EXPECT().Ancestors(mock.Anything, viewer, testPersonID, tt.wantDepth).Return(relatives, tt.walkErr)
