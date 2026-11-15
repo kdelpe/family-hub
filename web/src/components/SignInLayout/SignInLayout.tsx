@@ -3,8 +3,8 @@ import { Outlet } from 'react-router'
 import { SignInTree } from '../SignInTree/SignInTree'
 import styles from './SignInLayout.module.css'
 
-// The parent route of every page before sign-in: the brand panel, then the page's own <main>. As a
-// layout route it stays mounted between those pages, so the tree doesn't regrow on each move.
+// The parent route of every page with the brand panel (sign-in pages and First setup), then the page's own <main>.
+// As a layout route it stays mounted between those pages, so the tree doesn't regrow on each move.
 export function SignInLayout() {
   return (
     <div className={styles.page}>
