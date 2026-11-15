@@ -130,9 +130,9 @@ Why `family/` is one package: relationship writes need the ancestor walk (cycle 
 
 Conventions: **Postgres 18**. UUID PKs via the built-in `uuidv7()` (Postgres 18, no extension): time-ordered, so B-tree indexes stay compact. `uuidv7()` embeds the creation time. That's acceptable: IDs reach signed-in members, and media IDs also appear in presigned bucket URLs (§9), which can be forwarded. Those keys already carry the upload year (`media/<yyyy>/...`), and anyone holding the URL can see the photo itself, so the extra exposure is only the upload timestamp. **Postgres 18 everywhere:** local compose, the CI test service, production, and the `pg_dump` client used for backups (an older `pg_dump` refuses a newer server). Managed hosting (§14 Option B) is only an option on providers that offer 18. `TIMESTAMPTZ` everywhere. Partial dates are stored as a date plus a precision flag (`1950-01-01` + `year` means "1950"). Soft delete via `deleted_at` on people, events and media.
 
-### 3.1 Full schema (written as one migration per phase, §6.2)
+### 3.1 Full schema (written as one migration per PR, §6.2)
 
-Phase 2's migrations hold `users`, `auth_tokens` and `sessions` (`000001_create_auth_tables` also made the Google sign-in table and column that `000002_remove_google_sign_in` drops, §5); `users.person_id`, its unique index and its foreign key arrive with `persons` in Phase 3, as do `pg_trgm` and `masked_birth_date`.
+Phase 2's migrations hold `users`, `auth_tokens` and `sessions` (`000001_create_auth_tables` also made the Google sign-in table and column that `000002_remove_google_sign_in` drops, §5). Phase 3's `000003_create_persons` adds `persons`, `pg_trgm` and `masked_birth_date`; `persons.avatar_media_id` waits for `media` (Phase 5), and `users.person_id`, its unique index and its foreign key come with account linking (§5.1).
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- fuzzy name search for tagging autocomplete
@@ -791,7 +791,7 @@ Changes vs V2: no CORS middleware (Vite proxies `/api`, so dev is same-origin to
 
 **No `migrate down`.** Rolling back a schema on real data loses data, so a change is undone by a new migration (or a backup restore). Locally, reset with `docker compose down -v`, `make up`, `make migrate-up`. Each migration still ships a `.down.sql`: a test applies every embedded migration, rolls them all back and applies them again.
 
-**One migration per phase:** each phase adds the tables its code uses, starting with the auth tables in Phase 2. §3.1 shows the full schema as one file for reading; it's split by phase when written.
+**One migration per PR:** each PR adds the tables its code uses, starting with the auth tables in Phase 2, and a merged migration is never edited (local databases have already applied it). §3.1 shows the full schema as one file for reading; it's split up when written. Tests share database-wide extensions such as `pg_trgm` through `public`, so a `.down.sql` leaves extensions in place.
 
 **Tests** run against `TEST_DATABASE_URL`, each in a throwaway schema (`search_path`), using small migrations in `internal/database/testdata/`; the mail tests send to Mailpit and read the result back through its API at `TEST_MAILPIT_URL`. `make test` always sets both, so run `make up` first; a plain `go test` without them skips those tests locally, and CI (which runs Postgres and Mailpit as services) fails instead of skipping.
 

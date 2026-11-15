@@ -30,6 +30,7 @@ const (
 		"maiden_name":null,"side":"first","birth_place":null,"gender":null,"birth_date":"--03-14","birth_date_precision":"day",
 		"death_date":null,"death_date_precision":null,"is_deceased":false,"bio":null}`
 	personNotFoundBody = `{"error":{"code":"not_found","message":"person not found"}}`
+	busyBody           = `{"error":{"code":"busy","message":"try again in a moment"}}`
 )
 
 func TestSearchPersons(t *testing.T) {
@@ -122,6 +123,7 @@ func TestCreatePerson(t *testing.T) {
 		{name: "created", session: true, body: body, wantCreate: true, wantStatus: http.StatusCreated, wantBody: testPersonBody},
 		{name: "refused by the rules", session: true, body: body, wantCreate: true, createErr: family.ErrInvalidPerson,
 			wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"validation_error","message":"invalid person"}}`},
+		{name: "busy", session: true, body: body, wantCreate: true, createErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable, wantBody: busyBody},
 		{name: "unknown field", session: true, body: `{"first_name":"Rosa","email":"x@example.com"}`, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"bad_request","message":"invalid JSON body"}}`},
 		{name: "database error", session: true, body: body, wantCreate: true, createErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
@@ -172,8 +174,11 @@ func TestUpdatePerson(t *testing.T) {
 			updateErr: family.ErrInvalidPerson, wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"validation_error","message":"invalid person"}}`},
 		{name: "unknown or deleted", body: `{}`, wantPatch: &family.PersonPatch{}, updateErr: family.ErrPersonNotFound, wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
 		{name: "not a person id", id: "42", body: `{}`, wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
-		{name: "busy", body: `{}`, wantPatch: &family.PersonPatch{}, updateErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable,
-			wantBody: `{"error":{"code":"busy","message":"try again in a moment"}}`},
+		{name: "deceased can't be cleared", body: `{"is_deceased":null}`, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"bad_request","message":"invalid JSON body"}}`},
+		{name: "a first name can't be cleared", body: `{"first_name":null}`, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"bad_request","message":"invalid JSON body"}}`},
+		{name: "busy", body: `{}`, wantPatch: &family.PersonPatch{}, updateErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable, wantBody: busyBody},
 		{name: "unknown field", body: `{"email":"x@example.com"}`, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"bad_request","message":"invalid JSON body"}}`},
 		{name: "database error", body: `{}`, wantPatch: &family.PersonPatch{}, updateErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
@@ -208,6 +213,7 @@ func TestDeletePerson(t *testing.T) {
 	}{
 		{name: "deleted", wantDelete: true, wantStatus: http.StatusNoContent},
 		{name: "unknown or already deleted", wantDelete: true, deleteErr: family.ErrPersonNotFound, wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
+		{name: "busy", wantDelete: true, deleteErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable, wantBody: busyBody},
 		{name: "not a person id", id: "42", wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
 		{name: "database error", wantDelete: true, deleteErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 	}
@@ -239,6 +245,7 @@ func TestRestorePerson(t *testing.T) {
 	}{
 		{name: "restored", wantRestore: true, wantStatus: http.StatusOK, wantBody: testPersonBody},
 		{name: "unknown or not deleted", wantRestore: true, restoreErr: family.ErrPersonNotFound, wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
+		{name: "busy", wantRestore: true, restoreErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable, wantBody: busyBody},
 		{name: "not a person id", id: "42", wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
 		{name: "database error", wantRestore: true, restoreErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 	}

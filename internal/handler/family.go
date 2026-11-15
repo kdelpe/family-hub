@@ -69,7 +69,7 @@ type createPersonRequest struct {
 }
 
 type updatePersonRequest struct {
-	FirstName          optional[string]  `json:"first_name"`
+	FirstName          required[string]  `json:"first_name"`
 	MiddleName         optional[*string] `json:"middle_name"`
 	LastName           optional[*string] `json:"last_name"`
 	MaidenName         optional[*string] `json:"maiden_name"`
@@ -80,7 +80,7 @@ type updatePersonRequest struct {
 	BirthDatePrecision optional[*string] `json:"birth_date_precision"`
 	DeathDate          optional[*string] `json:"death_date"`
 	DeathDatePrecision optional[*string] `json:"death_date_precision"`
-	IsDeceased         optional[bool]    `json:"is_deceased"`
+	IsDeceased         required[bool]    `json:"is_deceased"`
 	Bio                optional[*string] `json:"bio"`
 }
 
@@ -88,6 +88,17 @@ type updatePersonRequest struct {
 type optional[T any] family.Opt[T]
 
 func (o *optional[T]) UnmarshalJSON(data []byte) error {
+	o.Set = true
+	return json.Unmarshal(data, &o.Value)
+}
+
+// required is a PATCH field that can be left out but not cleared: null would otherwise decode as the zero value.
+type required[T any] family.Opt[T]
+
+func (o *required[T]) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return errors.New("null for a field that can't be cleared")
+	}
 	o.Set = true
 	return json.Unmarshal(data, &o.Value)
 }

@@ -1,14 +1,17 @@
 package family
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/database"
 	"github.com/kdelpe/family-hub/internal/testdb"
 )
@@ -46,6 +49,37 @@ func TestCreateRefusesAnInvalidPerson(t *testing.T) {
 
 			require.ErrorIs(t, err, ErrInvalidPerson)
 			assert.Equal(t, "invalid person: "+tt.wantErrMsg, err.Error())
+		})
+	}
+}
+
+func TestPartialDatesAreComparedAsRanges(t *testing.T) {
+	tests := []struct {
+		name                  string
+		birth, birthPrecision string
+		death, deathPrecision string
+		wantErr               bool
+	}{
+		{name: "died the year of a known birthday", birth: "1950-03-14", birthPrecision: "day", death: "1950", deathPrecision: "year"},
+		{name: "died the month of a known birthday", birth: "1950-03-14", birthPrecision: "day", death: "1950-03", deathPrecision: "month"},
+		{name: "died the day of birth", birth: "1950-03-14", birthPrecision: "day", death: "1950-03-14", deathPrecision: "day"},
+		{name: "died early in the birth year", birth: "1950", birthPrecision: "year", death: "1950-01-02", deathPrecision: "day"},
+		{name: "died the year of a circa birth", birth: "1950", birthPrecision: "circa", death: "1950-06", deathPrecision: "month"},
+		{name: "died the day before birth", birth: "1950-03-14", birthPrecision: "day", death: "1950-03-13", deathPrecision: "day", wantErr: true},
+		{name: "died the month before birth", birth: "1950-03-14", birthPrecision: "day", death: "1950-02", deathPrecision: "month", wantErr: true},
+		{name: "died the year before birth", birth: "1950-01", birthPrecision: "month", death: "1949", deathPrecision: "circa", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := normalize(PersonInput{FirstName: "Rosa", IsDeceased: true,
+				BirthDate: &tt.birth, BirthDatePrecision: &tt.birthPrecision, DeathDate: &tt.death, DeathDatePrecision: &tt.deathPrecision})
+
+			if !tt.wantErr {
+				assert.NoError(t, err)
+				return
+			}
+			assert.EqualError(t, err, "invalid person: the death date is before the birth date")
 		})
 	}
 }
@@ -252,6 +286,56 @@ func TestUnknownPersonIsNotFound(t *testing.T) {
 
 	for _, err := range []error{getErr, updateErr, deleteErr, restoreErr} {
 		assert.ErrorIs(t, err, ErrPersonNotFound)
+	}
+}
+
+func TestWritesAreBusyWhileARowStaysLocked(t *testing.T) {
+	const lockPersons = `SELECT 1 FROM persons FOR UPDATE`
+	tests := []struct {
+		name    string
+		lock    string
+		deleted bool
+		write   func(ctx context.Context, s *Persons, id, admin uuid.UUID) error
+	}{
+		{name: "create, while the creator's user row is locked", lock: `SELECT 1 FROM users FOR UPDATE`,
+			write: func(ctx context.Context, s *Persons, _, admin uuid.UUID) error {
+				_, err := s.Create(ctx, admin, PersonInput{FirstName: "Jean"})
+				return err
+			}},
+		{name: "update", lock: lockPersons,
+			write: func(ctx context.Context, s *Persons, id, _ uuid.UUID) error {
+				_, err := s.Update(ctx, id, PersonPatch{})
+				return err
+			}},
+		{name: "delete", lock: lockPersons,
+			write: func(ctx context.Context, s *Persons, id, _ uuid.UUID) error { return s.Delete(ctx, id) }},
+		{name: "restore", lock: lockPersons, deleted: true,
+			write: func(ctx context.Context, s *Persons, id, _ uuid.UUID) error {
+				_, err := s.Restore(ctx, id)
+				return err
+			}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := testdb.MigratedPool(t, database.MigrateUp)
+			persons, admin := NewPersons(pool), insertAdmin(t, pool)
+			persons.lockTimeout = 100 * time.Millisecond
+			rosa, err := persons.Create(t.Context(), admin, PersonInput{FirstName: "Rosa"})
+			require.NoError(t, err)
+			if tt.deleted {
+				require.NoError(t, persons.Delete(t.Context(), rosa.ID))
+			}
+			holder, err := pool.Begin(t.Context())
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = holder.Rollback(context.Background()) })
+			_, err = holder.Exec(t.Context(), tt.lock)
+			require.NoError(t, err)
+
+			err = tt.write(t.Context(), persons, rosa.ID, admin)
+
+			assert.ErrorIs(t, err, auth.ErrBusy)
+		})
 	}
 }
 

@@ -112,11 +112,12 @@ type ListInput struct {
 }
 
 type Persons struct {
-	pool *pgxpool.Pool
+	pool        *pgxpool.Pool
+	lockTimeout time.Duration
 }
 
 func NewPersons(pool *pgxpool.Pool) *Persons {
-	return &Persons{pool: pool}
+	return &Persons{pool: pool, lockTimeout: auth.LockTimeout}
 }
 
 // List searches by name when Query is set (best matches first), otherwise lists everyone A–Z.
@@ -163,82 +164,104 @@ func (s *Persons) Create(ctx context.Context, createdBy uuid.UUID, in PersonInpu
 	if err != nil {
 		return Person{}, err
 	}
-	id, err := gen.New(s.pool).CreatePerson(ctx, gen.CreatePersonParams{
-		FirstName: f.FirstName, MiddleName: f.MiddleName, LastName: f.LastName, MaidenName: f.MaidenName, Side: f.Side,
-		BirthPlace: f.BirthPlace, Gender: f.Gender, BirthDate: f.birthDate, BirthDatePrecision: f.BirthDatePrecision,
-		DeathDate: f.deathDate, DeathDatePrecision: f.DeathDatePrecision, IsDeceased: f.IsDeceased, Bio: f.Bio, CreatedBy: &createdBy,
+	var id uuid.UUID
+	// The created_by foreign key waits on the creator's users row, which sign-ins lock FOR UPDATE.
+	err = s.write(ctx, "create person", func(q *gen.Queries) (err error) {
+		id, err = q.CreatePerson(ctx, gen.CreatePersonParams{
+			FirstName: f.FirstName, MiddleName: f.MiddleName, LastName: f.LastName, MaidenName: f.MaidenName, Side: f.Side,
+			BirthPlace: f.BirthPlace, Gender: f.Gender, BirthDate: f.birthDate, BirthDatePrecision: f.BirthDatePrecision,
+			DeathDate: f.deathDate, DeathDatePrecision: f.DeathDatePrecision, IsDeceased: f.IsDeceased, Bio: f.Bio, CreatedBy: &createdBy,
+		})
+		if err != nil {
+			return fmt.Errorf("create person: %w", err)
+		}
+		return nil
 	})
 	if err != nil {
-		return Person{}, fmt.Errorf("create person: %w", err)
+		return Person{}, err
 	}
 	return s.Get(ctx, Viewer{IsAdmin: true}, id)
 }
 
 // Update is admin-only for now; a member editing their own bio comes with person linking (§5.1).
 func (s *Persons) Update(ctx context.Context, id uuid.UUID, patch PersonPatch) (Person, error) {
-	err := s.update(ctx, id, patch)
-	if err != nil {
-		return Person{}, auth.BusyIfContended(err)
-	}
-	return s.Get(ctx, Viewer{IsAdmin: true}, id)
-}
-
-func (s *Persons) update(ctx context.Context, id uuid.UUID, patch PersonPatch) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin update person: %w", err)
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-	if err := auth.SetLockTimeout(ctx, tx, auth.LockTimeout); err != nil {
-		return err
-	}
-	q := gen.New(tx)
-	row, err := q.LockPerson(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrPersonNotFound
-	}
-	if err != nil {
-		return fmt.Errorf("lock person: %w", err)
-	}
-	f, err := normalize(patch.apply(fromRow(row)))
-	if err != nil {
-		return err
-	}
-	err = q.UpdatePerson(ctx, gen.UpdatePersonParams{
-		ID: id, FirstName: f.FirstName, MiddleName: f.MiddleName, LastName: f.LastName, MaidenName: f.MaidenName, Side: f.Side,
-		BirthPlace: f.BirthPlace, Gender: f.Gender, BirthDate: f.birthDate, BirthDatePrecision: f.BirthDatePrecision,
-		DeathDate: f.deathDate, DeathDatePrecision: f.DeathDatePrecision, IsDeceased: f.IsDeceased, Bio: f.Bio,
+	err := s.write(ctx, "update person", func(q *gen.Queries) error {
+		row, err := q.LockPerson(ctx, id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrPersonNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("lock person: %w", err)
+		}
+		f, err := normalize(patch.apply(fromRow(row)))
+		if err != nil {
+			return err
+		}
+		err = q.UpdatePerson(ctx, gen.UpdatePersonParams{
+			ID: id, FirstName: f.FirstName, MiddleName: f.MiddleName, LastName: f.LastName, MaidenName: f.MaidenName, Side: f.Side,
+			BirthPlace: f.BirthPlace, Gender: f.Gender, BirthDate: f.birthDate, BirthDatePrecision: f.BirthDatePrecision,
+			DeathDate: f.deathDate, DeathDatePrecision: f.DeathDatePrecision, IsDeceased: f.IsDeceased, Bio: f.Bio,
+		})
+		if err != nil {
+			return fmt.Errorf("update person: %w", err)
+		}
+		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("update person: %w", err)
+		return Person{}, err
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit person: %w", err)
-	}
-	return nil
+	return s.Get(ctx, Viewer{IsAdmin: true}, id)
 }
 
 // Delete only hides the person; their relationships stay, so Restore puts them back where they were (§3.1).
 func (s *Persons) Delete(ctx context.Context, id uuid.UUID) error {
-	n, err := gen.New(s.pool).SoftDeletePerson(ctx, id)
-	if err != nil {
-		return fmt.Errorf("delete person: %w", err)
-	}
-	if n == 0 {
-		return ErrPersonNotFound
-	}
-	return nil
+	return s.write(ctx, "delete person", func(q *gen.Queries) error {
+		n, err := q.SoftDeletePerson(ctx, id)
+		if err != nil {
+			return fmt.Errorf("delete person: %w", err)
+		}
+		if n == 0 {
+			return ErrPersonNotFound
+		}
+		return nil
+	})
 }
 
 func (s *Persons) Restore(ctx context.Context, id uuid.UUID) (Person, error) {
-	n, err := gen.New(s.pool).RestorePerson(ctx, id)
+	err := s.write(ctx, "restore person", func(q *gen.Queries) error {
+		n, err := q.RestorePerson(ctx, id)
+		if err != nil {
+			return fmt.Errorf("restore person: %w", err)
+		}
+		if n == 0 {
+			return ErrPersonNotFound
+		}
+		return nil
+	})
 	if err != nil {
-		return Person{}, fmt.Errorf("restore person: %w", err)
-	}
-	if n == 0 {
-		return Person{}, ErrPersonNotFound
+		return Person{}, err
 	}
 	return s.Get(ctx, Viewer{IsAdmin: true}, id)
+}
+
+// write runs fn in a transaction whose lock waits give up after lockTimeout with ErrBusy,
+// so a held row can't pin a pool connection.
+func (s *Persons) write(ctx context.Context, what string, fn func(q *gen.Queries) error) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin %s: %w", what, err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if err := auth.SetLockTimeout(ctx, tx, s.lockTimeout); err != nil {
+		return err
+	}
+	if err := fn(gen.New(tx)); err != nil {
+		return auth.BusyIfContended(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit %s: %w", what, err)
+	}
+	return nil
 }
 
 func (p PersonPatch) apply(in PersonInput) PersonInput {
@@ -310,10 +333,21 @@ func normalize(in PersonInput) (fields, error) {
 	if f.deathDate != nil && !f.IsDeceased {
 		return fields{}, fmt.Errorf("%w: a death date needs is_deceased", ErrInvalidPerson)
 	}
-	if f.birthDate != nil && f.deathDate != nil && f.deathDate.Before(*f.birthDate) {
+	if f.birthDate != nil && f.deathDate != nil && lastDay(*f.deathDate, *f.DeathDatePrecision).Before(*f.birthDate) {
 		return fields{}, fmt.Errorf("%w: the death date is before the birth date", ErrInvalidPerson)
 	}
 	return f, nil
+}
+
+// lastDay is the latest day a date can mean: a month or year is stored as its first day.
+func lastDay(date time.Time, precision string) time.Time {
+	switch precision {
+	case "month":
+		return date.AddDate(0, 1, -1)
+	case "year", "circa":
+		return date.AddDate(1, 0, -1)
+	}
+	return date
 }
 
 func parseDate(what string, value, precision *string) (*time.Time, error) {
