@@ -20,5 +20,9 @@ export const googleStartPath = '/api/auth/google/start'
 export const login = (email: string, password: string) =>
   api<User>('POST', '/auth/login', { body: { email, password } })
 
+// Always answers the same, whether or not the email has an account.
+export const forgotPassword = (email: string) =>
+  api<void>('POST', '/auth/password/forgot', { body: { email } })
+
 export const providers = ({ signal }: { signal?: AbortSignal } = {}) =>
   api<Providers>('GET', '/auth/providers', { signal })
