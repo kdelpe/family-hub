@@ -92,7 +92,7 @@ export function RequestAccess() {
   return (
     <>
       <title>Request access — Pluviose-Monestime Family Hub</title>
-      <main className={page.main}>
+      <main className={`${page.main} ${page.tallMain}`}>
         <div className={`${page.form} ${styles.column}`}>
           <Link to="/auth/login" className={page.backLink}>
             <span aria-hidden="true">← </span>Back to sign in

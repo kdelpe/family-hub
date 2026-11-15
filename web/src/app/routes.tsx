@@ -1,6 +1,7 @@
 import type { RouteObject } from 'react-router'
 
 import { SignInLayout } from '../components/SignInLayout/SignInLayout'
+import { FirstSetup } from '../pages/FirstSetup/FirstSetup'
 import { ForgotPassword } from '../pages/ForgotPassword/ForgotPassword'
 import { Login } from '../pages/Login/Login'
 import { RequestAccess } from '../pages/RequestAccess/RequestAccess'
@@ -16,6 +17,7 @@ export const routes: RouteObject[] = [
       { path: '/auth/request-access', element: <RequestAccess /> },
       { path: '/auth/forgot', element: <ForgotPassword /> },
       { path: '/auth/set-password', element: <WelcomeInvite /> },
+      { path: '/setup', element: <FirstSetup /> },
     ],
   },
   { path: '*', element: <NotBuiltYet /> },
