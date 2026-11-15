@@ -17,9 +17,8 @@ import (
 )
 
 const (
-	googleOnly = `UPDATE users SET password_hash = NULL, password_changed_at = NULL WHERE id = $1`
-	notSetUp   = `UPDATE users SET password_hash = NULL, password_changed_at = NULL, google_sub = NULL WHERE id = $1`
-	oldInvite  = `INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at) VALUES ($1, 'invite', 'old invite', now() + interval '7 days')`
+	notSetUp  = `UPDATE users SET password_hash = NULL, password_changed_at = NULL WHERE id = $1`
+	oldInvite = `INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at) VALUES ($1, 'invite', 'old invite', now() + interval '7 days')`
 )
 
 func TestSendReset(t *testing.T) {
@@ -35,7 +34,6 @@ func TestSendReset(t *testing.T) {
 		wantResets, wantInvites int
 	}{
 		{name: "a password user gets a reset; the earlier one still works", wantSend: true, wantSubject: "Reset your family hub password", wantResets: 2},
-		{name: "a Google-only user gets a reset to add a password", setup: []string{googleOnly}, wantSend: true, wantSubject: "Reset your family hub password", wantResets: 2},
 		{name: "a user who never set up gets a new invite; the old one still works", setup: []string{notSetUp, oldInvite}, wantSend: true,
 			wantSubject: inviteSubject, wantResets: 1, wantInvites: 1},
 		// Saved first, so the admin can just send again.

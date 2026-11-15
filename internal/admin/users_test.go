@@ -27,7 +27,6 @@ func TestListShowsEachAccountsStatus(t *testing.T) {
 		wantExpiring bool
 	}{
 		{name: "a password set up", setup: []string{withPassword}, wantStatus: StatusActive},
-		{name: "Google linked", setup: []string{`UPDATE users SET google_sub = 'sub-1' WHERE id = $1`}, wantStatus: StatusActive},
 		{name: "invited", setup: []string{withInvite}, wantStatus: StatusInvited, wantExpiring: true},
 		{name: "invited, link expired", setup: []string{withInvite, `UPDATE auth_tokens SET expires_at = now() - interval '1 day' WHERE user_id = $1`},
 			wantStatus: StatusInvited, wantExpiring: true},

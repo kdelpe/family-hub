@@ -112,7 +112,7 @@ func TestUpdate(t *testing.T) {
 			assert.Equal(t, tt.wantEmail, sent.To)
 			assert.Equal(t, inviteSubject, sent.Subject)
 			require.NotNil(t, got.InviteExpiresAt)
-			assert.Equal(t, "||", credentials(t, pool, id), "the old password and Google link are gone")
+			assert.Equal(t, "|", credentials(t, pool, id), "the old password is gone")
 			_, user, err := auth.NewService(pool, auth.NewHasher()).SetPasswordWithToken(t.Context(), auth.SetPasswordInput{Token: inviteToken(t, sent.Body), Password: testPassword})
 			require.NoError(t, err, "the new address's invite sets a password")
 			assert.Equal(t, tt.wantEmail, user.Email)
@@ -158,7 +158,7 @@ func TestUpdateUnknownUser(t *testing.T) {
 	assert.ErrorIs(t, err, ErrUserNotFound)
 }
 
-// withAccounts adds another enabled admin and a member signed in with a password, Google, a session and a reset link.
+// withAccounts adds another enabled admin and a member with a password, a session and a reset link.
 func withAccounts(t *testing.T) (*pgxpool.Pool, uuid.UUID) {
 	t.Helper()
 	pool := testdb.MigratedPool(t, database.MigrateUp)
@@ -166,7 +166,7 @@ func withAccounts(t *testing.T) (*pgxpool.Pool, uuid.UUID) {
 	require.NoError(t, err)
 	id := insertUser(t, pool, testEmail)
 	for _, sql := range []string{
-		`UPDATE users SET password_hash = 'hash', password_changed_at = now(), google_sub = 'sub-1' WHERE id = $1`,
+		`UPDATE users SET password_hash = 'hash', password_changed_at = now() WHERE id = $1`,
 		`INSERT INTO sessions (id_hash, user_id, expires_at) VALUES (sha256($1::uuid::text::bytea), $1::uuid, now() + interval '1 day')`,
 		`INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at) VALUES ($1::uuid, 'password_reset', sha256($1::uuid::text::bytea), now() + interval '30 minutes')`,
 	} {
@@ -179,7 +179,7 @@ func withAccounts(t *testing.T) (*pgxpool.Pool, uuid.UUID) {
 func accountState(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) string {
 	t.Helper()
 	var state string
-	require.NoError(t, pool.QueryRow(t.Context(), `SELECT concat_ws('|', u.email, u.role, u.disabled_at, u.password_hash, u.google_sub,
+	require.NoError(t, pool.QueryRow(t.Context(), `SELECT concat_ws('|', u.email, u.role, u.disabled_at, u.password_hash,
 		(SELECT count(*) FROM sessions WHERE user_id = u.id), (SELECT count(*) FROM auth_tokens WHERE user_id = u.id))
 		FROM users u WHERE id = $1`, id).Scan(&state))
 	return state
@@ -188,7 +188,7 @@ func accountState(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) string {
 func credentials(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) string {
 	t.Helper()
 	var creds string
-	require.NoError(t, pool.QueryRow(t.Context(), `SELECT concat(password_hash, '|', password_changed_at, '|', google_sub) FROM users WHERE id = $1`, id).Scan(&creds))
+	require.NoError(t, pool.QueryRow(t.Context(), `SELECT concat(password_hash, '|', password_changed_at) FROM users WHERE id = $1`, id).Scan(&creds))
 	return creds
 }
 

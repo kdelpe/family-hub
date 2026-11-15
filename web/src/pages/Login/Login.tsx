@@ -1,36 +1,18 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { type FormEvent, useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
+import { useMutation } from '@tanstack/react-query'
+import { type FormEvent, useState } from 'react'
+import { Link, useNavigate } from 'react-router'
 
-import { googleStartPath, login, providersQuery } from '../../api/auth'
+import { login } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { PasswordInput } from '../../components/PasswordInput/PasswordInput'
 import { errorMessage } from '../../lib/errorMessage'
 import page from '../../styles/signInForm.module.css'
 import styles from './Login.module.css'
 
-// Not "try again": the account may be refused for good (not invited), which a retry can't fix.
-const googleFailedMessage =
-  'Signing in with Google didn’t work. Sign in with your email and password, or request access if you’re new here.'
-const googleOffMessage = 'Signing in with Google isn’t available. Sign in with your email and password.'
-
 export function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [searchParams, setSearchParams] = useSearchParams()
-  // Read once, then dropped from the address, so a reload doesn't show it again.
-  const [googleFailed, setGoogleFailed] = useState(searchParams.get('google') === 'unavailable')
   const navigate = useNavigate()
-
-  useEffect(() => {
-    if (searchParams.has('google')) {
-      const rest = new URLSearchParams(searchParams)
-      rest.delete('google')
-      setSearchParams(rest, { replace: true })
-    }
-  }, [searchParams, setSearchParams])
-
-  const { data: available, isPending: providersPending } = useQuery(providersQuery)
   const signIn = useMutation({
     mutationFn: () => login(email, password),
     onSuccess: () => void navigate('/', { replace: true }),
@@ -38,7 +20,6 @@ export function Login() {
 
   // Only a shown error: resetting a pending sign-in would detach it, re-enabling the button and losing its answer.
   const clearError = () => {
-    setGoogleFailed(false)
     if (signIn.isError) {
       signIn.reset()
     }
@@ -50,11 +31,10 @@ export function Login() {
     if (signIn.isPending) {
       return
     }
-    setGoogleFailed(false)
     signIn.mutate()
   }
 
-  const error = alertMessage(signIn.error, googleFailed, providersPending, available?.google)
+  const error = signIn.error ? loginErrorMessage(signIn.error) : null
 
   return (
     <>
@@ -123,42 +103,11 @@ export function Login() {
             </Link>
           </span>
 
-          {/* Holds Google's place until the answer comes, so the centered form doesn't jump. */}
-          {/* Shown too if the check failed: the link then either works or comes back here with a message. */}
-          {available?.google !== false && (
-            <div className={providersPending ? `${styles.google} ${styles.reserved}` : styles.google}>
-              <div aria-hidden="true" className={page.divider}>
-                <span className={page.rule} />
-                or
-                <span className={page.rule} />
-              </div>
-              <a href={googleStartPath} className={`pill ${page.secondary} ${page.googleButton}`}>
-                Continue with Google
-              </a>
-            </div>
-          )}
-
           <span className={styles.note}>Already invited? Use the link in your invitation email.</span>
         </form>
       </main>
     </>
   )
-}
-
-function alertMessage(
-  signInError: Error | null,
-  googleFailed: boolean,
-  providersPending: boolean,
-  googleConfigured: boolean | undefined,
-): string | null {
-  if (signInError) {
-    return loginErrorMessage(signInError)
-  }
-  // Waits for providers, so the alert isn't announced once and then corrected.
-  if (!googleFailed || providersPending) {
-    return null
-  }
-  return googleConfigured === false ? googleOffMessage : googleFailedMessage
 }
 
 function loginErrorMessage(error: Error): string {

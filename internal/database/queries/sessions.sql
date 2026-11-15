@@ -30,23 +30,6 @@ SELECT EXISTS (SELECT 1 FROM sessions WHERE id_hash = @id_hash AND user_id = @us
 SELECT EXISTS (SELECT 1 FROM sessions WHERE id_hash = @id_hash AND user_id = @user_id
   AND expires_at > clock_timestamp() AND last_seen_at > clock_timestamp() - @idle_timeout::interval FOR UPDATE);
 
--- name: CreateOAuthFlow :exec
-INSERT INTO oauth_flows (handle_hash, state, nonce, pkce_verifier, expires_at)
-VALUES (@handle_hash, @state, @nonce, @pkce_verifier, now() + @lifetime::interval);
-
--- name: ConsumeOAuthFlow :one
-UPDATE oauth_flows SET consumed_at = clock_timestamp()
-WHERE handle_hash = @handle_hash AND consumed_at IS NULL AND expires_at > clock_timestamp()
-RETURNING state, nonce, pkce_verifier;
-
--- name: DeleteStaleOAuthFlows :execrows
-WITH doomed AS (
-  SELECT handle_hash FROM oauth_flows
-  WHERE consumed_at IS NOT NULL OR expires_at <= clock_timestamp()
-  ORDER BY expires_at LIMIT @batch_size FOR UPDATE SKIP LOCKED
-)
-DELETE FROM oauth_flows f USING doomed WHERE f.handle_hash = doomed.handle_hash;
-
 -- name: DeleteExpiredSessions :execrows
 WITH doomed AS (
   SELECT id_hash FROM sessions WHERE expires_at <= clock_timestamp()

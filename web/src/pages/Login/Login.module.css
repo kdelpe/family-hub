@@ -28,18 +28,8 @@
   font-weight: 600;
 }
 
-.google {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
 .note {
   align-self: center;
   font-size: 14px;
   color: var(--muted);
-}
-
-.reserved {
-  visibility: hidden;
 }

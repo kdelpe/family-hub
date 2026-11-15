@@ -4,6 +4,8 @@ The agreed look and behaviour for the Pluviose-Monestime Family Hub frontend (Ph
 
 All names, dates, stories, phone numbers and addresses in the mockups are **made up** sample data.
 
+**Continue with Google is dropped** (owner's decision, November 2026): leave out every Google button, divider and line of Google copy the mockups still show (Sign in, Welcome, Forgot password, the invite email in Members & invites, the sign-in line in My profile).
+
 ## Scope for the MVP
 
 `docs/architecture-v3.md` §16 defers a few things this design shows. Until each one lands, build the page as drawn without it:
@@ -124,7 +126,6 @@ All five pages share a two-column layout: **left brand panel** (`--brand-panel`)
 - Heading **"Lakay se lakay"** (`lang="ht"`), subline *"There's no place like home."*
 - Email; Password with **Show / Hide**; "Forgot password?" link beside the password label.
 - **Sign in** (primary), then centered: *"First time here? **Request access**"*.
-- "or" divider · **Continue with Google** (hidden when Google isn't configured).
 - Small centered line: *"Already invited? Use the link in your invitation email."*
 - No separate "New here?" box: the line under Sign in is the only Request access entry point.
 - Never say "Welcome back" (we don't know who's visiting). Optional later: "Welcome back" only if this device has signed in before (a localStorage flag, no name stored).
@@ -140,7 +141,6 @@ All five pages share a two-column layout: **left brand panel** (`--brand-panel`)
 ### 3.3 Welcome (from the invitation email)
 - Banner with the inviter's avatar: *"**Nadège Pluviose** invited you to the family hub."* (Shows who the invitation is **from**, §5.3.)
 - *"Welcome to the family, Darline"*; *"Choose a password to finish setting up your account for <email>."*
-- **Continue with Google instead** (only for Gmail invitees: a Workspace address can't be recognised before sign-in, so those invitees use Continue with Google on the sign-in page) · "or choose a password" divider.
 - New password with Show/Hide (shown by default here) and a 4-segment strength bar + label. No rules text up front; if the password is refused, show one plain-language error under the field (e.g. *"Use at least 8 characters"*, *"That password is too common — try a short phrase"*), linked with `aria-describedby`.
 - **Set password and continue** → First-time setup.
 - Small print: *"This link works for 7 days. Not Darline? Go to sign in."* (The "administrators can see everything" notice lives in the invitation email, First-time setup step 2 and My profile, not here.)
@@ -151,7 +151,7 @@ All five pages share a two-column layout: **left brand panel** (`--brand-panel`)
 3. *"Here's your place in the family"*: grandparents → parents → **You** highlighted; *"Something look wrong? Let an admin know and they'll fix it."* → **Go to my home page**.
 
 ### 3.5 Forgot password (side path from Sign in)
-- *"Forgot your password?"* + email + **Send me a reset link** → *"Check your email. If that email is on our family list, a reset link is on its way. It works for 30 minutes."* + spam/ask-an-admin hint. Google-only users can use it to add a password.
+- *"Forgot your password?"* + email + **Send me a reset link** → *"Check your email. If that email is on our family list, a reset link is on its way. It works for 30 minutes."* + spam/ask-an-admin hint.
 
 ---
 
@@ -234,7 +234,7 @@ A five-step guide with a clickable step bar (Storyteller · Recording · Details
 Finish screen: *"Your story is on its way"* with steps ✓ Recording uploaded · … Preparing the video · … Making captions; **Back to Stories** / **Add another story**. The story shows as "Processing…" in the Stories list until ready.
 
 ### 4.8 My profile
-Photo + story editor · birthday shown with *"only you and admins see the year"* · contact rows (phone, email, address, WhatsApp, Instagram, Facebook, others) with switches: **Only me / Visible to family** for email and social accounts, **Only me / Family can ask** for phone, WhatsApp and address; a **"Requests for your details"** card at the top of the side column (*"Darline Monestime asked for your phone number." — Share / Not now*; sharing reveals it to that one person; declining is silent), and under it **Shared with**: one line per person you shared with (*"Darline Monestime · phone number"*) and a **Stop sharing** button that revokes it; add button reads *"+ Add a phone, email, address or social account"* · one quiet line under the contact list: *"Admins can see all information you enter."* · Sign-in (password set / Google linked, Change password, Sign out) · **"Know someone who should be here? Suggest a relative"** · **See me in the tree**.
+Photo + story editor · birthday shown with *"only you and admins see the year"* · contact rows (phone, email, address, WhatsApp, Instagram, Facebook, others) with switches: **Only me / Visible to family** for email and social accounts, **Only me / Family can ask** for phone, WhatsApp and address; a **"Requests for your details"** card at the top of the side column (*"Darline Monestime asked for your phone number." — Share / Not now*; sharing reveals it to that one person; declining is silent), and under it **Shared with**: one line per person you shared with (*"Darline Monestime · phone number"*) and a **Stop sharing** button that revokes it; add button reads *"+ Add a phone, email, address or social account"* · one quiet line under the contact list: *"Admins can see all information you enter."* · Sign-in (Change password, Sign out) · **"Know someone who should be here? Suggest a relative"** · **See me in the tree**.
 
 ### 4.9 Full profile (from "Open full profile" / "View profile")
 Back to the tree · portrait, relation, name, maiden name, birthday, place, story · **Center the tree on Nadège** and a dashed **Request phone number** button (never the number itself, unless she has shared it with you) · family grouped as Parents / Married to / Children / Step-children / Grandchildren · photos · moments (events + stories).
@@ -243,7 +243,7 @@ Back to the tree · portrait, relation, name, maiden name, birthday, place, stor
 Tabs: **Requests (n)** · **Invite someone** · **Everyone (n)**.
 - **Requests:** name + email, side chip, source chip ("Asked on the sign-in page" / "Suggested by Stanley Jean-Louis"), **Related to** lines with a badge **✓ In the tree** or **Not found — check spelling**, their note, when. **Approve & invite** → Invite tab with that person preselected. **Not now** → quietly set aside (they're never told), with Undo for 90 days (declined requests are deleted after that).
 - **Invite someone:** 1) pick the person **in the tree first** ("Not in the tree yet? Add them first") · 2) email + role (Member / Admin, each with a one-line description) · 3) **Who is the invitation from?** (defaults to the member who suggested them, otherwise you; other admins selectable) · 4) live email preview. **Send invitation** → *"Invitation sent to Kervens, from Stanley Jean-Louis."*
-- **Email copy:** subject *"<From first name> invited you to the family hub"*; body *"Bonjou Kervens, <From full name> invited you to the Pluviose-Monestime Family Hub — a private place for our family's tree, photos and stories."*; if the sender isn't the admin who approved it, add *"Approved by <admin>, admin."*; button **Set up my account**; small print about Google, 7 days, admins seeing everything.
+- **Email copy:** subject *"<From first name> invited you to the family hub"*; body *"Bonjou Kervens, <From full name> invited you to the Pluviose-Monestime Family Hub — a private place for our family's tree, photos and stories."*; if the sender isn't the admin who approved it, add *"Approved by <admin>, admin."*; button **Set up my account**; small print about the 7 days and admins seeing everything.
 - **Everyone:** table (scrolls sideways on small screens): name, sign-in email (admins only), role, status (Active · Invited · expires in N days · Invited · expired · Disabled), and one action (**Send password reset** / **Resend invitation**).
 
 Wording rule everywhere: say **"admin"**, not "family admin".

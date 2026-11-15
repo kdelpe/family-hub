@@ -26,7 +26,6 @@ func TestAuthSchemaConstraints(t *testing.T) {
 		{name: "a role is admin or member", sql: `INSERT INTO users (email, role) VALUES ('new@example.com', 'owner')`, wantCode: checkViolation},
 		{name: "a password hash needs its change time", sql: `INSERT INTO users (email, password_hash) VALUES ('new@example.com', 'x')`, wantCode: checkViolation},
 		{name: "a change time needs a password hash", sql: `INSERT INTO users (email, password_changed_at) VALUES ('new@example.com', now())`, wantCode: checkViolation},
-		{name: "a Google account links to one login", sql: `INSERT INTO users (email, google_sub) VALUES ('new@example.com', 'sub-1')`, wantCode: UniqueViolation},
 		{name: "a token purpose is invite or password_reset", sql: `INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at)
 			SELECT id, 'login', '\x02', now() FROM users`, wantCode: checkViolation},
 		{name: "a token hash is used once", sql: `INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at)
@@ -64,13 +63,13 @@ func TestDeletingAUserDeletesTheirTokensAndSessions(t *testing.T) {
 	}
 }
 
-// Holds test@example.com (Google sub-1), a token (hash \x01) and a session; the cases above collide with them.
+// Holds test@example.com, a token (hash \x01) and a session; the cases above collide with them.
 func authSchema(t *testing.T) testSchema {
 	t.Helper()
 	db := newTestSchema(t)
 	require.NoError(t, MigrateUp(t.Context(), db.url))
 	db.exec(t, `
-		INSERT INTO users (email, google_sub) VALUES ('test@example.com', 'sub-1');
+		INSERT INTO users (email) VALUES ('test@example.com');
 		INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at)
 			SELECT id, 'invite', '\x01', now() + interval '7 days' FROM users;
 		INSERT INTO sessions (id_hash, user_id, expires_at)

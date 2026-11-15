@@ -23,7 +23,7 @@ func TestChangePassword(t *testing.T) {
 	}{
 		{name: "changed", current: testPassword, newPassword: newPassword},
 		{name: "wrong current password", current: "not the password", newPassword: newPassword, wantErr: ErrInvalidCredentials},
-		{name: "no password yet (Google only)", setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL, google_sub = 'sub-1'`,
+		{name: "no password yet", setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`,
 			current: testPassword, newPassword: newPassword, wantErr: ErrInvalidCredentials},
 		{name: "new password too short", current: testPassword, newPassword: "short", wantErr: ErrPasswordTooShort},
 		{name: "new password is the email", current: testPassword, newPassword: testEmail, wantErr: ErrPasswordTooCommon},
