@@ -5,7 +5,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { authKeys, googleStartPath, login, providers } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { errorMessage } from '../../lib/errorMessage'
-import page from '../../components/SignInLayout/SignInForm.module.css'
+import page from '../../components/SignInForm/SignInForm.module.css'
 import styles from './Login.module.css'
 
 // Not "try again": the account may be refused for good (not invited), which a retry can't fix.
@@ -54,6 +54,10 @@ export function Login() {
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    // The button is aria-disabled, not disabled, so it keeps keyboard focus while signing in.
+    if (signIn.isPending) {
+      return
+    }
     setGoogleFailed(false)
     signIn.mutate()
   }
@@ -128,7 +132,7 @@ export function Login() {
             </p>
           )}
 
-          <button type="submit" disabled={signIn.isPending} className={`pill ${page.primary}`}>
+          <button type="submit" aria-disabled={signIn.isPending} className={`pill ${page.primary}`}>
             {signIn.isPending ? 'Signing in…' : 'Sign in'}
           </button>
           <span className={styles.requestAccess}>

@@ -38,7 +38,7 @@ describe('ForgotPassword', () => {
     send()
 
     expect(await screen.findByRole('heading', { name: 'Check your email' })).toHaveFocus()
-    expect(screen.getByRole('status')).toHaveTextContent('It works for 30 minutes.')
+    expect(screen.getByText(/It works for 30 minutes\./)).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith('/api/auth/password/forgot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -53,6 +53,12 @@ describe('ForgotPassword', () => {
       answer: Response.json({ error: { code: 'rate_limited', message: 'x' } }, { status: 429, headers: { 'Retry-After': '3600' } }),
       want: 'Too many tries. Wait 60 minutes and try again.',
     },
+    {
+      name: 'busy',
+      answer: Response.json({ error: { code: 'busy', message: 'x' } }, { status: 503 }),
+      want: 'The family hub is busy right now.',
+    },
+    { name: 'a server failure', answer: new Response(null, { status: 500 }), want: 'Something went wrong.' },
     { name: 'no answer', answer: 'network error' as const, want: 'Can’t reach the family hub.' },
   ])('explains a failure: $name', async ({ answer, want }) => {
     renderPage(answer)
@@ -60,6 +66,6 @@ describe('ForgotPassword', () => {
     send()
 
     expect(await screen.findByRole('alert')).toHaveTextContent(want)
-    expect(screen.getByRole('button', { name: 'Send me a reset link' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Send me a reset link' })).not.toHaveAttribute('aria-disabled', 'true')
   })
 })

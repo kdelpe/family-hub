@@ -78,7 +78,7 @@
   cursor: pointer;
 }
 
-.primary:disabled {
+.primary[aria-disabled='true'] {
   cursor: progress;
 }
 

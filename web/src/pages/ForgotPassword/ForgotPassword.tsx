@@ -4,7 +4,7 @@ import { Link } from 'react-router'
 
 import { forgotPassword } from '../../api/auth'
 import { errorMessage } from '../../lib/errorMessage'
-import page from '../../components/SignInLayout/SignInForm.module.css'
+import page from '../../components/SignInForm/SignInForm.module.css'
 import styles from './ForgotPassword.module.css'
 
 export function ForgotPassword() {
@@ -12,7 +12,8 @@ export function ForgotPassword() {
   const send = useMutation({ mutationFn: () => forgotPassword(email) })
   const sentHeading = useRef<HTMLHeadingElement>(null)
 
-  // The focused button goes away with the form; the heading takes focus, so keyboard and screen-reader users land on the result.
+  // aria-disabled, not disabled, keeps the button focused while sending. The form then goes away,
+  // so the heading takes focus: keyboard and screen-reader users land on the result.
   useEffect(() => {
     if (send.isSuccess) {
       sentHeading.current?.focus()
@@ -21,7 +22,9 @@ export function ForgotPassword() {
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    send.mutate()
+    if (!send.isPending) {
+      send.mutate()
+    }
   }
 
   return (
@@ -33,7 +36,7 @@ export function ForgotPassword() {
             <span aria-hidden="true">← </span>Back to sign in
           </Link>
           {send.isSuccess ? (
-            <div role="status" className={styles.sent}>
+            <div className={styles.sent}>
               <div className={styles.envelope}>
                 <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24">
                   <path d="M3 6 H21 V18 H3 Z M3 6 L12 13 L21 6" className={styles.envelopeLine} strokeWidth="2" />
@@ -67,6 +70,8 @@ export function ForgotPassword() {
                   type="email"
                   autoComplete="email"
                   required
+                  // Locked while sending, so a corrected typo can't be silently left unsent.
+                  readOnly={send.isPending}
                   value={email}
                   onChange={(event) => {
                     setEmail(event.target.value)
@@ -82,7 +87,7 @@ export function ForgotPassword() {
                   {errorMessage(send.error)}
                 </p>
               )}
-              <button type="submit" disabled={send.isPending} className={`pill ${page.primary}`}>
+              <button type="submit" aria-disabled={send.isPending} className={`pill ${page.primary}`}>
                 {send.isPending ? 'Sending…' : 'Send me a reset link'}
               </button>
               <span className={styles.hint}>
