@@ -28,7 +28,7 @@ func TestResetsRequest(t *testing.T) {
 	}{
 		{name: "an enabled user gets a link", email: testEmail, wantSend: true},
 		{name: "the email is normalized", email: "  TEST@Example.com ", wantSend: true},
-		{name: "a user without a password can add one", email: testEmail, setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL, google_sub = 'sub-1'`, wantSend: true},
+		{name: "a user without a password can add one", email: testEmail, setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`, wantSend: true},
 		{name: "unknown email", email: "nobody@example.com"},
 		{name: "disabled user", email: testEmail, setup: `UPDATE users SET disabled_at = now()`},
 		{name: "not an email", email: "Test <test@example.com>"},

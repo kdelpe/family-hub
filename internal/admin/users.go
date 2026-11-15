@@ -74,7 +74,7 @@ type Account struct {
 	ID    uuid.UUID
 	Email string
 	Role  string
-	// Active once a password is set or Google linked; invited until then.
+	// Active once a password is set; invited until then.
 	Status string
 	// Only for an invited user: when the latest invite link expires, if there is one.
 	InviteExpiresAt *time.Time

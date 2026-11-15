@@ -40,9 +40,6 @@ func (c *Cleanup) Run(ctx context.Context) {
 }
 
 func (c *Cleanup) prune(ctx context.Context) error {
-	if _, err := c.q.DeleteStaleOAuthFlows(ctx, int32(authCleanupBatch)); err != nil {
-		return fmt.Errorf("delete OAuth flows: %w", err)
-	}
 	if _, err := c.q.DeleteOldExpiredTokens(ctx, int32(authCleanupBatch)); err != nil {
 		return fmt.Errorf("delete expired auth tokens: %w", err)
 	}

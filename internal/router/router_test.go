@@ -36,9 +36,6 @@ func TestRoutes(t *testing.T) {
 		{name: "login reaches its handler", method: http.MethodPost, path: "/api/auth/login", wantStatus: http.StatusUnsupportedMediaType, wantType: "application/json"},
 		{name: "forgot password reaches its handler", method: http.MethodPost, path: "/api/auth/password/forgot", wantStatus: http.StatusUnsupportedMediaType, wantType: "application/json"},
 		{name: "invite preview reaches its handler", method: http.MethodPost, path: "/api/auth/invite/preview", wantStatus: http.StatusUnsupportedMediaType, wantType: "application/json"},
-		{name: "providers needs no session", method: http.MethodGet, path: "/api/auth/providers", wantStatus: http.StatusOK, wantType: "application/json"},
-		{name: "Google sign-in is disabled without configuration", method: http.MethodGet, path: "/api/auth/google/start", wantStatus: http.StatusSeeOther},
-		{name: "Google callback is disabled without configuration", method: http.MethodGet, path: "/api/auth/google/callback", wantStatus: http.StatusSeeOther},
 		{name: "password reset reaches its handler", method: http.MethodPost, path: "/api/auth/password/reset", wantStatus: http.StatusUnsupportedMediaType, wantType: "application/json"},
 		{name: "wrong method on an /api route is a JSON 405", method: http.MethodGet, path: "/api/auth/login", wantStatus: http.StatusMethodNotAllowed, wantType: "application/json"},
 		{name: "me needs a session", method: http.MethodGet, path: "/api/auth/me", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
@@ -121,20 +118,6 @@ func TestSignInRoutesAreRateLimitedPerClientIP(t *testing.T) {
 	}
 }
 
-func TestGoogleRoutesSharePerIPRateLimit(t *testing.T) {
-	routes := newRoutes(t, 1, false)
-	for i, path := range []string{"/api/auth/google/start", "/api/auth/google/callback"} {
-		req := httptest.NewRequest(http.MethodGet, path, nil)
-		rec := httptest.NewRecorder()
-		routes.ServeHTTP(rec, req)
-		if i == 0 {
-			assert.Equal(t, http.StatusSeeOther, rec.Code)
-		} else {
-			assert.Equal(t, http.StatusTooManyRequests, rec.Code)
-		}
-	}
-}
-
 func newRoutes(t *testing.T, perHour int, trustedProxy bool) http.Handler {
 	t.Helper()
 	cookie := handler.NewSessionCookie(true)
@@ -151,7 +134,6 @@ func newRoutes(t *testing.T, perHour int, trustedProxy bool) http.Handler {
 			LimitForgot:    httpx.LimitByIP(ratelimit.New(perHour, time.Hour)),
 			LimitReset:     httpx.LimitByIP(ratelimit.New(perHour, time.Hour)),
 			LimitPreview:   httpx.LimitByIP(ratelimit.New(perHour, time.Hour)),
-			LimitGoogle:    httpx.LimitByIP(ratelimit.New(perHour, time.Hour)),
 			TrustedProxy:   trustedProxy,
 		},
 	)

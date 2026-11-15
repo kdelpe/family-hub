@@ -304,9 +304,6 @@ func TestPreviewLink(t *testing.T) {
 	}{
 		{name: "invite", purpose: purposeInvite, want: LinkPreview{Purpose: purposeInvite, Email: testEmail}},
 		{name: "password reset", purpose: purposePasswordReset, want: LinkPreview{Purpose: purposePasswordReset, Email: testEmail}},
-		{name: "a Gmail address can use Google", purpose: purposeInvite, email: "test@gmail.com", want: LinkPreview{Purpose: purposeInvite, Email: "test@gmail.com", GoogleEligible: true}},
-		{name: "a Googlemail address can't", purpose: purposeInvite, email: "test@googlemail.com", want: LinkPreview{Purpose: purposeInvite, Email: "test@googlemail.com"}},
-		{name: "a look-alike domain can't", purpose: purposeInvite, email: "test@notgmail.com", want: LinkPreview{Purpose: purposeInvite, Email: "test@notgmail.com"}},
 		{name: "malformed token", purpose: purposeInvite, token: func(string) string { return "not-a-token" }, wantErr: ErrInvalidToken},
 		{name: "unknown token", purpose: purposeInvite, token: func(string) string { return "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }, wantErr: ErrInvalidToken},
 		{name: "expired", purpose: purposeInvite, setup: `UPDATE auth_tokens SET expires_at = now() - interval '1 second'`, wantErr: ErrInvalidToken},

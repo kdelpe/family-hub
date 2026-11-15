@@ -20,16 +20,6 @@ type AuthToken struct {
 	CreatedAt  time.Time
 }
 
-type OauthFlow struct {
-	HandleHash   []byte
-	State        string
-	Nonce        string
-	PkceVerifier string
-	ExpiresAt    time.Time
-	ConsumedAt   *time.Time
-	CreatedAt    time.Time
-}
-
 type Session struct {
 	IDHash     []byte
 	UserID     uuid.UUID
@@ -45,7 +35,6 @@ type User struct {
 	Role              string
 	PasswordHash      *string
 	PasswordChangedAt *time.Time
-	GoogleSub         *string
 	DisabledAt        *time.Time
 	LastLoginAt       *time.Time
 	CreatedAt         time.Time

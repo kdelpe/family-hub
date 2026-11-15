@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,8 +18,6 @@ const (
 	SetPasswordPath      = "/auth/set-password#t="
 	purposeInvite        = "invite"
 	purposePasswordReset = "password_reset"
-	// Google owns this domain outright; a Workspace domain needs the ID token's hd claim (§5).
-	gmailDomain = "@gmail.com"
 )
 
 var ErrInvalidToken = errors.New("link is invalid, used or expired")
@@ -52,9 +49,8 @@ func createToken(ctx context.Context, db gen.DBTX, userID uuid.UUID, purpose str
 }
 
 type LinkPreview struct {
-	Purpose        string
-	Email          string
-	GoogleEligible bool
+	Purpose string
+	Email   string
 }
 
 // PreviewLink says what an invite or reset link is for, without using it.
@@ -63,7 +59,7 @@ func (s *Service) PreviewLink(ctx context.Context, token string) (LinkPreview, e
 	if err != nil {
 		return LinkPreview{}, err
 	}
-	return LinkPreview{Purpose: found.Purpose, Email: found.Email, GoogleEligible: strings.HasSuffix(found.Email, gmailDomain)}, nil
+	return LinkPreview{Purpose: found.Purpose, Email: found.Email}, nil
 }
 
 // usableToken finds a link that works now; using it re-checks under the user's row lock.

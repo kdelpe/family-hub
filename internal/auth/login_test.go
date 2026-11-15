@@ -35,7 +35,7 @@ func TestLogin(t *testing.T) {
 		{name: "email in another case with spaces", email: "  Test@Example.COM ", password: testPassword, wantOK: true},
 		{name: "wrong password", email: testEmail, password: "wrong horse battery"},
 		{name: "unknown email", email: "other@example.com", password: testPassword},
-		{name: "no password (Google only)", setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`, email: testEmail, password: testPassword},
+		{name: "no password yet", setup: `UPDATE users SET password_hash = NULL, password_changed_at = NULL`, email: testEmail, password: testPassword},
 		{name: "disabled", setup: `UPDATE users SET disabled_at = now()`, email: testEmail, password: testPassword},
 		{name: "email longer than any real address", email: strings.Repeat("a", 250) + "@example.com", password: testPassword},
 		{name: "email with a NUL byte", email: "test@example.com\x00", password: testPassword},

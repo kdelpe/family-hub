@@ -243,10 +243,10 @@ func TestPreviewLink(t *testing.T) {
 		wantStatus  int
 		wantBody    string
 	}{
-		{name: "invite", body: `{"token":"tok"}`, wantPreview: true, preview: auth.LinkPreview{Purpose: "invite", Email: "test@gmail.com", GoogleEligible: true}, wantStatus: http.StatusOK,
-			wantBody: `{"purpose":"invite","invitee_email":"test@gmail.com","invitee_first_name":null,"from_name":null,"google_eligible":true}`},
+		{name: "invite", body: `{"token":"tok"}`, wantPreview: true, preview: auth.LinkPreview{Purpose: "invite", Email: "test@example.com"}, wantStatus: http.StatusOK,
+			wantBody: `{"purpose":"invite","invitee_email":"test@example.com","invitee_first_name":null,"from_name":null}`},
 		{name: "password reset", body: `{"token":"tok"}`, wantPreview: true, preview: auth.LinkPreview{Purpose: "password_reset", Email: "test@example.com"}, wantStatus: http.StatusOK,
-			wantBody: `{"purpose":"password_reset","invitee_email":"test@example.com","invitee_first_name":null,"from_name":null,"google_eligible":false}`},
+			wantBody: `{"purpose":"password_reset","invitee_email":"test@example.com","invitee_first_name":null,"from_name":null}`},
 		{name: "invalid token", body: `{"token":"tok"}`, wantPreview: true, previewErr: auth.ErrInvalidToken, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"invalid_token","message":"this link is invalid, used or expired; ask for a new one"}}`},
 		{name: "database error", body: `{"token":"tok"}`, wantPreview: true, previewErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},

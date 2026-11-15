@@ -2,22 +2,8 @@
 SELECT id, password_hash, password_changed_at, disabled_at FROM users WHERE email = @email;
 
 -- name: LockUser :one
-SELECT email, role, password_changed_at, disabled_at, google_sub,
-  (password_hash IS NOT NULL OR google_sub IS NOT NULL)::boolean AS set_up
+SELECT email, role, password_changed_at, disabled_at, (password_hash IS NOT NULL)::boolean AS set_up
 FROM users WHERE id = @id FOR UPDATE;
-
--- name: GetGoogleUserBySub :one
-SELECT id FROM users WHERE google_sub = @google_sub;
-
--- name: GetInvitedGoogleUser :one
-SELECT id FROM users WHERE email = @email AND disabled_at IS NULL
-	AND password_hash IS NULL AND google_sub IS NULL;
-
--- name: LinkGoogleAndRecordLogin :exec
-UPDATE users SET google_sub = @google_sub, last_login_at = clock_timestamp() WHERE id = @id;
-
--- name: RecordGoogleLogin :exec
-UPDATE users SET last_login_at = clock_timestamp() WHERE id = @id;
 
 -- name: RecordLogin :exec
 UPDATE users
@@ -51,7 +37,7 @@ UPDATE users SET password_hash = @password_hash::text, password_changed_at = clo
 
 -- name: ListUsers :many
 SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
-  (u.password_hash IS NOT NULL OR u.google_sub IS NOT NULL)::boolean AS set_up,
+  (u.password_hash IS NOT NULL)::boolean AS set_up,
   -- sqlc can't type a nullable max(), so has_invite says whether invite_expires_at is real.
   (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
 FROM users u
@@ -63,7 +49,7 @@ LIMIT @page_size;
 
 -- name: GetAccount :one
 SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
-  (u.password_hash IS NOT NULL OR u.google_sub IS NOT NULL)::boolean AS set_up,
+  (u.password_hash IS NOT NULL)::boolean AS set_up,
   (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
 FROM users u
 LEFT JOIN auth_tokens t ON t.user_id = u.id AND t.purpose = 'invite' AND t.consumed_at IS NULL
@@ -73,13 +59,13 @@ GROUP BY u.id;
 -- Only admins who can sign in: an invited admin who never set up can't manage anyone.
 -- name: CountUsableAdmins :one
 SELECT count(*) FROM users
-WHERE role = 'admin' AND disabled_at IS NULL AND (password_hash IS NOT NULL OR google_sub IS NOT NULL);
+WHERE role = 'admin' AND disabled_at IS NULL AND password_hash IS NOT NULL;
 
 -- name: SetRoleAndDisabled :exec
 UPDATE users
 SET role = @role, disabled_at = CASE WHEN @disabled::boolean THEN coalesce(disabled_at, clock_timestamp()) END
 WHERE id = @id;
 
--- The old address's password and Google link mustn't carry over to whoever owns the new one (§5).
+-- The old address's password mustn't carry over to whoever owns the new one (§5).
 -- name: ChangeEmail :exec
-UPDATE users SET email = @email, password_hash = NULL, password_changed_at = NULL, google_sub = NULL WHERE id = @id;
+UPDATE users SET email = @email, password_hash = NULL, password_changed_at = NULL WHERE id = @id;

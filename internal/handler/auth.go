@@ -6,14 +6,10 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/httpx"
 )
-
-// The web app's sign-in page, which explains the failure.
-const googleUnavailablePath = "/auth/login?google=unavailable"
 
 type AuthService interface {
 	Login(ctx context.Context, in auth.LoginInput) (string, auth.User, error)
@@ -28,96 +24,14 @@ type ResetRequester interface {
 	Request(ctx context.Context, email string)
 }
 
-type GoogleAuthService interface {
-	Start(ctx context.Context) (string, string, error)
-	Complete(ctx context.Context, in auth.GoogleCallbackInput) (string, auth.User, error)
-}
-
 type Auth struct {
-	svc          AuthService
-	resets       ResetRequester
-	cookie       SessionCookie
-	google       GoogleAuthService
-	googleCookie googleFlowCookie
+	svc    AuthService
+	resets ResetRequester
+	cookie SessionCookie
 }
 
-func NewAuth(svc AuthService, resets ResetRequester, cookie SessionCookie, google ...GoogleAuthService) *Auth {
-	a := &Auth{svc: svc, resets: resets, cookie: cookie, googleCookie: newGoogleFlowCookie(cookie.secure)}
-	if len(google) > 0 {
-		a.google = google[0]
-	}
-	return a
-}
-
-type providersResponse struct {
-	Google bool `json:"google"`
-}
-
-// Providers tells the sign-in page which ways to sign in exist, so it can hide Continue with Google.
-func (a *Auth) Providers(w http.ResponseWriter, _ *http.Request) {
-	httpx.JSON(w, http.StatusOK, providersResponse{Google: a.google != nil})
-}
-
-func (a *Auth) GoogleStart(w http.ResponseWriter, r *http.Request) {
-	if a.google == nil {
-		googleRefused(w, r)
-		return
-	}
-	handle, destination, err := a.google.Start(r.Context())
-	if err != nil {
-		googleFault(w, r, err, "start Google sign-in")
-		return
-	}
-	a.googleCookie.set(w, handle)
-	http.Redirect(w, r, destination, http.StatusFound)
-}
-
-func (a *Auth) GoogleCallback(w http.ResponseWriter, r *http.Request) {
-	a.googleCookie.clear(w)
-	if a.google == nil {
-		googleRefused(w, r)
-		return
-	}
-	handle, err := r.Cookie("fh_oauth")
-	if err != nil {
-		googleRefused(w, r)
-		return
-	}
-	code := r.URL.Query().Get("code")
-	if r.URL.Query().Get("error") != "" {
-		code = ""
-	}
-	token, _, err := a.google.Complete(r.Context(), auth.GoogleCallbackInput{
-		Handle: handle.Value, State: r.URL.Query().Get("state"), Code: code,
-		UserAgent: r.UserAgent(), ReplacesToken: a.cookieToken(r),
-	})
-	if errors.Is(err, auth.ErrGoogleAccess) {
-		googleRefused(w, r)
-		return
-	}
-	if err != nil {
-		googleFault(w, r, err, "complete Google sign-in")
-		return
-	}
-	a.cookie.set(w, token)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-// googleRefused sends the browser back to the sign-in page, which explains, rather than to an error
-// body: the Google routes are full-page navigations.
-func googleRefused(w http.ResponseWriter, r *http.Request) {
-	if clientGone(r) {
-		return
-	}
-	http.Redirect(w, r, googleUnavailablePath, http.StatusSeeOther)
-}
-
-// googleFault logs a real failure (anything but the client's own cancel), then refuses.
-func googleFault(w http.ResponseWriter, r *http.Request, err error, msg string) {
-	if !clientGone(r) || !errors.Is(err, context.Canceled) {
-		zerolog.Ctx(r.Context()).Error().Err(err).Msg(msg)
-	}
-	googleRefused(w, r)
+func NewAuth(svc AuthService, resets ResetRequester, cookie SessionCookie) *Auth {
+	return &Auth{svc: svc, resets: resets, cookie: cookie}
 }
 
 type loginRequest struct {
@@ -149,7 +63,6 @@ type previewResponse struct {
 	InviteeEmail     string  `json:"invitee_email"`
 	InviteeFirstName *string `json:"invitee_first_name"`
 	FromName         *string `json:"from_name"`
-	GoogleEligible   bool    `json:"google_eligible"`
 }
 
 type userResponse struct {
@@ -229,7 +142,7 @@ func (a *Auth) PreviewLink(w http.ResponseWriter, r *http.Request) {
 	preview, err := a.svc.PreviewLink(r.Context(), req.Token)
 	switch {
 	case err == nil:
-		httpx.JSON(w, http.StatusOK, previewResponse{Purpose: preview.Purpose, InviteeEmail: preview.Email, GoogleEligible: preview.GoogleEligible})
+		httpx.JSON(w, http.StatusOK, previewResponse{Purpose: preview.Purpose, InviteeEmail: preview.Email})
 	case clientGone(r):
 	case errors.Is(err, auth.ErrInvalidToken):
 		invalidToken(w)
