@@ -1,9 +1,10 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { createQueryClient } from '../../api/queryClient'
 import { ForgotPassword } from './ForgotPassword'
 
 const email = 'maya.pluviose@example.com'
@@ -17,7 +18,7 @@ function renderPage(answer: Response | Promise<Response> | 'network error') {
     initialEntries: ['/auth/forgot'],
   })
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={createQueryClient()}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
@@ -31,6 +32,7 @@ function send() {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  onlineManager.setOnline(true)
 })
 
 describe('ForgotPassword', () => {
@@ -46,6 +48,16 @@ describe('ForgotPassword', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     })
+  })
+
+  it('fails instead of waiting when the browser says it is offline', async () => {
+    renderPage('network error')
+    onlineManager.setOnline(false)
+
+    send()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Can’t reach the family hub.')
+    expect(screen.getByLabelText('Email')).not.toHaveAttribute('readonly')
   })
 
   it('sends once and locks the email while sending', async () => {
