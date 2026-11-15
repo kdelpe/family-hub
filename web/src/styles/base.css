@@ -28,6 +28,24 @@ a:hover {
   color: var(--accent-hover);
 }
 
+/* Every pill button and link drawn as one lifts on hover and keyboard focus (design-notes §2.5). */
+.pill {
+  transition:
+    box-shadow 0.15s ease,
+    translate 0.15s ease;
+}
+
+.pill:not(:disabled):hover,
+.pill:focus-visible {
+  box-shadow: 0 4px 12px var(--shadow-lift);
+  translate: 0 -1px;
+}
+
+.pill:not(:disabled):active {
+  translate: 0 0;
+  box-shadow: 0 1px 3px var(--shadow-press);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

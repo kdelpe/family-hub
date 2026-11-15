@@ -63,6 +63,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 		r.With(mw.LimitForgot).Post("/auth/password/forgot", h.Auth.ForgotPassword)
 		r.With(mw.LimitReset).Post("/auth/password/reset", h.Auth.ResetPassword)
 		r.With(mw.LimitPreview).Post("/auth/invite/preview", h.Auth.PreviewLink)
+		r.Get("/auth/providers", h.Auth.Providers)
 		r.With(mw.LimitGoogle).Get("/auth/google/start", h.Auth.GoogleStart)
 		r.With(mw.LimitGoogle).Get("/auth/google/callback", h.Auth.GoogleCallback)
 		// Outside the session group, so an expired session's cookie still gets cleared.

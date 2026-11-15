@@ -1,0 +1,167 @@
+.tree {
+  width: 100%;
+  max-width: 620px;
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 720px;
+  align-self: center;
+}
+
+/* Stacked on narrow screens, a fixed share of the window keeps the form close below. */
+@media (width < 960px) {
+  .tree {
+    flex: none;
+    height: 40vh;
+  }
+}
+
+.draw {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: draw 0.7s ease-out both;
+}
+
+.back {
+  stroke: var(--mountain-back);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.front {
+  stroke: var(--mountain-front);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.ground {
+  stroke: var(--line);
+  stroke-width: 2.5;
+}
+
+.grass {
+  fill: none;
+  stroke: var(--grass);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: 0;
+  animation: fade-in ease-out both;
+}
+
+.root {
+  stroke: var(--tree-root);
+}
+
+.sway {
+  transform-box: view-box;
+  transform-origin: 380.4px 838.5px;
+  animation: sway 4.5s ease-in-out infinite;
+}
+
+.branches {
+  stroke: var(--tree-branch);
+}
+
+.branch {
+  animation-timing-function: linear;
+}
+
+.leaf {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pop ease-out both;
+}
+
+.cycle {
+  opacity: 0;
+  animation: swap-color 3s ease-in-out infinite;
+}
+
+/* base.css turns the animations off; show the tree fully grown instead of undrawn. */
+@media (prefers-reduced-motion: reduce) {
+  .draw {
+    stroke-dashoffset: 0;
+  }
+
+  .grass {
+    opacity: 1;
+  }
+}
+
+/* Opacity stays 0 until the stroke starts, or the round caps show as dots before the line draws. */
+@keyframes draw {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+  3% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Starts upright (the mockup starts at -1.5deg, a visible jump when the sway begins). Per-segment easing
+   keeps the swing moving through upright, so it only slows at the two ends, like the mockup's. */
+@keyframes sway {
+  0% {
+    transform: rotate(0deg);
+    animation-timing-function: ease-out;
+  }
+  25% {
+    transform: rotate(-1.5deg);
+    animation-timing-function: ease-in-out;
+  }
+  75% {
+    transform: rotate(1.5deg);
+    animation-timing-function: ease-in;
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes swap-color {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  42% {
+    opacity: 1;
+  }
+  54% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}

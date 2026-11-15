@@ -53,6 +53,28 @@ func TestGoogleStartSetsFlowCookieAndRedirects(t *testing.T) {
 	assert.Equal(t, http.SameSiteLaxMode, cookies[0].SameSite)
 }
 
+func TestGoogleStartRefusalReturnsToSignIn(t *testing.T) {
+	tests := []struct {
+		name   string
+		google []handler.GoogleAuthService
+	}{
+		{name: "not configured"},
+		{name: "start fails", google: []handler.GoogleAuthService{&googleServiceStub{startErr: errors.New("database failure")}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := handler.NewAuth(nil, nil, handler.NewSessionCookie(true), tt.google...)
+			rec := httptest.NewRecorder()
+
+			a.GoogleStart(rec, httptest.NewRequest(http.MethodGet, "/api/auth/google/start", nil))
+
+			assert.Equal(t, http.StatusSeeOther, rec.Code)
+			assert.Equal(t, "/auth/login?google=unavailable", rec.Header().Get("Location"))
+			assert.Empty(t, rec.Result().Cookies())
+		})
+	}
+}
+
 func TestGoogleCallbackConsumesFlowCookieAndSetsSession(t *testing.T) {
 	google := &googleServiceStub{completeTok: "session-token"}
 	a := handler.NewAuth(nil, nil, handler.NewSessionCookie(true), google)
@@ -87,7 +109,7 @@ func TestGoogleCallbackRefusesProviderErrorAndClearsFlowCookie(t *testing.T) {
 	a.GoogleCallback(rec, req)
 
 	assert.Equal(t, http.StatusSeeOther, rec.Code)
-	assert.Equal(t, "/login?google=unavailable", rec.Header().Get("Location"))
+	assert.Equal(t, "/auth/login?google=unavailable", rec.Header().Get("Location"))
 	assert.Empty(t, google.completeIn.Code)
 	cookies := rec.Result().Cookies()
 	require.Len(t, cookies, 1)
@@ -106,6 +128,28 @@ func TestGoogleCallbackDoesNotExposeUnexpectedErrors(t *testing.T) {
 	a.GoogleCallback(rec, req)
 
 	assert.Equal(t, http.StatusSeeOther, rec.Code)
-	assert.Equal(t, "/login?google=unavailable", rec.Header().Get("Location"))
+	assert.Equal(t, "/auth/login?google=unavailable", rec.Header().Get("Location"))
 	assert.NotContains(t, rec.Body.String(), "database failure")
+}
+
+func TestProvidersReportsWhetherGoogleIsConfigured(t *testing.T) {
+	tests := []struct {
+		name   string
+		google []handler.GoogleAuthService
+		want   string
+	}{
+		{name: "configured", google: []handler.GoogleAuthService{&googleServiceStub{}}, want: `{"google":true}`},
+		{name: "not configured", want: `{"google":false}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := handler.NewAuth(nil, nil, handler.NewSessionCookie(false), tt.google...)
+			rec := httptest.NewRecorder()
+
+			a.Providers(rec, httptest.NewRequest(http.MethodGet, "/api/auth/providers", nil))
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.JSONEq(t, tt.want, rec.Body.String())
+		})
+	}
 }
