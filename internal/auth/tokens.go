@@ -148,5 +148,5 @@ func (s *Service) setPasswordWithToken(ctx context.Context, in SetPasswordInput)
 	if err := tx.Commit(ctx); err != nil {
 		return "", User{}, fmt.Errorf("commit set password: %w", err)
 	}
-	return token, User{ID: found.UserID, Email: locked.Email, Role: locked.Role}, nil
+	return token, User{ID: found.UserID, Email: locked.Email, Role: locked.Role, PersonID: locked.PersonID}, nil
 }

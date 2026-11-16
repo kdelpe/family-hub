@@ -66,9 +66,10 @@ type previewResponse struct {
 }
 
 type userResponse struct {
-	ID    uuid.UUID `json:"id"`
-	Email string    `json:"email"`
-	Role  string    `json:"role"`
+	ID       uuid.UUID  `json:"id"`
+	Email    string     `json:"email"`
+	Role     string     `json:"role"`
+	PersonID *uuid.UUID `json:"person_id"`
 }
 
 func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
@@ -256,5 +257,5 @@ func (a *Auth) cookieToken(r *http.Request) string {
 }
 
 func toUserResponse(u auth.User) userResponse {
-	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role}
+	return userResponse(u)
 }

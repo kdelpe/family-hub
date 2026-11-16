@@ -28,8 +28,9 @@ const (
 var ErrNoSession = errors.New("no active session")
 
 type Session struct {
-	UserID uuid.UUID
-	Role   string
+	UserID   uuid.UUID
+	Role     string
+	PersonID *uuid.UUID
 }
 
 type Sessions struct {
@@ -79,7 +80,7 @@ func (s *Sessions) Authenticate(ctx context.Context, token string) (Session, err
 			zerolog.Ctx(ctx).Warn().Err(err).Msg("touch session")
 		}
 	}
-	return Session{UserID: row.UserID, Role: row.Role}, nil
+	return Session{UserID: row.UserID, Role: row.Role, PersonID: row.PersonID}, nil
 }
 
 func (s *Sessions) Delete(ctx context.Context, token string) error {

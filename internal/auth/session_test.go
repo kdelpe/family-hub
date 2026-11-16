@@ -35,6 +35,22 @@ func TestSessionRoundTrip(t *testing.T) {
 	assert.ErrorIs(t, err, auth.ErrNoSession)
 }
 
+func TestSessionCarriesTheLinkedPerson(t *testing.T) {
+	pool, userID := withMember(t)
+	var personID uuid.UUID
+	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO persons (first_name) VALUES ('Rosa') RETURNING id`).Scan(&personID))
+	_, err := pool.Exec(t.Context(), `UPDATE users SET person_id = $1 WHERE id = $2`, personID, userID)
+	require.NoError(t, err)
+	sessions := auth.NewSessions(pool)
+	token, err := sessions.Create(t.Context(), userID, "")
+	require.NoError(t, err)
+
+	got, err := sessions.Authenticate(t.Context(), token)
+
+	require.NoError(t, err)
+	assert.Equal(t, auth.Session{UserID: userID, Role: "member", PersonID: &personID}, got)
+}
+
 func TestAuthenticateRefusesBadTokens(t *testing.T) {
 	pool, userID := withMember(t)
 	sessions := auth.NewSessions(pool)

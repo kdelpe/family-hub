@@ -21,7 +21,7 @@ import (
 
 var testUser = auth.User{ID: uuid.MustParse("01890000-0000-7000-8000-000000000001"), Email: "test@example.com", Role: "member"}
 
-const testUserBody = `{"id":"01890000-0000-7000-8000-000000000001","email":"test@example.com","role":"member"}`
+const testUserBody = `{"id":"01890000-0000-7000-8000-000000000001","email":"test@example.com","role":"member","person_id":null}`
 
 func TestLogin(t *testing.T) {
 	tests := []struct {
