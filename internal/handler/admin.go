@@ -193,8 +193,6 @@ func (a *Admin) InviteUser(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusConflict, "email_taken", err.Error())
 	case errors.Is(err, admin.ErrPersonTaken):
 		httpx.Error(w, http.StatusConflict, "person_taken", err.Error())
-	case errors.Is(err, auth.ErrBusy):
-		busy(w)
 	case errors.Is(err, admin.ErrEmailNotSent):
 		zerolog.Ctx(r.Context()).Error().Err(err).Msg("send invite")
 		httpx.Error(w, http.StatusBadGateway, "mail_failed", "the invitation email couldn't be sent and nothing was saved; try again")

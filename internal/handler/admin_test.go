@@ -47,8 +47,6 @@ func TestInviteUser(t *testing.T) {
 			wantBody: `{"error":{"code":"email_taken","message":"a user with this email already exists"}}`},
 		{name: "person taken", body: body, wantInvite: true, inviteErr: admin.ErrPersonTaken, wantStatus: http.StatusConflict,
 			wantBody: `{"error":{"code":"person_taken","message":"that person already has a login"}}`},
-		{name: "busy", body: body, wantInvite: true, inviteErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable,
-			wantBody: `{"error":{"code":"busy","message":"try again in a moment"}}`},
 		{name: "email not sent", body: body, wantInvite: true, inviteErr: fmt.Errorf("%w: smtp: 550", admin.ErrEmailNotSent), wantStatus: http.StatusBadGateway,
 			wantBody: `{"error":{"code":"mail_failed","message":"the invitation email couldn't be sent and nothing was saved; try again"}}`},
 		{name: "database error", body: body, wantInvite: true, inviteErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},

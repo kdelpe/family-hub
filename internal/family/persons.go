@@ -216,7 +216,6 @@ func (s *Service) UpdatePerson(ctx context.Context, id uuid.UUID, patch PersonPa
 // It's refused while an enabled login is linked to them; a disabled one loses the link (§5.1).
 func (s *Service) DeletePerson(ctx context.Context, id uuid.UUID) error {
 	return s.write(ctx, "delete person", func(q *gen.Queries) error {
-		// Locked first, so an invite linking a login to them waits, and the check below sees it.
 		found, err := q.LockPersonToDelete(ctx, id)
 		if err != nil {
 			return fmt.Errorf("lock person: %w", err)
@@ -224,17 +223,20 @@ func (s *Service) DeletePerson(ctx context.Context, id uuid.UUID) error {
 		if !found {
 			return ErrPersonNotFound
 		}
-		logins, err := q.LockPersonLogins(ctx, &id)
-		if err != nil {
-			return fmt.Errorf("lock logins: %w", err)
-		}
-		if slices.Contains(logins, true) {
+		login, err := q.LockPersonLogin(ctx, &id)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+		case err != nil:
+			return fmt.Errorf("lock login: %w", err)
+		case login.Enabled:
 			return ErrPersonHasLogin
+		default:
+			// A disabled login loses the link, so no login ever points at someone deleted (§5.1).
+			if err := q.SetUserPerson(ctx, gen.SetUserPersonParams{ID: login.ID}); err != nil {
+				return fmt.Errorf("unlink login: %w", err)
+			}
 		}
-		if err := q.UnlinkPersonLogins(ctx, &id); err != nil {
-			return fmt.Errorf("unlink logins: %w", err)
-		}
-		if _, err := q.SoftDeletePerson(ctx, id); err != nil {
+		if err := q.SoftDeletePerson(ctx, id); err != nil {
 			return fmt.Errorf("delete person: %w", err)
 		}
 		return nil

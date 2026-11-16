@@ -42,7 +42,7 @@ UPDATE persons SET first_name = @first_name, middle_name = sqlc.narg(middle_name
   is_deceased = @is_deceased, bio = sqlc.narg(bio), updated_at = now()
 WHERE id = @id;
 
--- name: SoftDeletePerson :execrows
+-- name: SoftDeletePerson :exec
 UPDATE persons SET deleted_at = now(), updated_at = now() WHERE id = @id AND deleted_at IS NULL;
 
 -- name: RestorePerson :execrows
@@ -52,10 +52,7 @@ UPDATE persons SET deleted_at = NULL, updated_at = now() WHERE id = @id AND dele
 -- name: LockPersonToDelete :one
 SELECT EXISTS (SELECT 1 FROM persons WHERE id = @id AND deleted_at IS NULL FOR UPDATE);
 
--- Locked, so a login being enabled meanwhile is seen as enabled, not unlinked behind the admin's back.
--- name: LockPersonLogins :many
-SELECT (disabled_at IS NULL)::boolean AS enabled FROM users WHERE person_id = @person_id FOR UPDATE;
-
--- A disabled login loses its link with the person, so no login ever points at someone deleted (§5.1).
--- name: UnlinkPersonLogins :exec
-UPDATE users SET person_id = NULL WHERE person_id = @person_id;
+-- Held until the commit, so the person can't be deleted while a login is being linked to them. KEY SHARE
+-- only blocks that delete, not edits to the person during the invite's email send.
+-- name: LockPersonToLink :one
+SELECT EXISTS (SELECT 1 FROM persons WHERE id = @id AND deleted_at IS NULL FOR KEY SHARE);

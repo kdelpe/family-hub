@@ -35,7 +35,7 @@ type UpdateInput struct {
 	PersonID  *uuid.UUID
 }
 
-// Update changes a user's role, enabled state or email. A new email clears their credentials and
+// Update changes a user's role, enabled state, email or linked person. A new email clears their credentials and
 // emails a fresh invite before the commit, so a failed send changes nothing (§5).
 func (s *Users) Update(ctx context.Context, in UpdateInput) (Account, error) {
 	if in.Email == nil && in.Role == nil && in.Disabled == nil && !in.SetPerson {

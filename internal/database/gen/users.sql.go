@@ -85,7 +85,7 @@ func (q *Queries) EmailTaken(ctx context.Context, email string) (bool, error) {
 
 const getAccount = `-- name: GetAccount :one
 SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
-  (u.password_hash IS NOT NULL)::boolean AS set_up, u.person_id, p.first_name AS person_first_name, p.last_name AS person_last_name,
+  (u.password_hash IS NOT NULL)::boolean AS set_up, u.person_id, coalesce(p.first_name, '')::text AS person_first_name, p.last_name AS person_last_name,
   (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
 FROM users u
 LEFT JOIN auth_tokens t ON t.user_id = u.id AND t.purpose = 'invite' AND t.consumed_at IS NULL
@@ -103,7 +103,7 @@ type GetAccountRow struct {
 	CreatedAt       time.Time
 	SetUp           bool
 	PersonID        *uuid.UUID
-	PersonFirstName *string
+	PersonFirstName string
 	PersonLastName  *string
 	HasInvite       bool
 	InviteExpiresAt time.Time
@@ -200,7 +200,7 @@ func (q *Queries) GetUserPassword(ctx context.Context, id uuid.UUID) (GetUserPas
 
 const listUsers = `-- name: ListUsers :many
 SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
-  (u.password_hash IS NOT NULL)::boolean AS set_up, u.person_id, p.first_name AS person_first_name, p.last_name AS person_last_name,
+  (u.password_hash IS NOT NULL)::boolean AS set_up, u.person_id, coalesce(p.first_name, '')::text AS person_first_name, p.last_name AS person_last_name,
   -- sqlc can't type a nullable max(), so has_invite says whether invite_expires_at is real.
   (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
 FROM users u
@@ -227,7 +227,7 @@ type ListUsersRow struct {
 	CreatedAt       time.Time
 	SetUp           bool
 	PersonID        *uuid.UUID
-	PersonFirstName *string
+	PersonFirstName string
 	PersonLastName  *string
 	HasInvite       bool
 	InviteExpiresAt time.Time
@@ -277,17 +277,21 @@ func (q *Queries) LockEnabledUserByEmail(ctx context.Context, email string) (uui
 	return id, err
 }
 
-const lockPersonToLink = `-- name: LockPersonToLink :one
-SELECT EXISTS (SELECT 1 FROM persons WHERE id = $1 AND deleted_at IS NULL FOR KEY SHARE)
+const lockPersonLogin = `-- name: LockPersonLogin :one
+SELECT id, (disabled_at IS NULL)::boolean AS enabled FROM users WHERE person_id = $1 FOR UPDATE
 `
 
-// Held until the commit, so the person can't be deleted while a login is being linked to them. KEY SHARE
-// only blocks that delete, not edits to the person during the invite's email send.
-func (q *Queries) LockPersonToLink(ctx context.Context, id uuid.UUID) (bool, error) {
-	row := q.db.QueryRow(ctx, lockPersonToLink, id)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
+type LockPersonLoginRow struct {
+	ID      uuid.UUID
+	Enabled bool
+}
+
+// Locked, so a login being enabled meanwhile is seen as enabled, not unlinked behind the admin's back.
+func (q *Queries) LockPersonLogin(ctx context.Context, personID *uuid.UUID) (LockPersonLoginRow, error) {
+	row := q.db.QueryRow(ctx, lockPersonLogin, personID)
+	var i LockPersonLoginRow
+	err := row.Scan(&i.ID, &i.Enabled)
+	return i, err
 }
 
 const lockUser = `-- name: LockUser :one

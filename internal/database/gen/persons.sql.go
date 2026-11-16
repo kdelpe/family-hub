@@ -245,31 +245,6 @@ func (q *Queries) LockPerson(ctx context.Context, id uuid.UUID) (LockPersonRow, 
 	return i, err
 }
 
-const lockPersonLogins = `-- name: LockPersonLogins :many
-SELECT (disabled_at IS NULL)::boolean AS enabled FROM users WHERE person_id = $1 FOR UPDATE
-`
-
-// Locked, so a login being enabled meanwhile is seen as enabled, not unlinked behind the admin's back.
-func (q *Queries) LockPersonLogins(ctx context.Context, personID *uuid.UUID) ([]bool, error) {
-	rows, err := q.db.Query(ctx, lockPersonLogins, personID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []bool
-	for rows.Next() {
-		var enabled bool
-		if err := rows.Scan(&enabled); err != nil {
-			return nil, err
-		}
-		items = append(items, enabled)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const lockPersonToDelete = `-- name: LockPersonToDelete :one
 SELECT EXISTS (SELECT 1 FROM persons WHERE id = $1 AND deleted_at IS NULL FOR UPDATE)
 `
@@ -277,6 +252,19 @@ SELECT EXISTS (SELECT 1 FROM persons WHERE id = $1 AND deleted_at IS NULL FOR UP
 // FOR UPDATE waits for an invite still linking a login to them (its FOR KEY SHARE).
 func (q *Queries) LockPersonToDelete(ctx context.Context, id uuid.UUID) (bool, error) {
 	row := q.db.QueryRow(ctx, lockPersonToDelete, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const lockPersonToLink = `-- name: LockPersonToLink :one
+SELECT EXISTS (SELECT 1 FROM persons WHERE id = $1 AND deleted_at IS NULL FOR KEY SHARE)
+`
+
+// Held until the commit, so the person can't be deleted while a login is being linked to them. KEY SHARE
+// only blocks that delete, not edits to the person during the invite's email send.
+func (q *Queries) LockPersonToLink(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, lockPersonToLink, id)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -294,25 +282,12 @@ func (q *Queries) RestorePerson(ctx context.Context, id uuid.UUID) (int64, error
 	return result.RowsAffected(), nil
 }
 
-const softDeletePerson = `-- name: SoftDeletePerson :execrows
+const softDeletePerson = `-- name: SoftDeletePerson :exec
 UPDATE persons SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL
 `
 
-func (q *Queries) SoftDeletePerson(ctx context.Context, id uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, softDeletePerson, id)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const unlinkPersonLogins = `-- name: UnlinkPersonLogins :exec
-UPDATE users SET person_id = NULL WHERE person_id = $1
-`
-
-// A disabled login loses its link with the person, so no login ever points at someone deleted (§5.1).
-func (q *Queries) UnlinkPersonLogins(ctx context.Context, personID *uuid.UUID) error {
-	_, err := q.db.Exec(ctx, unlinkPersonLogins, personID)
+func (q *Queries) SoftDeletePerson(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, softDeletePerson, id)
 	return err
 }
 

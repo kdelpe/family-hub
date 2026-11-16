@@ -131,11 +131,7 @@ func accountFromRow(row gen.ListUsersRow) Account {
 		DisabledAt: row.DisabledAt, LastLoginAt: row.LastLoginAt, CreatedAt: row.CreatedAt,
 	}
 	if row.PersonID != nil {
-		a.Person = &LinkedPerson{ID: *row.PersonID, LastName: row.PersonLastName}
-		// The foreign key keeps the join from missing; the guard only avoids a nil dereference.
-		if row.PersonFirstName != nil {
-			a.Person.FirstName = *row.PersonFirstName
-		}
+		a.Person = &LinkedPerson{ID: *row.PersonID, FirstName: row.PersonFirstName, LastName: row.PersonLastName}
 	}
 	switch {
 	case row.DisabledAt != nil:

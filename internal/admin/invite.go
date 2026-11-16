@@ -56,7 +56,7 @@ func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 		return auth.User{}, ErrNoPerson
 	}
 
-	// No lock timeout: a second invite for the same email waits for the first's send and then gets email_taken.
+	// No lock timeout: a second invite for the same email or person waits for the first's send, then gets a 409.
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return auth.User{}, fmt.Errorf("begin invite: %w", err)
@@ -88,7 +88,6 @@ func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 	return auth.User{ID: id, Email: email, Role: in.Role, PersonID: &in.PersonID}, nil
 }
 
-// lockPersonToLink holds the person until the commit, so they can't be deleted while a login is linked to them.
 func lockPersonToLink(ctx context.Context, q *gen.Queries, id uuid.UUID) error {
 	found, err := q.LockPersonToLink(ctx, id)
 	if err != nil {

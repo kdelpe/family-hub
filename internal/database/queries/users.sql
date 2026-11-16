@@ -37,7 +37,7 @@ UPDATE users SET password_hash = @password_hash::text, password_changed_at = clo
 
 -- name: ListUsers :many
 SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
-  (u.password_hash IS NOT NULL)::boolean AS set_up, u.person_id, p.first_name AS person_first_name, p.last_name AS person_last_name,
+  (u.password_hash IS NOT NULL)::boolean AS set_up, u.person_id, coalesce(p.first_name, '')::text AS person_first_name, p.last_name AS person_last_name,
   -- sqlc can't type a nullable max(), so has_invite says whether invite_expires_at is real.
   (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
 FROM users u
@@ -50,7 +50,7 @@ LIMIT @page_size;
 
 -- name: GetAccount :one
 SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
-  (u.password_hash IS NOT NULL)::boolean AS set_up, u.person_id, p.first_name AS person_first_name, p.last_name AS person_last_name,
+  (u.password_hash IS NOT NULL)::boolean AS set_up, u.person_id, coalesce(p.first_name, '')::text AS person_first_name, p.last_name AS person_last_name,
   (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
 FROM users u
 LEFT JOIN auth_tokens t ON t.user_id = u.id AND t.purpose = 'invite' AND t.consumed_at IS NULL
@@ -75,7 +75,6 @@ UPDATE users SET email = @email, password_hash = NULL, password_changed_at = NUL
 -- name: SetUserPerson :exec
 UPDATE users SET person_id = sqlc.narg(person_id) WHERE id = @id;
 
--- Held until the commit, so the person can't be deleted while a login is being linked to them. KEY SHARE
--- only blocks that delete, not edits to the person during the invite's email send.
--- name: LockPersonToLink :one
-SELECT EXISTS (SELECT 1 FROM persons WHERE id = @id AND deleted_at IS NULL FOR KEY SHARE);
+-- Locked, so a login being enabled meanwhile is seen as enabled, not unlinked behind the admin's back.
+-- name: LockPersonLogin :one
+SELECT id, (disabled_at IS NULL)::boolean AS enabled FROM users WHERE person_id = @person_id FOR UPDATE;
