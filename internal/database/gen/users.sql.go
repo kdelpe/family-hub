@@ -129,6 +129,27 @@ func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (GetAccountRow, 
 	return i, err
 }
 
+const getInviteSender = `-- name: GetInviteSender :one
+SELECT p.first_name, p.last_name
+FROM persons p JOIN users u ON u.person_id = p.id
+WHERE p.id = $1 AND p.deleted_at IS NULL AND u.disabled_at IS NULL AND u.password_hash IS NOT NULL
+FOR SHARE OF u
+`
+
+type GetInviteSenderRow struct {
+	FirstName string
+	LastName  *string
+}
+
+// Someone an invite can be from: in the tree, with a login that is set up and enabled (§5). The login is
+// held until the commit, so a disable or email change can't land between this check and the send.
+func (q *Queries) GetInviteSender(ctx context.Context, id uuid.UUID) (GetInviteSenderRow, error) {
+	row := q.db.QueryRow(ctx, getInviteSender, id)
+	var i GetInviteSenderRow
+	err := row.Scan(&i.FirstName, &i.LastName)
+	return i, err
+}
+
 const getLoginUser = `-- name: GetLoginUser :one
 SELECT id, password_hash, password_changed_at, disabled_at FROM users WHERE email = $1
 `
@@ -175,6 +196,17 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (GetUserRow, error)
 	return i, err
 }
 
+const getUserFirstName = `-- name: GetUserFirstName :one
+SELECT p.first_name FROM users u JOIN persons p ON p.id = u.person_id AND p.deleted_at IS NULL WHERE u.id = $1
+`
+
+func (q *Queries) GetUserFirstName(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getUserFirstName, id)
+	var first_name string
+	err := row.Scan(&first_name)
+	return first_name, err
+}
+
 const getUserPassword = `-- name: GetUserPassword :one
 SELECT email, password_hash, password_changed_at, disabled_at FROM users WHERE id = $1
 `
@@ -196,6 +228,17 @@ func (q *Queries) GetUserPassword(ctx context.Context, id uuid.UUID) (GetUserPas
 		&i.DisabledAt,
 	)
 	return i, err
+}
+
+const getUserPersonID = `-- name: GetUserPersonID :one
+SELECT person_id FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserPersonID(ctx context.Context, id uuid.UUID) (*uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getUserPersonID, id)
+	var person_id *uuid.UUID
+	err := row.Scan(&person_id)
+	return person_id, err
 }
 
 const listUsers = `-- name: ListUsers :many

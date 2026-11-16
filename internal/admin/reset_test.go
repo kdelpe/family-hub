@@ -62,7 +62,7 @@ func TestSendReset(t *testing.T) {
 				target = uuid.New()
 			}
 
-			err := NewUsers(pool, mailer, testBaseURL).SendReset(t.Context(), target)
+			err := NewUsers(pool, mailer, testBaseURL).SendReset(t.Context(), userID(t, pool, otherAdminEmail), target)
 
 			if errors.Is(tt.wantErr, ErrUserNotFound) {
 				require.ErrorIs(t, err, tt.wantErr)

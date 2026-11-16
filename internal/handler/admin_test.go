@@ -21,6 +21,8 @@ import (
 	"github.com/kdelpe/family-hub/internal/handler/mocks"
 )
 
+var testAdminSession = auth.Session{UserID: uuid.MustParse("01890000-0000-7000-8000-0000000000ad"), Role: auth.RoleAdmin}
+
 func TestInviteUser(t *testing.T) {
 	const body = `{"email":"test@example.com","role":"member","person_id":"01890000-0000-7000-8000-0000000000aa"}`
 	personID := uuid.MustParse("01890000-0000-7000-8000-0000000000aa")
@@ -30,11 +32,15 @@ func TestInviteUser(t *testing.T) {
 		body       string
 		inviteErr  error
 		wantInvite bool
+		wantFrom   *uuid.UUID
 		canceled   bool
 		wantStatus int
 		wantBody   string
 	}{
 		{name: "invited", body: body, wantInvite: true, wantStatus: http.StatusCreated, wantBody: testUserBody},
+		{name: "invited from someone", body: `{"email":"test@example.com","role":"member","person_id":"01890000-0000-7000-8000-0000000000aa",
+			"from_person_id":"01890000-0000-7000-8000-0000000000cc"}`, wantInvite: true, wantFrom: new(uuid.MustParse("01890000-0000-7000-8000-0000000000cc")),
+			wantStatus: http.StatusCreated, wantBody: testUserBody},
 		{name: "invalid email", body: body, wantInvite: true, inviteErr: admin.ErrInvalidEmail, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"validation_error","message":"not a valid email address"}}`},
 		{name: "invalid role", body: body, wantInvite: true, inviteErr: admin.ErrInvalidRole, wantStatus: http.StatusBadRequest,
@@ -47,6 +53,8 @@ func TestInviteUser(t *testing.T) {
 			wantBody: `{"error":{"code":"email_taken","message":"a user with this email already exists"}}`},
 		{name: "person taken", body: body, wantInvite: true, inviteErr: admin.ErrPersonTaken, wantStatus: http.StatusConflict,
 			wantBody: `{"error":{"code":"person_taken","message":"that person already has a login"}}`},
+		{name: "a sender who can't send", body: body, wantInvite: true, inviteErr: admin.ErrInvalidSender, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"from_person_id must be someone in the tree with an active login"}}`},
 		{name: "email not sent", body: body, wantInvite: true, inviteErr: fmt.Errorf("%w: smtp: 550", admin.ErrEmailNotSent), wantStatus: http.StatusBadGateway,
 			wantBody: `{"error":{"code":"mail_failed","message":"the invitation email couldn't be sent and nothing was saved; try again"}}`},
 		{name: "database error", body: body, wantInvite: true, inviteErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
@@ -61,7 +69,10 @@ func TestInviteUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewAdminService(t)
 			if tt.wantInvite {
-				svc.EXPECT().Invite(mock.Anything, admin.InviteInput{Email: "test@example.com", Role: "member", PersonID: personID}).Return(testUser, tt.inviteErr)
+				svc.EXPECT().Invite(mock.Anything, admin.InviteInput{
+					Email: "test@example.com", Role: "member", PersonID: personID, FromPersonID: tt.wantFrom, SentBy: testAdminSession.UserID,
+				}).
+					Return(testUser, tt.inviteErr)
 			}
 			req := httptest.NewRequest(http.MethodPost, "/api/admin/users", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -70,6 +81,7 @@ func TestInviteUser(t *testing.T) {
 				cancel()
 				req = req.WithContext(ctx)
 			}
+			req = req.WithContext(handler.WithSession(req.Context(), testAdminSession))
 			rec := httptest.NewRecorder()
 
 			handler.NewAdmin(svc).InviteUser(rec, req)
@@ -208,6 +220,7 @@ func TestUpdateUser(t *testing.T) {
 				if tt.wantIn != nil {
 					in = *tt.wantIn
 				}
+				in.ActorID = testAdminSession.UserID
 				svc.EXPECT().Update(mock.Anything, in).Return(updated, tt.updateErr)
 			}
 			id := testUser.ID.String()
@@ -222,6 +235,7 @@ func TestUpdateUser(t *testing.T) {
 				cancel()
 				req = req.WithContext(ctx)
 			}
+			req = req.WithContext(handler.WithSession(req.Context(), testAdminSession))
 			rec := httptest.NewRecorder()
 
 			handler.NewAdmin(svc).UpdateUser(rec, req)
@@ -264,7 +278,7 @@ func TestSendReset(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewAdminService(t)
 			if tt.wantReset {
-				svc.EXPECT().SendReset(mock.Anything, testUser.ID).Return(tt.resetErr)
+				svc.EXPECT().SendReset(mock.Anything, testAdminSession.UserID, testUser.ID).Return(tt.resetErr)
 			}
 			id := testUser.ID.String()
 			if tt.id != "" {
@@ -276,6 +290,7 @@ func TestSendReset(t *testing.T) {
 				cancel()
 				req = req.WithContext(ctx)
 			}
+			req = req.WithContext(handler.WithSession(req.Context(), testAdminSession))
 			rec := httptest.NewRecorder()
 
 			handler.NewAdmin(svc).SendReset(rec, req)
@@ -328,6 +343,33 @@ func TestRequireAdmin(t *testing.T) {
 			if tt.wantBody != "" {
 				assert.JSONEq(t, tt.wantBody, rec.Body.String())
 			}
+		})
+	}
+}
+
+func TestAdminWritesNeedASession(t *testing.T) {
+	tests := []struct {
+		name  string
+		serve func(a *handler.Admin) http.HandlerFunc
+		body  string
+	}{
+		{name: "invite", serve: func(a *handler.Admin) http.HandlerFunc { return a.InviteUser },
+			body: `{"email":"test@example.com","role":"member","person_id":"01890000-0000-7000-8000-0000000000aa"}`},
+		{name: "update", serve: func(a *handler.Admin) http.HandlerFunc { return a.UpdateUser }, body: `{"role":"admin"}`},
+		{name: "send reset", serve: func(a *handler.Admin) http.HandlerFunc { return a.SendReset }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/admin/users", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			req = withURLParam(req, "id", testUser.ID.String())
+			rec := httptest.NewRecorder()
+
+			tt.serve(handler.NewAdmin(mocks.NewAdminService(t)))(rec, req)
+
+			assert.Equal(t, http.StatusInternalServerError, rec.Code)
+			assert.JSONEq(t, internalBody, rec.Body.String())
 		})
 	}
 }

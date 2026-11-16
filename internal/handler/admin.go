@@ -20,7 +20,7 @@ type AdminService interface {
 	Invite(ctx context.Context, in admin.InviteInput) (auth.User, error)
 	List(ctx context.Context, in admin.ListInput) (admin.Page, error)
 	Update(ctx context.Context, in admin.UpdateInput) (admin.Account, error)
-	SendReset(ctx context.Context, id uuid.UUID) error
+	SendReset(ctx context.Context, sentBy, id uuid.UUID) error
 }
 
 type Admin struct {
@@ -32,9 +32,10 @@ func NewAdmin(svc AdminService) *Admin {
 }
 
 type inviteRequest struct {
-	Email    string    `json:"email"`
-	Role     string    `json:"role"`
-	PersonID uuid.UUID `json:"person_id"`
+	Email        string     `json:"email"`
+	Role         string     `json:"role"`
+	PersonID     uuid.UUID  `json:"person_id"`
+	FromPersonID *uuid.UUID `json:"from_person_id"`
 }
 
 type accountResponse struct {
@@ -95,8 +96,12 @@ func (a *Admin) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
+	actor, ok := currentAdmin(w, r)
+	if !ok {
+		return
+	}
 	account, err := a.svc.Update(r.Context(), admin.UpdateInput{
-		ID: id, Email: req.Email, Role: req.Role, Disabled: req.Disabled, SetPerson: req.PersonID.Set, PersonID: req.PersonID.Value,
+		ID: id, ActorID: actor, Email: req.Email, Role: req.Role, Disabled: req.Disabled, SetPerson: req.PersonID.Set, PersonID: req.PersonID.Value,
 	})
 	switch {
 	case err == nil:
@@ -130,7 +135,11 @@ func (a *Admin) SendReset(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err := a.svc.SendReset(r.Context(), id)
+	actor, ok := currentAdmin(w, r)
+	if !ok {
+		return
+	}
+	err := a.svc.SendReset(r.Context(), actor, id)
 	switch {
 	case err == nil:
 		w.WriteHeader(http.StatusNoContent)
@@ -146,6 +155,15 @@ func (a *Admin) SendReset(w http.ResponseWriter, r *http.Request) {
 	default:
 		internalError(w, r, err, "send reset")
 	}
+}
+
+func currentAdmin(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	session, ok := CurrentSession(r.Context())
+	if !ok {
+		internalError(w, r, errors.New("no session in context"), "admin route mounted without RequireSession")
+		return uuid.Nil, false
+	}
+	return session.UserID, true
 }
 
 func userID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
@@ -180,14 +198,20 @@ func (a *Admin) InviteUser(w http.ResponseWriter, r *http.Request) {
 	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
-	user, err := a.svc.Invite(r.Context(), admin.InviteInput(req))
+	actor, ok := currentAdmin(w, r)
+	if !ok {
+		return
+	}
+	user, err := a.svc.Invite(r.Context(), admin.InviteInput{
+		Email: req.Email, Role: req.Role, PersonID: req.PersonID, FromPersonID: req.FromPersonID, SentBy: actor,
+	})
 	switch {
 	case err == nil:
 		httpx.JSON(w, http.StatusCreated, toUserResponse(user))
 	// Only a plain cancel is dropped: a failed commit after the email went out must still be logged.
 	case clientGone(r) && errors.Is(err, context.Canceled):
 	case errors.Is(err, admin.ErrInvalidEmail), errors.Is(err, admin.ErrInvalidRole), errors.Is(err, admin.ErrNoPerson),
-		errors.Is(err, admin.ErrPersonNotFound):
+		errors.Is(err, admin.ErrPersonNotFound), errors.Is(err, admin.ErrInvalidSender):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, admin.ErrEmailTaken):
 		httpx.Error(w, http.StatusConflict, "email_taken", err.Error())

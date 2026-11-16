@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -297,28 +298,29 @@ func normalize(in PersonInput) (fields, error) {
 		return fields{}, fmt.Errorf("%w: a first name is required", ErrInvalidPerson)
 	}
 	for _, field := range []struct {
-		name  string
-		value **string
-		max   int
+		name      string
+		value     **string
+		max       int
+		multiline bool
 	}{
-		{"middle name", &f.MiddleName, maxNameLength},
-		{"last name", &f.LastName, maxNameLength},
-		{"maiden name", &f.MaidenName, maxNameLength},
-		{"birth place", &f.BirthPlace, maxPlaceLength},
-		{"bio", &f.Bio, maxBioLength},
+		{"middle name", &f.MiddleName, maxNameLength, false},
+		{"last name", &f.LastName, maxNameLength, false},
+		{"maiden name", &f.MaidenName, maxNameLength, false},
+		{"birth place", &f.BirthPlace, maxPlaceLength, false},
+		{"bio", &f.Bio, maxBioLength, true},
 	} {
 		*field.value = trimmed(*field.value)
 		if *field.value == nil {
 			continue
 		}
-		if !storable(**field.value) {
+		if !storable(**field.value) || (!field.multiline && hasControl(**field.value)) {
 			return fields{}, fmt.Errorf("%w: the %s contains a character that isn't allowed", ErrInvalidPerson, field.name)
 		}
 		if utf8.RuneCountInString(**field.value) > field.max {
 			return fields{}, fmt.Errorf("%w: the %s is longer than %d characters", ErrInvalidPerson, field.name, field.max)
 		}
 	}
-	if !storable(f.FirstName) {
+	if !storable(f.FirstName) || hasControl(f.FirstName) {
 		return fields{}, fmt.Errorf("%w: the first name contains a character that isn't allowed", ErrInvalidPerson)
 	}
 	if utf8.RuneCountInString(f.FirstName) > maxNameLength {
@@ -423,6 +425,12 @@ func trimmed(s *string) *string {
 // storable is text Postgres can keep: TEXT refuses NUL and invalid UTF-8, which would otherwise surface as a 500.
 func storable(s string) bool {
 	return utf8.ValidString(s) && !strings.ContainsRune(s, 0)
+}
+
+// hasControl finds line breaks and other control characters, which a one-line field never needs: names go into
+// email subjects, where a line break would make every invite from that person fail.
+func hasControl(s string) bool {
+	return strings.ContainsFunc(s, unicode.IsControl)
 }
 
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)

@@ -11,13 +11,15 @@ import (
 )
 
 type AuthToken struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
-	Purpose    string
-	TokenHash  []byte
-	ExpiresAt  time.Time
-	ConsumedAt *time.Time
-	CreatedAt  time.Time
+	ID           uuid.UUID
+	UserID       uuid.UUID
+	Purpose      string
+	TokenHash    []byte
+	ExpiresAt    time.Time
+	ConsumedAt   *time.Time
+	CreatedAt    time.Time
+	FromPersonID *uuid.UUID
+	SentByUserID *uuid.UUID
 }
 
 type Person struct {

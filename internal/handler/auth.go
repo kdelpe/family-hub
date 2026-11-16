@@ -57,7 +57,6 @@ type previewRequest struct {
 	Token string `json:"token"`
 }
 
-// The names are null until Phase 3 brings persons.
 type previewResponse struct {
 	Purpose          string  `json:"purpose"`
 	InviteeEmail     string  `json:"invitee_email"`
@@ -143,7 +142,9 @@ func (a *Auth) PreviewLink(w http.ResponseWriter, r *http.Request) {
 	preview, err := a.svc.PreviewLink(r.Context(), req.Token)
 	switch {
 	case err == nil:
-		httpx.JSON(w, http.StatusOK, previewResponse{Purpose: preview.Purpose, InviteeEmail: preview.Email})
+		httpx.JSON(w, http.StatusOK, previewResponse{
+			Purpose: preview.Purpose, InviteeEmail: preview.Email, InviteeFirstName: preview.InviteeFirstName, FromName: preview.FromName,
+		})
 	case clientGone(r):
 	case errors.Is(err, auth.ErrInvalidToken):
 		invalidToken(w)

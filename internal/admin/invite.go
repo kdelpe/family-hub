@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/database/gen"
@@ -13,12 +16,14 @@ import (
 )
 
 const (
-	inviteSubject = "You're invited to the family hub"
-	inviteBody    = `Bonjou,
+	inviteSubject     = "You're invited to the family hub"
+	inviteFromSubject = "%s invited you to the family hub"
+	aboutTheHub       = "the Pluviose-Monestime Family Hub — a private place for our family's tree, photos and stories."
+	inviteBody        = `Bonjou%s,
 
-You're invited to the family hub, a private place for our family's tree, photos and stories.
+%s
 
-Set up your account:
+Set up my account:
 %s
 
 This link works for %d days. If it has expired, ask an admin for a new one.
@@ -32,6 +37,7 @@ var (
 	// ErrPersonNotFound is about a person_id in the body, so it's a 400, not a 404.
 	ErrPersonNotFound = errors.New("no such person in the tree")
 	ErrPersonTaken    = errors.New("that person already has a login")
+	ErrInvalidSender  = errors.New("from_person_id must be someone in the tree with an active login")
 	// ErrEmailNotSent: Invite and Update then save nothing; SendReset keeps the link, so it can just be sent again.
 	ErrEmailNotSent = errors.New("email could not be sent")
 )
@@ -40,6 +46,9 @@ type InviteInput struct {
 	Email    string
 	Role     string
 	PersonID uuid.UUID
+	// FromPersonID is who the invite is from; nil means the sending admin.
+	FromPersonID *uuid.UUID
+	SentBy       uuid.UUID
 }
 
 // Invite creates a user without a password and emails them a link to set one. The email goes
@@ -66,6 +75,10 @@ func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 	if err := lockPersonToLink(ctx, q, in.PersonID); err != nil {
 		return auth.User{}, err
 	}
+	sender, err := resolveSender(ctx, q, in.SentBy, in.FromPersonID)
+	if err != nil {
+		return auth.User{}, err
+	}
 	id, err := q.CreateInvitedUser(ctx, gen.CreateInvitedUserParams{Email: email, Role: in.Role, PersonID: &in.PersonID})
 	switch {
 	case isEmailTaken(err):
@@ -75,11 +88,11 @@ func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 	case err != nil:
 		return auth.User{}, fmt.Errorf("create user: %w", err)
 	}
-	token, err := auth.CreateInvite(ctx, tx, id)
+	msg, err := s.invite(ctx, tx, id, email, sender)
 	if err != nil {
 		return auth.User{}, err
 	}
-	if err := s.send(ctx, s.inviteMessage(email, token)); err != nil {
+	if err := s.send(ctx, msg); err != nil {
 		return auth.User{}, err
 	}
 	if err := commit(ctx, tx, "invite"); err != nil {
@@ -99,8 +112,104 @@ func lockPersonToLink(ctx context.Context, q *gen.Queries, id uuid.UUID) error {
 	return nil
 }
 
-func (s *Users) inviteMessage(email, token string) mail.Message {
-	link := auth.SetPasswordLink(s.baseURL, token)
+type name struct {
+	first string
+	full  string
+}
+
+// sender is who an invite is from and the admin who approved it, as the email names them.
+type sender struct {
+	auth.Sender
+	from, approver *name
+}
+
+// resolveSender picks who an invite is from: fromPersonID, or the sending admin's own person when that's nil
+// (§5); with neither, it's from nobody. An explicit sender who can't send one is refused.
+func resolveSender(ctx context.Context, q *gen.Queries, sentBy uuid.UUID, fromPersonID *uuid.UUID) (sender, error) {
+	if sentBy == uuid.Nil {
+		return sender{}, errors.New("an invite needs the admin sending it")
+	}
+	adminPerson, err := q.GetUserPersonID(ctx, sentBy)
+	if err != nil {
+		return sender{}, fmt.Errorf("get sending admin: %w", err)
+	}
+	s := sender{Sender: auth.Sender{FromPersonID: fromPersonID, SentBy: sentBy}}
+	if s.FromPersonID == nil {
+		s.FromPersonID = adminPerson
+	}
+	if s.from, err = senderName(ctx, q, s.FromPersonID); err != nil {
+		return sender{}, err
+	}
+	if s.from == nil {
+		if fromPersonID != nil {
+			return sender{}, ErrInvalidSender
+		}
+		s.FromPersonID = nil
+	}
+	if adminPerson != nil && !samePerson(adminPerson, s.FromPersonID) {
+		if s.approver, err = senderName(ctx, q, adminPerson); err != nil {
+			return sender{}, err
+		}
+	}
+	return s, nil
+}
+
+// invite stores an invite link for userID and writes its email.
+func (s *Users) invite(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string, from sender) (mail.Message, error) {
+	invitee, err := gen.New(tx).GetUserFirstName(ctx, userID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return mail.Message{}, fmt.Errorf("get invitee: %w", err)
+	}
+	token, err := auth.CreateInvite(ctx, tx, userID, from.Sender)
+	if err != nil {
+		return mail.Message{}, err
+	}
+	return inviteMessage(email, auth.SetPasswordLink(s.baseURL, token), invitee, from.from, from.approver), nil
+}
+
+// inviteFromAdmin is a resend, or the invite to a changed email: from the admin doing it.
+func (s *Users) inviteFromAdmin(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string, sentBy uuid.UUID) (mail.Message, error) {
+	from, err := resolveSender(ctx, gen.New(tx), sentBy, nil)
+	if err != nil {
+		return mail.Message{}, err
+	}
+	return s.invite(ctx, tx, userID, email, from)
+}
+
+// senderName is nil for nobody, or for someone an invite can't be from.
+func senderName(ctx context.Context, q *gen.Queries, id *uuid.UUID) (*name, error) {
+	if id == nil {
+		return nil, nil
+	}
+	row, err := q.GetInviteSender(ctx, *id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get sender: %w", err)
+	}
+	first := oneLine(row.FirstName)
+	return &name{first: first, full: oneLine(auth.FullName(row.FirstName, row.LastName))}, nil
+}
+
+// oneLine keeps a name saved before line breaks were refused from breaking the email subject.
+func oneLine(s string) string {
+	return strings.Join(strings.FieldsFunc(s, unicode.IsControl), " ")
+}
+
+// inviteMessage follows design-notes §4.10.
+func inviteMessage(email, link, invitee string, from, approver *name) mail.Message {
+	subject, intro := inviteSubject, "You're invited to "+aboutTheHub
+	if from != nil {
+		subject, intro = fmt.Sprintf(inviteFromSubject, from.first), from.full+" invited you to "+aboutTheHub
+	}
+	if approver != nil {
+		intro += "\nApproved by " + approver.full + ", admin."
+	}
+	greeting := ""
+	if invitee != "" {
+		greeting = " " + invitee
+	}
 	days := int(auth.InviteLifetime.Hours() / 24)
-	return mail.Message{To: email, Subject: inviteSubject, Body: fmt.Sprintf(inviteBody, link, days)}
+	return mail.Message{To: email, Subject: subject, Body: fmt.Sprintf(inviteBody, greeting, intro, link, days)}
 }

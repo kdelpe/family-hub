@@ -83,7 +83,7 @@ func TestUpdate(t *testing.T) {
 			if tt.wantInviteSent {
 				mailer.EXPECT().Send(mock.Anything, mock.Anything).Run(func(_ context.Context, msg mail.Message) { sent = msg }).Return(tt.sendErr).Once()
 			}
-			tt.in.ID = id
+			tt.in.ID, tt.in.ActorID = id, userID(t, pool, otherAdminEmail)
 
 			got, err := NewUsers(pool, mailer, testBaseURL).Update(t.Context(), tt.in)
 
@@ -279,4 +279,28 @@ func countFor(t *testing.T, pool *pgxpool.Pool, sql string, id uuid.UUID) int {
 	var n int
 	require.NoError(t, pool.QueryRow(t.Context(), sql, id).Scan(&n))
 	return n
+}
+
+func TestAnAdminChangingTheirOwnEmailStaysTheSender(t *testing.T) {
+	pool, _ := withAccounts(t)
+	self := userID(t, pool, otherAdminEmail)
+	var maya uuid.UUID
+	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO persons (first_name, last_name) VALUES ('Maya', 'Pluviose') RETURNING id`).Scan(&maya))
+	// A second admin who can sign in, so this one may change their email.
+	_, err := pool.Exec(t.Context(), `UPDATE users SET role = 'admin' WHERE email = $1`, testEmail)
+	require.NoError(t, err)
+	_, err = pool.Exec(t.Context(), `UPDATE users SET person_id = $1 WHERE id = $2`, maya, self)
+	require.NoError(t, err)
+	mailer := mailmocks.NewMailer(t)
+	var sent mail.Message
+	mailer.EXPECT().Send(mock.Anything, mock.Anything).Run(func(_ context.Context, msg mail.Message) { sent = msg }).Return(nil).Once()
+	email := "maya@example.com"
+
+	_, err = NewUsers(pool, mailer, testBaseURL).Update(t.Context(), UpdateInput{ID: self, ActorID: self, Email: &email})
+
+	require.NoError(t, err)
+	assert.Equal(t, "Maya invited you to the family hub", sent.Subject)
+	var from *uuid.UUID
+	require.NoError(t, pool.QueryRow(t.Context(), `SELECT from_person_id FROM auth_tokens WHERE user_id = $1 AND purpose = 'invite'`, self).Scan(&from))
+	assert.Equal(t, &maya, from)
 }
