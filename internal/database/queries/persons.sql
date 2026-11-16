@@ -20,11 +20,11 @@ SELECT p.id, p.first_name, p.middle_name, p.last_name, p.maiden_name, p.side, p.
 FROM persons p
 WHERE p.id = @id AND p.deleted_at IS NULL;
 
--- Admins only: the unmasked row, to apply a PATCH to.
+-- Admins only: the unmasked row, to apply a PATCH to. NO KEY, so an invite linking a login doesn't block it.
 -- name: LockPerson :one
 SELECT id, first_name, middle_name, last_name, maiden_name, side, birth_place, gender,
   birth_date, birth_date_precision, death_date, death_date_precision, is_deceased, bio
-FROM persons WHERE id = @id AND deleted_at IS NULL FOR UPDATE;
+FROM persons WHERE id = @id AND deleted_at IS NULL FOR NO KEY UPDATE;
 
 -- name: CreatePerson :one
 INSERT INTO persons (first_name, middle_name, last_name, maiden_name, side, birth_place, gender,
@@ -42,8 +42,17 @@ UPDATE persons SET first_name = @first_name, middle_name = sqlc.narg(middle_name
   is_deceased = @is_deceased, bio = sqlc.narg(bio), updated_at = now()
 WHERE id = @id;
 
--- name: SoftDeletePerson :execrows
+-- name: SoftDeletePerson :exec
 UPDATE persons SET deleted_at = now(), updated_at = now() WHERE id = @id AND deleted_at IS NULL;
 
 -- name: RestorePerson :execrows
 UPDATE persons SET deleted_at = NULL, updated_at = now() WHERE id = @id AND deleted_at IS NOT NULL;
+
+-- FOR UPDATE waits for an invite still linking a login to them (its FOR KEY SHARE).
+-- name: LockPersonToDelete :one
+SELECT EXISTS (SELECT 1 FROM persons WHERE id = @id AND deleted_at IS NULL FOR UPDATE);
+
+-- Held until the commit, so the person can't be deleted while a login is being linked to them. KEY SHARE
+-- only blocks that delete, not edits to the person during the invite's email send.
+-- name: LockPersonToLink :one
+SELECT EXISTS (SELECT 1 FROM persons WHERE id = @id AND deleted_at IS NULL FOR KEY SHARE);

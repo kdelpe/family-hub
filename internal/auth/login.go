@@ -32,6 +32,8 @@ type User struct {
 	ID    uuid.UUID
 	Email string
 	Role  string
+	// PersonID is who the login is in the tree; nil until an admin links them (§5.1).
+	PersonID *uuid.UUID
 }
 
 const (
@@ -225,7 +227,7 @@ func (s *Service) login(ctx context.Context, email string, in LoginInput) (strin
 	if err := tx.Commit(ctx); err != nil {
 		return "", User{}, fmt.Errorf("commit login: %w", err)
 	}
-	return token, User{ID: found.ID, Email: locked.Email, Role: locked.Role}, nil
+	return token, User{ID: found.ID, Email: locked.Email, Role: locked.Role, PersonID: locked.PersonID}, nil
 }
 
 // lockUser takes the row lock that every credential change and new session waits on (§5).
@@ -289,7 +291,7 @@ func (s *Service) User(ctx context.Context, id uuid.UUID) (User, error) {
 	if err != nil {
 		return User{}, fmt.Errorf("get user: %w", err)
 	}
-	return User{ID: u.ID, Email: u.Email, Role: u.Role}, nil
+	return User{ID: u.ID, Email: u.Email, Role: u.Role, PersonID: u.PersonID}, nil
 }
 
 func (s *Service) refuse(ctx context.Context, password string) error {

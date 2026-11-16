@@ -202,7 +202,7 @@ func (q *Queries) ListPersons(ctx context.Context, arg ListPersonsParams) ([]Lis
 const lockPerson = `-- name: LockPerson :one
 SELECT id, first_name, middle_name, last_name, maiden_name, side, birth_place, gender,
   birth_date, birth_date_precision, death_date, death_date_precision, is_deceased, bio
-FROM persons WHERE id = $1 AND deleted_at IS NULL FOR UPDATE
+FROM persons WHERE id = $1 AND deleted_at IS NULL FOR NO KEY UPDATE
 `
 
 type LockPersonRow struct {
@@ -222,7 +222,7 @@ type LockPersonRow struct {
 	Bio                *string
 }
 
-// Admins only: the unmasked row, to apply a PATCH to.
+// Admins only: the unmasked row, to apply a PATCH to. NO KEY, so an invite linking a login doesn't block it.
 func (q *Queries) LockPerson(ctx context.Context, id uuid.UUID) (LockPersonRow, error) {
 	row := q.db.QueryRow(ctx, lockPerson, id)
 	var i LockPersonRow
@@ -245,6 +245,31 @@ func (q *Queries) LockPerson(ctx context.Context, id uuid.UUID) (LockPersonRow, 
 	return i, err
 }
 
+const lockPersonToDelete = `-- name: LockPersonToDelete :one
+SELECT EXISTS (SELECT 1 FROM persons WHERE id = $1 AND deleted_at IS NULL FOR UPDATE)
+`
+
+// FOR UPDATE waits for an invite still linking a login to them (its FOR KEY SHARE).
+func (q *Queries) LockPersonToDelete(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, lockPersonToDelete, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const lockPersonToLink = `-- name: LockPersonToLink :one
+SELECT EXISTS (SELECT 1 FROM persons WHERE id = $1 AND deleted_at IS NULL FOR KEY SHARE)
+`
+
+// Held until the commit, so the person can't be deleted while a login is being linked to them. KEY SHARE
+// only blocks that delete, not edits to the person during the invite's email send.
+func (q *Queries) LockPersonToLink(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, lockPersonToLink, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const restorePerson = `-- name: RestorePerson :execrows
 UPDATE persons SET deleted_at = NULL, updated_at = now() WHERE id = $1 AND deleted_at IS NOT NULL
 `
@@ -257,16 +282,13 @@ func (q *Queries) RestorePerson(ctx context.Context, id uuid.UUID) (int64, error
 	return result.RowsAffected(), nil
 }
 
-const softDeletePerson = `-- name: SoftDeletePerson :execrows
+const softDeletePerson = `-- name: SoftDeletePerson :exec
 UPDATE persons SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL
 `
 
-func (q *Queries) SoftDeletePerson(ctx context.Context, id uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, softDeletePerson, id)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+func (q *Queries) SoftDeletePerson(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, softDeletePerson, id)
+	return err
 }
 
 const updatePerson = `-- name: UpdatePerson :exec

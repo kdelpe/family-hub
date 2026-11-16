@@ -3,7 +3,7 @@ INSERT INTO sessions (id_hash, user_id, expires_at, user_agent)
 VALUES (@id_hash, @user_id, now() + @lifetime::interval, @user_agent);
 
 -- name: GetActiveSession :one
-SELECT s.user_id, u.role, s.last_seen_at < now() - @touch_after::interval AS stale
+SELECT s.user_id, u.role, u.person_id, s.last_seen_at < now() - @touch_after::interval AS stale
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.id_hash = @id_hash

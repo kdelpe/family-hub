@@ -22,7 +22,8 @@ import (
 )
 
 func TestInviteUser(t *testing.T) {
-	const body = `{"email":"test@example.com","role":"member"}`
+	const body = `{"email":"test@example.com","role":"member","person_id":"01890000-0000-7000-8000-0000000000aa"}`
+	personID := uuid.MustParse("01890000-0000-7000-8000-0000000000aa")
 
 	tests := []struct {
 		name       string
@@ -38,8 +39,14 @@ func TestInviteUser(t *testing.T) {
 			wantBody: `{"error":{"code":"validation_error","message":"not a valid email address"}}`},
 		{name: "invalid role", body: body, wantInvite: true, inviteErr: admin.ErrInvalidRole, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"validation_error","message":"role must be admin or member"}}`},
+		{name: "no person", body: body, wantInvite: true, inviteErr: admin.ErrNoPerson, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"person_id is required: every invited login is someone in the tree"}}`},
+		{name: "unknown person", body: body, wantInvite: true, inviteErr: admin.ErrPersonNotFound, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"no such person in the tree"}}`},
 		{name: "email taken", body: body, wantInvite: true, inviteErr: admin.ErrEmailTaken, wantStatus: http.StatusConflict,
 			wantBody: `{"error":{"code":"email_taken","message":"a user with this email already exists"}}`},
+		{name: "person taken", body: body, wantInvite: true, inviteErr: admin.ErrPersonTaken, wantStatus: http.StatusConflict,
+			wantBody: `{"error":{"code":"person_taken","message":"that person already has a login"}}`},
 		{name: "email not sent", body: body, wantInvite: true, inviteErr: fmt.Errorf("%w: smtp: 550", admin.ErrEmailNotSent), wantStatus: http.StatusBadGateway,
 			wantBody: `{"error":{"code":"mail_failed","message":"the invitation email couldn't be sent and nothing was saved; try again"}}`},
 		{name: "database error", body: body, wantInvite: true, inviteErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
@@ -54,7 +61,7 @@ func TestInviteUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewAdminService(t)
 			if tt.wantInvite {
-				svc.EXPECT().Invite(mock.Anything, admin.InviteInput{Email: "test@example.com", Role: "member"}).Return(testUser, tt.inviteErr)
+				svc.EXPECT().Invite(mock.Anything, admin.InviteInput{Email: "test@example.com", Role: "member", PersonID: personID}).Return(testUser, tt.inviteErr)
 			}
 			req := httptest.NewRequest(http.MethodPost, "/api/admin/users", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -81,11 +88,13 @@ func TestListUsers(t *testing.T) {
 	expires := time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)
 	page := admin.Page{
 		Accounts: []admin.Account{
-			{ID: testUser.ID, Email: "test@example.com", Role: "member", Status: admin.StatusInvited, InviteExpiresAt: &expires, CreatedAt: expires.AddDate(0, 0, -7)},
+			{ID: testUser.ID, Email: "test@example.com", Role: "member", Status: admin.StatusInvited, InviteExpiresAt: &expires, CreatedAt: expires.AddDate(0, 0, -7),
+				Person: &admin.LinkedPerson{ID: uuid.MustParse("01890000-0000-7000-8000-0000000000aa"), FirstName: "Rosa", LastName: new("Pierre")}},
 		},
 		NextCursor: "next",
 	}
 	const pageBody = `{"users":[{"id":"01890000-0000-7000-8000-000000000001","email":"test@example.com","role":"member","status":"invited",
+		"person":{"id":"01890000-0000-7000-8000-0000000000aa","first_name":"Rosa","last_name":"Pierre"},
 		"invite_expires_at":"2026-11-21T12:00:00Z","disabled_at":null,"last_login_at":null,"created_at":"2026-11-14T12:00:00Z"}],"next_cursor":"next"}`
 
 	tests := []struct {
@@ -142,7 +151,7 @@ func TestUpdateUser(t *testing.T) {
 	const body = `{"role":"admin","disabled":false}`
 	role, enabled := "admin", false
 	updated := admin.Account{ID: testUser.ID, Email: "test@example.com", Role: "admin", Status: admin.StatusActive, CreatedAt: time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)}
-	const updatedBody = `{"id":"01890000-0000-7000-8000-000000000001","email":"test@example.com","role":"admin","status":"active",
+	const updatedBody = `{"id":"01890000-0000-7000-8000-000000000001","email":"test@example.com","role":"admin","status":"active","person":null,
 		"invite_expires_at":null,"disabled_at":null,"last_login_at":null,"created_at":"2026-11-14T12:00:00Z"}`
 
 	tests := []struct {
@@ -151,11 +160,21 @@ func TestUpdateUser(t *testing.T) {
 		body       string
 		updateErr  error
 		wantUpdate bool
+		wantIn     *admin.UpdateInput
 		canceled   bool
 		wantStatus int
 		wantBody   string
 	}{
 		{name: "updated", body: body, wantUpdate: true, wantStatus: http.StatusOK, wantBody: updatedBody},
+		{name: "linked to a person", body: `{"person_id":"01890000-0000-7000-8000-0000000000aa"}`, wantUpdate: true,
+			wantIn:     &admin.UpdateInput{ID: testUser.ID, SetPerson: true, PersonID: new(uuid.MustParse("01890000-0000-7000-8000-0000000000aa"))},
+			wantStatus: http.StatusOK, wantBody: updatedBody},
+		{name: "unlinked", body: `{"person_id":null}`, wantUpdate: true, wantIn: &admin.UpdateInput{ID: testUser.ID, SetPerson: true},
+			wantStatus: http.StatusOK, wantBody: updatedBody},
+		{name: "unknown person", body: body, wantUpdate: true, updateErr: admin.ErrPersonNotFound, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"no such person in the tree"}}`},
+		{name: "person taken", body: body, wantUpdate: true, updateErr: admin.ErrPersonTaken, wantStatus: http.StatusConflict,
+			wantBody: `{"error":{"code":"person_taken","message":"that person already has a login"}}`},
 		{name: "nothing to change", body: body, wantUpdate: true, updateErr: admin.ErrNoChanges, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"validation_error","message":"nothing to change"}}`},
 		{name: "invalid role", body: body, wantUpdate: true, updateErr: admin.ErrInvalidRole, wantStatus: http.StatusBadRequest,
@@ -186,6 +205,9 @@ func TestUpdateUser(t *testing.T) {
 			svc := mocks.NewAdminService(t)
 			if tt.wantUpdate {
 				in := admin.UpdateInput{ID: testUser.ID, Role: &role, Disabled: &enabled}
+				if tt.wantIn != nil {
+					in = *tt.wantIn
+				}
 				svc.EXPECT().Update(mock.Anything, in).Return(updated, tt.updateErr)
 			}
 			id := testUser.ID.String()

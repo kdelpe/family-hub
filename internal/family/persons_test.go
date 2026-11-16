@@ -13,6 +13,7 @@ import (
 
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/database"
+	"github.com/kdelpe/family-hub/internal/database/gen"
 	"github.com/kdelpe/family-hub/internal/testdb"
 )
 
@@ -278,6 +279,110 @@ func TestDeleteAndRestore(t *testing.T) {
 	assert.Equal(t, rosa, restored)
 	_, err = svc.RestorePerson(t.Context(), rosa.ID)
 	assert.ErrorIs(t, err, ErrPersonNotFound, "restoring someone not deleted")
+}
+
+func TestDeleteGuardsALinkedLogin(t *testing.T) {
+	tests := []struct {
+		name     string
+		disabled bool
+		wantErr  error
+	}{
+		{name: "refused while the login is enabled", wantErr: ErrPersonHasLogin},
+		{name: "a disabled login loses the link", disabled: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, admin := newService(t)
+			rosa, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosa"})
+			require.NoError(t, err)
+			_, err = svc.pool.Exec(t.Context(), `UPDATE users SET person_id = $1, disabled_at = CASE WHEN $2 THEN now() END WHERE id = $3`, rosa.ID, tt.disabled, admin)
+			require.NoError(t, err)
+
+			err = svc.DeletePerson(t.Context(), rosa.ID)
+
+			var linked *uuid.UUID
+			require.NoError(t, svc.pool.QueryRow(t.Context(), `SELECT person_id FROM users WHERE id = $1`, admin).Scan(&linked))
+			_, getErr := svc.GetPerson(t.Context(), Viewer{IsAdmin: true}, rosa.ID)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				assert.NoError(t, getErr, "still in the tree")
+				assert.Equal(t, &rosa.ID, linked, "still linked")
+				return
+			}
+			require.NoError(t, err)
+			assert.ErrorIs(t, getErr, ErrPersonNotFound)
+			assert.Nil(t, linked)
+		})
+	}
+}
+
+func TestDeleteWaitsForALoginBeingEnabled(t *testing.T) {
+	svc, admin := newService(t)
+	rosa, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosa"})
+	require.NoError(t, err)
+	_, err = svc.pool.Exec(t.Context(), `UPDATE users SET person_id = $1, disabled_at = now() WHERE id = $2`, rosa.ID, admin)
+	require.NoError(t, err)
+	enable, err := svc.pool.Begin(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = enable.Rollback(context.Background()) })
+	_, err = enable.Exec(t.Context(), `UPDATE users SET disabled_at = NULL WHERE id = $1`, admin)
+	require.NoError(t, err)
+
+	done := make(chan error, 1)
+	go func() { done <- svc.DeletePerson(t.Context(), rosa.ID) }()
+	require.Eventually(t, func() bool {
+		var waiting int
+		require.NoError(t, svc.pool.QueryRow(t.Context(), `SELECT count(*) FROM pg_locks WHERE NOT granted`).Scan(&waiting))
+		return waiting > 0
+	}, 5*time.Second, 10*time.Millisecond, "the delete waits on the login's row")
+	require.NoError(t, enable.Commit(t.Context()))
+
+	require.ErrorIs(t, <-done, ErrPersonHasLogin)
+	var linked *uuid.UUID
+	require.NoError(t, svc.pool.QueryRow(t.Context(), `SELECT person_id FROM users WHERE id = $1`, admin).Scan(&linked))
+	assert.Equal(t, &rosa.ID, linked, "still linked")
+	_, err = svc.GetPerson(t.Context(), Viewer{IsAdmin: true}, rosa.ID)
+	assert.NoError(t, err, "still in the tree")
+}
+
+func TestAnInviteInProgressBlocksOnlyTheDelete(t *testing.T) {
+	tests := []struct {
+		name     string
+		write    func(ctx context.Context, s *Service, id uuid.UUID) error
+		wantBusy bool
+	}{
+		{name: "an edit goes ahead", write: func(ctx context.Context, s *Service, id uuid.UUID) error {
+			_, err := s.UpdatePerson(ctx, id, PersonPatch{Bio: Opt[*string]{Set: true, Value: new("Born in Jacmel")}})
+			return err
+		}},
+		{name: "a delete waits for the invite", wantBusy: true, write: func(ctx context.Context, s *Service, id uuid.UUID) error {
+			return s.DeletePerson(ctx, id)
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := testdb.MigratedPool(t, database.MigrateUp)
+			svc, admin := NewService(pool), insertAdmin(t, pool)
+			svc.lockTimeout = 100 * time.Millisecond
+			rosa, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosa"})
+			require.NoError(t, err)
+			invite, err := pool.Begin(t.Context())
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = invite.Rollback(context.Background()) })
+			_, err = gen.New(invite).LockPersonToLink(t.Context(), rosa.ID)
+			require.NoError(t, err)
+
+			err = tt.write(t.Context(), svc, rosa.ID)
+
+			if tt.wantBusy {
+				assert.ErrorIs(t, err, auth.ErrBusy)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestUnknownPersonIsNotFound(t *testing.T) {

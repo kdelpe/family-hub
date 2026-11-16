@@ -85,6 +85,50 @@ func TestSearchPersons(t *testing.T) {
 	}
 }
 
+func TestReadsPassTheLinkedPerson(t *testing.T) {
+	linked := auth.Session{UserID: testUser.ID, Role: auth.RoleMember, PersonID: new(otherPersonID)}
+	viewer := family.Viewer{PersonID: new(otherPersonID)}
+	tests := []struct {
+		name   string
+		expect func(svc *mocks.FamilyService)
+		serve  func(f *handler.Family) http.HandlerFunc
+		path   string
+	}{
+		{name: "a profile", path: "/api/persons/" + testPersonID.String(),
+			expect: func(svc *mocks.FamilyService) {
+				svc.EXPECT().GetPerson(mock.Anything, viewer, testPersonID).Return(testPerson, nil)
+			},
+			serve: func(f *handler.Family) http.HandlerFunc { return f.GetPerson }},
+		{name: "search", path: "/api/persons",
+			expect: func(svc *mocks.FamilyService) {
+				svc.EXPECT().ListPersons(mock.Anything, viewer, family.ListInput{}).Return(nil, nil)
+			},
+			serve: func(f *handler.Family) http.HandlerFunc { return f.SearchPersons }},
+		{name: "ancestors", path: "/api/persons/" + testPersonID.String() + "/ancestors",
+			expect: func(svc *mocks.FamilyService) {
+				svc.EXPECT().Ancestors(mock.Anything, viewer, testPersonID, family.DefaultDepth).Return(nil, nil)
+			},
+			serve: func(f *handler.Family) http.HandlerFunc { return f.Ancestors }},
+		{name: "descendants", path: "/api/persons/" + testPersonID.String() + "/descendants",
+			expect: func(svc *mocks.FamilyService) {
+				svc.EXPECT().Descendants(mock.Anything, viewer, testPersonID, family.DefaultDepth).Return(nil, nil)
+			},
+			serve: func(f *handler.Family) http.HandlerFunc { return f.Descendants }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewFamilyService(t)
+			tt.expect(svc)
+			req := withURLParam(httptest.NewRequest(http.MethodGet, tt.path, nil), "id", testPersonID.String())
+
+			rec := serveWith(t, linked, tt.serve(handler.NewFamily(svc)), req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+		})
+	}
+}
+
 func TestGetPerson(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -226,6 +270,8 @@ func TestDeletePerson(t *testing.T) {
 		{name: "deleted", wantDelete: true, wantStatus: http.StatusNoContent},
 		{name: "unknown or already deleted", wantDelete: true, deleteErr: family.ErrPersonNotFound, wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
 		{name: "busy", wantDelete: true, deleteErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable, wantBody: busyBody},
+		{name: "linked to a login", wantDelete: true, deleteErr: family.ErrPersonHasLogin, wantStatus: http.StatusConflict,
+			wantBody: `{"error":{"code":"conflict","message":"this person has a login; unlink or disable it first"}}`},
 		{name: "not a person id", id: "42", wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
 		{name: "database error", wantDelete: true, deleteErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 	}
@@ -409,13 +455,19 @@ func TestDeleteRelationship(t *testing.T) {
 // serveAs runs h behind the session gate as testUser with role; an empty role skips the gate.
 func serveAs(t *testing.T, role string, h http.HandlerFunc, req *http.Request) *httptest.ResponseRecorder {
 	t.Helper()
-	rec := httptest.NewRecorder()
 	if role == "" {
+		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		return rec
 	}
+	return serveWith(t, auth.Session{UserID: testUser.ID, Role: role}, h, req)
+}
+
+func serveWith(t *testing.T, session auth.Session, h http.HandlerFunc, req *http.Request) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
 	sessions := mocks.NewSessionAuthenticator(t)
-	sessions.EXPECT().Authenticate(mock.Anything, "tok").Return(auth.Session{UserID: testUser.ID, Role: role}, nil)
+	sessions.EXPECT().Authenticate(mock.Anything, "tok").Return(session, nil)
 	req.AddCookie(&http.Cookie{Name: "__Host-fh_session", Value: "tok"})
 	handler.NewSessionGate(sessions, handler.NewSessionCookie(true)).Require(h).ServeHTTP(rec, req)
 	return rec

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -29,7 +31,9 @@ func TestInvite(t *testing.T) {
 		wantSend         bool
 		wantErr          error
 		cancelDuringSend bool
-		wantUser         auth.User
+		// person is who the invite names: a new person unless "none", "unknown", "deleted" or "taken".
+		person   string
+		wantUser auth.User
 	}{
 		{name: "a member", in: InviteInput{Email: testEmail, Role: auth.RoleMember}, wantSend: true, wantUser: auth.User{Email: testEmail, Role: auth.RoleMember}},
 		{name: "an admin", in: InviteInput{Email: testEmail, Role: auth.RoleAdmin}, wantSend: true, wantUser: auth.User{Email: testEmail, Role: auth.RoleAdmin}},
@@ -39,6 +43,10 @@ func TestInvite(t *testing.T) {
 		{name: "unknown role", in: InviteInput{Email: testEmail, Role: "owner"}, wantErr: ErrInvalidRole},
 		{name: "no role", in: InviteInput{Email: testEmail}, wantErr: ErrInvalidRole},
 		{name: "email taken", in: InviteInput{Email: "TEST@example.com", Role: auth.RoleMember}, existing: testEmail, wantErr: ErrEmailTaken},
+		{name: "no person", in: InviteInput{Email: testEmail, Role: auth.RoleMember}, person: "none", wantErr: ErrNoPerson},
+		{name: "unknown person", in: InviteInput{Email: testEmail, Role: auth.RoleMember}, person: "unknown", wantErr: ErrPersonNotFound},
+		{name: "deleted person", in: InviteInput{Email: testEmail, Role: auth.RoleMember}, person: "deleted", wantErr: ErrPersonNotFound},
+		{name: "a person who already has a login", in: InviteInput{Email: testEmail, Role: auth.RoleMember}, existing: "other@example.com", person: "taken", wantErr: ErrPersonTaken},
 		{name: "email not sent saves nothing", in: InviteInput{Email: testEmail, Role: auth.RoleMember}, wantSend: true, sendErr: errors.New("smtp: 550"), wantErr: ErrEmailNotSent},
 		{name: "a refused message is not a send failure", in: InviteInput{Email: testEmail, Role: auth.RoleMember}, wantSend: true, sendErr: fmt.Errorf("%w: subject", mail.ErrInvalidMessage), wantErr: mail.ErrInvalidMessage},
 	}
@@ -46,9 +54,25 @@ func TestInvite(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := testdb.MigratedPool(t, database.MigrateUp)
+			person := insertPerson(t, pool)
 			if tt.existing != "" {
 				_, err := pool.Exec(t.Context(), `INSERT INTO users (email) VALUES ($1)`, tt.existing)
 				require.NoError(t, err)
+			}
+			switch tt.person {
+			case "":
+				tt.in.PersonID = person
+				tt.wantUser.PersonID = &person
+			case "unknown":
+				tt.in.PersonID = uuid.New()
+			case "deleted":
+				_, err := pool.Exec(t.Context(), `UPDATE persons SET deleted_at = now() WHERE id = $1`, person)
+				require.NoError(t, err)
+				tt.in.PersonID = person
+			case "taken":
+				_, err := pool.Exec(t.Context(), `UPDATE users SET person_id = $1 WHERE email = $2`, person, tt.existing)
+				require.NoError(t, err)
+				tt.in.PersonID = person
 			}
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -93,6 +117,13 @@ func TestInvite(t *testing.T) {
 			assert.Equal(t, user, signedIn)
 		})
 	}
+}
+
+func insertPerson(t *testing.T, pool *pgxpool.Pool) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO persons (first_name) VALUES ('Rosa') RETURNING id`).Scan(&id))
+	return id
 }
 
 func inviteToken(t *testing.T, body string) string {

@@ -72,4 +72,5 @@ type User struct {
 	DisabledAt        *time.Time
 	LastLoginAt       *time.Time
 	CreatedAt         time.Time
+	PersonID          *uuid.UUID
 }

@@ -30,12 +30,15 @@ type UpdateInput struct {
 	Email    *string
 	Role     *string
 	Disabled *bool
+	// SetPerson links the login to PersonID, or unlinks it when PersonID is nil.
+	SetPerson bool
+	PersonID  *uuid.UUID
 }
 
-// Update changes a user's role, enabled state or email. A new email clears their credentials and
+// Update changes a user's role, enabled state, email or linked person. A new email clears their credentials and
 // emails a fresh invite before the commit, so a failed send changes nothing (§5).
 func (s *Users) Update(ctx context.Context, in UpdateInput) (Account, error) {
-	if in.Email == nil && in.Role == nil && in.Disabled == nil {
+	if in.Email == nil && in.Role == nil && in.Disabled == nil && !in.SetPerson {
 		return Account{}, ErrNoChanges
 	}
 	var email string
@@ -89,8 +92,15 @@ func (s *Users) update(ctx context.Context, in UpdateInput, email string) (Accou
 		}
 	}
 
-	if err := q.SetRoleAndDisabled(ctx, gen.SetRoleAndDisabledParams{ID: in.ID, Role: role, Disabled: disabled}); err != nil {
-		return Account{}, fmt.Errorf("set role and disabled: %w", err)
+	if in.Role != nil || in.Disabled != nil {
+		if err := q.SetRoleAndDisabled(ctx, gen.SetRoleAndDisabledParams{ID: in.ID, Role: role, Disabled: disabled}); err != nil {
+			return Account{}, fmt.Errorf("set role and disabled: %w", err)
+		}
+	}
+	if in.SetPerson && !samePerson(in.PersonID, locked.PersonID) {
+		if err := linkPerson(ctx, q, in.ID, in.PersonID); err != nil {
+			return Account{}, err
+		}
 	}
 	if (disabled && locked.DisabledAt == nil) || emailChanged {
 		if err := revoke(ctx, q, in.ID); err != nil {
@@ -122,6 +132,26 @@ func (s *Users) update(ctx context.Context, in UpdateInput, email string) (Accou
 		return Account{}, err
 	}
 	return accountFromRow(gen.ListUsersRow(row)), nil
+}
+
+func linkPerson(ctx context.Context, q *gen.Queries, userID uuid.UUID, personID *uuid.UUID) error {
+	if personID != nil {
+		if err := lockPersonToLink(ctx, q, *personID); err != nil {
+			return err
+		}
+	}
+	err := q.SetUserPerson(ctx, gen.SetUserPersonParams{ID: userID, PersonID: personID})
+	if isPersonTaken(err) {
+		return ErrPersonTaken
+	}
+	if err != nil {
+		return fmt.Errorf("link person: %w", err)
+	}
+	return nil
+}
+
+func samePerson(a, b *uuid.UUID) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }
 
 func requireAnotherAdmin(ctx context.Context, tx pgx.Tx, q *gen.Queries) error {

@@ -69,7 +69,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID uuid.UUID) erro
 }
 
 const getActiveSession = `-- name: GetActiveSession :one
-SELECT s.user_id, u.role, s.last_seen_at < now() - $1::interval AS stale
+SELECT s.user_id, u.role, u.person_id, s.last_seen_at < now() - $1::interval AS stale
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.id_hash = $2
@@ -85,15 +85,21 @@ type GetActiveSessionParams struct {
 }
 
 type GetActiveSessionRow struct {
-	UserID uuid.UUID
-	Role   string
-	Stale  bool
+	UserID   uuid.UUID
+	Role     string
+	PersonID *uuid.UUID
+	Stale    bool
 }
 
 func (q *Queries) GetActiveSession(ctx context.Context, arg GetActiveSessionParams) (GetActiveSessionRow, error) {
 	row := q.db.QueryRow(ctx, getActiveSession, arg.TouchAfter, arg.IDHash, arg.IdleTimeout)
 	var i GetActiveSessionRow
-	err := row.Scan(&i.UserID, &i.Role, &i.Stale)
+	err := row.Scan(
+		&i.UserID,
+		&i.Role,
+		&i.PersonID,
+		&i.Stale,
+	)
 	return i, err
 }
 
