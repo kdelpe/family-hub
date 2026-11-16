@@ -123,9 +123,9 @@ func TestInvite(t *testing.T) {
 
 func TestInviteFrom(t *testing.T) {
 	const (
-		fromAdmin  = "Maya Pluviose invited you to the family hub, a private place for our family's tree, photos and stories."
-		fromNobody = "You're invited to the family hub, a private place for our family's tree, photos and stories."
-		fromMember = "Stanley Jean-Louis invited you to the family hub, a private place for our family's tree, photos and stories."
+		fromAdmin  = "Maya Pluviose invited you to the Pluviose-Monestime Family Hub — a private place for our family's tree, photos and stories."
+		fromNobody = "You're invited to the Pluviose-Monestime Family Hub — a private place for our family's tree, photos and stories."
+		fromMember = "Stanley Jean-Louis invited you to the Pluviose-Monestime Family Hub — a private place for our family's tree, photos and stories."
 		approved   = "Approved by Maya Pluviose, admin."
 	)
 	tests := []struct {

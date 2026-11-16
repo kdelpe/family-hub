@@ -16,7 +16,7 @@ import (
 const (
 	inviteSubject     = "You're invited to the family hub"
 	inviteFromSubject = "%s invited you to the family hub"
-	aboutTheHub       = "the family hub, a private place for our family's tree, photos and stories."
+	aboutTheHub       = "the Pluviose-Monestime Family Hub — a private place for our family's tree, photos and stories."
 	inviteBody        = `Bonjou%s,
 
 %s
@@ -165,7 +165,7 @@ func senderName(ctx context.Context, q *gen.Queries, id *uuid.UUID) (*name, erro
 	return &name{first: row.FirstName, full: auth.FullName(row.FirstName, row.LastName)}, nil
 }
 
-// inviteMessage follows design-notes §4.10, without surnames in the greeting (§5.5).
+// inviteMessage follows design-notes §4.10.
 func inviteMessage(email, link, invitee string, from, approver *name) mail.Message {
 	subject, intro := inviteSubject, "You're invited to "+aboutTheHub
 	if from != nil {
