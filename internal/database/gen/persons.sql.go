@@ -202,7 +202,7 @@ func (q *Queries) ListPersons(ctx context.Context, arg ListPersonsParams) ([]Lis
 const lockPerson = `-- name: LockPerson :one
 SELECT id, first_name, middle_name, last_name, maiden_name, side, birth_place, gender,
   birth_date, birth_date_precision, death_date, death_date_precision, is_deceased, bio
-FROM persons WHERE id = $1 AND deleted_at IS NULL FOR UPDATE
+FROM persons WHERE id = $1 AND deleted_at IS NULL FOR NO KEY UPDATE
 `
 
 type LockPersonRow struct {
@@ -222,7 +222,7 @@ type LockPersonRow struct {
 	Bio                *string
 }
 
-// Admins only: the unmasked row, to apply a PATCH to.
+// Admins only: the unmasked row, to apply a PATCH to. NO KEY, so an invite linking a login doesn't block it.
 func (q *Queries) LockPerson(ctx context.Context, id uuid.UUID) (LockPersonRow, error) {
 	row := q.db.QueryRow(ctx, lockPerson, id)
 	var i LockPersonRow
@@ -245,23 +245,38 @@ func (q *Queries) LockPerson(ctx context.Context, id uuid.UUID) (LockPersonRow, 
 	return i, err
 }
 
+const lockPersonLogins = `-- name: LockPersonLogins :many
+SELECT (disabled_at IS NULL)::boolean AS enabled FROM users WHERE person_id = $1 FOR UPDATE
+`
+
+// Locked, so a login being enabled meanwhile is seen as enabled, not unlinked behind the admin's back.
+func (q *Queries) LockPersonLogins(ctx context.Context, personID *uuid.UUID) ([]bool, error) {
+	rows, err := q.db.Query(ctx, lockPersonLogins, personID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []bool
+	for rows.Next() {
+		var enabled bool
+		if err := rows.Scan(&enabled); err != nil {
+			return nil, err
+		}
+		items = append(items, enabled)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockPersonToDelete = `-- name: LockPersonToDelete :one
 SELECT EXISTS (SELECT 1 FROM persons WHERE id = $1 AND deleted_at IS NULL FOR UPDATE)
 `
 
+// FOR UPDATE waits for an invite still linking a login to them (its FOR KEY SHARE).
 func (q *Queries) LockPersonToDelete(ctx context.Context, id uuid.UUID) (bool, error) {
 	row := q.db.QueryRow(ctx, lockPersonToDelete, id)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
-const personHasEnabledLogin = `-- name: PersonHasEnabledLogin :one
-SELECT EXISTS (SELECT 1 FROM users WHERE person_id = $1 AND disabled_at IS NULL)
-`
-
-func (q *Queries) PersonHasEnabledLogin(ctx context.Context, personID *uuid.UUID) (bool, error) {
-	row := q.db.QueryRow(ctx, personHasEnabledLogin, personID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err

@@ -75,6 +75,7 @@ UPDATE users SET email = @email, password_hash = NULL, password_changed_at = NUL
 -- name: SetUserPerson :exec
 UPDATE users SET person_id = sqlc.narg(person_id) WHERE id = @id;
 
--- Held until the commit, so the person can't be deleted while a login is being linked to them.
+-- Held until the commit, so the person can't be deleted while a login is being linked to them. KEY SHARE
+-- only blocks that delete, not edits to the person during the invite's email send.
 -- name: LockPersonToLink :one
-SELECT EXISTS (SELECT 1 FROM persons WHERE id = @id AND deleted_at IS NULL FOR SHARE);
+SELECT EXISTS (SELECT 1 FROM persons WHERE id = @id AND deleted_at IS NULL FOR KEY SHARE);

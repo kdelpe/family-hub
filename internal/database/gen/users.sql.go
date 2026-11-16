@@ -278,10 +278,11 @@ func (q *Queries) LockEnabledUserByEmail(ctx context.Context, email string) (uui
 }
 
 const lockPersonToLink = `-- name: LockPersonToLink :one
-SELECT EXISTS (SELECT 1 FROM persons WHERE id = $1 AND deleted_at IS NULL FOR SHARE)
+SELECT EXISTS (SELECT 1 FROM persons WHERE id = $1 AND deleted_at IS NULL FOR KEY SHARE)
 `
 
-// Held until the commit, so the person can't be deleted while a login is being linked to them.
+// Held until the commit, so the person can't be deleted while a login is being linked to them. KEY SHARE
+// only blocks that delete, not edits to the person during the invite's email send.
 func (q *Queries) LockPersonToLink(ctx context.Context, id uuid.UUID) (bool, error) {
 	row := q.db.QueryRow(ctx, lockPersonToLink, id)
 	var exists bool

@@ -18,7 +18,10 @@ import (
 )
 
 // Postgres names the constraint of the inline UNIQUE on users.email.
-const usersEmailKey = "users_email_key"
+const (
+	usersEmailKey  = "users_email_key"
+	usersPersonKey = "uq_users_person"
+)
 
 var (
 	ErrCreateUsage      = errors.New("usage: family-hub admin create --email ADDR")
@@ -126,7 +129,7 @@ func createAdmin(ctx context.Context, q *gen.Queries, email, passwordHash string
 
 func isPersonTaken(err error) bool {
 	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation && pgErr.ConstraintName == "uq_users_person"
+	return errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation && pgErr.ConstraintName == usersPersonKey
 }
 
 func isEmailTaken(err error) bool {

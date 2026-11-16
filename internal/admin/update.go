@@ -92,8 +92,10 @@ func (s *Users) update(ctx context.Context, in UpdateInput, email string) (Accou
 		}
 	}
 
-	if err := q.SetRoleAndDisabled(ctx, gen.SetRoleAndDisabledParams{ID: in.ID, Role: role, Disabled: disabled}); err != nil {
-		return Account{}, fmt.Errorf("set role and disabled: %w", err)
+	if in.Role != nil || in.Disabled != nil {
+		if err := q.SetRoleAndDisabled(ctx, gen.SetRoleAndDisabledParams{ID: in.ID, Role: role, Disabled: disabled}); err != nil {
+			return Account{}, fmt.Errorf("set role and disabled: %w", err)
+		}
 	}
 	if in.SetPerson && !samePerson(in.PersonID, locked.PersonID) {
 		if err := linkPerson(ctx, q, in.ID, in.PersonID); err != nil {

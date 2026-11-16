@@ -55,19 +55,13 @@ func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 	if in.PersonID == uuid.Nil {
 		return auth.User{}, ErrNoPerson
 	}
-	user, err := s.invite(ctx, email, in)
-	return user, auth.BusyIfContended(err)
-}
 
-func (s *Users) invite(ctx context.Context, email string, in InviteInput) (auth.User, error) {
+	// No lock timeout: a second invite for the same email waits for the first's send and then gets email_taken.
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return auth.User{}, fmt.Errorf("begin invite: %w", err)
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
-	if err := auth.SetLockTimeout(ctx, tx, auth.LockTimeout); err != nil {
-		return auth.User{}, err
-	}
 	q := gen.New(tx)
 	if err := lockPersonToLink(ctx, q, in.PersonID); err != nil {
 		return auth.User{}, err

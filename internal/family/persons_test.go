@@ -13,6 +13,7 @@ import (
 
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/database"
+	"github.com/kdelpe/family-hub/internal/database/gen"
 	"github.com/kdelpe/family-hub/internal/testdb"
 )
 
@@ -312,6 +313,45 @@ func TestDeleteGuardsALinkedLogin(t *testing.T) {
 			require.NoError(t, err)
 			assert.ErrorIs(t, getErr, ErrPersonNotFound)
 			assert.Nil(t, linked)
+		})
+	}
+}
+
+func TestAnInviteInProgressBlocksOnlyTheDelete(t *testing.T) {
+	tests := []struct {
+		name     string
+		write    func(ctx context.Context, s *Service, id uuid.UUID) error
+		wantBusy bool
+	}{
+		{name: "an edit goes ahead", write: func(ctx context.Context, s *Service, id uuid.UUID) error {
+			_, err := s.UpdatePerson(ctx, id, PersonPatch{Bio: Opt[*string]{Set: true, Value: new("Born in Jacmel")}})
+			return err
+		}},
+		{name: "a delete waits for the invite", wantBusy: true, write: func(ctx context.Context, s *Service, id uuid.UUID) error {
+			return s.DeletePerson(ctx, id)
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := testdb.MigratedPool(t, database.MigrateUp)
+			svc, admin := NewService(pool), insertAdmin(t, pool)
+			svc.lockTimeout = 100 * time.Millisecond
+			rosa, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosa"})
+			require.NoError(t, err)
+			invite, err := pool.Begin(t.Context())
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = invite.Rollback(context.Background()) })
+			_, err = gen.New(invite).LockPersonToLink(t.Context(), rosa.ID)
+			require.NoError(t, err)
+
+			err = tt.write(t.Context(), svc, rosa.ID)
+
+			if tt.wantBusy {
+				assert.ErrorIs(t, err, auth.ErrBusy)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

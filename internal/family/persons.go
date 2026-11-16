@@ -224,11 +224,11 @@ func (s *Service) DeletePerson(ctx context.Context, id uuid.UUID) error {
 		if !found {
 			return ErrPersonNotFound
 		}
-		linked, err := q.PersonHasEnabledLogin(ctx, &id)
+		logins, err := q.LockPersonLogins(ctx, &id)
 		if err != nil {
-			return fmt.Errorf("check login: %w", err)
+			return fmt.Errorf("lock logins: %w", err)
 		}
-		if linked {
+		if slices.Contains(logins, true) {
 			return ErrPersonHasLogin
 		}
 		if err := q.UnlinkPersonLogins(ctx, &id); err != nil {
