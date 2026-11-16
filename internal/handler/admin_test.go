@@ -32,11 +32,15 @@ func TestInviteUser(t *testing.T) {
 		body       string
 		inviteErr  error
 		wantInvite bool
+		wantFrom   *uuid.UUID
 		canceled   bool
 		wantStatus int
 		wantBody   string
 	}{
 		{name: "invited", body: body, wantInvite: true, wantStatus: http.StatusCreated, wantBody: testUserBody},
+		{name: "invited from someone", body: `{"email":"test@example.com","role":"member","person_id":"01890000-0000-7000-8000-0000000000aa",
+			"from_person_id":"01890000-0000-7000-8000-0000000000cc"}`, wantInvite: true, wantFrom: new(uuid.MustParse("01890000-0000-7000-8000-0000000000cc")),
+			wantStatus: http.StatusCreated, wantBody: testUserBody},
 		{name: "invalid email", body: body, wantInvite: true, inviteErr: admin.ErrInvalidEmail, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"validation_error","message":"not a valid email address"}}`},
 		{name: "invalid role", body: body, wantInvite: true, inviteErr: admin.ErrInvalidRole, wantStatus: http.StatusBadRequest,
@@ -65,7 +69,9 @@ func TestInviteUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewAdminService(t)
 			if tt.wantInvite {
-				svc.EXPECT().Invite(mock.Anything, admin.InviteInput{Email: "test@example.com", Role: "member", PersonID: personID, SentBy: testAdminSession.UserID}).
+				svc.EXPECT().Invite(mock.Anything, admin.InviteInput{
+					Email: "test@example.com", Role: "member", PersonID: personID, FromPersonID: tt.wantFrom, SentBy: testAdminSession.UserID,
+				}).
 					Return(testUser, tt.inviteErr)
 			}
 			req := httptest.NewRequest(http.MethodPost, "/api/admin/users", strings.NewReader(tt.body))
@@ -339,24 +345,6 @@ func TestRequireAdmin(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestInviteUserPassesTheSender(t *testing.T) {
-	from := uuid.MustParse("01890000-0000-7000-8000-0000000000cc")
-	svc := mocks.NewAdminService(t)
-	svc.EXPECT().Invite(mock.Anything, admin.InviteInput{
-		Email: "test@example.com", Role: "member", PersonID: uuid.MustParse("01890000-0000-7000-8000-0000000000aa"),
-		FromPersonID: &from, SentBy: testAdminSession.UserID,
-	}).Return(testUser, nil)
-	req := httptest.NewRequest(http.MethodPost, "/api/admin/users", strings.NewReader(
-		`{"email":"test@example.com","role":"member","person_id":"01890000-0000-7000-8000-0000000000aa","from_person_id":"01890000-0000-7000-8000-0000000000cc"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(handler.WithSession(req.Context(), testAdminSession))
-	rec := httptest.NewRecorder()
-
-	handler.NewAdmin(svc).InviteUser(rec, req)
-
-	assert.Equal(t, http.StatusCreated, rec.Code)
 }
 
 func TestAdminWritesNeedASession(t *testing.T) {

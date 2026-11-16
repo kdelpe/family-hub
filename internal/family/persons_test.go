@@ -43,6 +43,8 @@ func TestCreateRefusesAnInvalidPerson(t *testing.T) {
 		{name: "died before being born", in: PersonInput{FirstName: "Rosa", BirthDate: new("1950"), BirthDatePrecision: new("year"),
 			DeathDate: new("1949"), DeathDatePrecision: new("year"), IsDeceased: true}, wantErrMsg: "the death date is before the birth date"},
 		{name: "a NUL in the first name", in: PersonInput{FirstName: "Ro\x00sa"}, wantErrMsg: "the first name contains a character that isn't allowed"},
+		{name: "a line break in the first name", in: PersonInput{FirstName: "Maya\nPluviose"}, wantErrMsg: "the first name contains a character that isn't allowed"},
+		{name: "a tab in the birth place", in: PersonInput{FirstName: "Rosa", BirthPlace: new("Jac\tmel")}, wantErrMsg: "the birth place contains a character that isn't allowed"},
 		{name: "a NUL in the bio", in: PersonInput{FirstName: "Rosa", Bio: new("Tells\x00stories")}, wantErrMsg: "the bio contains a character that isn't allowed"},
 		{name: "a last name that isn't UTF-8", in: PersonInput{FirstName: "Rosa", LastName: new("Pi\xffrre")}, wantErrMsg: "the last name contains a character that isn't allowed"},
 	}

@@ -73,6 +73,10 @@ func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 	if err := lockPersonToLink(ctx, q, in.PersonID); err != nil {
 		return auth.User{}, err
 	}
+	sender, err := resolveSender(ctx, q, in.SentBy, in.FromPersonID)
+	if err != nil {
+		return auth.User{}, err
+	}
 	id, err := q.CreateInvitedUser(ctx, gen.CreateInvitedUserParams{Email: email, Role: in.Role, PersonID: &in.PersonID})
 	switch {
 	case isEmailTaken(err):
@@ -82,7 +86,7 @@ func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 	case err != nil:
 		return auth.User{}, fmt.Errorf("create user: %w", err)
 	}
-	msg, err := s.invite(ctx, tx, id, email, in.SentBy, in.FromPersonID)
+	msg, err := s.invite(ctx, tx, id, email, sender)
 	if err != nil {
 		return auth.User{}, err
 	}
@@ -111,43 +115,63 @@ type name struct {
 	full  string
 }
 
-// invite stores an invite link for userID and writes its email. It's from fromPersonID, or the
-// sending admin's own person when that's nil (§5); with neither, it's from nobody.
-func (s *Users) invite(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string, sentBy uuid.UUID, fromPersonID *uuid.UUID) (mail.Message, error) {
-	q := gen.New(tx)
+// sender is who an invite is from and the admin who approved it, as the email names them.
+type sender struct {
+	auth.Sender
+	from, approver *name
+}
+
+// resolveSender picks who an invite is from: fromPersonID, or the sending admin's own person when that's nil
+// (§5); with neither, it's from nobody. An explicit sender who can't send one is refused.
+func resolveSender(ctx context.Context, q *gen.Queries, sentBy uuid.UUID, fromPersonID *uuid.UUID) (sender, error) {
+	if sentBy == uuid.Nil {
+		return sender{}, errors.New("an invite needs the admin sending it")
+	}
 	adminPerson, err := q.GetUserPersonID(ctx, sentBy)
 	if err != nil {
-		return mail.Message{}, fmt.Errorf("get sending admin: %w", err)
+		return sender{}, fmt.Errorf("get sending admin: %w", err)
 	}
-	from := fromPersonID
-	if from == nil {
-		from = adminPerson
+	s := sender{Sender: auth.Sender{FromPersonID: fromPersonID, SentBy: sentBy}}
+	if s.FromPersonID == nil {
+		s.FromPersonID = adminPerson
 	}
-	fromName, err := senderName(ctx, q, from)
-	if err != nil {
-		return mail.Message{}, err
+	if s.from, err = senderName(ctx, q, s.FromPersonID); err != nil {
+		return sender{}, err
 	}
-	if fromName == nil {
+	if s.from == nil {
 		if fromPersonID != nil {
-			return mail.Message{}, ErrInvalidSender
+			return sender{}, ErrInvalidSender
 		}
-		from = nil
+		s.FromPersonID = nil
 	}
-	var approver *name
-	if adminPerson != nil && !samePerson(adminPerson, from) {
-		if approver, err = senderName(ctx, q, adminPerson); err != nil {
-			return mail.Message{}, err
+	if adminPerson != nil && !samePerson(adminPerson, s.FromPersonID) {
+		if s.approver, err = senderName(ctx, q, adminPerson); err != nil {
+			return sender{}, err
 		}
 	}
-	invitee, err := q.GetUserFirstName(ctx, userID)
+	return s, nil
+}
+
+// invite stores an invite link for userID and writes its email.
+func (s *Users) invite(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string, from sender) (mail.Message, error) {
+	invitee, err := gen.New(tx).GetUserFirstName(ctx, userID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return mail.Message{}, fmt.Errorf("get invitee: %w", err)
 	}
-	token, err := auth.CreateInvite(ctx, tx, userID, auth.Sender{FromPersonID: from, SentBy: sentBy})
+	token, err := auth.CreateInvite(ctx, tx, userID, from.Sender)
 	if err != nil {
 		return mail.Message{}, err
 	}
-	return inviteMessage(email, auth.SetPasswordLink(s.baseURL, token), invitee, fromName, approver), nil
+	return inviteMessage(email, auth.SetPasswordLink(s.baseURL, token), invitee, from.from, from.approver), nil
+}
+
+// inviteFromAdmin is a resend, or the invite to a changed email: from the admin doing it.
+func (s *Users) inviteFromAdmin(ctx context.Context, tx pgx.Tx, userID uuid.UUID, email string, sentBy uuid.UUID) (mail.Message, error) {
+	from, err := resolveSender(ctx, gen.New(tx), sentBy, nil)
+	if err != nil {
+		return mail.Message{}, err
+	}
+	return s.invite(ctx, tx, userID, email, from)
 }
 
 // senderName is nil for nobody, or for someone an invite can't be from.

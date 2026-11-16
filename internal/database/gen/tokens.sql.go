@@ -63,23 +63,38 @@ func (q *Queries) DeleteUserTokens(ctx context.Context, userID uuid.UUID) error 
 	return err
 }
 
-const getUsableToken = `-- name: GetUsableToken :one
-SELECT t.id, t.user_id, t.purpose, u.email,
-  invitee.first_name AS invitee_first_name, sender.first_name AS from_first_name, sender.last_name AS from_last_name
+const getTokenNames = `-- name: GetTokenNames :one
+SELECT invitee.first_name AS invitee_first_name, sender.first_name AS from_first_name, sender.last_name AS from_last_name
 FROM auth_tokens t JOIN users u ON u.id = t.user_id
 LEFT JOIN persons invitee ON invitee.id = u.person_id AND invitee.deleted_at IS NULL
 LEFT JOIN persons sender ON sender.id = t.from_person_id AND sender.deleted_at IS NULL
+WHERE t.id = $1
+`
+
+type GetTokenNamesRow struct {
+	InviteeFirstName *string
+	FromFirstName    *string
+	FromLastName     *string
+}
+
+func (q *Queries) GetTokenNames(ctx context.Context, id uuid.UUID) (GetTokenNamesRow, error) {
+	row := q.db.QueryRow(ctx, getTokenNames, id)
+	var i GetTokenNamesRow
+	err := row.Scan(&i.InviteeFirstName, &i.FromFirstName, &i.FromLastName)
+	return i, err
+}
+
+const getUsableToken = `-- name: GetUsableToken :one
+SELECT t.id, t.user_id, t.purpose, u.email
+FROM auth_tokens t JOIN users u ON u.id = t.user_id
 WHERE t.token_hash = $1 AND t.consumed_at IS NULL AND t.expires_at > now() AND u.disabled_at IS NULL
 `
 
 type GetUsableTokenRow struct {
-	ID               uuid.UUID
-	UserID           uuid.UUID
-	Purpose          string
-	Email            string
-	InviteeFirstName *string
-	FromFirstName    *string
-	FromLastName     *string
+	ID      uuid.UUID
+	UserID  uuid.UUID
+	Purpose string
+	Email   string
 }
 
 func (q *Queries) GetUsableToken(ctx context.Context, tokenHash []byte) (GetUsableTokenRow, error) {
@@ -90,9 +105,6 @@ func (q *Queries) GetUsableToken(ctx context.Context, tokenHash []byte) (GetUsab
 		&i.UserID,
 		&i.Purpose,
 		&i.Email,
-		&i.InviteeFirstName,
-		&i.FromFirstName,
-		&i.FromLastName,
 	)
 	return i, err
 }

@@ -133,6 +133,7 @@ const getInviteSender = `-- name: GetInviteSender :one
 SELECT p.first_name, p.last_name
 FROM persons p JOIN users u ON u.person_id = p.id
 WHERE p.id = $1 AND p.deleted_at IS NULL AND u.disabled_at IS NULL AND u.password_hash IS NOT NULL
+FOR SHARE OF u
 `
 
 type GetInviteSenderRow struct {
@@ -140,7 +141,8 @@ type GetInviteSenderRow struct {
 	LastName  *string
 }
 
-// Someone an invite can be from: in the tree, with a login that is set up and enabled (§5).
+// Someone an invite can be from: in the tree, with a login that is set up and enabled (§5). The login is
+// held until the commit, so a disable or email change can't land between this check and the send.
 func (q *Queries) GetInviteSender(ctx context.Context, id uuid.UUID) (GetInviteSenderRow, error) {
 	row := q.db.QueryRow(ctx, getInviteSender, id)
 	var i GetInviteSenderRow

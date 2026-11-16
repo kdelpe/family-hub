@@ -70,9 +70,17 @@ func (s *Service) PreviewLink(ctx context.Context, token string) (LinkPreview, e
 	if err != nil {
 		return LinkPreview{}, err
 	}
-	preview := LinkPreview{Purpose: found.Purpose, Email: found.Email, InviteeFirstName: found.InviteeFirstName}
-	if found.FromFirstName != nil {
-		preview.FromName = new(FullName(*found.FromFirstName, found.FromLastName))
+	names, err := gen.New(s.pool).GetTokenNames(ctx, found.ID)
+	// Gone since the lookup: it was used or swept, so it's no longer usable.
+	if errors.Is(err, pgx.ErrNoRows) {
+		return LinkPreview{}, ErrInvalidToken
+	}
+	if err != nil {
+		return LinkPreview{}, fmt.Errorf("get link names: %w", err)
+	}
+	preview := LinkPreview{Purpose: found.Purpose, Email: found.Email, InviteeFirstName: names.InviteeFirstName}
+	if names.FromFirstName != nil {
+		preview.FromName = new(FullName(*names.FromFirstName, names.FromLastName))
 	}
 	return preview, nil
 }

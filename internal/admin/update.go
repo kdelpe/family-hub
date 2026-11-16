@@ -118,7 +118,7 @@ func (s *Users) update(ctx context.Context, in UpdateInput, email string) (Accou
 			}
 			return Account{}, fmt.Errorf("change email: %w", err)
 		}
-		msg, err := s.invite(ctx, tx, in.ID, email, in.ActorID, nil)
+		msg, err := s.inviteFromAdmin(ctx, tx, in.ID, email, in.ActorID)
 		if err != nil {
 			return Account{}, err
 		}

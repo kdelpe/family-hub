@@ -49,7 +49,7 @@ func (s *Users) sendReset(ctx context.Context, sentBy, id uuid.UUID) error {
 		}
 		msg = auth.ResetMessage(s.baseURL, locked.Email, token)
 	} else {
-		if msg, err = s.invite(ctx, tx, id, locked.Email, sentBy, nil); err != nil {
+		if msg, err = s.inviteFromAdmin(ctx, tx, id, locked.Email, sentBy); err != nil {
 			return err
 		}
 	}
