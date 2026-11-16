@@ -47,3 +47,13 @@ UPDATE persons SET deleted_at = now(), updated_at = now() WHERE id = @id AND del
 
 -- name: RestorePerson :execrows
 UPDATE persons SET deleted_at = NULL, updated_at = now() WHERE id = @id AND deleted_at IS NOT NULL;
+
+-- name: LockPersonToDelete :one
+SELECT EXISTS (SELECT 1 FROM persons WHERE id = @id AND deleted_at IS NULL FOR UPDATE);
+
+-- name: PersonHasEnabledLogin :one
+SELECT EXISTS (SELECT 1 FROM users WHERE person_id = @person_id AND disabled_at IS NULL);
+
+-- A disabled login loses its link with the person, so no login ever points at someone deleted (§5.1).
+-- name: UnlinkPersonLogins :exec
+UPDATE users SET person_id = NULL WHERE person_id = @person_id;

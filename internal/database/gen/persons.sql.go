@@ -245,6 +245,28 @@ func (q *Queries) LockPerson(ctx context.Context, id uuid.UUID) (LockPersonRow, 
 	return i, err
 }
 
+const lockPersonToDelete = `-- name: LockPersonToDelete :one
+SELECT EXISTS (SELECT 1 FROM persons WHERE id = $1 AND deleted_at IS NULL FOR UPDATE)
+`
+
+func (q *Queries) LockPersonToDelete(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, lockPersonToDelete, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const personHasEnabledLogin = `-- name: PersonHasEnabledLogin :one
+SELECT EXISTS (SELECT 1 FROM users WHERE person_id = $1 AND disabled_at IS NULL)
+`
+
+func (q *Queries) PersonHasEnabledLogin(ctx context.Context, personID *uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, personHasEnabledLogin, personID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const restorePerson = `-- name: RestorePerson :execrows
 UPDATE persons SET deleted_at = NULL, updated_at = now() WHERE id = $1 AND deleted_at IS NOT NULL
 `
@@ -267,6 +289,16 @@ func (q *Queries) SoftDeletePerson(ctx context.Context, id uuid.UUID) (int64, er
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const unlinkPersonLogins = `-- name: UnlinkPersonLogins :exec
+UPDATE users SET person_id = NULL WHERE person_id = $1
+`
+
+// A disabled login loses its link with the person, so no login ever points at someone deleted (§5.1).
+func (q *Queries) UnlinkPersonLogins(ctx context.Context, personID *uuid.UUID) error {
+	_, err := q.db.Exec(ctx, unlinkPersonLogins, personID)
+	return err
 }
 
 const updatePerson = `-- name: UpdatePerson :exec

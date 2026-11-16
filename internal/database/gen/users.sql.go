@@ -56,16 +56,17 @@ func (q *Queries) CreateAdmin(ctx context.Context, arg CreateAdminParams) error 
 }
 
 const createInvitedUser = `-- name: CreateInvitedUser :one
-INSERT INTO users (email, role) VALUES ($1, $2) RETURNING id
+INSERT INTO users (email, role, person_id) VALUES ($1, $2, $3) RETURNING id
 `
 
 type CreateInvitedUserParams struct {
-	Email string
-	Role  string
+	Email    string
+	Role     string
+	PersonID *uuid.UUID
 }
 
 func (q *Queries) CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, createInvitedUser, arg.Email, arg.Role)
+	row := q.db.QueryRow(ctx, createInvitedUser, arg.Email, arg.Role, arg.PersonID)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -84,12 +85,13 @@ func (q *Queries) EmailTaken(ctx context.Context, email string) (bool, error) {
 
 const getAccount = `-- name: GetAccount :one
 SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
-  (u.password_hash IS NOT NULL)::boolean AS set_up,
+  (u.password_hash IS NOT NULL)::boolean AS set_up, u.person_id, p.first_name AS person_first_name, p.last_name AS person_last_name,
   (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
 FROM users u
 LEFT JOIN auth_tokens t ON t.user_id = u.id AND t.purpose = 'invite' AND t.consumed_at IS NULL
+LEFT JOIN persons p ON p.id = u.person_id
 WHERE u.id = $1
-GROUP BY u.id
+GROUP BY u.id, p.id
 `
 
 type GetAccountRow struct {
@@ -100,6 +102,9 @@ type GetAccountRow struct {
 	LastLoginAt     *time.Time
 	CreatedAt       time.Time
 	SetUp           bool
+	PersonID        *uuid.UUID
+	PersonFirstName *string
+	PersonLastName  *string
 	HasInvite       bool
 	InviteExpiresAt time.Time
 }
@@ -115,6 +120,9 @@ func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (GetAccountRow, 
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.SetUp,
+		&i.PersonID,
+		&i.PersonFirstName,
+		&i.PersonLastName,
 		&i.HasInvite,
 		&i.InviteExpiresAt,
 	)
@@ -145,19 +153,25 @@ func (q *Queries) GetLoginUser(ctx context.Context, email string) (GetLoginUserR
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, role FROM users WHERE id = $1
+SELECT id, email, role, person_id FROM users WHERE id = $1
 `
 
 type GetUserRow struct {
-	ID    uuid.UUID
-	Email string
-	Role  string
+	ID       uuid.UUID
+	Email    string
+	Role     string
+	PersonID *uuid.UUID
 }
 
 func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (GetUserRow, error) {
 	row := q.db.QueryRow(ctx, getUser, id)
 	var i GetUserRow
-	err := row.Scan(&i.ID, &i.Email, &i.Role)
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Role,
+		&i.PersonID,
+	)
 	return i, err
 }
 
@@ -186,13 +200,14 @@ func (q *Queries) GetUserPassword(ctx context.Context, id uuid.UUID) (GetUserPas
 
 const listUsers = `-- name: ListUsers :many
 SELECT u.id, u.email, u.role, u.disabled_at, u.last_login_at, u.created_at,
-  (u.password_hash IS NOT NULL)::boolean AS set_up,
+  (u.password_hash IS NOT NULL)::boolean AS set_up, u.person_id, p.first_name AS person_first_name, p.last_name AS person_last_name,
   -- sqlc can't type a nullable max(), so has_invite says whether invite_expires_at is real.
   (count(t.id) > 0)::boolean AS has_invite, coalesce(max(t.expires_at), u.created_at)::timestamptz AS invite_expires_at
 FROM users u
 LEFT JOIN auth_tokens t ON t.user_id = u.id AND t.purpose = 'invite' AND t.consumed_at IS NULL
+LEFT JOIN persons p ON p.id = u.person_id
 WHERE $1::text = '' OR (u.email, u.id) > ($1::text, $2::uuid)
-GROUP BY u.id
+GROUP BY u.id, p.id
 ORDER BY u.email, u.id
 LIMIT $3
 `
@@ -211,6 +226,9 @@ type ListUsersRow struct {
 	LastLoginAt     *time.Time
 	CreatedAt       time.Time
 	SetUp           bool
+	PersonID        *uuid.UUID
+	PersonFirstName *string
+	PersonLastName  *string
 	HasInvite       bool
 	InviteExpiresAt time.Time
 }
@@ -232,6 +250,9 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUse
 			&i.LastLoginAt,
 			&i.CreatedAt,
 			&i.SetUp,
+			&i.PersonID,
+			&i.PersonFirstName,
+			&i.PersonLastName,
 			&i.HasInvite,
 			&i.InviteExpiresAt,
 		); err != nil {
@@ -256,8 +277,20 @@ func (q *Queries) LockEnabledUserByEmail(ctx context.Context, email string) (uui
 	return id, err
 }
 
+const lockPersonToLink = `-- name: LockPersonToLink :one
+SELECT EXISTS (SELECT 1 FROM persons WHERE id = $1 AND deleted_at IS NULL FOR SHARE)
+`
+
+// Held until the commit, so the person can't be deleted while a login is being linked to them.
+func (q *Queries) LockPersonToLink(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, lockPersonToLink, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const lockUser = `-- name: LockUser :one
-SELECT email, role, password_changed_at, disabled_at, (password_hash IS NOT NULL)::boolean AS set_up
+SELECT email, role, password_changed_at, disabled_at, (password_hash IS NOT NULL)::boolean AS set_up, person_id
 FROM users WHERE id = $1 FOR UPDATE
 `
 
@@ -267,6 +300,7 @@ type LockUserRow struct {
 	PasswordChangedAt *time.Time
 	DisabledAt        *time.Time
 	SetUp             bool
+	PersonID          *uuid.UUID
 }
 
 func (q *Queries) LockUser(ctx context.Context, id uuid.UUID) (LockUserRow, error) {
@@ -278,6 +312,7 @@ func (q *Queries) LockUser(ctx context.Context, id uuid.UUID) (LockUserRow, erro
 		&i.PasswordChangedAt,
 		&i.DisabledAt,
 		&i.SetUp,
+		&i.PersonID,
 	)
 	return i, err
 }
@@ -340,5 +375,19 @@ type SetRoleAndDisabledParams struct {
 
 func (q *Queries) SetRoleAndDisabled(ctx context.Context, arg SetRoleAndDisabledParams) error {
 	_, err := q.db.Exec(ctx, setRoleAndDisabled, arg.Role, arg.Disabled, arg.ID)
+	return err
+}
+
+const setUserPerson = `-- name: SetUserPerson :exec
+UPDATE users SET person_id = $1 WHERE id = $2
+`
+
+type SetUserPersonParams struct {
+	PersonID *uuid.UUID
+	ID       uuid.UUID
+}
+
+func (q *Queries) SetUserPerson(ctx context.Context, arg SetUserPersonParams) error {
+	_, err := q.db.Exec(ctx, setUserPerson, arg.PersonID, arg.ID)
 	return err
 }
