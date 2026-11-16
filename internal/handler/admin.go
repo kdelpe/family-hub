@@ -32,19 +32,27 @@ func NewAdmin(svc AdminService) *Admin {
 }
 
 type inviteRequest struct {
-	Email string `json:"email"`
-	Role  string `json:"role"`
+	Email    string    `json:"email"`
+	Role     string    `json:"role"`
+	PersonID uuid.UUID `json:"person_id"`
 }
 
 type accountResponse struct {
-	ID              uuid.UUID  `json:"id"`
-	Email           string     `json:"email"`
-	Role            string     `json:"role"`
-	Status          string     `json:"status"`
-	InviteExpiresAt *time.Time `json:"invite_expires_at"`
-	DisabledAt      *time.Time `json:"disabled_at"`
-	LastLoginAt     *time.Time `json:"last_login_at"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID              uuid.UUID             `json:"id"`
+	Email           string                `json:"email"`
+	Role            string                `json:"role"`
+	Person          *linkedPersonResponse `json:"person"`
+	Status          string                `json:"status"`
+	InviteExpiresAt *time.Time            `json:"invite_expires_at"`
+	DisabledAt      *time.Time            `json:"disabled_at"`
+	LastLoginAt     *time.Time            `json:"last_login_at"`
+	CreatedAt       time.Time             `json:"created_at"`
+}
+
+type linkedPersonResponse struct {
+	ID        uuid.UUID `json:"id"`
+	FirstName string    `json:"first_name"`
+	LastName  *string   `json:"last_name"`
 }
 
 type pageResponse struct {
@@ -72,9 +80,10 @@ func (a *Admin) ListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateUserRequest struct {
-	Email    *string `json:"email"`
-	Role     *string `json:"role"`
-	Disabled *bool   `json:"disabled"`
+	Email    *string              `json:"email"`
+	Role     *string              `json:"role"`
+	Disabled *bool                `json:"disabled"`
+	PersonID optional[*uuid.UUID] `json:"person_id"`
 }
 
 func (a *Admin) UpdateUser(w http.ResponseWriter, r *http.Request) {
@@ -86,19 +95,23 @@ func (a *Admin) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
-	account, err := a.svc.Update(r.Context(), admin.UpdateInput{ID: id, Email: req.Email, Role: req.Role, Disabled: req.Disabled})
+	account, err := a.svc.Update(r.Context(), admin.UpdateInput{
+		ID: id, Email: req.Email, Role: req.Role, Disabled: req.Disabled, SetPerson: req.PersonID.Set, PersonID: req.PersonID.Value,
+	})
 	switch {
 	case err == nil:
 		httpx.JSON(w, http.StatusOK, toAccountResponse(account))
 	// Only a plain cancel is dropped: a failed commit after the email went out must still be logged.
 	case clientGone(r) && errors.Is(err, context.Canceled):
 	case errors.Is(err, admin.ErrNoChanges), errors.Is(err, admin.ErrInvalidEmail), errors.Is(err, admin.ErrInvalidRole),
-		errors.Is(err, admin.ErrDisabledEmailChange):
+		errors.Is(err, admin.ErrDisabledEmailChange), errors.Is(err, admin.ErrPersonNotFound):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, admin.ErrUserNotFound):
 		httpx.Error(w, http.StatusNotFound, "not_found", err.Error())
 	case errors.Is(err, admin.ErrEmailTaken):
 		httpx.Error(w, http.StatusConflict, "email_taken", err.Error())
+	case errors.Is(err, admin.ErrPersonTaken):
+		httpx.Error(w, http.StatusConflict, "person_taken", err.Error())
 	case errors.Is(err, admin.ErrLastAdmin):
 		httpx.Error(w, http.StatusConflict, "last_admin", err.Error())
 	case errors.Is(err, admin.ErrEmailNotSent):
@@ -157,8 +170,8 @@ func toPageResponse(page admin.Page) pageResponse {
 
 func toAccountResponse(acc admin.Account) accountResponse {
 	return accountResponse{
-		ID: acc.ID, Email: acc.Email, Role: acc.Role, Status: acc.Status, InviteExpiresAt: acc.InviteExpiresAt,
-		DisabledAt: acc.DisabledAt, LastLoginAt: acc.LastLoginAt, CreatedAt: acc.CreatedAt,
+		ID: acc.ID, Email: acc.Email, Role: acc.Role, Person: (*linkedPersonResponse)(acc.Person), Status: acc.Status,
+		InviteExpiresAt: acc.InviteExpiresAt, DisabledAt: acc.DisabledAt, LastLoginAt: acc.LastLoginAt, CreatedAt: acc.CreatedAt,
 	}
 }
 
@@ -167,16 +180,21 @@ func (a *Admin) InviteUser(w http.ResponseWriter, r *http.Request) {
 	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
-	user, err := a.svc.Invite(r.Context(), admin.InviteInput{Email: req.Email, Role: req.Role})
+	user, err := a.svc.Invite(r.Context(), admin.InviteInput(req))
 	switch {
 	case err == nil:
 		httpx.JSON(w, http.StatusCreated, toUserResponse(user))
 	// Only a plain cancel is dropped: a failed commit after the email went out must still be logged.
 	case clientGone(r) && errors.Is(err, context.Canceled):
-	case errors.Is(err, admin.ErrInvalidEmail), errors.Is(err, admin.ErrInvalidRole):
+	case errors.Is(err, admin.ErrInvalidEmail), errors.Is(err, admin.ErrInvalidRole), errors.Is(err, admin.ErrNoPerson),
+		errors.Is(err, admin.ErrPersonNotFound):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, admin.ErrEmailTaken):
 		httpx.Error(w, http.StatusConflict, "email_taken", err.Error())
+	case errors.Is(err, admin.ErrPersonTaken):
+		httpx.Error(w, http.StatusConflict, "person_taken", err.Error())
+	case errors.Is(err, auth.ErrBusy):
+		busy(w)
 	case errors.Is(err, admin.ErrEmailNotSent):
 		zerolog.Ctx(r.Context()).Error().Err(err).Msg("send invite")
 		httpx.Error(w, http.StatusBadGateway, "mail_failed", "the invitation email couldn't be sent and nothing was saved; try again")

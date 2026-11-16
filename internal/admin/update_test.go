@@ -120,6 +120,68 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
+func TestUpdateLinksAPerson(t *testing.T) {
+	tests := []struct {
+		name string
+		// linked is who the user is linked to before the update: "", "Rosa" or "Jean".
+		linked  string
+		to      string
+		unlink  bool
+		wantErr error
+		want    string
+	}{
+		{name: "linked", to: "Rosa", want: "Rosa"},
+		{name: "linked to someone else", linked: "Rosa", to: "Jean", want: "Jean"},
+		{name: "the same person again", linked: "Rosa", to: "Rosa", want: "Rosa"},
+		{name: "unlinked", linked: "Rosa", unlink: true},
+		{name: "an unknown person", to: "unknown", wantErr: ErrPersonNotFound},
+		{name: "a deleted person", to: "Gone", wantErr: ErrPersonNotFound},
+		{name: "a person with another login", linked: "Rosa", to: "Taken", wantErr: ErrPersonTaken},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool, id := withAccounts(t)
+			people := map[string]uuid.UUID{"unknown": uuid.New()}
+			for _, name := range []string{"Rosa", "Jean", "Gone", "Taken"} {
+				var pid uuid.UUID
+				require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO persons (first_name) VALUES ($1) RETURNING id`, name).Scan(&pid))
+				people[name] = pid
+			}
+			_, err := pool.Exec(t.Context(), `UPDATE persons SET deleted_at = now() WHERE id = $1`, people["Gone"])
+			require.NoError(t, err)
+			_, err = pool.Exec(t.Context(), `UPDATE users SET person_id = $1 WHERE email = $2`, people["Taken"], otherAdminEmail)
+			require.NoError(t, err)
+			if tt.linked != "" {
+				_, err := pool.Exec(t.Context(), `UPDATE users SET person_id = $1 WHERE id = $2`, people[tt.linked], id)
+				require.NoError(t, err)
+			}
+			before := accountState(t, pool, id)
+			in := UpdateInput{ID: id, SetPerson: true}
+			if !tt.unlink {
+				pid := people[tt.to]
+				in.PersonID = &pid
+			}
+
+			got, err := NewUsers(pool, nil, testBaseURL).Update(t.Context(), in)
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				assert.Equal(t, before, accountState(t, pool, id), "nothing changed")
+				return
+			}
+			require.NoError(t, err)
+			if tt.want == "" {
+				assert.Nil(t, got.Person)
+			} else {
+				assert.Equal(t, &LinkedPerson{ID: people[tt.want], FirstName: tt.want}, got.Person)
+			}
+			assert.Equal(t, got, listed(t, pool, id), "the same as the list shows")
+			assert.Equal(t, 1, countFor(t, pool, `SELECT count(*) FROM sessions WHERE user_id = $1`, id), "linking signs nobody out")
+		})
+	}
+}
+
 func TestUpdateKeepsAnAdminWhenTwoDemoteEachOther(t *testing.T) {
 	pool, id := withAccounts(t)
 	_, err := pool.Exec(t.Context(), `UPDATE users SET role = 'admin' WHERE id = $1`, id)
@@ -179,7 +241,7 @@ func withAccounts(t *testing.T) (*pgxpool.Pool, uuid.UUID) {
 func accountState(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) string {
 	t.Helper()
 	var state string
-	require.NoError(t, pool.QueryRow(t.Context(), `SELECT concat_ws('|', u.email, u.role, u.disabled_at, u.password_hash,
+	require.NoError(t, pool.QueryRow(t.Context(), `SELECT concat_ws('|', u.email, u.role, u.disabled_at, u.password_hash, u.person_id,
 		(SELECT count(*) FROM sessions WHERE user_id = u.id), (SELECT count(*) FROM auth_tokens WHERE user_id = u.id))
 		FROM users u WHERE id = $1`, id).Scan(&state))
 	return state

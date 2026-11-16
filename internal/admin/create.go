@@ -124,6 +124,11 @@ func createAdmin(ctx context.Context, q *gen.Queries, email, passwordHash string
 	return nil
 }
 
+func isPersonTaken(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation && pgErr.ConstraintName == "uq_users_person"
+}
+
 func isEmailTaken(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation && pgErr.ConstraintName == usersEmailKey

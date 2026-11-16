@@ -74,6 +74,8 @@ type Account struct {
 	ID    uuid.UUID
 	Email string
 	Role  string
+	// Person is who the login is in the tree; nil while unlinked.
+	Person *LinkedPerson
 	// Active once a password is set; invited until then.
 	Status string
 	// Only for an invited user: when the latest invite link expires, if there is one.
@@ -81,6 +83,12 @@ type Account struct {
 	DisabledAt      *time.Time
 	LastLoginAt     *time.Time
 	CreatedAt       time.Time
+}
+
+type LinkedPerson struct {
+	ID        uuid.UUID
+	FirstName string
+	LastName  *string
 }
 
 type Page struct {
@@ -121,6 +129,9 @@ func accountFromRow(row gen.ListUsersRow) Account {
 	a := Account{
 		ID: row.ID, Email: row.Email, Role: row.Role, Status: StatusActive,
 		DisabledAt: row.DisabledAt, LastLoginAt: row.LastLoginAt, CreatedAt: row.CreatedAt,
+	}
+	if row.PersonID != nil && row.PersonFirstName != nil {
+		a.Person = &LinkedPerson{ID: *row.PersonID, FirstName: *row.PersonFirstName, LastName: row.PersonLastName}
 	}
 	switch {
 	case row.DisabledAt != nil:
