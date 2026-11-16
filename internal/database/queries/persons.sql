@@ -20,7 +20,7 @@ SELECT p.id, p.first_name, p.middle_name, p.last_name, p.maiden_name, p.side, p.
 FROM persons p
 WHERE p.id = @id AND p.deleted_at IS NULL;
 
--- Admins only: the unmasked row, to apply a PATCH to. NO KEY, so an invite linking a login doesn't block it.
+-- The unmasked row, to apply a PATCH to; never returned as is. NO KEY, so an invite linking a login doesn't block it.
 -- name: LockPerson :one
 SELECT id, first_name, middle_name, last_name, maiden_name, side, birth_place, gender,
   birth_date, birth_date_precision, death_date, death_date_precision, is_deceased, bio
