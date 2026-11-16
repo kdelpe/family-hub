@@ -48,6 +48,86 @@ func (_m *FamilyService) EXPECT() *FamilyService_Expecter {
 	return &FamilyService_Expecter{mock: &_m.Mock}
 }
 
+// Ancestors provides a mock function for the type FamilyService
+func (_mock *FamilyService) Ancestors(ctx context.Context, viewer family.Viewer, id uuid.UUID, depth int) ([]family.Relative, error) {
+	ret := _mock.Called(ctx, viewer, id, depth)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Ancestors")
+	}
+
+	var r0 []family.Relative
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, uuid.UUID, int) ([]family.Relative, error)); ok {
+		return returnFunc(ctx, viewer, id, depth)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, uuid.UUID, int) []family.Relative); ok {
+		r0 = returnFunc(ctx, viewer, id, depth)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]family.Relative)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, family.Viewer, uuid.UUID, int) error); ok {
+		r1 = returnFunc(ctx, viewer, id, depth)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// FamilyService_Ancestors_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Ancestors'
+type FamilyService_Ancestors_Call struct {
+	*mock.Call
+}
+
+// Ancestors is a helper method to define mock.On call
+//   - ctx context.Context
+//   - viewer family.Viewer
+//   - id uuid.UUID
+//   - depth int
+func (_e *FamilyService_Expecter) Ancestors(ctx any, viewer any, id any, depth any) *FamilyService_Ancestors_Call {
+	return &FamilyService_Ancestors_Call{Call: _e.mock.On("Ancestors", ctx, viewer, id, depth)}
+}
+
+func (_c *FamilyService_Ancestors_Call) Run(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID, depth int)) *FamilyService_Ancestors_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 family.Viewer
+		if args[1] != nil {
+			arg1 = args[1].(family.Viewer)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		var arg3 int
+		if args[3] != nil {
+			arg3 = args[3].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *FamilyService_Ancestors_Call) Return(relatives []family.Relative, err error) *FamilyService_Ancestors_Call {
+	_c.Call.Return(relatives, err)
+	return _c
+}
+
+func (_c *FamilyService_Ancestors_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID, depth int) ([]family.Relative, error)) *FamilyService_Ancestors_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreatePerson provides a mock function for the type FamilyService
 func (_mock *FamilyService) CreatePerson(ctx context.Context, createdBy uuid.UUID, in family.PersonInput) (family.Person, error) {
 	ret := _mock.Called(ctx, createdBy, in)
@@ -300,6 +380,86 @@ func (_c *FamilyService_DeleteRelationship_Call) RunAndReturn(run func(ctx conte
 	return _c
 }
 
+// Descendants provides a mock function for the type FamilyService
+func (_mock *FamilyService) Descendants(ctx context.Context, viewer family.Viewer, id uuid.UUID, depth int) ([]family.Relative, error) {
+	ret := _mock.Called(ctx, viewer, id, depth)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Descendants")
+	}
+
+	var r0 []family.Relative
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, uuid.UUID, int) ([]family.Relative, error)); ok {
+		return returnFunc(ctx, viewer, id, depth)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, uuid.UUID, int) []family.Relative); ok {
+		r0 = returnFunc(ctx, viewer, id, depth)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]family.Relative)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, family.Viewer, uuid.UUID, int) error); ok {
+		r1 = returnFunc(ctx, viewer, id, depth)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// FamilyService_Descendants_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Descendants'
+type FamilyService_Descendants_Call struct {
+	*mock.Call
+}
+
+// Descendants is a helper method to define mock.On call
+//   - ctx context.Context
+//   - viewer family.Viewer
+//   - id uuid.UUID
+//   - depth int
+func (_e *FamilyService_Expecter) Descendants(ctx any, viewer any, id any, depth any) *FamilyService_Descendants_Call {
+	return &FamilyService_Descendants_Call{Call: _e.mock.On("Descendants", ctx, viewer, id, depth)}
+}
+
+func (_c *FamilyService_Descendants_Call) Run(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID, depth int)) *FamilyService_Descendants_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 family.Viewer
+		if args[1] != nil {
+			arg1 = args[1].(family.Viewer)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		var arg3 int
+		if args[3] != nil {
+			arg3 = args[3].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *FamilyService_Descendants_Call) Return(relatives []family.Relative, err error) *FamilyService_Descendants_Call {
+	_c.Call.Return(relatives, err)
+	return _c
+}
+
+func (_c *FamilyService_Descendants_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID, depth int) ([]family.Relative, error)) *FamilyService_Descendants_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetPerson provides a mock function for the type FamilyService
 func (_mock *FamilyService) GetPerson(ctx context.Context, viewer family.Viewer, id uuid.UUID) (family.Person, error) {
 	ret := _mock.Called(ctx, viewer, id)
@@ -508,6 +668,126 @@ func (_c *FamilyService_RestorePerson_Call) Return(person family.Person, err err
 }
 
 func (_c *FamilyService_RestorePerson_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) (family.Person, error)) *FamilyService_RestorePerson_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Summary provides a mock function for the type FamilyService
+func (_mock *FamilyService) Summary(ctx context.Context) (family.Summary, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Summary")
+	}
+
+	var r0 family.Summary
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (family.Summary, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) family.Summary); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(family.Summary)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// FamilyService_Summary_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Summary'
+type FamilyService_Summary_Call struct {
+	*mock.Call
+}
+
+// Summary is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *FamilyService_Expecter) Summary(ctx any) *FamilyService_Summary_Call {
+	return &FamilyService_Summary_Call{Call: _e.mock.On("Summary", ctx)}
+}
+
+func (_c *FamilyService_Summary_Call) Run(run func(ctx context.Context)) *FamilyService_Summary_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *FamilyService_Summary_Call) Return(summary family.Summary, err error) *FamilyService_Summary_Call {
+	_c.Call.Return(summary, err)
+	return _c
+}
+
+func (_c *FamilyService_Summary_Call) RunAndReturn(run func(ctx context.Context) (family.Summary, error)) *FamilyService_Summary_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Tree provides a mock function for the type FamilyService
+func (_mock *FamilyService) Tree(ctx context.Context) (family.Tree, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Tree")
+	}
+
+	var r0 family.Tree
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (family.Tree, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) family.Tree); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(family.Tree)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// FamilyService_Tree_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Tree'
+type FamilyService_Tree_Call struct {
+	*mock.Call
+}
+
+// Tree is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *FamilyService_Expecter) Tree(ctx any) *FamilyService_Tree_Call {
+	return &FamilyService_Tree_Call{Call: _e.mock.On("Tree", ctx)}
+}
+
+func (_c *FamilyService_Tree_Call) Run(run func(ctx context.Context)) *FamilyService_Tree_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *FamilyService_Tree_Call) Return(tree family.Tree, err error) *FamilyService_Tree_Call {
+	_c.Call.Return(tree, err)
+	return _c
+}
+
+func (_c *FamilyService_Tree_Call) RunAndReturn(run func(ctx context.Context) (family.Tree, error)) *FamilyService_Tree_Call {
 	_c.Call.Return(run)
 	return _c
 }
