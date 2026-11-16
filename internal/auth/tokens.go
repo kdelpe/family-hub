@@ -22,13 +22,21 @@ const (
 
 var ErrInvalidToken = errors.New("link is invalid, used or expired")
 
+// Sender is who an invite is from (nil when nobody is) and the admin who sent it.
+type Sender struct {
+	FromPersonID *uuid.UUID
+	SentBy       uuid.UUID
+}
+
 // CreateInvite stores an invite for a new user and returns the token for the link.
-func CreateInvite(ctx context.Context, db gen.DBTX, userID uuid.UUID) (string, error) {
-	return createToken(ctx, db, userID, purposeInvite, InviteLifetime)
+func CreateInvite(ctx context.Context, db gen.DBTX, userID uuid.UUID, sender Sender) (string, error) {
+	return createToken(ctx, db, gen.CreateTokenParams{
+		UserID: userID, Purpose: purposeInvite, Lifetime: InviteLifetime, FromPersonID: sender.FromPersonID, SentByUserID: &sender.SentBy,
+	})
 }
 
 func CreatePasswordReset(ctx context.Context, db gen.DBTX, userID uuid.UUID) (string, error) {
-	return createToken(ctx, db, userID, purposePasswordReset, ResetLifetime)
+	return createToken(ctx, db, gen.CreateTokenParams{UserID: userID, Purpose: purposePasswordReset, Lifetime: ResetLifetime})
 }
 
 // SetPasswordLink is the emailed link; the token goes in the fragment so it never reaches a server log (§5).
@@ -36,21 +44,24 @@ func SetPasswordLink(baseURL, token string) string {
 	return baseURL + SetPasswordPath + token
 }
 
-func createToken(ctx context.Context, db gen.DBTX, userID uuid.UUID, purpose string, lifetime time.Duration) (string, error) {
+func createToken(ctx context.Context, db gen.DBTX, params gen.CreateTokenParams) (string, error) {
 	raw, token, err := newToken()
 	if err != nil {
-		return "", fmt.Errorf("generate %s token: %w", purpose, err)
+		return "", fmt.Errorf("generate %s token: %w", params.Purpose, err)
 	}
-	err = gen.New(db).CreateToken(ctx, gen.CreateTokenParams{UserID: userID, Purpose: purpose, TokenHash: hashToken(raw), Lifetime: lifetime})
-	if err != nil {
-		return "", fmt.Errorf("create %s token: %w", purpose, err)
+	params.TokenHash = hashToken(raw)
+	if err := gen.New(db).CreateToken(ctx, params); err != nil {
+		return "", fmt.Errorf("create %s token: %w", params.Purpose, err)
 	}
 	return token, nil
 }
 
+// LinkPreview is what the set-password page shows; the names are nil when unknown.
 type LinkPreview struct {
-	Purpose string
-	Email   string
+	Purpose          string
+	Email            string
+	InviteeFirstName *string
+	FromName         *string
 }
 
 // PreviewLink says what an invite or reset link is for, without using it.
@@ -59,7 +70,18 @@ func (s *Service) PreviewLink(ctx context.Context, token string) (LinkPreview, e
 	if err != nil {
 		return LinkPreview{}, err
 	}
-	return LinkPreview{Purpose: found.Purpose, Email: found.Email}, nil
+	preview := LinkPreview{Purpose: found.Purpose, Email: found.Email, InviteeFirstName: found.InviteeFirstName}
+	if found.FromFirstName != nil {
+		preview.FromName = new(FullName(*found.FromFirstName, found.FromLastName))
+	}
+	return preview, nil
+}
+
+func FullName(first string, last *string) string {
+	if last == nil {
+		return first
+	}
+	return first + " " + *last
 }
 
 // usableToken finds a link that works now; using it re-checks under the user's row lock.

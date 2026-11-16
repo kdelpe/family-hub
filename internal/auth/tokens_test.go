@@ -284,12 +284,20 @@ func insertToken(t *testing.T, pool *pgxpool.Pool, userID uuid.UUID, purpose str
 func TestCreateInvite(t *testing.T) {
 	svc, pool, userID := withTestUser(t)
 
-	invite, err := CreateInvite(t.Context(), pool, userID)
+	invite, err := CreateInvite(t.Context(), pool, userID, Sender{SentBy: userID})
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, count(t, pool, `SELECT count(*) FROM auth_tokens WHERE purpose = 'invite' AND expires_at BETWEEN now() + interval '7 days' - interval '1 minute' AND now() + interval '7 days'`))
 	_, _, err = svc.SetPasswordWithToken(t.Context(), SetPasswordInput{Token: invite, Password: newPassword})
 	assert.NoError(t, err)
+}
+
+// withNames links the user to Darline and makes the link from the sender given as (first_name, last_name, deleted_at).
+func withNames(sender string) string {
+	return `WITH invitee AS (INSERT INTO persons (first_name) VALUES ('Darline') RETURNING id),
+		sender AS (INSERT INTO persons (first_name, last_name, deleted_at) VALUES ` + sender + ` RETURNING id),
+		linked AS (UPDATE users SET person_id = (SELECT id FROM invitee))
+		UPDATE auth_tokens SET from_person_id = (SELECT id FROM sender)`
 }
 
 func TestPreviewLink(t *testing.T) {
@@ -304,6 +312,12 @@ func TestPreviewLink(t *testing.T) {
 	}{
 		{name: "invite", purpose: purposeInvite, want: LinkPreview{Purpose: purposeInvite, Email: testEmail}},
 		{name: "password reset", purpose: purposePasswordReset, want: LinkPreview{Purpose: purposePasswordReset, Email: testEmail}},
+		{name: "an invite names who it's for and who it's from", purpose: purposeInvite, setup: withNames(`('Nadège', 'Pluviose', NULL)`),
+			want: LinkPreview{Purpose: purposeInvite, Email: testEmail, InviteeFirstName: new("Darline"), FromName: new("Nadège Pluviose")}},
+		{name: "a sender without a last name", purpose: purposeInvite, setup: withNames(`('Nadège', NULL, NULL)`),
+			want: LinkPreview{Purpose: purposeInvite, Email: testEmail, InviteeFirstName: new("Darline"), FromName: new("Nadège")}},
+		{name: "a deleted sender is left out", purpose: purposeInvite, setup: withNames(`('Nadège', 'Pluviose', now())`),
+			want: LinkPreview{Purpose: purposeInvite, Email: testEmail, InviteeFirstName: new("Darline")}},
 		{name: "malformed token", purpose: purposeInvite, token: func(string) string { return "not-a-token" }, wantErr: ErrInvalidToken},
 		{name: "unknown token", purpose: purposeInvite, token: func(string) string { return "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }, wantErr: ErrInvalidToken},
 		{name: "expired", purpose: purposeInvite, setup: `UPDATE auth_tokens SET expires_at = now() - interval '1 second'`, wantErr: ErrInvalidToken},
