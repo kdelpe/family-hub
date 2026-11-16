@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -186,7 +188,13 @@ func senderName(ctx context.Context, q *gen.Queries, id *uuid.UUID) (*name, erro
 	if err != nil {
 		return nil, fmt.Errorf("get sender: %w", err)
 	}
-	return &name{first: row.FirstName, full: auth.FullName(row.FirstName, row.LastName)}, nil
+	first := oneLine(row.FirstName)
+	return &name{first: first, full: oneLine(auth.FullName(row.FirstName, row.LastName))}, nil
+}
+
+// oneLine keeps a name saved before line breaks were refused from breaking the email subject.
+func oneLine(s string) string {
+	return strings.Join(strings.FieldsFunc(s, unicode.IsControl), " ")
 }
 
 // inviteMessage follows design-notes §4.10.

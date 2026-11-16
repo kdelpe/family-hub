@@ -94,6 +94,13 @@ func (s *Users) update(ctx context.Context, in UpdateInput, email string) (Accou
 			return Account{}, err
 		}
 	}
+	var from sender
+	if emailChanged {
+		// Before the credentials are cleared: an admin changing their own email is still a sender.
+		if from, err = resolveSender(ctx, q, in.ActorID, nil); err != nil {
+			return Account{}, err
+		}
+	}
 
 	if in.Role != nil || in.Disabled != nil {
 		if err := q.SetRoleAndDisabled(ctx, gen.SetRoleAndDisabledParams{ID: in.ID, Role: role, Disabled: disabled}); err != nil {
@@ -118,7 +125,7 @@ func (s *Users) update(ctx context.Context, in UpdateInput, email string) (Accou
 			}
 			return Account{}, fmt.Errorf("change email: %w", err)
 		}
-		msg, err := s.inviteFromAdmin(ctx, tx, in.ID, email, in.ActorID)
+		msg, err := s.invite(ctx, tx, in.ID, email, from)
 		if err != nil {
 			return Account{}, err
 		}

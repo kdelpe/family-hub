@@ -217,6 +217,26 @@ func TestInviteFrom(t *testing.T) {
 	}
 }
 
+func TestInviteFromANameSavedWithALineBreak(t *testing.T) {
+	pool := testdb.MigratedPool(t, database.MigrateUp)
+	var maya, kervens uuid.UUID
+	// Written straight to the table, as a name saved before line breaks were refused.
+	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO persons (first_name, last_name) VALUES (E'Maya\r\nAnne', 'Pluviose') RETURNING id`).Scan(&maya))
+	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO persons (first_name) VALUES ('Kervens') RETURNING id`).Scan(&kervens))
+	var admin uuid.UUID
+	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role, person_id, password_hash, password_changed_at)
+		VALUES ('admin@example.com', 'admin', $1, 'hash', now()) RETURNING id`, maya).Scan(&admin))
+	mailer := mailmocks.NewMailer(t)
+	var sent mail.Message
+	mailer.EXPECT().Send(mock.Anything, mock.Anything).Run(func(_ context.Context, msg mail.Message) { sent = msg }).Return(nil).Once()
+
+	_, err := NewUsers(pool, mailer, testBaseURL).Invite(t.Context(), InviteInput{Email: testEmail, Role: auth.RoleMember, PersonID: kervens, SentBy: admin})
+
+	require.NoError(t, err)
+	assert.Equal(t, "Maya Anne invited you to the family hub", sent.Subject)
+	assert.Contains(t, sent.Body, "Maya Anne Pluviose invited you")
+}
+
 func insertPerson(t *testing.T, pool *pgxpool.Pool) uuid.UUID {
 	t.Helper()
 	var id uuid.UUID
