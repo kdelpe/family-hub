@@ -317,6 +317,35 @@ func TestDeleteGuardsALinkedLogin(t *testing.T) {
 	}
 }
 
+func TestDeleteWaitsForALoginBeingEnabled(t *testing.T) {
+	svc, admin := newService(t)
+	rosa, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosa"})
+	require.NoError(t, err)
+	_, err = svc.pool.Exec(t.Context(), `UPDATE users SET person_id = $1, disabled_at = now() WHERE id = $2`, rosa.ID, admin)
+	require.NoError(t, err)
+	enable, err := svc.pool.Begin(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = enable.Rollback(context.Background()) })
+	_, err = enable.Exec(t.Context(), `UPDATE users SET disabled_at = NULL WHERE id = $1`, admin)
+	require.NoError(t, err)
+
+	done := make(chan error, 1)
+	go func() { done <- svc.DeletePerson(t.Context(), rosa.ID) }()
+	require.Eventually(t, func() bool {
+		var waiting int
+		require.NoError(t, svc.pool.QueryRow(t.Context(), `SELECT count(*) FROM pg_locks WHERE NOT granted`).Scan(&waiting))
+		return waiting > 0
+	}, 5*time.Second, 10*time.Millisecond, "the delete waits on the login's row")
+	require.NoError(t, enable.Commit(t.Context()))
+
+	require.ErrorIs(t, <-done, ErrPersonHasLogin)
+	var linked *uuid.UUID
+	require.NoError(t, svc.pool.QueryRow(t.Context(), `SELECT person_id FROM users WHERE id = $1`, admin).Scan(&linked))
+	assert.Equal(t, &rosa.ID, linked, "still linked")
+	_, err = svc.GetPerson(t.Context(), Viewer{IsAdmin: true}, rosa.ID)
+	assert.NoError(t, err, "still in the tree")
+}
+
 func TestAnInviteInProgressBlocksOnlyTheDelete(t *testing.T) {
 	tests := []struct {
 		name     string
