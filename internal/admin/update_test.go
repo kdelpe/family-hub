@@ -83,7 +83,7 @@ func TestUpdate(t *testing.T) {
 			if tt.wantInviteSent {
 				mailer.EXPECT().Send(mock.Anything, mock.Anything).Run(func(_ context.Context, msg mail.Message) { sent = msg }).Return(tt.sendErr).Once()
 			}
-			tt.in.ID = id
+			tt.in.ID, tt.in.ActorID = id, userID(t, pool, otherAdminEmail)
 
 			got, err := NewUsers(pool, mailer, testBaseURL).Update(t.Context(), tt.in)
 

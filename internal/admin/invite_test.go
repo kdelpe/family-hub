@@ -55,6 +55,7 @@ func TestInvite(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := testdb.MigratedPool(t, database.MigrateUp)
 			person := insertPerson(t, pool)
+			tt.in.SentBy = insertUser(t, pool, "admin@example.com")
 			if tt.existing != "" {
 				_, err := pool.Exec(t.Context(), `INSERT INTO users (email) VALUES ($1)`, tt.existing)
 				require.NoError(t, err)
@@ -97,7 +98,7 @@ func TestInvite(t *testing.T) {
 				}
 				var newUsers, tokens int
 				require.NoError(t, pool.QueryRow(t.Context(),
-					`SELECT (SELECT count(*) FROM users WHERE email <> $1), (SELECT count(*) FROM auth_tokens)`, tt.existing).Scan(&newUsers, &tokens))
+					`SELECT (SELECT count(*) FROM users WHERE email NOT IN ($1, 'admin@example.com')), (SELECT count(*) FROM auth_tokens)`, tt.existing).Scan(&newUsers, &tokens))
 				assert.Zero(t, newUsers, "no user left behind")
 				assert.Zero(t, tokens)
 				return
@@ -108,6 +109,7 @@ func TestInvite(t *testing.T) {
 			assert.Equal(t, tt.wantUser, user)
 			assert.Equal(t, testEmail, sent.To)
 			assert.Equal(t, "You're invited to the family hub", sent.Subject)
+			assert.Contains(t, sent.Body, "Bonjou Rosa,")
 			assert.Contains(t, sent.Body, "This link works for 7 days.")
 			token := inviteToken(t, sent.Body)
 
@@ -115,6 +117,102 @@ func TestInvite(t *testing.T) {
 
 			require.NoError(t, err, "the emailed link sets the password")
 			assert.Equal(t, user, signedIn)
+		})
+	}
+}
+
+func TestInviteFrom(t *testing.T) {
+	const (
+		fromAdmin  = "Maya Pluviose invited you to the family hub, a private place for our family's tree, photos and stories."
+		fromNobody = "You're invited to the family hub, a private place for our family's tree, photos and stories."
+		fromMember = "Stanley Jean-Louis invited you to the family hub, a private place for our family's tree, photos and stories."
+		approved   = "Approved by Maya Pluviose, admin."
+	)
+	tests := []struct {
+		name string
+		// adminLinked says whether the sending admin is someone in the tree.
+		adminLinked bool
+		// from names who the invite is from: "", "Stanley", or someone who can't send one.
+		from        string
+		wantErr     error
+		wantSubject string
+		wantIntro   string
+		wantFrom    string
+	}{
+		{name: "from the sending admin by default", adminLinked: true, wantSubject: "Maya invited you to the family hub",
+			wantIntro: fromAdmin + "\n\n", wantFrom: "Maya"},
+		{name: "from a member, approved by the admin", adminLinked: true, from: "Stanley", wantSubject: "Stanley invited you to the family hub",
+			wantIntro: fromMember + "\n" + approved + "\n\n", wantFrom: "Stanley"},
+		{name: "from nobody when the admin isn't in the tree", wantSubject: "You're invited to the family hub", wantIntro: fromNobody + "\n\n"},
+		{name: "from a member, with no admin to name", from: "Stanley", wantSubject: "Stanley invited you to the family hub",
+			wantIntro: fromMember + "\n\n", wantFrom: "Stanley"},
+		{name: "not from someone without a login", adminLinked: true, from: "No login", wantErr: ErrInvalidSender},
+		{name: "not from a disabled login", adminLinked: true, from: "Disabled", wantErr: ErrInvalidSender},
+		{name: "not from a login that was never set up", adminLinked: true, from: "Invited", wantErr: ErrInvalidSender},
+		{name: "not from someone unknown", adminLinked: true, from: "unknown", wantErr: ErrInvalidSender},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := testdb.MigratedPool(t, database.MigrateUp)
+			people := map[string]uuid.UUID{"unknown": uuid.New()}
+			for _, p := range []struct{ first, last, email, login string }{
+				{"Maya", "Pluviose", "admin@example.com", "admin"},
+				{"Stanley", "Jean-Louis", "stanley@example.com", "active"},
+				{"Disabled", "", "disabled@example.com", "disabled"},
+				{"Invited", "", "invited@example.com", "invited"},
+				{"No login", "", "", ""},
+				{"Kervens", "", "", ""},
+			} {
+				var id uuid.UUID
+				require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO persons (first_name, last_name) VALUES ($1, nullif($2, '')) RETURNING id`, p.first, p.last).Scan(&id))
+				people[p.first] = id
+				if p.email == "" {
+					continue
+				}
+				_, err := pool.Exec(t.Context(), `INSERT INTO users (email, role, person_id, password_hash, password_changed_at, disabled_at)
+					VALUES ($1, CASE WHEN $2 = 'admin' THEN 'admin' ELSE 'member' END, $3,
+					  CASE WHEN $2 <> 'invited' THEN 'hash' END, CASE WHEN $2 <> 'invited' THEN now() END, CASE WHEN $2 = 'disabled' THEN now() END)`,
+					p.email, p.login, id)
+				require.NoError(t, err)
+			}
+			admin := userID(t, pool, "admin@example.com")
+			if !tt.adminLinked {
+				_, err := pool.Exec(t.Context(), `UPDATE users SET person_id = NULL WHERE id = $1`, admin)
+				require.NoError(t, err)
+			}
+			in := InviteInput{Email: testEmail, Role: auth.RoleMember, PersonID: people["Kervens"], SentBy: admin}
+			if tt.from != "" {
+				from := people[tt.from]
+				in.FromPersonID = &from
+			}
+			mailer := mailmocks.NewMailer(t)
+			var sent mail.Message
+			if tt.wantErr == nil {
+				mailer.EXPECT().Send(mock.Anything, mock.Anything).Run(func(_ context.Context, msg mail.Message) { sent = msg }).Return(nil).Once()
+			}
+
+			user, err := NewUsers(pool, mailer, testBaseURL).Invite(t.Context(), in)
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				var invited int
+				require.NoError(t, pool.QueryRow(t.Context(), `SELECT count(*) FROM users WHERE email = $1`, testEmail).Scan(&invited))
+				assert.Zero(t, invited, "nobody invited")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantSubject, sent.Subject)
+			assert.True(t, strings.HasPrefix(sent.Body, "Bonjou Kervens,\n\n"+tt.wantIntro+"Set up my account:\n"), sent.Body)
+			var from *uuid.UUID
+			var sentBy uuid.UUID
+			require.NoError(t, pool.QueryRow(t.Context(), `SELECT from_person_id, sent_by_user_id FROM auth_tokens WHERE user_id = $1`, user.ID).Scan(&from, &sentBy))
+			assert.Equal(t, admin, sentBy, "the record keeps who sent it")
+			if tt.wantFrom == "" {
+				assert.Nil(t, from)
+			} else {
+				assert.Equal(t, new(people[tt.wantFrom]), from)
+			}
 		})
 	}
 }

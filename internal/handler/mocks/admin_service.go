@@ -182,16 +182,16 @@ func (_c *AdminService_List_Call) RunAndReturn(run func(ctx context.Context, in 
 }
 
 // SendReset provides a mock function for the type AdminService
-func (_mock *AdminService) SendReset(ctx context.Context, id uuid.UUID) error {
-	ret := _mock.Called(ctx, id)
+func (_mock *AdminService) SendReset(ctx context.Context, sentBy uuid.UUID, id uuid.UUID) error {
+	ret := _mock.Called(ctx, sentBy, id)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SendReset")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) error); ok {
-		r0 = returnFunc(ctx, id)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) error); ok {
+		r0 = returnFunc(ctx, sentBy, id)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -205,12 +205,13 @@ type AdminService_SendReset_Call struct {
 
 // SendReset is a helper method to define mock.On call
 //   - ctx context.Context
+//   - sentBy uuid.UUID
 //   - id uuid.UUID
-func (_e *AdminService_Expecter) SendReset(ctx any, id any) *AdminService_SendReset_Call {
-	return &AdminService_SendReset_Call{Call: _e.mock.On("SendReset", ctx, id)}
+func (_e *AdminService_Expecter) SendReset(ctx any, sentBy any, id any) *AdminService_SendReset_Call {
+	return &AdminService_SendReset_Call{Call: _e.mock.On("SendReset", ctx, sentBy, id)}
 }
 
-func (_c *AdminService_SendReset_Call) Run(run func(ctx context.Context, id uuid.UUID)) *AdminService_SendReset_Call {
+func (_c *AdminService_SendReset_Call) Run(run func(ctx context.Context, sentBy uuid.UUID, id uuid.UUID)) *AdminService_SendReset_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -220,9 +221,14 @@ func (_c *AdminService_SendReset_Call) Run(run func(ctx context.Context, id uuid
 		if args[1] != nil {
 			arg1 = args[1].(uuid.UUID)
 		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -233,7 +239,7 @@ func (_c *AdminService_SendReset_Call) Return(err error) *AdminService_SendReset
 	return _c
 }
 
-func (_c *AdminService_SendReset_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) error) *AdminService_SendReset_Call {
+func (_c *AdminService_SendReset_Call) RunAndReturn(run func(ctx context.Context, sentBy uuid.UUID, id uuid.UUID) error) *AdminService_SendReset_Call {
 	_c.Call.Return(run)
 	return _c
 }
