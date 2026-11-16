@@ -226,6 +226,8 @@ func TestDeletePerson(t *testing.T) {
 		{name: "deleted", wantDelete: true, wantStatus: http.StatusNoContent},
 		{name: "unknown or already deleted", wantDelete: true, deleteErr: family.ErrPersonNotFound, wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
 		{name: "busy", wantDelete: true, deleteErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable, wantBody: busyBody},
+		{name: "linked to a login", wantDelete: true, deleteErr: family.ErrPersonHasLogin, wantStatus: http.StatusConflict,
+			wantBody: `{"error":{"code":"conflict","message":"this person has a login; unlink or disable it first"}}`},
 		{name: "not a person id", id: "42", wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
 		{name: "database error", wantDelete: true, deleteErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 	}

@@ -30,6 +30,7 @@ var (
 	ErrPersonNotFound = errors.New("person not found")
 	ErrInvalidPerson  = errors.New("invalid person")
 	ErrInvalidFilter  = errors.New("invalid filter")
+	ErrPersonHasLogin = errors.New("this person has a login; unlink or disable it first")
 )
 
 var (
@@ -212,14 +213,29 @@ func (s *Service) UpdatePerson(ctx context.Context, id uuid.UUID, patch PersonPa
 }
 
 // DeletePerson only hides the person; their relationships stay, so RestorePerson puts them back where they were (§3.1).
+// It's refused while an enabled login is linked to them; a disabled one loses the link (§5.1).
 func (s *Service) DeletePerson(ctx context.Context, id uuid.UUID) error {
 	return s.write(ctx, "delete person", func(q *gen.Queries) error {
-		n, err := q.SoftDeletePerson(ctx, id)
+		// Locked first, so an invite linking a login to them waits, and the check below sees it.
+		found, err := q.LockPersonToDelete(ctx, id)
 		if err != nil {
-			return fmt.Errorf("delete person: %w", err)
+			return fmt.Errorf("lock person: %w", err)
 		}
-		if n == 0 {
+		if !found {
 			return ErrPersonNotFound
+		}
+		linked, err := q.PersonHasEnabledLogin(ctx, &id)
+		if err != nil {
+			return fmt.Errorf("check login: %w", err)
+		}
+		if linked {
+			return ErrPersonHasLogin
+		}
+		if err := q.UnlinkPersonLogins(ctx, &id); err != nil {
+			return fmt.Errorf("unlink logins: %w", err)
+		}
+		if _, err := q.SoftDeletePerson(ctx, id); err != nil {
+			return fmt.Errorf("delete person: %w", err)
 		}
 		return nil
 	})

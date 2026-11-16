@@ -280,6 +280,42 @@ func TestDeleteAndRestore(t *testing.T) {
 	assert.ErrorIs(t, err, ErrPersonNotFound, "restoring someone not deleted")
 }
 
+func TestDeleteGuardsALinkedLogin(t *testing.T) {
+	tests := []struct {
+		name     string
+		disabled bool
+		wantErr  error
+	}{
+		{name: "refused while the login is enabled", wantErr: ErrPersonHasLogin},
+		{name: "a disabled login loses the link", disabled: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, admin := newService(t)
+			rosa, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosa"})
+			require.NoError(t, err)
+			_, err = svc.pool.Exec(t.Context(), `UPDATE users SET person_id = $1, disabled_at = CASE WHEN $2 THEN now() END WHERE id = $3`, rosa.ID, tt.disabled, admin)
+			require.NoError(t, err)
+
+			err = svc.DeletePerson(t.Context(), rosa.ID)
+
+			var linked *uuid.UUID
+			require.NoError(t, svc.pool.QueryRow(t.Context(), `SELECT person_id FROM users WHERE id = $1`, admin).Scan(&linked))
+			_, getErr := svc.GetPerson(t.Context(), Viewer{IsAdmin: true}, rosa.ID)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				assert.NoError(t, getErr, "still in the tree")
+				assert.Equal(t, &rosa.ID, linked, "still linked")
+				return
+			}
+			require.NoError(t, err)
+			assert.ErrorIs(t, getErr, ErrPersonNotFound)
+			assert.Nil(t, linked)
+		})
+	}
+}
+
 func TestUnknownPersonIsNotFound(t *testing.T) {
 	svc, _ := newService(t)
 	id := uuid.New()

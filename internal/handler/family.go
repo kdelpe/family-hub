@@ -427,7 +427,7 @@ func (f *Family) fail(w http.ResponseWriter, r *http.Request, err error, what st
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, family.ErrPersonNotFound), errors.Is(err, family.ErrRelationshipNotFound):
 		httpx.Error(w, http.StatusNotFound, "not_found", err.Error())
-	case errors.Is(err, family.ErrRelationshipConflict):
+	case errors.Is(err, family.ErrRelationshipConflict), errors.Is(err, family.ErrPersonHasLogin):
 		httpx.Error(w, http.StatusConflict, "conflict", err.Error())
 	case errors.Is(err, auth.ErrBusy):
 		busy(w)
@@ -436,14 +436,13 @@ func (f *Family) fail(w http.ResponseWriter, r *http.Request, err error, what st
 	}
 }
 
-// Linking a login to a person arrives in Phase 3 (§5.1); until then nobody is "self".
 func currentViewer(w http.ResponseWriter, r *http.Request) (family.Viewer, bool) {
 	session, ok := CurrentSession(r.Context())
 	if !ok {
 		internalError(w, r, errors.New("no session in context"), "person read mounted without RequireSession")
 		return family.Viewer{}, false
 	}
-	return family.Viewer{IsAdmin: session.Role == auth.RoleAdmin}, true
+	return family.Viewer{IsAdmin: session.Role == auth.RoleAdmin, PersonID: session.PersonID}, true
 }
 
 func personID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
