@@ -505,7 +505,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/api/family/summary` | session | The People family strip: `{people, generations, earliest_record: {year, circa, place} \| null}`. `generations` counts the people in the longest biological or adoptive parent-to-child line; the earliest record is the birth year and place of the earliest-born **deceased** person, so no living person's year leaks |
 | POST | `/api/persons` | admin | Create |
 | GET | `/api/persons/{id}` | session | Profile, direct relations, tagged media, and **only the contact methods the viewer may see** (§5.2) |
-| PATCH | `/api/persons/{id}` | admin, or the linked user for their own profile fields | Update (members: bio and avatar only) |
+| PATCH | `/api/persons/{id}` | admin, or the linked user for their own profile fields | Update → `200` with the person. Only the fields sent change; `null` clears one. A member may send only `bio` (and `avatar_media_id` once media arrives, Phase 5), and only for the person their login is linked to; anything else is a `403 forbidden`. `404 not_found`, `503 busy` |
 | DELETE | `/api/persons/{id}` | admin | Soft delete → `204`; `409 conflict` while an enabled login is linked to them (a disabled one loses the link, §5.1) |
 | POST | `/api/persons/{id}/restore` | admin | Undo soft delete |
 | GET | `/api/persons/{id}/ancestors` | session | `?depth=` 1–10 (default 5) → `{persons: [{id, first_name, last_name, is_deceased, birth_date, birth_date_precision, depth}]}`, closest first, birth dates masked (§5.2). `400 validation_error` for a bad depth, `404 not_found` for an unknown or deleted person |

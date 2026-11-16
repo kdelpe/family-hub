@@ -76,6 +76,8 @@ func New(h Handlers, mw Middleware) http.Handler {
 			r.Get("/persons/{id}/descendants", h.Family.Descendants)
 			r.Get("/tree", h.Family.Tree)
 			r.Get("/family/summary", h.Family.Summary)
+			// Members may change their own bio; the service checks (§4).
+			r.Patch("/persons/{id}", h.Family.UpdatePerson)
 
 			r.Group(func(r chi.Router) {
 				r.Use(handler.RequireAdmin)
@@ -84,8 +86,6 @@ func New(h Handlers, mw Middleware) http.Handler {
 				r.Patch("/admin/users/{id}", h.Admin.UpdateUser)
 				r.Post("/admin/users/{id}/send-reset", h.Admin.SendReset)
 				r.Post("/persons", h.Family.CreatePerson)
-				// Admins only until logins link to people; then members may edit their own bio (§4).
-				r.Patch("/persons/{id}", h.Family.UpdatePerson)
 				r.Delete("/persons/{id}", h.Family.DeletePerson)
 				r.Post("/persons/{id}/restore", h.Family.RestorePerson)
 				r.Post("/relationships", h.Family.CreateRelationship)

@@ -140,7 +140,7 @@ func TestFamilyWritesAreAdminOnly(t *testing.T) {
 		wantStatus int
 	}{
 		{name: "a member can't add", method: http.MethodPost, path: "/api/persons", role: auth.RoleMember, wantStatus: http.StatusForbidden},
-		{name: "a member can't edit", method: http.MethodPatch, path: "/api/persons/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "a member reaches the edit, which checks whose it is", method: http.MethodPatch, path: "/api/persons/" + testID, role: auth.RoleMember, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "a member can't delete", method: http.MethodDelete, path: "/api/persons/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
 		{name: "a member can't restore", method: http.MethodPost, path: "/api/persons/" + testID + "/restore", role: auth.RoleMember, wantStatus: http.StatusForbidden},
 		{name: "a member can read a profile", method: http.MethodGet, path: "/api/persons/42", role: auth.RoleMember, wantStatus: http.StatusNotFound},

@@ -19,7 +19,7 @@ type FamilyService interface {
 	ListPersons(ctx context.Context, viewer family.Viewer, in family.ListInput) ([]family.Person, error)
 	GetPerson(ctx context.Context, viewer family.Viewer, id uuid.UUID) (family.Person, error)
 	CreatePerson(ctx context.Context, createdBy uuid.UUID, in family.PersonInput) (family.Person, error)
-	UpdatePerson(ctx context.Context, id uuid.UUID, patch family.PersonPatch) (family.Person, error)
+	UpdatePerson(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch family.PersonPatch) (family.Person, error)
 	DeletePerson(ctx context.Context, id uuid.UUID) error
 	RestorePerson(ctx context.Context, id uuid.UUID) (family.Person, error)
 	CreateRelationship(ctx context.Context, in family.RelationshipInput) (family.Relationship, error)
@@ -249,6 +249,10 @@ func (f *Family) CreatePerson(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *Family) UpdatePerson(w http.ResponseWriter, r *http.Request) {
+	viewer, ok := currentViewer(w, r)
+	if !ok {
+		return
+	}
 	id, ok := personID(w, r)
 	if !ok {
 		return
@@ -265,7 +269,7 @@ func (f *Family) UpdatePerson(w http.ResponseWriter, r *http.Request) {
 		DeathDate: family.Opt[*string](req.DeathDate), DeathDatePrecision: family.Opt[*string](req.DeathDatePrecision),
 		IsDeceased: family.Opt[bool](req.IsDeceased), Bio: family.Opt[*string](req.Bio),
 	}
-	person, err := f.svc.UpdatePerson(r.Context(), id, patch)
+	person, err := f.svc.UpdatePerson(r.Context(), viewer, id, patch)
 	f.answer(w, r, http.StatusOK, person, err, "update person")
 }
 
@@ -429,6 +433,8 @@ func (f *Family) fail(w http.ResponseWriter, r *http.Request, err error, what st
 		httpx.Error(w, http.StatusNotFound, "not_found", err.Error())
 	case errors.Is(err, family.ErrRelationshipConflict), errors.Is(err, family.ErrPersonHasLogin):
 		httpx.Error(w, http.StatusConflict, "conflict", err.Error())
+	case errors.Is(err, family.ErrNotYourProfile):
+		httpx.Error(w, http.StatusForbidden, "forbidden", err.Error())
 	case errors.Is(err, auth.ErrBusy):
 		busy(w)
 	default:

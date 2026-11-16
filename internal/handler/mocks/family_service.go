@@ -793,8 +793,8 @@ func (_c *FamilyService_Tree_Call) RunAndReturn(run func(ctx context.Context) (f
 }
 
 // UpdatePerson provides a mock function for the type FamilyService
-func (_mock *FamilyService) UpdatePerson(ctx context.Context, id uuid.UUID, patch family.PersonPatch) (family.Person, error) {
-	ret := _mock.Called(ctx, id, patch)
+func (_mock *FamilyService) UpdatePerson(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch family.PersonPatch) (family.Person, error) {
+	ret := _mock.Called(ctx, viewer, id, patch)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpdatePerson")
@@ -802,16 +802,16 @@ func (_mock *FamilyService) UpdatePerson(ctx context.Context, id uuid.UUID, patc
 
 	var r0 family.Person
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, family.PersonPatch) (family.Person, error)); ok {
-		return returnFunc(ctx, id, patch)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, uuid.UUID, family.PersonPatch) (family.Person, error)); ok {
+		return returnFunc(ctx, viewer, id, patch)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, family.PersonPatch) family.Person); ok {
-		r0 = returnFunc(ctx, id, patch)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, uuid.UUID, family.PersonPatch) family.Person); ok {
+		r0 = returnFunc(ctx, viewer, id, patch)
 	} else {
 		r0 = ret.Get(0).(family.Person)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, uuid.UUID, family.PersonPatch) error); ok {
-		r1 = returnFunc(ctx, id, patch)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, family.Viewer, uuid.UUID, family.PersonPatch) error); ok {
+		r1 = returnFunc(ctx, viewer, id, patch)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -825,30 +825,36 @@ type FamilyService_UpdatePerson_Call struct {
 
 // UpdatePerson is a helper method to define mock.On call
 //   - ctx context.Context
+//   - viewer family.Viewer
 //   - id uuid.UUID
 //   - patch family.PersonPatch
-func (_e *FamilyService_Expecter) UpdatePerson(ctx any, id any, patch any) *FamilyService_UpdatePerson_Call {
-	return &FamilyService_UpdatePerson_Call{Call: _e.mock.On("UpdatePerson", ctx, id, patch)}
+func (_e *FamilyService_Expecter) UpdatePerson(ctx any, viewer any, id any, patch any) *FamilyService_UpdatePerson_Call {
+	return &FamilyService_UpdatePerson_Call{Call: _e.mock.On("UpdatePerson", ctx, viewer, id, patch)}
 }
 
-func (_c *FamilyService_UpdatePerson_Call) Run(run func(ctx context.Context, id uuid.UUID, patch family.PersonPatch)) *FamilyService_UpdatePerson_Call {
+func (_c *FamilyService_UpdatePerson_Call) Run(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch family.PersonPatch)) *FamilyService_UpdatePerson_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 uuid.UUID
+		var arg1 family.Viewer
 		if args[1] != nil {
-			arg1 = args[1].(uuid.UUID)
+			arg1 = args[1].(family.Viewer)
 		}
-		var arg2 family.PersonPatch
+		var arg2 uuid.UUID
 		if args[2] != nil {
-			arg2 = args[2].(family.PersonPatch)
+			arg2 = args[2].(uuid.UUID)
+		}
+		var arg3 family.PersonPatch
+		if args[3] != nil {
+			arg3 = args[3].(family.PersonPatch)
 		}
 		run(
 			arg0,
 			arg1,
 			arg2,
+			arg3,
 		)
 	})
 	return _c
@@ -859,7 +865,7 @@ func (_c *FamilyService_UpdatePerson_Call) Return(person family.Person, err erro
 	return _c
 }
 
-func (_c *FamilyService_UpdatePerson_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID, patch family.PersonPatch) (family.Person, error)) *FamilyService_UpdatePerson_Call {
+func (_c *FamilyService_UpdatePerson_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch family.PersonPatch) (family.Person, error)) *FamilyService_UpdatePerson_Call {
 	_c.Call.Return(run)
 	return _c
 }
