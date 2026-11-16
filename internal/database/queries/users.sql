@@ -78,3 +78,15 @@ UPDATE users SET person_id = sqlc.narg(person_id) WHERE id = @id;
 -- Locked, so a login being enabled meanwhile is seen as enabled, not unlinked behind the admin's back.
 -- name: LockPersonLogin :one
 SELECT id, (disabled_at IS NULL)::boolean AS enabled FROM users WHERE person_id = @person_id FOR UPDATE;
+
+-- name: GetUserPersonID :one
+SELECT person_id FROM users WHERE id = @id;
+
+-- Someone an invite can be from: in the tree, with a login that is set up and enabled (§5).
+-- name: GetInviteSender :one
+SELECT p.first_name, p.last_name
+FROM persons p JOIN users u ON u.person_id = p.id
+WHERE p.id = @id AND p.deleted_at IS NULL AND u.disabled_at IS NULL AND u.password_hash IS NOT NULL;
+
+-- name: GetUserFirstName :one
+SELECT p.first_name FROM users u JOIN persons p ON p.id = u.person_id AND p.deleted_at IS NULL WHERE u.id = @id;
