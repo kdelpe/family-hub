@@ -51,7 +51,7 @@ WHERE r.id = @id AND r.status = 'pending' FOR UPDATE OF r;
 
 -- Serializes one member's suggestions, so the daily limit holds.
 -- name: LockSuggester :exec
-SELECT pg_advisory_xact_lock(hashtext('admin.suggestions'), hashtext(@user_id::text));
+SELECT pg_advisory_xact_lock(hashtext('admin.suggestions'), hashtext(CAST(@user_id::uuid AS text)));
 
 -- name: SuggestionsToday :one
 SELECT count(*) FROM access_requests WHERE suggested_by = @user_id AND created_at > now() - interval '1 day';

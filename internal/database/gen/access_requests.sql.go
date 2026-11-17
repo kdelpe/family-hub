@@ -187,11 +187,11 @@ func (q *Queries) LockPendingAccessRequest(ctx context.Context, id uuid.UUID) (*
 }
 
 const lockSuggester = `-- name: LockSuggester :exec
-SELECT pg_advisory_xact_lock(hashtext('admin.suggestions'), hashtext($1::text))
+SELECT pg_advisory_xact_lock(hashtext('admin.suggestions'), hashtext(CAST($1::uuid AS text)))
 `
 
 // Serializes one member's suggestions, so the daily limit holds.
-func (q *Queries) LockSuggester(ctx context.Context, userID string) error {
+func (q *Queries) LockSuggester(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, lockSuggester, userID)
 	return err
 }

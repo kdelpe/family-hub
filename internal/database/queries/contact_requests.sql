@@ -1,6 +1,6 @@
 -- Serializes one requester's asks, so the daily limit holds.
 -- name: LockRequester :exec
-SELECT pg_advisory_xact_lock(hashtext('contacts.requests'), hashtext(@requester_id::text));
+SELECT pg_advisory_xact_lock(hashtext('contacts.requests'), hashtext(CAST(@requester_id::uuid AS text)));
 
 -- Retry-after comes from the database's clock, the one created_at was stamped with.
 -- name: RequestsToday :one

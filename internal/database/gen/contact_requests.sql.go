@@ -136,11 +136,11 @@ func (q *Queries) ListRequestsFor(ctx context.Context, personID uuid.UUID) ([]Li
 }
 
 const lockRequester = `-- name: LockRequester :exec
-SELECT pg_advisory_xact_lock(hashtext('contacts.requests'), hashtext($1::text))
+SELECT pg_advisory_xact_lock(hashtext('contacts.requests'), hashtext(CAST($1::uuid AS text)))
 `
 
 // Serializes one requester's asks, so the daily limit holds.
-func (q *Queries) LockRequester(ctx context.Context, requesterID string) error {
+func (q *Queries) LockRequester(ctx context.Context, requesterID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, lockRequester, requesterID)
 	return err
 }

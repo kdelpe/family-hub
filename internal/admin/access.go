@@ -177,13 +177,27 @@ func (s *AccessRequests) Suggest(ctx context.Context, userID uuid.UUID, personID
 	if err != nil {
 		return err
 	}
+	pending, err := gen.New(s.pool).PendingAccessRequestExists(ctx, r.Email)
+	if err != nil {
+		return fmt.Errorf("check pending request: %w", err)
+	}
+	if pending {
+		return nil
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin suggestion: %w", err)
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	q := gen.New(tx)
-	if err := q.LockSuggester(ctx, userID.String()); err != nil {
+	inTree, err := q.CountPersonsInTree(ctx, []uuid.UUID{*personID})
+	if err != nil {
+		return fmt.Errorf("check suggester: %w", err)
+	}
+	if inTree == 0 {
+		return ErrNotLinked
+	}
+	if err := q.LockSuggester(ctx, userID); err != nil {
 		return fmt.Errorf("lock suggester: %w", err)
 	}
 	n, err := q.SuggestionsToday(ctx, &userID)

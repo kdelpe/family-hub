@@ -29,8 +29,9 @@ func NewAccess(svc AccessService) *Access {
 	return &Access{svc: svc}
 }
 
-// suggestionRequest is the form a member fills in to suggest a relative; signed in, so no honeypot.
-type suggestionRequest struct {
+// accessForm is what someone asking, or a member suggesting a relative, fills in. A member's is the whole body:
+// they're signed in, so it has no honeypot.
+type accessForm struct {
 	FullName     string   `json:"full_name"`
 	Email        string   `json:"email"`
 	Side         *string  `json:"side"`
@@ -40,12 +41,7 @@ type suggestionRequest struct {
 }
 
 type accessRequestRequest struct {
-	FullName     string   `json:"full_name"`
-	Email        string   `json:"email"`
-	Side         *string  `json:"side"`
-	Relationship *string  `json:"relationship"`
-	RelatedNames []string `json:"related_names"`
-	Note         *string  `json:"note"`
+	accessForm
 	// Website is a honeypot: the form hides it, so only a bot fills it in.
 	Website string `json:"website"`
 }
@@ -86,10 +82,7 @@ func (a *Access) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Website == "" {
-		err := a.svc.Submit(r.Context(), admin.AccessRequestInput{
-			FullName: req.FullName, Email: req.Email, Side: req.Side, Relationship: req.Relationship,
-			RelatedNames: req.RelatedNames, Note: req.Note,
-		})
+		err := a.svc.Submit(r.Context(), admin.AccessRequestInput(req.accessForm))
 		if err != nil {
 			a.fail(w, r, err, "submit access request")
 			return
@@ -106,7 +99,7 @@ func (a *Access) Suggest(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, errors.New("no session in context"), "suggestion mounted without RequireSession")
 		return
 	}
-	var req suggestionRequest
+	var req accessForm
 	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}

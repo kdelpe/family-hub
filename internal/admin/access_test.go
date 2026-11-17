@@ -342,9 +342,16 @@ func TestSuggest(t *testing.T) {
 	kervens := AccessRequestInput{FullName: "Kervens Pluviose", Email: "kervens@example.com", Relationship: new("cousin")}
 
 	require.ErrorIs(t, svc.Suggest(t.Context(), member, nil, kervens), ErrNotLinked, "a login linked to nobody can't suggest")
+	gone := insertNamedPerson(t, pool, "Gone", "Away")
+	_, err := pool.Exec(t.Context(), `UPDATE persons SET deleted_at = now() WHERE id = $1`, gone)
+	require.NoError(t, err)
+	require.ErrorIs(t, svc.Suggest(t.Context(), member, &gone, kervens), ErrNotLinked, "nor one linked to someone deleted")
 	require.ErrorIs(t, svc.Suggest(t.Context(), member, &stanley, AccessRequestInput{FullName: "Kervens", Email: "nope"}), ErrInvalidAccessRequest)
 	require.NoError(t, svc.Suggest(t.Context(), member, &stanley, kervens))
 	require.NoError(t, svc.Submit(t.Context(), AccessRequestInput{FullName: "Someone else", Email: "kervens@example.com"}), "a stranger's repeat is dropped")
+
+	require.NoError(t, svc.Suggest(t.Context(), member, &stanley, AccessRequestInput{FullName: "Kervens again", Email: "kervens@example.com"}),
+		"a member's repeat is dropped too")
 
 	requests, err := svc.List(t.Context())
 	require.NoError(t, err)
@@ -370,14 +377,14 @@ func TestTwentySuggestionsADay(t *testing.T) {
 
 func TestASuggestedInviteIsFromTheMember(t *testing.T) {
 	tests := []struct {
-		name        string
-		suggester   string
-		from        string
-		wantSubject string
+		name              string
+		suggesterDisabled bool
+		fromAdmin         bool
+		wantSubject       string
 	}{
-		{name: "from the member who suggested them", suggester: "active", wantSubject: "Stanley invited you to the family hub"},
-		{name: "from the admin when the member can't send one", suggester: "disabled", wantSubject: "Maya invited you to the family hub"},
-		{name: "from whoever the admin picks", suggester: "active", from: "Maya", wantSubject: "Maya invited you to the family hub"},
+		{name: "from the member who suggested them", wantSubject: "Stanley invited you to the family hub"},
+		{name: "from the admin when the member can't send one", suggesterDisabled: true, wantSubject: "Maya invited you to the family hub"},
+		{name: "from whoever the admin picks", fromAdmin: true, wantSubject: "Maya invited you to the family hub"},
 	}
 
 	for _, tt := range tests {
@@ -390,7 +397,7 @@ func TestASuggestedInviteIsFromTheMember(t *testing.T) {
 				VALUES ('admin@example.com', 'admin', $1, 'hash', now()) RETURNING id`, maya).Scan(&admin))
 			require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role, person_id, password_hash, password_changed_at, disabled_at)
 				VALUES ('stanley@example.com', 'member', $1, 'hash', now(), CASE WHEN $2 THEN now() END) RETURNING id`,
-				stanley, tt.suggester == "disabled").Scan(&member))
+				stanley, tt.suggesterDisabled).Scan(&member))
 			require.NoError(t, NewAccessRequests(pool).Suggest(t.Context(), member, &stanley,
 				AccessRequestInput{FullName: "Kervens Pluviose", Email: "kervens@example.com"}))
 			var request uuid.UUID
@@ -399,7 +406,7 @@ func TestASuggestedInviteIsFromTheMember(t *testing.T) {
 			var sent mail.Message
 			mailer.EXPECT().Send(mock.Anything, mock.Anything).Run(func(_ context.Context, m mail.Message) { sent = m }).Return(nil).Once()
 			in := InviteInput{Email: "kervens@example.com", Role: auth.RoleMember, PersonID: kervens, SentBy: admin, AccessRequestID: &request}
-			if tt.from == "Maya" {
+			if tt.fromAdmin {
 				in.FromPersonID = &maya
 			}
 
