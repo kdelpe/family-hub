@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -39,15 +40,18 @@ func (c *Cleanup) Run(ctx context.Context) {
 	}
 }
 
+// prune runs every delete even when one fails, so one table's trouble doesn't let the others grow.
 func (c *Cleanup) prune(ctx context.Context) error {
+	var errs []error
 	if _, err := c.q.DeleteOldExpiredTokens(ctx, int32(authCleanupBatch)); err != nil {
-		return fmt.Errorf("delete expired auth tokens: %w", err)
+		errs = append(errs, fmt.Errorf("delete expired auth tokens: %w", err))
 	}
 	if _, err := c.q.DeleteExpiredSessions(ctx, int32(authCleanupBatch)); err != nil {
-		return fmt.Errorf("delete expired sessions: %w", err)
+		errs = append(errs, fmt.Errorf("delete expired sessions: %w", err))
 	}
+	// Access requests are the admin package's, but one ticker for every table is simpler than two (§5).
 	if _, err := c.q.DeleteOldDeclinedAccessRequests(ctx, int32(authCleanupBatch)); err != nil {
-		return fmt.Errorf("delete old declined access requests: %w", err)
+		errs = append(errs, fmt.Errorf("delete old declined access requests: %w", err))
 	}
-	return nil
+	return errors.Join(errs...)
 }

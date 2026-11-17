@@ -89,16 +89,26 @@ func NewAccessRequests(pool *pgxpool.Pool) *AccessRequests {
 }
 
 // Submit stores a request for an invitation. Whatever happens after the input checks, the caller answers the
-// same way: a repeat while one is pending, an address over its limit, or a filled honeypot all store nothing.
+// same way: a repeat while one is pending, or an address over its limit, stores nothing. The handler drops
+// bots (the honeypot) before this.
 func (s *AccessRequests) Submit(ctx context.Context, in AccessRequestInput) error {
 	r, err := normalizeRequest(in)
 	if err != nil {
 		return err
 	}
+	q := gen.New(s.pool)
+	// A repeat is dropped without spending the address's budget, so a stranger's repeats can't use it up.
+	pending, err := q.PendingAccessRequestExists(ctx, r.Email)
+	if err != nil {
+		return fmt.Errorf("check pending request: %w", err)
+	}
+	if pending {
+		return nil
+	}
 	if ok, _ := s.perEmail.Take(r.Email); !ok {
 		return nil
 	}
-	if err := gen.New(s.pool).CreateAccessRequest(ctx, gen.CreateAccessRequestParams{
+	if err := q.CreateAccessRequest(ctx, gen.CreateAccessRequestParams{
 		FullName: r.FullName, Email: r.Email, Side: r.Side, Relationship: r.Relationship,
 		RelatedNames: r.RelatedNames, Note: r.Note, Source: "self",
 	}); err != nil {
@@ -119,11 +129,15 @@ func (s *AccessRequests) List(ctx context.Context) ([]AccessRequest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list access requests: %w", err)
 	}
+	matches, err := matchNames(ctx, q, rows)
+	if err != nil {
+		return nil, err
+	}
 	requests := make([]AccessRequest, 0, len(rows))
 	for _, row := range rows {
-		names, err := matchNames(ctx, q, row.RelatedNames)
-		if err != nil {
-			return nil, err
+		names := make([]RelatedName, len(row.RelatedNames))
+		for i, n := range row.RelatedNames {
+			names[i] = RelatedName{Name: n, Match: matches[n]}
 		}
 		r := AccessRequest{
 			ID: row.ID, FullName: row.FullName, Email: row.Email, Side: row.Side, Relationship: row.Relationship,
@@ -199,22 +213,28 @@ func approveRequest(ctx context.Context, q *gen.Queries, id, adminID, userID uui
 	return nil
 }
 
-func matchNames(ctx context.Context, q *gen.Queries, typed []string) ([]RelatedName, error) {
-	names := make([]RelatedName, len(typed))
-	for i, n := range typed {
-		names[i].Name = n
+// matchNames finds the closest person to every distinct name in the queue, in one query.
+func matchNames(ctx context.Context, q *gen.Queries, rows []gen.ListAccessRequestsRow) (map[string]*PersonName, error) {
+	var typed []string
+	for _, row := range rows {
+		for _, n := range row.RelatedNames {
+			if !slices.Contains(typed, n) {
+				typed = append(typed, n)
+			}
+		}
 	}
+	matches := map[string]*PersonName{}
 	if len(typed) == 0 {
-		return names, nil
+		return matches, nil
 	}
-	matches, err := q.MatchRelatedNames(ctx, typed)
+	found, err := q.MatchRelatedNames(ctx, typed)
 	if err != nil {
 		return nil, fmt.Errorf("match related names: %w", err)
 	}
-	for _, m := range matches {
-		names[m.Idx].Match = &PersonName{PersonID: m.PersonID, Name: auth.FullName(m.FirstName, m.LastName)}
+	for _, m := range found {
+		matches[typed[m.Idx]] = &PersonName{PersonID: m.PersonID, Name: auth.FullName(m.FirstName, m.LastName)}
 	}
-	return names, nil
+	return matches, nil
 }
 
 func normalizeRequest(in AccessRequestInput) (AccessRequestInput, error) {
@@ -248,9 +268,11 @@ func normalizeRequest(in AccessRequestInput) (AccessRequestInput, error) {
 		r.RelatedNames = []string{}
 	}
 	if in.Note != nil {
-		note := strings.TrimSpace(*in.Note)
-		if !utf8.ValidString(note) || strings.ContainsFunc(note, func(c rune) bool { return unicode.IsControl(c) && c != '\n' }) ||
-			utf8.RuneCountInString(note) > maxRequestNote {
+		note := strings.TrimSpace(strings.ReplaceAll(*in.Note, "\r\n", "\n"))
+		if !utf8.ValidString(note) || strings.ContainsFunc(note, func(c rune) bool { return unicode.IsControl(c) && c != '\n' && c != '\t' }) {
+			return r, invalidRequest("the note contains a character that isn't allowed")
+		}
+		if utf8.RuneCountInString(note) > maxRequestNote {
 			return r, invalidRequest(fmt.Sprintf("the note must be at most %d characters", maxRequestNote))
 		}
 		if note != "" {

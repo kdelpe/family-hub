@@ -4,18 +4,24 @@ INSERT INTO access_requests (full_name, email, side, relationship, related_names
 VALUES (@full_name, @email, sqlc.narg(side), sqlc.narg(relationship), @related_names::text[], sqlc.narg(note), @source, sqlc.narg(suggested_by))
 ON CONFLICT (email) WHERE status = 'pending' DO NOTHING;
 
--- The Requests queue: pending first, then the ones declined in the last 90 days, which can still be reopened.
+-- name: PendingAccessRequestExists :one
+SELECT EXISTS (SELECT 1 FROM access_requests WHERE email = @email AND status = 'pending');
+
+-- The Requests queue: pending (oldest first), then the ones declined in the last 90 days, latest first, which
+-- can still be reopened. The limit is a backstop: the form is rate-limited, and a family's queue is short.
 -- name: ListAccessRequests :many
 SELECT r.id, r.full_name, r.email, r.side, r.relationship, r.related_names, r.note, r.source, r.status,
   r.reviewed_at, r.created_at, sp.id AS suggester_person_id, sp.first_name AS suggester_first_name, sp.last_name AS suggester_last_name
 FROM access_requests r
 LEFT JOIN users su ON su.id = r.suggested_by
-LEFT JOIN persons sp ON sp.id = su.person_id AND sp.deleted_at IS NULL
+LEFT JOIN persons sp ON sp.id = su.person_id
 WHERE r.status = 'pending' OR (r.status = 'declined' AND r.reviewed_at > now() - interval '90 days')
-ORDER BY r.status = 'declined', r.created_at, r.id;
+ORDER BY r.status = 'declined', CASE WHEN r.status = 'pending' THEN r.created_at END, r.reviewed_at DESC, r.id
+LIMIT 500;
 
 -- The closest person in the tree to each name that has one close enough (pg_trgm's % threshold), by the
--- name's position in the list. Only admins see these, never the public form (§12).
+-- name's position in the list; the whole queue's names in one call. Only admins see these, never the
+-- public form (§12).
 -- name: MatchRelatedNames :many
 SELECT (n.i - 1)::int AS idx, m.id AS person_id, m.first_name, m.last_name
 FROM unnest(@names::text[]) WITH ORDINALITY AS n(name, i)

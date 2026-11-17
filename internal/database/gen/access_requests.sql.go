@@ -109,9 +109,10 @@ SELECT r.id, r.full_name, r.email, r.side, r.relationship, r.related_names, r.no
   r.reviewed_at, r.created_at, sp.id AS suggester_person_id, sp.first_name AS suggester_first_name, sp.last_name AS suggester_last_name
 FROM access_requests r
 LEFT JOIN users su ON su.id = r.suggested_by
-LEFT JOIN persons sp ON sp.id = su.person_id AND sp.deleted_at IS NULL
+LEFT JOIN persons sp ON sp.id = su.person_id
 WHERE r.status = 'pending' OR (r.status = 'declined' AND r.reviewed_at > now() - interval '90 days')
-ORDER BY r.status = 'declined', r.created_at, r.id
+ORDER BY r.status = 'declined', CASE WHEN r.status = 'pending' THEN r.created_at END, r.reviewed_at DESC, r.id
+LIMIT 500
 `
 
 type ListAccessRequestsRow struct {
@@ -131,7 +132,8 @@ type ListAccessRequestsRow struct {
 	SuggesterLastName  *string
 }
 
-// The Requests queue: pending first, then the ones declined in the last 90 days, which can still be reopened.
+// The Requests queue: pending (oldest first), then the ones declined in the last 90 days, latest first, which
+// can still be reopened. The limit is a backstop: the form is rate-limited, and a family's queue is short.
 func (q *Queries) ListAccessRequests(ctx context.Context) ([]ListAccessRequestsRow, error) {
 	rows, err := q.db.Query(ctx, listAccessRequests)
 	if err != nil {
@@ -198,7 +200,8 @@ type MatchRelatedNamesRow struct {
 }
 
 // The closest person in the tree to each name that has one close enough (pg_trgm's % threshold), by the
-// name's position in the list. Only admins see these, never the public form (§12).
+// name's position in the list; the whole queue's names in one call. Only admins see these, never the
+// public form (§12).
 func (q *Queries) MatchRelatedNames(ctx context.Context, names []string) ([]MatchRelatedNamesRow, error) {
 	rows, err := q.db.Query(ctx, matchRelatedNames, names)
 	if err != nil {
@@ -222,6 +225,17 @@ func (q *Queries) MatchRelatedNames(ctx context.Context, names []string) ([]Matc
 		return nil, err
 	}
 	return items, nil
+}
+
+const pendingAccessRequestExists = `-- name: PendingAccessRequestExists :one
+SELECT EXISTS (SELECT 1 FROM access_requests WHERE email = $1 AND status = 'pending')
+`
+
+func (q *Queries) PendingAccessRequestExists(ctx context.Context, email string) (bool, error) {
+	row := q.db.QueryRow(ctx, pendingAccessRequestExists, email)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const reopenAccessRequest = `-- name: ReopenAccessRequest :execrows

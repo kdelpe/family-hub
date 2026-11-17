@@ -46,6 +46,10 @@ func TestNormalizeRequest(t *testing.T) {
 			wantErr: "at most 4 names"},
 		{name: "a related name with a tab", in: AccessRequestInput{FullName: "Darline", Email: "darline@example.com", RelatedNames: []string{"a\tb"}},
 			wantErr: "each name must be"},
+		{name: "a note with a tab and Windows line ends", in: AccessRequestInput{FullName: "Darline", Email: "darline@example.com", Note: new("a\tb\r\nc")},
+			want: AccessRequestInput{FullName: "Darline", Email: "darline@example.com", RelatedNames: []string{}, Note: new("a\tb\nc")}},
+		{name: "a NUL in the note", in: AccessRequestInput{FullName: "Darline", Email: "darline@example.com", Note: new("a\x00b")},
+			wantErr: "the note contains a character"},
 		{name: "a note too long", in: AccessRequestInput{FullName: "Darline", Email: "darline@example.com", Note: new(strings.Repeat("a", maxRequestNote+1))},
 			wantErr: "the note must be"},
 	}
@@ -78,6 +82,21 @@ func TestSubmitStoresOnePendingRequestPerEmail(t *testing.T) {
 	require.Len(t, requests, 1)
 	assert.Equal(t, "Darline Monestime", requests[0].FullName, "the pending one is left as it was")
 	assert.Equal(t, "self", requests[0].Source)
+}
+
+func TestRepeatsDontSpendTheAddressBudget(t *testing.T) {
+	pool := testdb.MigratedPool(t, database.MigrateUp)
+	svc := NewAccessRequests(pool)
+	admin := insertUser(t, pool, "admin@example.com")
+	for range accessRequestsPerEmail + 3 {
+		require.NoError(t, svc.Submit(t.Context(), AccessRequestInput{FullName: "Junk", Email: "darline@example.com"}))
+	}
+	_, err := pool.Exec(t.Context(), `UPDATE access_requests SET status = 'declined', reviewed_by = $1, reviewed_at = now()`, admin)
+	require.NoError(t, err)
+
+	require.NoError(t, svc.Submit(t.Context(), AccessRequestInput{FullName: "Darline Monestime", Email: "darline@example.com"}))
+
+	assert.Equal(t, 1, countRows(t, pool, `SELECT count(*) FROM access_requests WHERE status = 'pending' AND full_name = 'Darline Monestime'`))
 }
 
 func TestSubmitStopsAfterFiveAnHourPerEmail(t *testing.T) {
@@ -121,6 +140,7 @@ func TestListMatchesNamesAndShowsTheQueue(t *testing.T) {
 		require.NoError(t, err)
 	}
 	insert("declined@example.com", "declined", "1 day", nil, nil)
+	insert("declined-today@example.com", "declined", "1 minute", []string{"Frantz Monestim"}, nil)
 	insert("old@example.com", "declined", "91 days", nil, nil)
 	insert("approved@example.com", "approved", "1 day", nil, nil)
 	insert("second@example.com", "pending", "1 hour", nil, &suggester)
@@ -133,7 +153,10 @@ func TestListMatchesNamesAndShowsTheQueue(t *testing.T) {
 	for _, r := range requests {
 		emails = append(emails, r.Email)
 	}
-	assert.Equal(t, []string{"first@example.com", "second@example.com", "declined@example.com"}, emails, "pending first, then recent declines")
+	assert.Equal(t, []string{"first@example.com", "second@example.com", "declined-today@example.com", "declined@example.com"}, emails,
+		"pending oldest first, then the latest declines")
+	assert.Equal(t, []RelatedName{{Name: "Frantz Monestim", Match: &PersonName{PersonID: frantz, Name: "Frantz Monestime"}}}, requests[2].RelatedNames,
+		"a name in two requests matches in both")
 	assert.Equal(t, []RelatedName{
 		{Name: "Frantz Monestim", Match: &PersonName{PersonID: frantz, Name: "Frantz Monestime"}},
 		{Name: "Gone Away"},
