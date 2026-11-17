@@ -19,12 +19,26 @@ SELECT id, kind, platform, label, value, visibility FROM contact_methods WHERE p
 SELECT id, kind, platform, label, value, visibility FROM contact_methods
 WHERE person_id = @person_id AND visibility = 'family' ORDER BY id;
 
--- Only the kinds, never the values; someone without a login can't answer a request, so they offer none.
--- name: RequestableKinds :many
-SELECT DISTINCT CASE WHEN kind = 'social' THEN platform ELSE kind END::text AS kind FROM contact_methods c
+-- The on_request rows of the kinds this viewer's request was shared for (§5.2). Someone without an enabled
+-- login can't answer or take back a share, so theirs stay with admins.
+-- name: ListSharedContacts :many
+SELECT c.id, c.kind, c.platform, c.label, c.value, c.visibility FROM contact_methods c
+JOIN contact_requests r ON r.person_id = c.person_id AND r.requester_id = @requester_id AND r.status = 'shared'
+  AND r.kind = CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END
 WHERE c.person_id = @person_id AND c.visibility = 'on_request'
   AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)
-ORDER BY 1;
+ORDER BY c.id;
+
+-- The kinds the viewer could ask for and hasn't been shown, never their values. Declined and revoked read
+-- as requested, so a decline stays silent.
+-- name: RequestableKinds :many
+SELECT k.kind, CASE WHEN r.status IS NULL THEN 'none' ELSE 'requested' END::text AS my_request_status
+FROM (SELECT DISTINCT CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END::text AS kind FROM contact_methods c
+      WHERE c.person_id = @person_id AND c.visibility = 'on_request'
+        AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)) k
+LEFT JOIN contact_requests r ON r.person_id = @person_id AND r.requester_id = @requester_id AND r.kind = k.kind
+WHERE r.status IS DISTINCT FROM 'shared'
+ORDER BY k.kind;
 
 -- name: GetContact :one
 SELECT id, kind, platform, label, value, visibility FROM contact_methods WHERE id = @id AND person_id = @person_id;

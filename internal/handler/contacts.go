@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -18,6 +19,9 @@ type ContactsService interface {
 	Create(ctx context.Context, viewer family.Viewer, personID uuid.UUID, in contacts.ContactInput) (contacts.Contact, error)
 	Update(ctx context.Context, viewer family.Viewer, personID, id uuid.UUID, patch contacts.ContactPatch) (contacts.Contact, error)
 	Delete(ctx context.Context, viewer family.Viewer, personID, id uuid.UUID) error
+	Ask(ctx context.Context, viewer family.Viewer, personID uuid.UUID, kind string) (string, error)
+	Requests(ctx context.Context, viewer family.Viewer) ([]contacts.Request, error)
+	Decide(ctx context.Context, viewer family.Viewer, id uuid.UUID, d contacts.Decision) error
 }
 
 // Contacts serves /api/me/contacts (the viewer's own person) and /api/persons/{id}/contacts.
@@ -49,6 +53,33 @@ type contactsResponse struct {
 	Contacts []any `json:"contacts"`
 }
 
+type askRequest struct {
+	Kind string `json:"kind"`
+}
+
+type askResponse struct {
+	Kind            string `json:"kind"`
+	MyRequestStatus string `json:"my_request_status"`
+}
+
+type requestsResponse struct {
+	Requests []requestResponse `json:"requests"`
+}
+
+type requestResponse struct {
+	ID        uuid.UUID         `json:"id"`
+	Kind      string            `json:"kind"`
+	Status    string            `json:"status"`
+	CreatedAt time.Time         `json:"created_at"`
+	DecidedAt *time.Time        `json:"decided_at"`
+	From      requesterResponse `json:"from"`
+}
+
+type requesterResponse struct {
+	PersonID uuid.UUID `json:"person_id"`
+	Name     string    `json:"name"`
+}
+
 type createContactRequest struct {
 	Kind       string  `json:"kind"`
 	Platform   *string `json:"platform"`
@@ -73,6 +104,64 @@ func (c *Contacts) CreateFor(w http.ResponseWriter, r *http.Request)  { c.create
 func (c *Contacts) UpdateFor(w http.ResponseWriter, r *http.Request)  { c.update(w, r, false) }
 func (c *Contacts) DeleteFor(w http.ResponseWriter, r *http.Request)  { c.delete(w, r, false) }
 
+// Ask is POST /api/persons/{id}/contact-requests: the viewer asks for a phone, WhatsApp or address.
+func (c *Contacts) Ask(w http.ResponseWriter, r *http.Request) {
+	viewer, personID, ok := c.target(w, r, false)
+	if !ok {
+		return
+	}
+	var req askRequest
+	if !httpx.DecodeJSON(w, r, &req) {
+		return
+	}
+	status, err := c.svc.Ask(r.Context(), viewer, personID, req.Kind)
+	if err != nil {
+		c.fail(w, r, err, "ask for contact")
+		return
+	}
+	httpx.JSON(w, http.StatusOK, askResponse{Kind: req.Kind, MyRequestStatus: status})
+}
+
+func (c *Contacts) ListRequests(w http.ResponseWriter, r *http.Request) {
+	viewer, ok := currentViewer(w, r)
+	if !ok {
+		return
+	}
+	requests, err := c.svc.Requests(r.Context(), viewer)
+	if err != nil {
+		c.fail(w, r, err, "list contact requests")
+		return
+	}
+	resp := requestsResponse{Requests: make([]requestResponse, 0, len(requests))}
+	for _, req := range requests {
+		resp.Requests = append(resp.Requests, requestResponse{
+			ID: req.ID, Kind: req.Kind, Status: req.Status, CreatedAt: req.CreatedAt, DecidedAt: req.DecidedAt,
+			From: requesterResponse(req.From),
+		})
+	}
+	httpx.JSON(w, http.StatusOK, resp)
+}
+
+func (c *Contacts) Share(w http.ResponseWriter, r *http.Request)   { c.decide(w, r, contacts.Share) }
+func (c *Contacts) Decline(w http.ResponseWriter, r *http.Request) { c.decide(w, r, contacts.Decline) }
+func (c *Contacts) Revoke(w http.ResponseWriter, r *http.Request)  { c.decide(w, r, contacts.Revoke) }
+
+func (c *Contacts) decide(w http.ResponseWriter, r *http.Request, d contacts.Decision) {
+	viewer, ok := currentViewer(w, r)
+	if !ok {
+		return
+	}
+	id, ok := pathID(w, r, "rid", contacts.ErrRequestNotFound)
+	if !ok {
+		return
+	}
+	if err := c.svc.Decide(r.Context(), viewer, id, d); err != nil {
+		c.fail(w, r, err, "decide contact request")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (c *Contacts) list(w http.ResponseWriter, r *http.Request, mine bool) {
 	viewer, personID, ok := c.target(w, r, mine)
 	if !ok {
@@ -87,9 +176,8 @@ func (c *Contacts) list(w http.ResponseWriter, r *http.Request, mine bool) {
 	for _, contact := range listing.Contacts {
 		resp.Contacts = append(resp.Contacts, contactResponse(contact))
 	}
-	for _, kind := range listing.Requestable {
-		// Requests arrive in the next PR; until then nobody has asked.
-		resp.Contacts = append(resp.Contacts, requestableResponse{Kind: kind, Requestable: true, MyRequestStatus: "none"})
+	for _, k := range listing.Requestable {
+		resp.Contacts = append(resp.Contacts, requestableResponse{Kind: k.Kind, Requestable: true, MyRequestStatus: k.MyRequestStatus})
 	}
 	httpx.JSON(w, http.StatusOK, resp)
 }
@@ -170,11 +258,16 @@ func (c *Contacts) answer(w http.ResponseWriter, r *http.Request, status int, co
 }
 
 func (c *Contacts) fail(w http.ResponseWriter, r *http.Request, err error, what string) {
+	var limited *auth.RateLimitedError
 	switch {
 	case clientGone(r):
-	case errors.Is(err, contacts.ErrInvalidContact):
+	case errors.As(err, &limited):
+		httpx.TooManyRequests(w, limited.RetryAfter)
+	case errors.Is(err, contacts.ErrInvalidContact), errors.Is(err, contacts.ErrInvalidRequest):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
-	case errors.Is(err, family.ErrPersonNotFound), errors.Is(err, contacts.ErrContactNotFound):
+	case errors.Is(err, contacts.ErrAlreadyDecided):
+		httpx.Error(w, http.StatusConflict, "conflict", err.Error())
+	case errors.Is(err, family.ErrPersonNotFound), errors.Is(err, contacts.ErrContactNotFound), errors.Is(err, contacts.ErrRequestNotFound):
 		httpx.Error(w, http.StatusNotFound, "not_found", err.Error())
 	case errors.Is(err, contacts.ErrNotYours), errors.Is(err, contacts.ErrNotLinked):
 		httpx.Error(w, http.StatusForbidden, "forbidden", err.Error())

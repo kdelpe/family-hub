@@ -197,6 +197,58 @@ func (q *Queries) ListFamilyContacts(ctx context.Context, personID uuid.UUID) ([
 	return items, nil
 }
 
+const listSharedContacts = `-- name: ListSharedContacts :many
+SELECT c.id, c.kind, c.platform, c.label, c.value, c.visibility FROM contact_methods c
+JOIN contact_requests r ON r.person_id = c.person_id AND r.requester_id = $1 AND r.status = 'shared'
+  AND r.kind = CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END
+WHERE c.person_id = $2 AND c.visibility = 'on_request'
+  AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)
+ORDER BY c.id
+`
+
+type ListSharedContactsParams struct {
+	RequesterID uuid.UUID
+	PersonID    uuid.UUID
+}
+
+type ListSharedContactsRow struct {
+	ID         uuid.UUID
+	Kind       string
+	Platform   *string
+	Label      *string
+	Value      string
+	Visibility string
+}
+
+// The on_request rows of the kinds this viewer's request was shared for (§5.2). Someone without an enabled
+// login can't answer or take back a share, so theirs stay with admins.
+func (q *Queries) ListSharedContacts(ctx context.Context, arg ListSharedContactsParams) ([]ListSharedContactsRow, error) {
+	rows, err := q.db.Query(ctx, listSharedContacts, arg.RequesterID, arg.PersonID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSharedContactsRow
+	for rows.Next() {
+		var i ListSharedContactsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Platform,
+			&i.Label,
+			&i.Value,
+			&i.Visibility,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockPersonForContacts = `-- name: LockPersonForContacts :one
 
 SELECT EXISTS (SELECT 1 FROM persons WHERE id = $1 AND deleted_at IS NULL FOR NO KEY UPDATE)
@@ -225,26 +277,40 @@ func (q *Queries) PersonHasLogin(ctx context.Context, id *uuid.UUID) (bool, erro
 }
 
 const requestableKinds = `-- name: RequestableKinds :many
-SELECT DISTINCT CASE WHEN kind = 'social' THEN platform ELSE kind END::text AS kind FROM contact_methods c
-WHERE c.person_id = $1 AND c.visibility = 'on_request'
-  AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)
-ORDER BY 1
+SELECT k.kind, CASE WHEN r.status IS NULL THEN 'none' ELSE 'requested' END::text AS my_request_status
+FROM (SELECT DISTINCT CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END::text AS kind FROM contact_methods c
+      WHERE c.person_id = $1 AND c.visibility = 'on_request'
+        AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)) k
+LEFT JOIN contact_requests r ON r.person_id = $1 AND r.requester_id = $2 AND r.kind = k.kind
+WHERE r.status IS DISTINCT FROM 'shared'
+ORDER BY k.kind
 `
 
-// Only the kinds, never the values; someone without a login can't answer a request, so they offer none.
-func (q *Queries) RequestableKinds(ctx context.Context, personID uuid.UUID) ([]string, error) {
-	rows, err := q.db.Query(ctx, requestableKinds, personID)
+type RequestableKindsParams struct {
+	PersonID    uuid.UUID
+	RequesterID uuid.UUID
+}
+
+type RequestableKindsRow struct {
+	Kind            string
+	MyRequestStatus string
+}
+
+// The kinds the viewer could ask for and hasn't been shown, never their values. Declined and revoked read
+// as requested, so a decline stays silent.
+func (q *Queries) RequestableKinds(ctx context.Context, arg RequestableKindsParams) ([]RequestableKindsRow, error) {
+	rows, err := q.db.Query(ctx, requestableKinds, arg.PersonID, arg.RequesterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []RequestableKindsRow
 	for rows.Next() {
-		var kind string
-		if err := rows.Scan(&kind); err != nil {
+		var i RequestableKindsRow
+		if err := rows.Scan(&i.Kind, &i.MyRequestStatus); err != nil {
 			return nil, err
 		}
-		items = append(items, kind)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

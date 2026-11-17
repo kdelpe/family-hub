@@ -74,7 +74,7 @@ func TestSearchPersons(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantIn != nil {
-				svc.EXPECT().ListPersons(mock.Anything, family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}, *tt.wantIn).Return(tt.people, tt.listErr)
+				svc.EXPECT().ListPersons(mock.Anything, family.Viewer{UserID: testUser.ID, IsAdmin: tt.role == auth.RoleAdmin}, *tt.wantIn).Return(tt.people, tt.listErr)
 			}
 			req := httptest.NewRequest(http.MethodGet, "/api/persons"+tt.query, nil)
 
@@ -87,7 +87,7 @@ func TestSearchPersons(t *testing.T) {
 
 func TestReadsPassTheLinkedPerson(t *testing.T) {
 	linked := auth.Session{UserID: testUser.ID, Role: auth.RoleMember, PersonID: new(otherPersonID)}
-	viewer := family.Viewer{PersonID: new(otherPersonID)}
+	viewer := family.Viewer{UserID: testUser.ID, PersonID: new(otherPersonID)}
 	tests := []struct {
 		name   string
 		expect func(svc *mocks.FamilyService)
@@ -151,7 +151,7 @@ func TestGetPerson(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
 			if tt.wantGet {
-				svc.EXPECT().GetPerson(mock.Anything, family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}, testPersonID).Return(testPerson, tt.getErr)
+				svc.EXPECT().GetPerson(mock.Anything, family.Viewer{UserID: testUser.ID, IsAdmin: tt.role == auth.RoleAdmin}, testPersonID).Return(testPerson, tt.getErr)
 			}
 			id := idOr(tt.id)
 			req := withURLParam(httptest.NewRequest(http.MethodGet, "/api/persons/"+id, nil), "id", id)
@@ -251,9 +251,9 @@ func TestUpdatePerson(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
-			session, viewer := auth.Session{UserID: testUser.ID, Role: auth.RoleAdmin}, family.Viewer{IsAdmin: true}
+			session, viewer := auth.Session{UserID: testUser.ID, Role: auth.RoleAdmin}, family.Viewer{UserID: testUser.ID, IsAdmin: true}
 			if tt.member {
-				session, viewer = auth.Session{UserID: testUser.ID, Role: auth.RoleMember, PersonID: &testPersonID}, family.Viewer{PersonID: &testPersonID}
+				session, viewer = auth.Session{UserID: testUser.ID, Role: auth.RoleMember, PersonID: &testPersonID}, family.Viewer{UserID: testUser.ID, PersonID: &testPersonID}
 			}
 			if tt.wantPatch != nil {
 				svc.EXPECT().UpdatePerson(mock.Anything, viewer, testPersonID, *tt.wantPatch).Return(testPerson, tt.updateErr)
@@ -584,7 +584,7 @@ func TestAncestorsAndDescendants(t *testing.T) {
 				svc := mocks.NewFamilyService(t)
 				h := handler.NewFamily(svc).Ancestors
 				if !tt.noWalk {
-					viewer := family.Viewer{IsAdmin: tt.role == auth.RoleAdmin}
+					viewer := family.Viewer{UserID: testUser.ID, IsAdmin: tt.role == auth.RoleAdmin}
 					if direction == "ancestors" {
 						svc.EXPECT().Ancestors(mock.Anything, viewer, testPersonID, tt.wantDepth).Return(relatives, tt.walkErr)
 					} else {

@@ -85,6 +85,11 @@ func New(h Handlers, mw Middleware) http.Handler {
 			r.Post("/me/contacts", h.Contacts.CreateMine)
 			r.Patch("/me/contacts/{cid}", h.Contacts.UpdateMine)
 			r.Delete("/me/contacts/{cid}", h.Contacts.DeleteMine)
+			r.Post("/persons/{id}/contact-requests", h.Contacts.Ask)
+			r.Get("/me/contact-requests", h.Contacts.ListRequests)
+			r.Post("/me/contact-requests/{rid}/share", h.Contacts.Share)
+			r.Post("/me/contact-requests/{rid}/decline", h.Contacts.Decline)
+			r.Post("/me/contact-requests/{rid}/revoke", h.Contacts.Revoke)
 
 			r.Group(func(r chi.Router) {
 				r.Use(handler.RequireAdmin)

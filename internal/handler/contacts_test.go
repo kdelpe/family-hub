@@ -7,9 +7,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/kdelpe/family-hub/internal/auth"
@@ -23,7 +25,7 @@ var (
 	testContactID = uuid.MustParse("01890000-0000-7000-8000-0000000000dd")
 	testContact   = contacts.Contact{ID: testContactID, Kind: "phone", Label: new("Mobile"), Value: "+1 555 010 0000", Visibility: "on_request"}
 	memberSession = auth.Session{UserID: testUser.ID, Role: auth.RoleMember, PersonID: &testPersonID}
-	memberViewer  = family.Viewer{PersonID: &testPersonID}
+	memberViewer  = family.Viewer{UserID: testUser.ID, PersonID: &testPersonID}
 )
 
 const (
@@ -33,7 +35,7 @@ const (
 )
 
 func TestListContacts(t *testing.T) {
-	listing := contacts.Listing{Contacts: []contacts.Contact{testContact}, Requestable: []string{"address"}}
+	listing := contacts.Listing{Contacts: []contacts.Contact{testContact}, Requestable: []contacts.Requestable{{Kind: "address", MyRequestStatus: "requested"}}}
 	tests := []struct {
 		name       string
 		mine       bool
@@ -44,9 +46,9 @@ func TestListContacts(t *testing.T) {
 		wantBody   string
 	}{
 		{name: "rows, then the kinds the viewer could ask for", session: memberSession, wantPerson: &testPersonID, wantStatus: http.StatusOK,
-			wantBody: `{"contacts":[` + testContactBody + `,{"kind":"address","requestable":true,"my_request_status":"none"}]}`},
+			wantBody: `{"contacts":[` + testContactBody + `,{"kind":"address","requestable":true,"my_request_status":"requested"}]}`},
 		{name: "mine", mine: true, session: memberSession, wantPerson: &testPersonID, wantStatus: http.StatusOK,
-			wantBody: `{"contacts":[` + testContactBody + `,{"kind":"address","requestable":true,"my_request_status":"none"}]}`},
+			wantBody: `{"contacts":[` + testContactBody + `,{"kind":"address","requestable":true,"my_request_status":"requested"}]}`},
 		{name: "mine, linked to nobody", mine: true, session: auth.Session{UserID: testUser.ID, Role: auth.RoleMember}, wantStatus: http.StatusForbidden,
 			wantBody: `{"error":{"code":"forbidden","message":"your login isn't linked to anyone in the tree yet"}}`},
 		{name: "unknown person", session: memberSession, wantPerson: &testPersonID, listErr: family.ErrPersonNotFound,
@@ -77,7 +79,7 @@ func TestListContacts(t *testing.T) {
 
 func TestWriteContacts(t *testing.T) {
 	adminSession := auth.Session{UserID: testUser.ID, Role: auth.RoleAdmin}
-	adminViewer := family.Viewer{IsAdmin: true}
+	adminViewer := family.Viewer{UserID: testUser.ID, IsAdmin: true}
 	tests := []struct {
 		name       string
 		serve      func(h *handler.Contacts) http.HandlerFunc
@@ -160,6 +162,80 @@ func TestWriteContacts(t *testing.T) {
 			rec := serveWith(t, tt.session, tt.serve(handler.NewContacts(svc)), req)
 
 			assertBody(t, rec, tt.wantStatus, tt.wantBody)
+		})
+	}
+}
+
+func TestContactRequests(t *testing.T) {
+	requestID := uuid.MustParse("01890000-0000-7000-8000-0000000000ee")
+	asked := time.Date(2026, 11, 15, 9, 30, 0, 0, time.UTC)
+	tests := []struct {
+		name       string
+		serve      func(h *handler.Contacts) http.HandlerFunc
+		method     string
+		rid        string
+		body       string
+		expect     func(svc *mocks.ContactsService)
+		wantStatus int
+		wantBody   string
+		wantRetry  string
+	}{
+		{name: "ask", serve: func(h *handler.Contacts) http.HandlerFunc { return h.Ask }, method: http.MethodPost, body: `{"kind":"phone"}`,
+			expect: func(svc *mocks.ContactsService) {
+				svc.EXPECT().Ask(mock.Anything, memberViewer, testPersonID, "phone").Return("requested", nil)
+			}, wantStatus: http.StatusOK, wantBody: `{"kind":"phone","my_request_status":"requested"}`},
+		{name: "ask for something not offered", serve: func(h *handler.Contacts) http.HandlerFunc { return h.Ask }, method: http.MethodPost, body: `{"kind":"email"}`,
+			expect: func(svc *mocks.ContactsService) {
+				svc.EXPECT().Ask(mock.Anything, memberViewer, testPersonID, "email").Return("", contacts.ErrInvalidRequest)
+			}, wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"validation_error","message":"invalid contact request"}}`},
+		{name: "asked too often", serve: func(h *handler.Contacts) http.HandlerFunc { return h.Ask }, method: http.MethodPost, body: `{"kind":"phone"}`,
+			expect: func(svc *mocks.ContactsService) {
+				svc.EXPECT().Ask(mock.Anything, memberViewer, testPersonID, "phone").Return("", &auth.RateLimitedError{RetryAfter: time.Hour})
+			}, wantStatus: http.StatusTooManyRequests, wantRetry: "3600",
+			wantBody: `{"error":{"code":"rate_limited","message":"too many attempts, try again later"}}`},
+		{name: "requests for my details", serve: func(h *handler.Contacts) http.HandlerFunc { return h.ListRequests }, method: http.MethodGet,
+			expect: func(svc *mocks.ContactsService) {
+				svc.EXPECT().Requests(mock.Anything, memberViewer).Return([]contacts.Request{{
+					ID: requestID, Kind: "phone", Status: "pending", CreatedAt: asked,
+					From: contacts.Requester{PersonID: otherPersonID, Name: "Darline Monestime"},
+				}}, nil)
+			}, wantStatus: http.StatusOK,
+			wantBody: `{"requests":[{"id":"01890000-0000-7000-8000-0000000000ee","kind":"phone","status":"pending",
+				"created_at":"2026-11-15T09:30:00Z","decided_at":null,
+				"from":{"person_id":"01890000-0000-7000-8000-0000000000cc","name":"Darline Monestime"}}]}`},
+		{name: "share", serve: func(h *handler.Contacts) http.HandlerFunc { return h.Share }, method: http.MethodPost, rid: requestID.String(),
+			expect: func(svc *mocks.ContactsService) {
+				svc.EXPECT().Decide(mock.Anything, memberViewer, requestID, contacts.Share).Return(nil)
+			}, wantStatus: http.StatusNoContent},
+		{name: "decline", serve: func(h *handler.Contacts) http.HandlerFunc { return h.Decline }, method: http.MethodPost, rid: requestID.String(),
+			expect: func(svc *mocks.ContactsService) {
+				svc.EXPECT().Decide(mock.Anything, memberViewer, requestID, contacts.Decline).Return(nil)
+			}, wantStatus: http.StatusNoContent},
+		{name: "revoke what was never shared", serve: func(h *handler.Contacts) http.HandlerFunc { return h.Revoke }, method: http.MethodPost, rid: requestID.String(),
+			expect: func(svc *mocks.ContactsService) {
+				svc.EXPECT().Decide(mock.Anything, memberViewer, requestID, contacts.Revoke).Return(contacts.ErrAlreadyDecided)
+			}, wantStatus: http.StatusConflict, wantBody: `{"error":{"code":"conflict","message":"this request has already been answered"}}`},
+		{name: "not a request id", serve: func(h *handler.Contacts) http.HandlerFunc { return h.Share }, method: http.MethodPost, rid: "42",
+			wantStatus: http.StatusNotFound, wantBody: `{"error":{"code":"not_found","message":"contact request not found"}}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewContactsService(t)
+			if tt.expect != nil {
+				tt.expect(svc)
+			}
+			req := httptest.NewRequest(tt.method, "/api/contact-requests", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", testPersonID.String())
+			rctx.URLParams.Add("rid", tt.rid)
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+			rec := serveWith(t, memberSession, tt.serve(handler.NewContacts(svc)), req)
+
+			assertBody(t, rec, tt.wantStatus, tt.wantBody)
+			assert.Equal(t, tt.wantRetry, rec.Header().Get("Retry-After"))
 		})
 	}
 }

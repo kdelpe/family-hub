@@ -36,11 +36,17 @@ type Contact struct {
 	Visibility string
 }
 
-// Listing is what a viewer may see of one person's contact methods. Requestable names the kinds
-// (phone, whatsapp, address) they could ask for, without their values.
+// Listing is what a viewer may see of one person's contact methods. Requestable is each kind (phone,
+// whatsapp, address) they could ask for but haven't been shown, without its values.
 type Listing struct {
 	Contacts    []Contact
-	Requestable []string
+	Requestable []Requestable
+}
+
+type Requestable struct {
+	Kind string
+	// MyRequestStatus is none or requested; a declined or revoked request reads requested (§5.2).
+	MyRequestStatus string
 }
 
 type ContactInput struct {
@@ -98,9 +104,17 @@ func (s *Service) List(ctx context.Context, viewer family.Viewer, personID uuid.
 		if err != nil {
 			return fmt.Errorf("list family contacts: %w", err)
 		}
-		listing.Contacts = toContacts(rows)
-		if listing.Requestable, err = q.RequestableKinds(ctx, personID); err != nil {
+		shared, err := q.ListSharedContacts(ctx, gen.ListSharedContactsParams{PersonID: personID, RequesterID: viewer.UserID})
+		if err != nil {
+			return fmt.Errorf("list shared contacts: %w", err)
+		}
+		listing.Contacts = append(toContacts(rows), toContacts(shared)...)
+		kinds, err := q.RequestableKinds(ctx, gen.RequestableKindsParams{PersonID: personID, RequesterID: viewer.UserID})
+		if err != nil {
 			return fmt.Errorf("requestable kinds: %w", err)
+		}
+		for _, k := range kinds {
+			listing.Requestable = append(listing.Requestable, Requestable(k))
 		}
 		return nil
 	})
@@ -231,29 +245,16 @@ func checkRequestable(ctx context.Context, q *gen.Queries, personID uuid.UUID, c
 
 // lockPerson runs fn in a transaction holding the person, so a delete can't land mid-write.
 func (s *Service) lockPerson(ctx context.Context, what string, personID uuid.UUID, fn func(q *gen.Queries) error) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin %s: %w", what, err)
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-	if err := auth.SetLockTimeout(ctx, tx, s.lockTimeout); err != nil {
-		return err
-	}
-	q := gen.New(tx)
-	found, err := q.LockPersonForContacts(ctx, personID)
-	if err != nil {
-		return auth.BusyIfContended(fmt.Errorf("lock person: %w", err))
-	}
-	if !found {
-		return family.ErrPersonNotFound
-	}
-	if err := fn(q); err != nil {
-		return auth.BusyIfContended(err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit %s: %w", what, err)
-	}
-	return nil
+	return s.tx(ctx, what, func(q *gen.Queries) error {
+		found, err := q.LockPersonForContacts(ctx, personID)
+		if err != nil {
+			return fmt.Errorf("lock person: %w", err)
+		}
+		if !found {
+			return family.ErrPersonNotFound
+		}
+		return fn(q)
+	})
 }
 
 // read runs fn on one snapshot, so the person check and the rows agree.
@@ -272,7 +273,7 @@ func (s *Service) read(ctx context.Context, fn func(q *gen.Queries) error) error
 	return nil
 }
 
-func toContacts[R gen.ListContactsRow | gen.ListFamilyContactsRow](rows []R) []Contact {
+func toContacts[R gen.ListContactsRow | gen.ListFamilyContactsRow | gen.ListSharedContactsRow](rows []R) []Contact {
 	contacts := make([]Contact, 0, len(rows))
 	for _, r := range rows {
 		contacts = append(contacts, Contact(gen.ListContactsRow(r)))

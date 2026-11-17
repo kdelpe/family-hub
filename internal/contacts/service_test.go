@@ -45,9 +45,9 @@ func TestWhoSeesWhat(t *testing.T) {
 		{name: "an admin sees every row", viewer: admin, person: maya,
 			want: Listing{Contacts: []Contact{email, hidden, phone, second, whatsapp}}},
 		{name: "family sees family rows and what they could ask for, once per kind", viewer: family.Viewer{PersonID: &rosa}, person: maya,
-			want: Listing{Contacts: []Contact{email}, Requestable: []string{"phone", "whatsapp"}}},
+			want: Listing{Contacts: []Contact{email}, Requestable: []Requestable{{"phone", "none"}, {"whatsapp", "none"}}}},
 		{name: "an unlinked member too", viewer: family.Viewer{}, person: maya,
-			want: Listing{Contacts: []Contact{email}, Requestable: []string{"phone", "whatsapp"}}},
+			want: Listing{Contacts: []Contact{email}, Requestable: []Requestable{{"phone", "none"}, {"whatsapp", "none"}}}},
 		{name: "someone else's rows", viewer: family.Viewer{PersonID: &maya}, person: rosa,
 			want: Listing{Contacts: []Contact{rosaEmail}}},
 	}

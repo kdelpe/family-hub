@@ -43,6 +43,7 @@ var (
 
 // Viewer is who is asking, which decides whether a living person's birth year shows (§5.2).
 type Viewer struct {
+	UserID   uuid.UUID
 	IsAdmin  bool
 	PersonID *uuid.UUID
 }
