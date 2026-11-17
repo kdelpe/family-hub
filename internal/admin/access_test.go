@@ -3,7 +3,9 @@ package admin
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -97,6 +99,39 @@ func TestRepeatsDontSpendTheAddressBudget(t *testing.T) {
 	require.NoError(t, svc.Submit(t.Context(), AccessRequestInput{FullName: "Darline Monestime", Email: "darline@example.com"}))
 
 	assert.Equal(t, 1, countRows(t, pool, `SELECT count(*) FROM access_requests WHERE status = 'pending' AND full_name = 'Darline Monestime'`))
+}
+
+func TestRepeatsThatLoseARaceGiveTheirTokenBack(t *testing.T) {
+	pool := testdb.MigratedPool(t, database.MigrateUp)
+	svc := NewAccessRequests(pool)
+	admin := insertUser(t, pool, "admin@example.com")
+	// A request for the address still being stored: every Submit passes the pending check, then waits on it.
+	first, err := pool.Begin(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = first.Rollback(context.Background()) })
+	_, err = first.Exec(t.Context(), `INSERT INTO access_requests (full_name, email, source) VALUES ('First', 'darline@example.com', 'self')`)
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	for range accessRequestsPerEmail {
+		wg.Go(func() {
+			assert.NoError(t, svc.Submit(t.Context(), AccessRequestInput{FullName: "Repeat", Email: "darline@example.com"}))
+		})
+	}
+	require.Eventually(t, func() bool {
+		return countRows(t, pool, `SELECT count(*) FROM pg_locks WHERE NOT granted`) == accessRequestsPerEmail
+	}, 5*time.Second, 10*time.Millisecond, "every repeat waits on the first")
+	require.NoError(t, first.Commit(t.Context()))
+	wg.Wait()
+
+	for range accessRequestsPerEmail {
+		_, err := pool.Exec(t.Context(), `UPDATE access_requests SET status = 'declined', reviewed_by = $1, reviewed_at = now() WHERE status = 'pending'`, admin)
+		require.NoError(t, err)
+		require.NoError(t, svc.Submit(t.Context(), AccessRequestInput{FullName: "Darline Monestime", Email: "darline@example.com"}))
+	}
+
+	assert.Equal(t, accessRequestsPerEmail, countRows(t, pool, `SELECT count(*) FROM access_requests WHERE full_name = 'Darline Monestime'`),
+		"the repeats stored nothing, so the whole budget is left")
 }
 
 func TestSubmitStopsAfterFiveAnHourPerEmail(t *testing.T) {

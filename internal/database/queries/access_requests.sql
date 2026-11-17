@@ -1,5 +1,5 @@
 -- While a request for the email is pending, a new one is dropped and the pending one left as it was (§5).
--- name: CreateAccessRequest :exec
+-- name: CreateAccessRequest :execrows
 INSERT INTO access_requests (full_name, email, side, relationship, related_names, note, source, suggested_by)
 VALUES (@full_name, @email, sqlc.narg(side), sqlc.narg(relationship), @related_names::text[], sqlc.narg(note), @source, sqlc.narg(suggested_by))
 ON CONFLICT (email) WHERE status = 'pending' DO NOTHING;

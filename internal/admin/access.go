@@ -105,13 +105,20 @@ func (s *AccessRequests) Submit(ctx context.Context, in AccessRequestInput) erro
 	if pending {
 		return nil
 	}
-	if ok, _ := s.perEmail.Take(r.Email); !ok {
+	// Trimmed from a body of up to 1 MiB: a copy, so the limiter key doesn't keep the whole body alive.
+	key := strings.Clone(r.Email)
+	if ok, _ := s.perEmail.Take(key); !ok {
 		return nil
 	}
-	if err := q.CreateAccessRequest(ctx, gen.CreateAccessRequestParams{
+	n, err := q.CreateAccessRequest(ctx, gen.CreateAccessRequestParams{
 		FullName: r.FullName, Email: r.Email, Side: r.Side, Relationship: r.Relationship,
 		RelatedNames: r.RelatedNames, Note: r.Note, Source: "self",
-	}); err != nil {
+	})
+	// Only a stored request spends the budget: a concurrent repeat that lost the race gets its token back.
+	if err != nil || n == 0 {
+		s.perEmail.Refund(key)
+	}
+	if err != nil {
 		return fmt.Errorf("create access request: %w", err)
 	}
 	return nil

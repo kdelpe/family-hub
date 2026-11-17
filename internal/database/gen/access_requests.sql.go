@@ -39,7 +39,7 @@ func (q *Queries) ApproveAccessRequest(ctx context.Context, arg ApproveAccessReq
 	return err
 }
 
-const createAccessRequest = `-- name: CreateAccessRequest :exec
+const createAccessRequest = `-- name: CreateAccessRequest :execrows
 INSERT INTO access_requests (full_name, email, side, relationship, related_names, note, source, suggested_by)
 VALUES ($1, $2, $3, $4, $5::text[], $6, $7, $8)
 ON CONFLICT (email) WHERE status = 'pending' DO NOTHING
@@ -57,8 +57,8 @@ type CreateAccessRequestParams struct {
 }
 
 // While a request for the email is pending, a new one is dropped and the pending one left as it was (§5).
-func (q *Queries) CreateAccessRequest(ctx context.Context, arg CreateAccessRequestParams) error {
-	_, err := q.db.Exec(ctx, createAccessRequest,
+func (q *Queries) CreateAccessRequest(ctx context.Context, arg CreateAccessRequestParams) (int64, error) {
+	result, err := q.db.Exec(ctx, createAccessRequest,
 		arg.FullName,
 		arg.Email,
 		arg.Side,
@@ -68,7 +68,10 @@ func (q *Queries) CreateAccessRequest(ctx context.Context, arg CreateAccessReque
 		arg.Source,
 		arg.SuggestedBy,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const declineAccessRequest = `-- name: DeclineAccessRequest :execrows
