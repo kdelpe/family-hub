@@ -15,18 +15,18 @@ SELECT count(*) FROM contact_methods WHERE person_id = @person_id;
 -- name: ListContacts :many
 SELECT id, kind, platform, label, value, visibility FROM contact_methods WHERE person_id = @person_id ORDER BY id;
 
--- name: ListFamilyContacts :many
-SELECT id, kind, platform, label, value, visibility FROM contact_methods
-WHERE person_id = @person_id AND visibility = 'family' ORDER BY id;
-
--- The on_request rows of the kinds this viewer's request was shared for (§5.2). Someone without an enabled
--- login can't answer or take back a share, so theirs stay with admins.
--- name: ListSharedContacts :many
+-- What someone other than the owner sees: family rows, and the on_request rows of each kind the owner shared
+-- with them (§5.2). A share counts only while both sides could still see it on their My profile: the owner
+-- has an enabled login, and the requester's login is linked to someone in the tree, so it can be revoked.
+-- name: ListVisibleContacts :many
 SELECT c.id, c.kind, c.platform, c.label, c.value, c.visibility FROM contact_methods c
-JOIN contact_requests r ON r.person_id = c.person_id AND r.requester_id = @requester_id AND r.status = 'shared'
-  AND r.kind = CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END
-WHERE c.person_id = @person_id AND c.visibility = 'on_request'
+WHERE c.person_id = @person_id AND (c.visibility = 'family' OR (c.visibility = 'on_request'
   AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)
+  AND EXISTS (SELECT 1 FROM contact_requests r
+    JOIN users ru ON ru.id = r.requester_id
+    JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL
+    WHERE r.person_id = c.person_id AND r.requester_id = @requester_id AND r.status = 'shared'
+      AND r.kind = CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END)))
 ORDER BY c.id;
 
 -- The kinds the viewer could ask for and hasn't been shown, never their values. Declined and revoked read

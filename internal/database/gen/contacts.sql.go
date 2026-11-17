@@ -156,62 +156,24 @@ func (q *Queries) ListContacts(ctx context.Context, personID uuid.UUID) ([]ListC
 	return items, nil
 }
 
-const listFamilyContacts = `-- name: ListFamilyContacts :many
-SELECT id, kind, platform, label, value, visibility FROM contact_methods
-WHERE person_id = $1 AND visibility = 'family' ORDER BY id
-`
-
-type ListFamilyContactsRow struct {
-	ID         uuid.UUID
-	Kind       string
-	Platform   *string
-	Label      *string
-	Value      string
-	Visibility string
-}
-
-func (q *Queries) ListFamilyContacts(ctx context.Context, personID uuid.UUID) ([]ListFamilyContactsRow, error) {
-	rows, err := q.db.Query(ctx, listFamilyContacts, personID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListFamilyContactsRow
-	for rows.Next() {
-		var i ListFamilyContactsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Kind,
-			&i.Platform,
-			&i.Label,
-			&i.Value,
-			&i.Visibility,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSharedContacts = `-- name: ListSharedContacts :many
+const listVisibleContacts = `-- name: ListVisibleContacts :many
 SELECT c.id, c.kind, c.platform, c.label, c.value, c.visibility FROM contact_methods c
-JOIN contact_requests r ON r.person_id = c.person_id AND r.requester_id = $1 AND r.status = 'shared'
-  AND r.kind = CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END
-WHERE c.person_id = $2 AND c.visibility = 'on_request'
+WHERE c.person_id = $1 AND (c.visibility = 'family' OR (c.visibility = 'on_request'
   AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)
+  AND EXISTS (SELECT 1 FROM contact_requests r
+    JOIN users ru ON ru.id = r.requester_id
+    JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL
+    WHERE r.person_id = c.person_id AND r.requester_id = $2 AND r.status = 'shared'
+      AND r.kind = CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END)))
 ORDER BY c.id
 `
 
-type ListSharedContactsParams struct {
-	RequesterID uuid.UUID
+type ListVisibleContactsParams struct {
 	PersonID    uuid.UUID
+	RequesterID uuid.UUID
 }
 
-type ListSharedContactsRow struct {
+type ListVisibleContactsRow struct {
 	ID         uuid.UUID
 	Kind       string
 	Platform   *string
@@ -220,17 +182,18 @@ type ListSharedContactsRow struct {
 	Visibility string
 }
 
-// The on_request rows of the kinds this viewer's request was shared for (§5.2). Someone without an enabled
-// login can't answer or take back a share, so theirs stay with admins.
-func (q *Queries) ListSharedContacts(ctx context.Context, arg ListSharedContactsParams) ([]ListSharedContactsRow, error) {
-	rows, err := q.db.Query(ctx, listSharedContacts, arg.RequesterID, arg.PersonID)
+// What someone other than the owner sees: family rows, and the on_request rows of each kind the owner shared
+// with them (§5.2). A share counts only while both sides could still see it on their My profile: the owner
+// has an enabled login, and the requester's login is linked to someone in the tree, so it can be revoked.
+func (q *Queries) ListVisibleContacts(ctx context.Context, arg ListVisibleContactsParams) ([]ListVisibleContactsRow, error) {
+	rows, err := q.db.Query(ctx, listVisibleContacts, arg.PersonID, arg.RequesterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListSharedContactsRow
+	var items []ListVisibleContactsRow
 	for rows.Next() {
-		var i ListSharedContactsRow
+		var i ListVisibleContactsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Kind,

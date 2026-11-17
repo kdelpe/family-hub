@@ -2,8 +2,11 @@
 -- name: LockRequester :exec
 SELECT pg_advisory_xact_lock(hashtext('contacts.requests'), hashtext(@requester_id::text));
 
+-- Retry-after comes from the database's clock, the one created_at was stamped with.
 -- name: RequestsToday :one
-SELECT count(*) AS n, coalesce(min(created_at), now())::timestamptz AS oldest FROM contact_requests
+SELECT count(*) AS n,
+  extract(epoch FROM coalesce(min(created_at), now()) + interval '1 day' - now())::float8 AS retry_after_seconds
+FROM contact_requests
 WHERE requester_id = @requester_id AND created_at > now() - interval '1 day';
 
 -- name: GetMyRequestStatus :one
@@ -28,8 +31,7 @@ WHERE id = @id AND person_id = @person_id AND status = @from_status;
 -- name: ContactRequestExists :one
 SELECT EXISTS (SELECT 1 FROM contact_requests WHERE id = @id AND person_id = @person_id);
 
--- Something to ask for: an on_request row of that kind, and an enabled login to answer.
+-- An on_request row of that kind; Ask checks the login to answer it separately, under a lock.
 -- name: OffersKind :one
 SELECT EXISTS (SELECT 1 FROM contact_methods c
-  WHERE c.person_id = @person_id AND c.visibility = 'on_request' AND CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END = @kind::text
-    AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL));
+  WHERE c.person_id = @person_id AND c.visibility = 'on_request' AND CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END = @kind::text);

@@ -3,6 +3,7 @@ package handler_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -213,8 +214,9 @@ func TestContactRequests(t *testing.T) {
 			}, wantStatus: http.StatusNoContent},
 		{name: "revoke what was never shared", serve: func(h *handler.Contacts) http.HandlerFunc { return h.Revoke }, method: http.MethodPost, rid: requestID.String(),
 			expect: func(svc *mocks.ContactsService) {
-				svc.EXPECT().Decide(mock.Anything, memberViewer, requestID, contacts.Revoke).Return(contacts.ErrAlreadyDecided)
-			}, wantStatus: http.StatusConflict, wantBody: `{"error":{"code":"conflict","message":"this request has already been answered"}}`},
+				svc.EXPECT().Decide(mock.Anything, memberViewer, requestID, contacts.Revoke).Return(fmt.Errorf("%w: only a shared request can be taken back", contacts.ErrWrongState))
+			}, wantStatus: http.StatusConflict,
+			wantBody: `{"error":{"code":"conflict","message":"contact request can't change that way: only a shared request can be taken back"}}`},
 		{name: "not a request id", serve: func(h *handler.Contacts) http.HandlerFunc { return h.Share }, method: http.MethodPost, rid: "42",
 			wantStatus: http.StatusNotFound, wantBody: `{"error":{"code":"not_found","message":"contact request not found"}}`},
 	}

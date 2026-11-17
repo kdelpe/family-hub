@@ -147,8 +147,7 @@ func (q *Queries) LockRequester(ctx context.Context, requesterID string) error {
 
 const offersKind = `-- name: OffersKind :one
 SELECT EXISTS (SELECT 1 FROM contact_methods c
-  WHERE c.person_id = $1 AND c.visibility = 'on_request' AND CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END = $2::text
-    AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL))
+  WHERE c.person_id = $1 AND c.visibility = 'on_request' AND CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END = $2::text)
 `
 
 type OffersKindParams struct {
@@ -156,7 +155,7 @@ type OffersKindParams struct {
 	Kind     string
 }
 
-// Something to ask for: an on_request row of that kind, and an enabled login to answer.
+// An on_request row of that kind; Ask checks the login to answer it separately, under a lock.
 func (q *Queries) OffersKind(ctx context.Context, arg OffersKindParams) (bool, error) {
 	row := q.db.QueryRow(ctx, offersKind, arg.PersonID, arg.Kind)
 	var exists bool
@@ -165,18 +164,21 @@ func (q *Queries) OffersKind(ctx context.Context, arg OffersKindParams) (bool, e
 }
 
 const requestsToday = `-- name: RequestsToday :one
-SELECT count(*) AS n, coalesce(min(created_at), now())::timestamptz AS oldest FROM contact_requests
+SELECT count(*) AS n,
+  extract(epoch FROM coalesce(min(created_at), now()) + interval '1 day' - now())::float8 AS retry_after_seconds
+FROM contact_requests
 WHERE requester_id = $1 AND created_at > now() - interval '1 day'
 `
 
 type RequestsTodayRow struct {
-	N      int64
-	Oldest time.Time
+	N                 int64
+	RetryAfterSeconds float64
 }
 
+// Retry-after comes from the database's clock, the one created_at was stamped with.
 func (q *Queries) RequestsToday(ctx context.Context, requesterID uuid.UUID) (RequestsTodayRow, error) {
 	row := q.db.QueryRow(ctx, requestsToday, requesterID)
 	var i RequestsTodayRow
-	err := row.Scan(&i.N, &i.Oldest)
+	err := row.Scan(&i.N, &i.RetryAfterSeconds)
 	return i, err
 }

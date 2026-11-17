@@ -88,13 +88,13 @@ func TestDecideRules(t *testing.T) {
 		d       Decision
 		wantErr error
 	}{
-		{name: "revoking what wasn't shared", viewer: maya, id: id, d: Revoke, wantErr: ErrAlreadyDecided},
+		{name: "revoking what wasn't shared", viewer: maya, id: id, d: Revoke, wantErr: ErrWrongState},
 		{name: "someone else's request", viewer: rosa, id: id, d: Share, wantErr: ErrRequestNotFound},
 		{name: "an unknown request", viewer: maya, id: uuid.New(), d: Share, wantErr: ErrRequestNotFound},
 		{name: "a login linked to nobody", viewer: family.Viewer{UserID: darline.UserID}, id: id, d: Share, wantErr: ErrNotLinked},
 		{name: "declined", viewer: maya, id: id, d: Decline},
-		{name: "declining twice", viewer: maya, id: id, d: Decline, wantErr: ErrAlreadyDecided},
-		{name: "sharing once declined", viewer: maya, id: id, d: Share, wantErr: ErrAlreadyDecided},
+		{name: "declining twice", viewer: maya, id: id, d: Decline, wantErr: ErrWrongState},
+		{name: "sharing once declined", viewer: maya, id: id, d: Share, wantErr: ErrWrongState},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -137,6 +137,7 @@ func TestAskRules(t *testing.T) {
 		{name: "their own", viewer: maya, person: *maya.PersonID, kind: "phone", wantErr: ErrInvalidRequest},
 		{name: "an admin, who sees everything", viewer: family.Viewer{UserID: darline.UserID, IsAdmin: true}, person: *maya.PersonID, kind: "phone", wantErr: ErrInvalidRequest},
 		{name: "someone deleted", viewer: darline, person: gone, kind: "phone", wantErr: family.ErrPersonNotFound},
+		{name: "a login linked to nobody", viewer: family.Viewer{UserID: darline.UserID}, person: *maya.PersonID, kind: "phone", wantErr: ErrNotLinked},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -175,6 +176,61 @@ func TestTwentyNewRequestsADay(t *testing.T) {
 
 	require.NoError(t, err, "a repeat is free")
 	assert.Equal(t, "requested", status)
+}
+
+func TestAShareEndsWhenEitherSideCantSeeIt(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(t *testing.T, pool *pgxpool.Pool, maya, darline family.Viewer)
+	}{
+		{name: "the requester is unlinked", change: func(t *testing.T, pool *pgxpool.Pool, _, darline family.Viewer) {
+			_, err := pool.Exec(t.Context(), `UPDATE users SET person_id = NULL WHERE id = $1`, darline.UserID)
+			require.NoError(t, err)
+		}},
+		{name: "the requester's person is deleted", change: func(t *testing.T, pool *pgxpool.Pool, _, darline family.Viewer) {
+			_, err := pool.Exec(t.Context(), `UPDATE persons SET deleted_at = now() WHERE id = $1`, *darline.PersonID)
+			require.NoError(t, err)
+		}},
+		{name: "the owner's login is disabled", change: func(t *testing.T, pool *pgxpool.Pool, maya, _ family.Viewer) {
+			_, err := pool.Exec(t.Context(), `UPDATE users SET disabled_at = now() WHERE id = $1`, maya.UserID)
+			require.NoError(t, err)
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, pool := newService(t)
+			maya, darline := member(t, pool, "Maya", "Pluviose"), member(t, pool, "Darline", "Monestime")
+			_, err := svc.Create(t.Context(), maya, *maya.PersonID, ContactInput{Kind: "phone", Value: "+1 555 010 0000", Visibility: new("on_request")})
+			require.NoError(t, err)
+			_, err = svc.Ask(t.Context(), darline, *maya.PersonID, "phone")
+			require.NoError(t, err)
+			requests, err := svc.Requests(t.Context(), maya)
+			require.NoError(t, err)
+			require.NoError(t, svc.Decide(t.Context(), maya, requests[0].ID, Share))
+
+			tt.change(t, pool, maya, darline)
+
+			listing, err := svc.List(t.Context(), family.Viewer{UserID: darline.UserID}, *maya.PersonID)
+			require.NoError(t, err)
+			assert.Empty(t, listing.Contacts, "the phone is no longer shown")
+		})
+	}
+}
+
+func TestAskingAgainForWhatsNoLongerOffered(t *testing.T) {
+	svc, pool := newService(t)
+	maya, darline := member(t, pool, "Maya", "Pluviose"), member(t, pool, "Darline", "Monestime")
+	phone, err := svc.Create(t.Context(), maya, *maya.PersonID, ContactInput{Kind: "phone", Value: "+1 555 010 0000", Visibility: new("on_request")})
+	require.NoError(t, err)
+	_, err = svc.Ask(t.Context(), darline, *maya.PersonID, "phone")
+	require.NoError(t, err)
+	_, err = svc.Update(t.Context(), maya, *maya.PersonID, phone.ID, ContactPatch{Visibility: family.Opt[string]{Set: true, Value: "hidden"}})
+	require.NoError(t, err)
+
+	_, err = svc.Ask(t.Context(), darline, *maya.PersonID, "phone")
+
+	assert.ErrorIs(t, err, ErrInvalidRequest)
 }
 
 func TestRequestsFromSomeoneWhoCantSignInLeaveTheList(t *testing.T) {

@@ -265,7 +265,7 @@ func (c *Contacts) fail(w http.ResponseWriter, r *http.Request, err error, what 
 		httpx.TooManyRequests(w, limited.RetryAfter)
 	case errors.Is(err, contacts.ErrInvalidContact), errors.Is(err, contacts.ErrInvalidRequest):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
-	case errors.Is(err, contacts.ErrAlreadyDecided):
+	case errors.Is(err, contacts.ErrWrongState):
 		httpx.Error(w, http.StatusConflict, "conflict", err.Error())
 	case errors.Is(err, family.ErrPersonNotFound), errors.Is(err, contacts.ErrContactNotFound), errors.Is(err, contacts.ErrRequestNotFound):
 		httpx.Error(w, http.StatusNotFound, "not_found", err.Error())
