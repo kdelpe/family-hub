@@ -222,7 +222,7 @@ type LockPersonRow struct {
 	Bio                *string
 }
 
-// Admins only: the unmasked row, to apply a PATCH to. NO KEY, so an invite linking a login doesn't block it.
+// The unmasked row, to apply a PATCH to; never returned as is. NO KEY, so an invite linking a login doesn't block it.
 func (q *Queries) LockPerson(ctx context.Context, id uuid.UUID) (LockPersonRow, error) {
 	row := q.db.QueryRow(ctx, lockPerson, id)
 	var i LockPersonRow

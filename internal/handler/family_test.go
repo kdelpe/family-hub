@@ -211,11 +211,19 @@ func TestUpdatePerson(t *testing.T) {
 		name       string
 		id         string
 		body       string
+		member     bool
 		wantPatch  *family.PersonPatch
 		updateErr  error
 		wantStatus int
 		wantBody   string
 	}{
+		{name: "a member's own bio", member: true, body: `{"bio":"Tells the best stories."}`,
+			wantPatch:  &family.PersonPatch{Bio: family.Opt[*string]{Set: true, Value: new("Tells the best stories.")}},
+			wantStatus: http.StatusOK, wantBody: testPersonBody},
+		{name: "a member refused by the service is forbidden", member: true, body: `{"first_name":"Rose"}`,
+			wantPatch: &family.PersonPatch{FirstName: family.Opt[string]{Set: true, Value: "Rose"}},
+			updateErr: fmt.Errorf("%w: members can change only their bio", family.ErrNotYourProfile), wantStatus: http.StatusForbidden,
+			wantBody: `{"error":{"code":"forbidden","message":"not allowed: members can change only their bio"}}`},
 		{name: "only the fields sent change; null clears", body: `{"bio":"Tells the best stories.","middle_name":null}`,
 			wantPatch: &family.PersonPatch{
 				Bio:        family.Opt[*string]{Set: true, Value: new("Tells the best stories.")},
@@ -243,15 +251,19 @@ func TestUpdatePerson(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewFamilyService(t)
+			session, viewer := auth.Session{UserID: testUser.ID, Role: auth.RoleAdmin}, family.Viewer{IsAdmin: true}
+			if tt.member {
+				session, viewer = auth.Session{UserID: testUser.ID, Role: auth.RoleMember, PersonID: &testPersonID}, family.Viewer{PersonID: &testPersonID}
+			}
 			if tt.wantPatch != nil {
-				svc.EXPECT().UpdatePerson(mock.Anything, testPersonID, *tt.wantPatch).Return(testPerson, tt.updateErr)
+				svc.EXPECT().UpdatePerson(mock.Anything, viewer, testPersonID, *tt.wantPatch).Return(testPerson, tt.updateErr)
 			}
 			id := idOr(tt.id)
 			req := httptest.NewRequest(http.MethodPatch, "/api/persons/"+id, strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			req = withURLParam(req, "id", id)
 
-			rec := serveAs(t, auth.RoleAdmin, handler.NewFamily(svc).UpdatePerson, req)
+			rec := serveWith(t, session, handler.NewFamily(svc).UpdatePerson, req)
 
 			assertBody(t, rec, tt.wantStatus, tt.wantBody)
 		})

@@ -245,7 +245,7 @@ func TestUpdateChangesOnlyTheFieldsSent(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			got, err := svc.UpdatePerson(t.Context(), before.ID, tt.patch)
+			got, err := svc.UpdatePerson(t.Context(), Viewer{IsAdmin: true}, before.ID, tt.patch)
 
 			stored, getErr := svc.GetPerson(t.Context(), Viewer{IsAdmin: true}, before.ID)
 			require.NoError(t, getErr)
@@ -263,6 +263,49 @@ func TestUpdateChangesOnlyTheFieldsSent(t *testing.T) {
 	}
 }
 
+func TestAMemberChangesOnlyTheirOwnBio(t *testing.T) {
+	svc, admin := newService(t)
+	ids := addPeople(t, svc, admin, "Maya", "Rosa")
+	maya, rosa := ids["Maya"], ids["Rosa"]
+	bio := PersonPatch{Bio: Opt[*string]{Set: true, Value: new("Tells the best stories.")}}
+
+	tests := []struct {
+		name    string
+		viewer  Viewer
+		id      uuid.UUID
+		patch   PersonPatch
+		wantBio *string
+		wantErr error
+	}{
+		{name: "their own bio", viewer: Viewer{PersonID: &maya}, id: maya, patch: bio, wantBio: new("Tells the best stories.")},
+		{name: "clearing it", viewer: Viewer{PersonID: &maya}, id: maya, patch: PersonPatch{Bio: Opt[*string]{Set: true}}},
+		{name: "someone else's bio", viewer: Viewer{PersonID: &maya}, id: rosa, patch: bio, wantErr: ErrNotYourProfile},
+		{name: "a login linked to nobody", viewer: Viewer{}, id: maya, patch: bio, wantErr: ErrNotYourProfile},
+		{name: "their own name", viewer: Viewer{PersonID: &maya}, id: maya,
+			patch: PersonPatch{Bio: bio.Bio, FirstName: Opt[string]{Set: true, Value: "May"}}, wantErr: ErrNotYourProfile},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before, err := svc.GetPerson(t.Context(), Viewer{IsAdmin: true}, tt.id)
+			require.NoError(t, err)
+
+			got, err := svc.UpdatePerson(t.Context(), tt.viewer, tt.id, tt.patch)
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				stored, getErr := svc.GetPerson(t.Context(), Viewer{IsAdmin: true}, tt.id)
+				require.NoError(t, getErr)
+				assert.Equal(t, before, stored, "nothing changed")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantBio, got.Bio)
+			assert.Equal(t, "Maya", got.FirstName)
+		})
+	}
+}
+
 func TestDeleteAndRestore(t *testing.T) {
 	svc, admin := newService(t)
 	rosa, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: "Rosa"})
@@ -272,7 +315,7 @@ func TestDeleteAndRestore(t *testing.T) {
 
 	_, err = svc.GetPerson(t.Context(), Viewer{IsAdmin: true}, rosa.ID)
 	assert.ErrorIs(t, err, ErrPersonNotFound, "a deleted person is gone from reads")
-	_, err = svc.UpdatePerson(t.Context(), rosa.ID, PersonPatch{})
+	_, err = svc.UpdatePerson(t.Context(), Viewer{IsAdmin: true}, rosa.ID, PersonPatch{})
 	assert.ErrorIs(t, err, ErrPersonNotFound, "and from edits")
 	assert.ErrorIs(t, svc.DeletePerson(t.Context(), rosa.ID), ErrPersonNotFound, "deleting twice")
 
@@ -355,7 +398,7 @@ func TestAnInviteInProgressBlocksOnlyTheDelete(t *testing.T) {
 		wantBusy bool
 	}{
 		{name: "an edit goes ahead", write: func(ctx context.Context, s *Service, id uuid.UUID) error {
-			_, err := s.UpdatePerson(ctx, id, PersonPatch{Bio: Opt[*string]{Set: true, Value: new("Born in Jacmel")}})
+			_, err := s.UpdatePerson(ctx, Viewer{IsAdmin: true}, id, PersonPatch{Bio: Opt[*string]{Set: true, Value: new("Born in Jacmel")}})
 			return err
 		}},
 		{name: "a delete waits for the invite", wantBusy: true, write: func(ctx context.Context, s *Service, id uuid.UUID) error {
@@ -392,7 +435,7 @@ func TestUnknownPersonIsNotFound(t *testing.T) {
 	id := uuid.New()
 
 	_, getErr := svc.GetPerson(t.Context(), Viewer{}, id)
-	_, updateErr := svc.UpdatePerson(t.Context(), id, PersonPatch{})
+	_, updateErr := svc.UpdatePerson(t.Context(), Viewer{IsAdmin: true}, id, PersonPatch{})
 	deleteErr := svc.DeletePerson(t.Context(), id)
 	_, restoreErr := svc.RestorePerson(t.Context(), id)
 
@@ -416,7 +459,7 @@ func TestPersonWritesAreBusyWhileARowStaysLocked(t *testing.T) {
 			}},
 		{name: "update", lock: lockPersons,
 			write: func(ctx context.Context, s *Service, id, _ uuid.UUID) error {
-				_, err := s.UpdatePerson(ctx, id, PersonPatch{})
+				_, err := s.UpdatePerson(ctx, Viewer{IsAdmin: true}, id, PersonPatch{})
 				return err
 			}},
 		{name: "delete", lock: lockPersons,

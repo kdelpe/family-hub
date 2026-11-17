@@ -32,6 +32,7 @@ var (
 	ErrInvalidPerson  = errors.New("invalid person")
 	ErrInvalidFilter  = errors.New("invalid filter")
 	ErrPersonHasLogin = errors.New("this person has a login; unlink or disable it first")
+	ErrNotYourProfile = errors.New("not allowed")
 )
 
 var (
@@ -181,8 +182,16 @@ func (s *Service) CreatePerson(ctx context.Context, createdBy uuid.UUID, in Pers
 	return person, nil
 }
 
-// UpdatePerson is admin-only for now; a member editing their own bio comes with person linking (§5.1).
-func (s *Service) UpdatePerson(ctx context.Context, id uuid.UUID, patch PersonPatch) (Person, error) {
+// UpdatePerson lets an admin change anything, and a member only their own linked person's bio (§4).
+func (s *Service) UpdatePerson(ctx context.Context, viewer Viewer, id uuid.UUID, patch PersonPatch) (Person, error) {
+	if !viewer.IsAdmin {
+		if viewer.PersonID == nil || *viewer.PersonID != id {
+			return Person{}, fmt.Errorf("%w: you can change only your own profile", ErrNotYourProfile)
+		}
+		if patch != (PersonPatch{Bio: patch.Bio}) {
+			return Person{}, fmt.Errorf("%w: members can change only their bio", ErrNotYourProfile)
+		}
+	}
 	var person Person
 	err := s.write(ctx, "update person", func(q *gen.Queries) error {
 		row, err := q.LockPerson(ctx, id)
@@ -204,7 +213,7 @@ func (s *Service) UpdatePerson(ctx context.Context, id uuid.UUID, patch PersonPa
 		if err != nil {
 			return fmt.Errorf("update person: %w", err)
 		}
-		person, err = get(ctx, q, Viewer{IsAdmin: true}, id)
+		person, err = get(ctx, q, viewer, id)
 		return err
 	})
 	if err != nil {
