@@ -18,10 +18,11 @@ const (
 )
 
 type Handlers struct {
-	Health *handler.Health
-	Auth   *handler.Auth
-	Admin  *handler.Admin
-	Family *handler.Family
+	Health   *handler.Health
+	Auth     *handler.Auth
+	Admin    *handler.Admin
+	Family   *handler.Family
+	Contacts *handler.Contacts
 }
 
 type Middleware struct {
@@ -78,6 +79,11 @@ func New(h Handlers, mw Middleware) http.Handler {
 			r.Get("/family/summary", h.Family.Summary)
 			// Members may change their own bio; the service checks (§4).
 			r.Patch("/persons/{id}", h.Family.UpdatePerson)
+			r.Get("/persons/{id}/contacts", h.Contacts.ListFor)
+			r.Get("/me/contacts", h.Contacts.ListMine)
+			r.Post("/me/contacts", h.Contacts.CreateMine)
+			r.Patch("/me/contacts/{cid}", h.Contacts.UpdateMine)
+			r.Delete("/me/contacts/{cid}", h.Contacts.DeleteMine)
 
 			r.Group(func(r chi.Router) {
 				r.Use(handler.RequireAdmin)
@@ -91,6 +97,9 @@ func New(h Handlers, mw Middleware) http.Handler {
 				r.Post("/relationships", h.Family.CreateRelationship)
 				r.Patch("/relationships/{id}", h.Family.UpdateRelationship)
 				r.Delete("/relationships/{id}", h.Family.DeleteRelationship)
+				r.Post("/persons/{id}/contacts", h.Contacts.CreateFor)
+				r.Patch("/persons/{id}/contacts/{cid}", h.Contacts.UpdateFor)
+				r.Delete("/persons/{id}/contacts/{cid}", h.Contacts.DeleteFor)
 			})
 		})
 	})

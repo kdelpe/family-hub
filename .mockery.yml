@@ -12,6 +12,7 @@ packages:
       AdminService: {}
       ResetRequester: {}
       FamilyService: {}
+      ContactsService: {}
   github.com/kdelpe/family-hub/internal/admin:
     interfaces:
       Terminal: {}

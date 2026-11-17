@@ -132,7 +132,7 @@ Conventions: **Postgres 18**. UUID PKs via the built-in `uuidv7()` (Postgres 18,
 
 ### 3.1 Full schema (written as one migration per PR, §6.2)
 
-Phase 2's migrations hold `users`, `auth_tokens` and `sessions` (`000001_create_auth_tables` also made the Google sign-in table and column that `000002_remove_google_sign_in` drops, §5). Phase 3's `000003_create_persons` adds `persons`, `pg_trgm` and `masked_birth_date`, and `000004_create_relationships` adds `relationships`; `persons.avatar_media_id` waits for `media` (Phase 5), and `000005_link_users_to_persons` adds `users.person_id` with its unique index and foreign key (§5.1).
+Phase 2's migrations hold `users`, `auth_tokens` and `sessions` (`000001_create_auth_tables` also made the Google sign-in table and column that `000002_remove_google_sign_in` drops, §5). Phase 3's `000003_create_persons` adds `persons`, `pg_trgm` and `masked_birth_date`, and `000004_create_relationships` adds `relationships`; `persons.avatar_media_id` waits for `media` (Phase 5), and `000005_link_users_to_persons` adds `users.person_id` with its unique index and foreign key (§5.1), `000006_add_invite_sender` adds who an invite is from (§5), and `000007_create_contact_methods` adds `contact_methods` (§5.2).
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- fuzzy name search for tagging autocomplete
@@ -252,7 +252,6 @@ CREATE TABLE contact_methods (
   value      TEXT NOT NULL,                             -- for social: a handle, a WhatsApp number or an https URL on that platform
   -- email/social: hidden | family; phone, WhatsApp, address: hidden | on_request (the service enforces which per kind, §5.2)
   visibility TEXT NOT NULL DEFAULT 'hidden' CHECK (visibility IN ('hidden','family','on_request')),
-  sort_order INT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK ((kind = 'social') = (platform IS NOT NULL))
@@ -504,18 +503,18 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/api/persons` | session | `?q=` trigram search for autocomplete; without `q`, everyone A–Z for the People page, with `?side=&living=` filters |
 | GET | `/api/family/summary` | session | The People family strip: `{people, generations, earliest_record: {year, circa, place} \| null}`. `generations` counts the people in the longest biological or adoptive parent-to-child line; the earliest record is the birth year and place of the earliest-born **deceased** person, so no living person's year leaks |
 | POST | `/api/persons` | admin | Create |
-| GET | `/api/persons/{id}` | session | Profile, direct relations, tagged media, and **only the contact methods the viewer may see** (§5.2) |
+| GET | `/api/persons/{id}` | session | Profile, direct relations and tagged media; its contact methods come from `/api/persons/{id}/contacts`, so they're fetched fresh (§5.2) |
 | PATCH | `/api/persons/{id}` | admin, or the linked user for their own profile fields | Update → `200` with the person. Only the fields sent change; `null` clears one. A member may send only `bio` (and `avatar_media_id` once media arrives, Phase 5), and only for the person their login is linked to; anything else is a `403 forbidden`. `404 not_found`, `503 busy` |
 | DELETE | `/api/persons/{id}` | admin | Soft delete → `204`; `409 conflict` while an enabled login is linked to them (a disabled one loses the link, §5.1) |
 | POST | `/api/persons/{id}/restore` | admin | Undo soft delete |
 | GET | `/api/persons/{id}/ancestors` | session | `?depth=` 1–10 (default 5) → `{persons: [{id, first_name, last_name, is_deceased, birth_date, birth_date_precision, depth}]}`, closest first, birth dates masked (§5.2). `400 validation_error` for a bad depth, `404 not_found` for an unknown or deleted person |
 | GET | `/api/persons/{id}/descendants` | session | As ancestors, downwards |
-| GET | `/api/me/contacts` | session | Own contact methods with their visibility |
-| POST | `/api/me/contacts` | session | Add `{kind, label, value, visibility}` (default `hidden`) |
-| PATCH/DELETE | `/api/me/contacts/{cid}` | session (own) | Edit value or toggle visibility; remove |
-| GET | `/api/persons/{id}/contacts` | session | Just the person's contact methods: all of them for admins and the owner, otherwise only what §5.2 lets the viewer see (the tree's quick look uses it) |
-| POST | `/api/persons/{id}/contacts` | admin | Add on behalf of someone (e.g. a relative without a login) |
-| PATCH/DELETE | `/api/persons/{id}/contacts/{cid}` | admin | Edit / remove any contact method |
+| GET | `/api/me/contacts` | session | The contact methods of the person the login is linked to, in the same shape as below; `403 forbidden` for a login linked to nobody |
+| POST | `/api/me/contacts` | session | Add `{kind, platform, label, value, visibility}` → `201` with the row. `visibility` defaults to `hidden`; `platform` goes with `kind: "social"` only. `400 validation_error` for a value that doesn't fit its kind (an email address, a phone number with 5–15 digits, a handle or `https` link on the platform's own domain), a visibility the kind doesn't allow (§5.2), `on_request` for someone without a login, or a 51st row |
+| PATCH/DELETE | `/api/me/contacts/{cid}` | session (own) | Edit `label` (`null` clears), `value` or `visibility` → `200` with the row; kind and platform never change. Remove → `204`. `404 not_found` for a row that isn't theirs |
+| GET | `/api/persons/{id}/contacts` | session | `{contacts: [...]}`. Admins and the owner get every row as `{id, kind, platform, label, value, visibility}`. Others get the `family` rows, then one `{kind, requestable: true, my_request_status}` per kind of `on_request` row (`phone`, `whatsapp`, `address`), never its value, and only while the person has a login; `hidden` rows give nothing. The tree's quick look uses it. `404 not_found` for someone not in the tree |
+| POST | `/api/persons/{id}/contacts` | admin | Add on behalf of someone (e.g. a relative without a login), as `POST /api/me/contacts` |
+| PATCH/DELETE | `/api/persons/{id}/contacts/{cid}` | admin | Edit / remove any contact method, as for `/api/me/contacts/{cid}` |
 | GET | `/api/directory` | session | `?q=` living people with at least one `family` or `on_request` contact method: `family` values, `on_request` values only where the viewer's request was shared, otherwise `{kind, requestable: true, my_request_status}` (§5.2) |
 | POST | `/api/persons/{id}/contact-requests` | session | `{kind: phone\|whatsapp\|address}`; only if that person has an `on_request` method of that kind; idempotent; 20 per day per requester |
 | GET | `/api/me/contact-requests` | session | Requests for my details, pending first |
