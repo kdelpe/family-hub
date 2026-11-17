@@ -33,6 +33,7 @@ func TestInviteUser(t *testing.T) {
 		inviteErr  error
 		wantInvite bool
 		wantFrom   *uuid.UUID
+		wantAsk    *uuid.UUID
 		canceled   bool
 		wantStatus int
 		wantBody   string
@@ -41,6 +42,12 @@ func TestInviteUser(t *testing.T) {
 		{name: "invited from someone", body: `{"email":"test@example.com","role":"member","person_id":"01890000-0000-7000-8000-0000000000aa",
 			"from_person_id":"01890000-0000-7000-8000-0000000000cc"}`, wantInvite: true, wantFrom: new(uuid.MustParse("01890000-0000-7000-8000-0000000000cc")),
 			wantStatus: http.StatusCreated, wantBody: testUserBody},
+		{name: "approving a request", body: `{"email":"test@example.com","role":"member","person_id":"01890000-0000-7000-8000-0000000000aa",
+			"access_request_id":"01890000-0000-7000-8000-0000000000ee"}`, wantInvite: true, wantAsk: new(uuid.MustParse("01890000-0000-7000-8000-0000000000ee")),
+			wantStatus: http.StatusCreated, wantBody: testUserBody},
+		{name: "a request no longer pending", body: body, wantInvite: true,
+			inviteErr: fmt.Errorf("%w: only a pending request can be approved", admin.ErrAccessRequestState), wantStatus: http.StatusConflict,
+			wantBody: `{"error":{"code":"conflict","message":"access request can't change that way: only a pending request can be approved"}}`},
 		{name: "invalid email", body: body, wantInvite: true, inviteErr: admin.ErrInvalidEmail, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"validation_error","message":"not a valid email address"}}`},
 		{name: "invalid role", body: body, wantInvite: true, inviteErr: admin.ErrInvalidRole, wantStatus: http.StatusBadRequest,
@@ -71,6 +78,7 @@ func TestInviteUser(t *testing.T) {
 			if tt.wantInvite {
 				svc.EXPECT().Invite(mock.Anything, admin.InviteInput{
 					Email: "test@example.com", Role: "member", PersonID: personID, FromPersonID: tt.wantFrom, SentBy: testAdminSession.UserID,
+					AccessRequestID: tt.wantAsk,
 				}).
 					Return(testUser, tt.inviteErr)
 			}

@@ -23,6 +23,7 @@ type Handlers struct {
 	Admin    *handler.Admin
 	Family   *handler.Family
 	Contacts *handler.Contacts
+	Access   *handler.Access
 }
 
 type Middleware struct {
@@ -31,11 +32,12 @@ type Middleware struct {
 	LimitForgot    func(http.Handler) http.Handler
 	LimitReset     func(http.Handler) http.Handler
 	LimitPreview   func(http.Handler) http.Handler
+	LimitAccess    func(http.Handler) http.Handler
 	TrustedProxy   bool
 }
 
 func New(h Handlers, mw Middleware) http.Handler {
-	if mw.RequireSession == nil || mw.LimitLogin == nil || mw.LimitForgot == nil || mw.LimitReset == nil || mw.LimitPreview == nil {
+	if mw.RequireSession == nil || mw.LimitLogin == nil || mw.LimitForgot == nil || mw.LimitReset == nil || mw.LimitPreview == nil || mw.LimitAccess == nil {
 		panic("router: RequireSession and every Limit middleware are required")
 	}
 	r := chi.NewRouter()
@@ -65,6 +67,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 		r.With(mw.LimitForgot).Post("/auth/password/forgot", h.Auth.ForgotPassword)
 		r.With(mw.LimitReset).Post("/auth/password/reset", h.Auth.ResetPassword)
 		r.With(mw.LimitPreview).Post("/auth/invite/preview", h.Auth.PreviewLink)
+		r.With(mw.LimitAccess).Post("/access-requests", h.Access.Submit)
 		// Outside the session group, so an expired session's cookie still gets cleared.
 		r.Post("/auth/logout", h.Auth.Logout)
 
@@ -97,6 +100,9 @@ func New(h Handlers, mw Middleware) http.Handler {
 				r.Post("/admin/users", h.Admin.InviteUser)
 				r.Patch("/admin/users/{id}", h.Admin.UpdateUser)
 				r.Post("/admin/users/{id}/send-reset", h.Admin.SendReset)
+				r.Get("/admin/access-requests", h.Access.List)
+				r.Post("/admin/access-requests/{id}/decline", h.Access.Decline)
+				r.Post("/admin/access-requests/{id}/reopen", h.Access.Reopen)
 				r.Post("/persons", h.Family.CreatePerson)
 				r.Delete("/persons/{id}", h.Family.DeletePerson)
 				r.Post("/persons/{id}/restore", h.Family.RestorePerson)

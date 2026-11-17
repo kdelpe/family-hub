@@ -36,6 +36,8 @@ type inviteRequest struct {
 	Role         string     `json:"role"`
 	PersonID     uuid.UUID  `json:"person_id"`
 	FromPersonID *uuid.UUID `json:"from_person_id"`
+	// AccessRequestID is the pending request this invite approves.
+	AccessRequestID *uuid.UUID `json:"access_request_id"`
 }
 
 type accountResponse struct {
@@ -204,6 +206,7 @@ func (a *Admin) InviteUser(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := a.svc.Invite(r.Context(), admin.InviteInput{
 		Email: req.Email, Role: req.Role, PersonID: req.PersonID, FromPersonID: req.FromPersonID, SentBy: actor,
+		AccessRequestID: req.AccessRequestID,
 	})
 	switch {
 	case err == nil:
@@ -211,12 +214,14 @@ func (a *Admin) InviteUser(w http.ResponseWriter, r *http.Request) {
 	// Only a plain cancel is dropped: a failed commit after the email went out must still be logged.
 	case clientGone(r) && errors.Is(err, context.Canceled):
 	case errors.Is(err, admin.ErrInvalidEmail), errors.Is(err, admin.ErrInvalidRole), errors.Is(err, admin.ErrNoPerson),
-		errors.Is(err, admin.ErrPersonNotFound), errors.Is(err, admin.ErrInvalidSender):
+		errors.Is(err, admin.ErrPersonNotFound), errors.Is(err, admin.ErrInvalidSender), errors.Is(err, admin.ErrInvalidAccessRequest):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, admin.ErrEmailTaken):
 		httpx.Error(w, http.StatusConflict, "email_taken", err.Error())
 	case errors.Is(err, admin.ErrPersonTaken):
 		httpx.Error(w, http.StatusConflict, "person_taken", err.Error())
+	case errors.Is(err, admin.ErrAccessRequestState):
+		httpx.Error(w, http.StatusConflict, "conflict", err.Error())
 	case errors.Is(err, admin.ErrEmailNotSent):
 		zerolog.Ctx(r.Context()).Error().Err(err).Msg("send invite")
 		httpx.Error(w, http.StatusBadGateway, "mail_failed", "the invitation email couldn't be sent and nothing was saved; try again")

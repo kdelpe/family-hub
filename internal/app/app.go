@@ -42,6 +42,8 @@ const (
 	resetsPerIPWindow   = time.Minute
 	previewsPerIP       = 10
 	previewsPerIPWindow = time.Minute
+	accessPerIP         = 20
+	accessPerIPWindow   = time.Hour
 )
 
 // Run serves until ctx is canceled: a clean stop even before the port opens, but not during
@@ -100,6 +102,7 @@ func newServer(pool *pgxpool.Pool, cfg config.Config) (*http.Server, *auth.Reset
 			Admin:    handler.NewAdmin(admin.NewUsers(pool, mailer, cfg.BaseURL)),
 			Family:   handler.NewFamily(family.NewService(pool)),
 			Contacts: handler.NewContacts(contacts.NewService(pool)),
+			Access:   handler.NewAccess(admin.NewAccessRequests(pool)),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(auth.NewSessions(pool), cookie).Require,
@@ -107,6 +110,7 @@ func newServer(pool *pgxpool.Pool, cfg config.Config) (*http.Server, *auth.Reset
 			LimitForgot:    httpx.LimitByIP(ratelimit.New(forgotsPerIP, forgotsPerIPWindow)),
 			LimitReset:     httpx.LimitByIP(ratelimit.New(resetsPerIP, resetsPerIPWindow)),
 			LimitPreview:   httpx.LimitByIP(ratelimit.New(previewsPerIP, previewsPerIPWindow)),
+			LimitAccess:    httpx.LimitByIP(ratelimit.New(accessPerIP, accessPerIPWindow)),
 			TrustedProxy:   cfg.TrustedProxy,
 		},
 	)
