@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/kdelpe/family-hub/internal/auth"
 	"github.com/kdelpe/family-hub/internal/database"
 	"github.com/kdelpe/family-hub/internal/database/gen"
+	"github.com/kdelpe/family-hub/internal/mail"
 	mailmocks "github.com/kdelpe/family-hub/internal/mail/mocks"
 	"github.com/kdelpe/family-hub/internal/testdb"
 )
@@ -329,4 +331,82 @@ func countRows(t *testing.T, pool *pgxpool.Pool, sql string) int {
 	var n int
 	require.NoError(t, pool.QueryRow(context.Background(), sql).Scan(&n))
 	return n
+}
+
+func TestSuggest(t *testing.T) {
+	pool := testdb.MigratedPool(t, database.MigrateUp)
+	svc := NewAccessRequests(pool)
+	stanley := insertNamedPerson(t, pool, "Stanley", "Jean-Louis")
+	var member uuid.UUID
+	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role, person_id) VALUES ('stanley@example.com', 'member', $1) RETURNING id`, stanley).Scan(&member))
+	kervens := AccessRequestInput{FullName: "Kervens Pluviose", Email: "kervens@example.com", Relationship: new("cousin")}
+
+	require.ErrorIs(t, svc.Suggest(t.Context(), member, nil, kervens), ErrNotLinked, "a login linked to nobody can't suggest")
+	require.ErrorIs(t, svc.Suggest(t.Context(), member, &stanley, AccessRequestInput{FullName: "Kervens", Email: "nope"}), ErrInvalidAccessRequest)
+	require.NoError(t, svc.Suggest(t.Context(), member, &stanley, kervens))
+	require.NoError(t, svc.Submit(t.Context(), AccessRequestInput{FullName: "Someone else", Email: "kervens@example.com"}), "a stranger's repeat is dropped")
+
+	requests, err := svc.List(t.Context())
+	require.NoError(t, err)
+	require.Len(t, requests, 1)
+	assert.Equal(t, "Kervens Pluviose", requests[0].FullName)
+	assert.Equal(t, "member_suggestion", requests[0].Source)
+	assert.Equal(t, &PersonName{PersonID: stanley, Name: "Stanley Jean-Louis"}, requests[0].SuggestedBy)
+}
+
+func TestTwentySuggestionsADay(t *testing.T) {
+	pool := testdb.MigratedPool(t, database.MigrateUp)
+	svc := NewAccessRequests(pool)
+	stanley := insertNamedPerson(t, pool, "Stanley", "Jean-Louis")
+	var member uuid.UUID
+	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role, person_id) VALUES ('stanley@example.com', 'member', $1) RETURNING id`, stanley).Scan(&member))
+
+	for i := range suggestionsPerDay + 1 {
+		require.NoError(t, svc.Suggest(t.Context(), member, &stanley, AccessRequestInput{FullName: "Relative", Email: fmt.Sprintf("relative%d@example.com", i)}))
+	}
+
+	assert.Equal(t, suggestionsPerDay, countRows(t, pool, `SELECT count(*) FROM access_requests`), "the 21st is dropped")
+}
+
+func TestASuggestedInviteIsFromTheMember(t *testing.T) {
+	tests := []struct {
+		name        string
+		suggester   string
+		from        string
+		wantSubject string
+	}{
+		{name: "from the member who suggested them", suggester: "active", wantSubject: "Stanley invited you to the family hub"},
+		{name: "from the admin when the member can't send one", suggester: "disabled", wantSubject: "Maya invited you to the family hub"},
+		{name: "from whoever the admin picks", suggester: "active", from: "Maya", wantSubject: "Maya invited you to the family hub"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := testdb.MigratedPool(t, database.MigrateUp)
+			maya, stanley := insertNamedPerson(t, pool, "Maya", "Pluviose"), insertNamedPerson(t, pool, "Stanley", "Jean-Louis")
+			kervens := insertNamedPerson(t, pool, "Kervens", "Pluviose")
+			var admin, member uuid.UUID
+			require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role, person_id, password_hash, password_changed_at)
+				VALUES ('admin@example.com', 'admin', $1, 'hash', now()) RETURNING id`, maya).Scan(&admin))
+			require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role, person_id, password_hash, password_changed_at, disabled_at)
+				VALUES ('stanley@example.com', 'member', $1, 'hash', now(), CASE WHEN $2 THEN now() END) RETURNING id`,
+				stanley, tt.suggester == "disabled").Scan(&member))
+			require.NoError(t, NewAccessRequests(pool).Suggest(t.Context(), member, &stanley,
+				AccessRequestInput{FullName: "Kervens Pluviose", Email: "kervens@example.com"}))
+			var request uuid.UUID
+			require.NoError(t, pool.QueryRow(t.Context(), `SELECT id FROM access_requests`).Scan(&request))
+			mailer := mailmocks.NewMailer(t)
+			var sent mail.Message
+			mailer.EXPECT().Send(mock.Anything, mock.Anything).Run(func(_ context.Context, m mail.Message) { sent = m }).Return(nil).Once()
+			in := InviteInput{Email: "kervens@example.com", Role: auth.RoleMember, PersonID: kervens, SentBy: admin, AccessRequestID: &request}
+			if tt.from == "Maya" {
+				in.FromPersonID = &maya
+			}
+
+			_, err := NewUsers(pool, mailer, testBaseURL).Invite(t.Context(), in)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantSubject, sent.Subject)
+		})
+	}
 }

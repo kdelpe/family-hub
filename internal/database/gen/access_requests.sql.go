@@ -173,15 +173,27 @@ func (q *Queries) ListAccessRequests(ctx context.Context) ([]ListAccessRequestsR
 }
 
 const lockPendingAccessRequest = `-- name: LockPendingAccessRequest :one
-SELECT EXISTS (SELECT 1 FROM access_requests WHERE id = $1 AND status = 'pending' FOR UPDATE)
+SELECT u.person_id AS suggester_person_id FROM access_requests r LEFT JOIN users u ON u.id = r.suggested_by
+WHERE r.id = $1 AND r.status = 'pending' FOR UPDATE OF r
 `
 
-// Held until the invite commits, so two admins can't both approve it.
-func (q *Queries) LockPendingAccessRequest(ctx context.Context, id uuid.UUID) (bool, error) {
+// Held until the invite commits, so two admins can't both approve it. Gives the suggesting member's person,
+// whom the invite is from by default (§5).
+func (q *Queries) LockPendingAccessRequest(ctx context.Context, id uuid.UUID) (*uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, lockPendingAccessRequest, id)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
+	var suggester_person_id *uuid.UUID
+	err := row.Scan(&suggester_person_id)
+	return suggester_person_id, err
+}
+
+const lockSuggester = `-- name: LockSuggester :exec
+SELECT pg_advisory_xact_lock(hashtext('admin.suggestions'), hashtext($1::text))
+`
+
+// Serializes one member's suggestions, so the daily limit holds.
+func (q *Queries) LockSuggester(ctx context.Context, userID string) error {
+	_, err := q.db.Exec(ctx, lockSuggester, userID)
+	return err
 }
 
 const matchRelatedNames = `-- name: MatchRelatedNames :many
@@ -252,4 +264,15 @@ func (q *Queries) ReopenAccessRequest(ctx context.Context, id uuid.UUID) (int64,
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const suggestionsToday = `-- name: SuggestionsToday :one
+SELECT count(*) FROM access_requests WHERE suggested_by = $1 AND created_at > now() - interval '1 day'
+`
+
+func (q *Queries) SuggestionsToday(ctx context.Context, userID *uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, suggestionsToday, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }

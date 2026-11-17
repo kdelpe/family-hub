@@ -24,6 +24,9 @@ const (
 	accessRequestsPerEmail       = 5
 	accessRequestsPerEmailWindow = time.Hour
 
+	// Counts stored suggestions; a repeat for an email already pending is free.
+	suggestionsPerDay = 20
+
 	maxRequestName  = 200
 	maxRelatedNames = 4
 	maxRequestNote  = 2000
@@ -40,6 +43,7 @@ var (
 	ErrAccessRequestNotFound = errors.New("access request not found")
 	// ErrAccessRequestState is a decline or approval of a request that isn't pending, or a reopen of one not declined.
 	ErrAccessRequestState = errors.New("access request can't change that way")
+	ErrNotLinked          = errors.New("your login isn't linked to anyone in the tree yet")
 )
 
 // AccessRequestInput is the public form: someone asking for an invitation.
@@ -161,6 +165,46 @@ func (s *AccessRequests) List(ctx context.Context) ([]AccessRequest, error) {
 	return requests, nil
 }
 
+// Suggest is a member suggesting a relative: an access request from them, answered like the public form.
+// Past the input checks it stores nothing for a repeat while one is pending or past 20 a day (§5), and the
+// caller answers the same either way.
+func (s *AccessRequests) Suggest(ctx context.Context, userID uuid.UUID, personID *uuid.UUID, in AccessRequestInput) error {
+	// The queue names who suggested someone by their place in the tree.
+	if personID == nil {
+		return ErrNotLinked
+	}
+	r, err := normalizeRequest(in)
+	if err != nil {
+		return err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin suggestion: %w", err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	q := gen.New(tx)
+	if err := q.LockSuggester(ctx, userID.String()); err != nil {
+		return fmt.Errorf("lock suggester: %w", err)
+	}
+	n, err := q.SuggestionsToday(ctx, &userID)
+	if err != nil {
+		return fmt.Errorf("count suggestions: %w", err)
+	}
+	if n >= suggestionsPerDay {
+		return nil
+	}
+	if _, err := q.CreateAccessRequest(ctx, gen.CreateAccessRequestParams{
+		FullName: r.FullName, Email: r.Email, Side: r.Side, Relationship: r.Relationship,
+		RelatedNames: r.RelatedNames, Note: r.Note, Source: "member_suggestion", SuggestedBy: &userID,
+	}); err != nil {
+		return fmt.Errorf("create suggestion: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit suggestion: %w", err)
+	}
+	return nil
+}
+
 // Decline quietly sets a pending request aside; nobody is told (§5).
 func (s *AccessRequests) Decline(ctx context.Context, adminID, id uuid.UUID) error {
 	q := gen.New(s.pool)
@@ -198,26 +242,24 @@ func changed(ctx context.Context, q *gen.Queries, id uuid.UUID, n int64, refused
 	return fmt.Errorf("%w: %s", ErrAccessRequestState, refused)
 }
 
-// approveRequest marks the request an invite answers, in the invite's transaction.
-func approveRequest(ctx context.Context, q *gen.Queries, id, adminID, userID uuid.UUID) error {
-	pending, err := q.LockPendingAccessRequest(ctx, id)
+// lockRequest holds the pending request an invite answers until the invite commits, and gives the suggesting
+// member's person, if any.
+func lockRequest(ctx context.Context, q *gen.Queries, id uuid.UUID) (*uuid.UUID, error) {
+	suggester, err := q.LockPendingAccessRequest(ctx, id)
+	if err == nil {
+		return suggester, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("lock access request: %w", err)
+	}
+	exists, err := q.AccessRequestExists(ctx, id)
 	if err != nil {
-		return fmt.Errorf("lock access request: %w", err)
+		return nil, fmt.Errorf("check access request: %w", err)
 	}
-	if !pending {
-		exists, err := q.AccessRequestExists(ctx, id)
-		if err != nil {
-			return fmt.Errorf("check access request: %w", err)
-		}
-		if !exists {
-			return fmt.Errorf("%w: no such access request", ErrInvalidAccessRequest)
-		}
-		return fmt.Errorf("%w: only a pending request can be approved", ErrAccessRequestState)
+	if !exists {
+		return nil, fmt.Errorf("%w: no such access request", ErrInvalidAccessRequest)
 	}
-	if err := q.ApproveAccessRequest(ctx, gen.ApproveAccessRequestParams{ID: id, ReviewedBy: &adminID, InvitedUserID: &userID}); err != nil {
-		return fmt.Errorf("approve access request: %w", err)
-	}
-	return nil
+	return nil, fmt.Errorf("%w: only a pending request can be approved", ErrAccessRequestState)
 }
 
 // matchNames finds the closest person to every distinct name in the queue, in one query.

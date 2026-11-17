@@ -124,3 +124,39 @@ func TestDeclineAndReopenAccessRequests(t *testing.T) {
 		})
 	}
 }
+
+func TestSuggestARelative(t *testing.T) {
+	const body = `{"full_name":"Kervens Pluviose","email":"kervens@example.com","relationship":"cousin","related_names":[]}`
+	in := admin.AccessRequestInput{FullName: "Kervens Pluviose", Email: "kervens@example.com", Relationship: new("cousin"), RelatedNames: []string{}}
+	tests := []struct {
+		name       string
+		body       string
+		err        error
+		wantCall   bool
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "received", body: body, wantCall: true, wantStatus: http.StatusAccepted},
+		{name: "a login linked to nobody", body: body, wantCall: true, err: admin.ErrNotLinked, wantStatus: http.StatusForbidden,
+			wantBody: `{"error":{"code":"forbidden","message":"your login isn't linked to anyone in the tree yet"}}`},
+		{name: "refused by the rules", body: body, wantCall: true, err: admin.ErrInvalidAccessRequest, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"invalid access request"}}`},
+		{name: "no honeypot for members", body: `{"full_name":"Kervens","website":"x"}`, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"bad_request","message":"invalid JSON body"}}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewAccessService(t)
+			if tt.wantCall {
+				svc.EXPECT().Suggest(mock.Anything, testUser.ID, &testPersonID, in).Return(tt.err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/me/suggestions", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+
+			rec := serveWith(t, memberSession, handler.NewAccess(svc).Suggest, req)
+
+			assertBody(t, rec, tt.wantStatus, tt.wantBody)
+		})
+	}
+}
