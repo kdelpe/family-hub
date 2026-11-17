@@ -15,16 +15,31 @@ SELECT count(*) FROM contact_methods WHERE person_id = @person_id;
 -- name: ListContacts :many
 SELECT id, kind, platform, label, value, visibility FROM contact_methods WHERE person_id = @person_id ORDER BY id;
 
--- name: ListFamilyContacts :many
-SELECT id, kind, platform, label, value, visibility FROM contact_methods
-WHERE person_id = @person_id AND visibility = 'family' ORDER BY id;
-
--- Only the kinds, never the values; someone without a login can't answer a request, so they offer none.
--- name: RequestableKinds :many
-SELECT DISTINCT CASE WHEN kind = 'social' THEN platform ELSE kind END::text AS kind FROM contact_methods c
-WHERE c.person_id = @person_id AND c.visibility = 'on_request'
+-- What someone other than the owner sees: family rows, and the on_request rows of each kind the owner shared
+-- with them (§5.2). A share counts only while both sides could still see it on their My profile: the owner
+-- has an enabled login, and the requester's login is linked to someone in the tree, so it can be revoked.
+-- name: ListVisibleContacts :many
+SELECT c.id, c.kind, c.platform, c.label, c.value, c.visibility FROM contact_methods c
+WHERE c.person_id = @person_id AND (c.visibility = 'family' OR (c.visibility = 'on_request'
   AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)
-ORDER BY 1;
+  AND EXISTS (SELECT 1 FROM contact_requests r
+    JOIN users ru ON ru.id = r.requester_id
+    JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL
+    WHERE r.person_id = c.person_id AND r.requester_id = @requester_id AND r.status = 'shared'
+      AND r.kind = CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END)))
+ORDER BY c.id;
+
+-- The kinds the viewer could ask for and hasn't been shown, never their values. Declined and revoked read
+-- as requested, so a decline stays silent; so does a share ListVisibleContacts no longer honours.
+-- name: RequestableKinds :many
+SELECT k.kind, CASE WHEN r.status IS NULL THEN 'none' ELSE 'requested' END::text AS my_request_status
+FROM (SELECT DISTINCT CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END::text AS kind FROM contact_methods c
+      WHERE c.person_id = @person_id AND c.visibility = 'on_request'
+        AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)) k
+LEFT JOIN contact_requests r ON r.person_id = @person_id AND r.requester_id = @requester_id AND r.kind = k.kind
+WHERE r.status IS DISTINCT FROM 'shared' OR NOT EXISTS (SELECT 1 FROM users ru
+  JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL WHERE ru.id = @requester_id)
+ORDER BY k.kind;
 
 -- name: GetContact :one
 SELECT id, kind, platform, label, value, visibility FROM contact_methods WHERE id = @id AND person_id = @person_id;

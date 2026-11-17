@@ -448,7 +448,7 @@ func currentViewer(w http.ResponseWriter, r *http.Request) (family.Viewer, bool)
 		internalError(w, r, errors.New("no session in context"), "person read mounted without RequireSession")
 		return family.Viewer{}, false
 	}
-	return family.Viewer{IsAdmin: session.Role == auth.RoleAdmin, PersonID: session.PersonID}, true
+	return family.Viewer{UserID: session.UserID, IsAdmin: session.Role == auth.RoleAdmin, PersonID: session.PersonID}, true
 }
 
 func personID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {

@@ -156,12 +156,24 @@ func (q *Queries) ListContacts(ctx context.Context, personID uuid.UUID) ([]ListC
 	return items, nil
 }
 
-const listFamilyContacts = `-- name: ListFamilyContacts :many
-SELECT id, kind, platform, label, value, visibility FROM contact_methods
-WHERE person_id = $1 AND visibility = 'family' ORDER BY id
+const listVisibleContacts = `-- name: ListVisibleContacts :many
+SELECT c.id, c.kind, c.platform, c.label, c.value, c.visibility FROM contact_methods c
+WHERE c.person_id = $1 AND (c.visibility = 'family' OR (c.visibility = 'on_request'
+  AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)
+  AND EXISTS (SELECT 1 FROM contact_requests r
+    JOIN users ru ON ru.id = r.requester_id
+    JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL
+    WHERE r.person_id = c.person_id AND r.requester_id = $2 AND r.status = 'shared'
+      AND r.kind = CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END)))
+ORDER BY c.id
 `
 
-type ListFamilyContactsRow struct {
+type ListVisibleContactsParams struct {
+	PersonID    uuid.UUID
+	RequesterID uuid.UUID
+}
+
+type ListVisibleContactsRow struct {
 	ID         uuid.UUID
 	Kind       string
 	Platform   *string
@@ -170,15 +182,18 @@ type ListFamilyContactsRow struct {
 	Visibility string
 }
 
-func (q *Queries) ListFamilyContacts(ctx context.Context, personID uuid.UUID) ([]ListFamilyContactsRow, error) {
-	rows, err := q.db.Query(ctx, listFamilyContacts, personID)
+// What someone other than the owner sees: family rows, and the on_request rows of each kind the owner shared
+// with them (§5.2). A share counts only while both sides could still see it on their My profile: the owner
+// has an enabled login, and the requester's login is linked to someone in the tree, so it can be revoked.
+func (q *Queries) ListVisibleContacts(ctx context.Context, arg ListVisibleContactsParams) ([]ListVisibleContactsRow, error) {
+	rows, err := q.db.Query(ctx, listVisibleContacts, arg.PersonID, arg.RequesterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListFamilyContactsRow
+	var items []ListVisibleContactsRow
 	for rows.Next() {
-		var i ListFamilyContactsRow
+		var i ListVisibleContactsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Kind,
@@ -225,26 +240,41 @@ func (q *Queries) PersonHasLogin(ctx context.Context, id *uuid.UUID) (bool, erro
 }
 
 const requestableKinds = `-- name: RequestableKinds :many
-SELECT DISTINCT CASE WHEN kind = 'social' THEN platform ELSE kind END::text AS kind FROM contact_methods c
-WHERE c.person_id = $1 AND c.visibility = 'on_request'
-  AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)
-ORDER BY 1
+SELECT k.kind, CASE WHEN r.status IS NULL THEN 'none' ELSE 'requested' END::text AS my_request_status
+FROM (SELECT DISTINCT CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END::text AS kind FROM contact_methods c
+      WHERE c.person_id = $1 AND c.visibility = 'on_request'
+        AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)) k
+LEFT JOIN contact_requests r ON r.person_id = $1 AND r.requester_id = $2 AND r.kind = k.kind
+WHERE r.status IS DISTINCT FROM 'shared' OR NOT EXISTS (SELECT 1 FROM users ru
+  JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL WHERE ru.id = $2)
+ORDER BY k.kind
 `
 
-// Only the kinds, never the values; someone without a login can't answer a request, so they offer none.
-func (q *Queries) RequestableKinds(ctx context.Context, personID uuid.UUID) ([]string, error) {
-	rows, err := q.db.Query(ctx, requestableKinds, personID)
+type RequestableKindsParams struct {
+	PersonID    uuid.UUID
+	RequesterID uuid.UUID
+}
+
+type RequestableKindsRow struct {
+	Kind            string
+	MyRequestStatus string
+}
+
+// The kinds the viewer could ask for and hasn't been shown, never their values. Declined and revoked read
+// as requested, so a decline stays silent; so does a share ListVisibleContacts no longer honours.
+func (q *Queries) RequestableKinds(ctx context.Context, arg RequestableKindsParams) ([]RequestableKindsRow, error) {
+	rows, err := q.db.Query(ctx, requestableKinds, arg.PersonID, arg.RequesterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []RequestableKindsRow
 	for rows.Next() {
-		var kind string
-		if err := rows.Scan(&kind); err != nil {
+		var i RequestableKindsRow
+		if err := rows.Scan(&i.Kind, &i.MyRequestStatus); err != nil {
 			return nil, err
 		}
-		items = append(items, kind)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

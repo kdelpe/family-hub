@@ -49,6 +49,84 @@ func (_m *ContactsService) EXPECT() *ContactsService_Expecter {
 	return &ContactsService_Expecter{mock: &_m.Mock}
 }
 
+// Ask provides a mock function for the type ContactsService
+func (_mock *ContactsService) Ask(ctx context.Context, viewer family.Viewer, personID uuid.UUID, kind string) (string, error) {
+	ret := _mock.Called(ctx, viewer, personID, kind)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Ask")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, uuid.UUID, string) (string, error)); ok {
+		return returnFunc(ctx, viewer, personID, kind)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, uuid.UUID, string) string); ok {
+		r0 = returnFunc(ctx, viewer, personID, kind)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, family.Viewer, uuid.UUID, string) error); ok {
+		r1 = returnFunc(ctx, viewer, personID, kind)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ContactsService_Ask_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Ask'
+type ContactsService_Ask_Call struct {
+	*mock.Call
+}
+
+// Ask is a helper method to define mock.On call
+//   - ctx context.Context
+//   - viewer family.Viewer
+//   - personID uuid.UUID
+//   - kind string
+func (_e *ContactsService_Expecter) Ask(ctx any, viewer any, personID any, kind any) *ContactsService_Ask_Call {
+	return &ContactsService_Ask_Call{Call: _e.mock.On("Ask", ctx, viewer, personID, kind)}
+}
+
+func (_c *ContactsService_Ask_Call) Run(run func(ctx context.Context, viewer family.Viewer, personID uuid.UUID, kind string)) *ContactsService_Ask_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 family.Viewer
+		if args[1] != nil {
+			arg1 = args[1].(family.Viewer)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *ContactsService_Ask_Call) Return(s string, err error) *ContactsService_Ask_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *ContactsService_Ask_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, personID uuid.UUID, kind string) (string, error)) *ContactsService_Ask_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Create provides a mock function for the type ContactsService
 func (_mock *ContactsService) Create(ctx context.Context, viewer family.Viewer, personID uuid.UUID, in contacts.ContactInput) (contacts.Contact, error) {
 	ret := _mock.Called(ctx, viewer, personID, in)
@@ -123,6 +201,75 @@ func (_c *ContactsService_Create_Call) Return(contact contacts.Contact, err erro
 }
 
 func (_c *ContactsService_Create_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, personID uuid.UUID, in contacts.ContactInput) (contacts.Contact, error)) *ContactsService_Create_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Decide provides a mock function for the type ContactsService
+func (_mock *ContactsService) Decide(ctx context.Context, viewer family.Viewer, id uuid.UUID, d contacts.Decision) error {
+	ret := _mock.Called(ctx, viewer, id, d)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Decide")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, uuid.UUID, contacts.Decision) error); ok {
+		r0 = returnFunc(ctx, viewer, id, d)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// ContactsService_Decide_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Decide'
+type ContactsService_Decide_Call struct {
+	*mock.Call
+}
+
+// Decide is a helper method to define mock.On call
+//   - ctx context.Context
+//   - viewer family.Viewer
+//   - id uuid.UUID
+//   - d contacts.Decision
+func (_e *ContactsService_Expecter) Decide(ctx any, viewer any, id any, d any) *ContactsService_Decide_Call {
+	return &ContactsService_Decide_Call{Call: _e.mock.On("Decide", ctx, viewer, id, d)}
+}
+
+func (_c *ContactsService_Decide_Call) Run(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID, d contacts.Decision)) *ContactsService_Decide_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 family.Viewer
+		if args[1] != nil {
+			arg1 = args[1].(family.Viewer)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		var arg3 contacts.Decision
+		if args[3] != nil {
+			arg3 = args[3].(contacts.Decision)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *ContactsService_Decide_Call) Return(err error) *ContactsService_Decide_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *ContactsService_Decide_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID, d contacts.Decision) error) *ContactsService_Decide_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -264,6 +411,74 @@ func (_c *ContactsService_List_Call) Return(listing contacts.Listing, err error)
 }
 
 func (_c *ContactsService_List_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, personID uuid.UUID) (contacts.Listing, error)) *ContactsService_List_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Requests provides a mock function for the type ContactsService
+func (_mock *ContactsService) Requests(ctx context.Context, viewer family.Viewer) ([]contacts.Request, error) {
+	ret := _mock.Called(ctx, viewer)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Requests")
+	}
+
+	var r0 []contacts.Request
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer) ([]contacts.Request, error)); ok {
+		return returnFunc(ctx, viewer)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer) []contacts.Request); ok {
+		r0 = returnFunc(ctx, viewer)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]contacts.Request)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, family.Viewer) error); ok {
+		r1 = returnFunc(ctx, viewer)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ContactsService_Requests_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Requests'
+type ContactsService_Requests_Call struct {
+	*mock.Call
+}
+
+// Requests is a helper method to define mock.On call
+//   - ctx context.Context
+//   - viewer family.Viewer
+func (_e *ContactsService_Expecter) Requests(ctx any, viewer any) *ContactsService_Requests_Call {
+	return &ContactsService_Requests_Call{Call: _e.mock.On("Requests", ctx, viewer)}
+}
+
+func (_c *ContactsService_Requests_Call) Run(run func(ctx context.Context, viewer family.Viewer)) *ContactsService_Requests_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 family.Viewer
+		if args[1] != nil {
+			arg1 = args[1].(family.Viewer)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *ContactsService_Requests_Call) Return(requests []contacts.Request, err error) *ContactsService_Requests_Call {
+	_c.Call.Return(requests, err)
+	return _c
+}
+
+func (_c *ContactsService_Requests_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer) ([]contacts.Request, error)) *ContactsService_Requests_Call {
 	_c.Call.Return(run)
 	return _c
 }

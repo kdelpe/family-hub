@@ -34,6 +34,16 @@ type ContactMethod struct {
 	UpdatedAt  time.Time
 }
 
+type ContactRequest struct {
+	ID          uuid.UUID
+	RequesterID uuid.UUID
+	PersonID    uuid.UUID
+	Kind        string
+	Status      string
+	CreatedAt   time.Time
+	DecidedAt   *time.Time
+}
+
 type Person struct {
 	ID                 uuid.UUID
 	FirstName          string
