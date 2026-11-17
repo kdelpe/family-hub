@@ -173,17 +173,16 @@ func (q *Queries) ListAccessRequests(ctx context.Context) ([]ListAccessRequestsR
 }
 
 const lockPendingAccessRequest = `-- name: LockPendingAccessRequest :one
-SELECT u.person_id AS suggester_person_id FROM access_requests r LEFT JOIN users u ON u.id = r.suggested_by
-WHERE r.id = $1 AND r.status = 'pending' FOR UPDATE OF r
+SELECT suggested_by FROM access_requests WHERE id = $1 AND status = 'pending' FOR UPDATE
 `
 
-// Held until the invite commits, so two admins can't both approve it. Gives the suggesting member's person,
+// Held until the invite commits, so two admins can't both approve it. Gives the suggesting member's login,
 // whom the invite is from by default (§5).
 func (q *Queries) LockPendingAccessRequest(ctx context.Context, id uuid.UUID) (*uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, lockPendingAccessRequest, id)
-	var suggester_person_id *uuid.UUID
-	err := row.Scan(&suggester_person_id)
-	return suggester_person_id, err
+	var suggested_by *uuid.UUID
+	err := row.Scan(&suggested_by)
+	return suggested_by, err
 }
 
 const lockSuggester = `-- name: LockSuggester :exec

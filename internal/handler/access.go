@@ -14,7 +14,7 @@ import (
 
 type AccessService interface {
 	Submit(ctx context.Context, in admin.AccessRequestInput) error
-	Suggest(ctx context.Context, userID uuid.UUID, personID *uuid.UUID, in admin.AccessRequestInput) error
+	Suggest(ctx context.Context, userID uuid.UUID, in admin.AccessRequestInput) error
 	List(ctx context.Context) ([]admin.AccessRequest, error)
 	Decline(ctx context.Context, adminID, id uuid.UUID) error
 	Reopen(ctx context.Context, id uuid.UUID) error
@@ -103,7 +103,7 @@ func (a *Access) Suggest(w http.ResponseWriter, r *http.Request) {
 	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
-	if err := a.svc.Suggest(r.Context(), session.UserID, session.PersonID, admin.AccessRequestInput(req)); err != nil {
+	if err := a.svc.Suggest(r.Context(), session.UserID, admin.AccessRequestInput(req)); err != nil {
 		a.fail(w, r, err, "suggest a relative")
 		return
 	}

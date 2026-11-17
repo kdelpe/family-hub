@@ -43,11 +43,10 @@ WHERE id = @id AND status = 'declined';
 -- name: AccessRequestExists :one
 SELECT EXISTS (SELECT 1 FROM access_requests WHERE id = @id);
 
--- Held until the invite commits, so two admins can't both approve it. Gives the suggesting member's person,
+-- Held until the invite commits, so two admins can't both approve it. Gives the suggesting member's login,
 -- whom the invite is from by default (§5).
 -- name: LockPendingAccessRequest :one
-SELECT u.person_id AS suggester_person_id FROM access_requests r LEFT JOIN users u ON u.id = r.suggested_by
-WHERE r.id = @id AND r.status = 'pending' FOR UPDATE OF r;
+SELECT suggested_by FROM access_requests WHERE id = @id AND status = 'pending' FOR UPDATE;
 
 -- Serializes one member's suggestions, so the daily limit holds.
 -- name: LockSuggester :exec

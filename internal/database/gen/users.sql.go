@@ -365,6 +365,18 @@ func (q *Queries) LockUser(ctx context.Context, id uuid.UUID) (LockUserRow, erro
 	return i, err
 }
 
+const lockUserLink = `-- name: LockUserLink :one
+SELECT person_id FROM users WHERE id = $1 FOR SHARE
+`
+
+// Who a login is in the tree now, held until the commit so an unlink or relink can't land mid-write.
+func (q *Queries) LockUserLink(ctx context.Context, id uuid.UUID) (*uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockUserLink, id)
+	var person_id *uuid.UUID
+	err := row.Scan(&person_id)
+	return person_id, err
+}
+
 const recordLogin = `-- name: RecordLogin :exec
 UPDATE users
 SET last_login_at = now(), password_hash = coalesce($1, password_hash)

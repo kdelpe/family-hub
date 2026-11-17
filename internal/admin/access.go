@@ -168,11 +168,7 @@ func (s *AccessRequests) List(ctx context.Context) ([]AccessRequest, error) {
 // Suggest is a member suggesting a relative: an access request from them, answered like the public form.
 // Past the input checks it stores nothing for a repeat while one is pending or past 20 a day (§5), and the
 // caller answers the same either way.
-func (s *AccessRequests) Suggest(ctx context.Context, userID uuid.UUID, personID *uuid.UUID, in AccessRequestInput) error {
-	// The queue names who suggested someone by their place in the tree.
-	if personID == nil {
-		return ErrNotLinked
-	}
+func (s *AccessRequests) Suggest(ctx context.Context, userID uuid.UUID, in AccessRequestInput) error {
 	r, err := normalizeRequest(in)
 	if err != nil {
 		return err
@@ -190,6 +186,14 @@ func (s *AccessRequests) Suggest(ctx context.Context, userID uuid.UUID, personID
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	q := gen.New(tx)
+	// The queue names who suggested someone by their place in the tree, so the login must be someone in it now.
+	personID, err := q.LockUserLink(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("lock suggester: %w", err)
+	}
+	if personID == nil {
+		return ErrNotLinked
+	}
 	inTree, err := q.CountPersonsInTree(ctx, []uuid.UUID{*personID})
 	if err != nil {
 		return fmt.Errorf("check suggester: %w", err)
@@ -257,11 +261,21 @@ func changed(ctx context.Context, q *gen.Queries, id uuid.UUID, n int64, refused
 }
 
 // lockRequest holds the pending request an invite answers until the invite commits, and gives the suggesting
-// member's person, if any.
+// member's person now, if any, with their login held too.
 func lockRequest(ctx context.Context, q *gen.Queries, id uuid.UUID) (*uuid.UUID, error) {
 	suggester, err := q.LockPendingAccessRequest(ctx, id)
 	if err == nil {
-		return suggester, nil
+		if suggester == nil {
+			return nil, nil
+		}
+		person, err := q.LockUserLink(ctx, *suggester)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("lock suggester: %w", err)
+		}
+		return person, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("lock access request: %w", err)

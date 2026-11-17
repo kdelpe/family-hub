@@ -149,7 +149,7 @@ func TestSuggestARelative(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewAccessService(t)
 			if tt.wantCall {
-				svc.EXPECT().Suggest(mock.Anything, testUser.ID, &testPersonID, in).Return(tt.err)
+				svc.EXPECT().Suggest(mock.Anything, testUser.ID, in).Return(tt.err)
 			}
 			req := httptest.NewRequest(http.MethodPost, "/api/me/suggestions", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
