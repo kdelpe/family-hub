@@ -29,3 +29,11 @@ func TestSecurityHeaders(t *testing.T) {
 		})
 	}
 }
+
+func TestNoStore(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	NoStore(http.NotFoundHandler()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/me/contacts", nil))
+
+	assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+}

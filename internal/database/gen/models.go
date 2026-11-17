@@ -22,6 +22,18 @@ type AuthToken struct {
 	SentByUserID *uuid.UUID
 }
 
+type ContactMethod struct {
+	ID         uuid.UUID
+	PersonID   uuid.UUID
+	Kind       string
+	Platform   *string
+	Label      *string
+	Value      string
+	Visibility string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
 type Person struct {
 	ID                 uuid.UUID
 	FirstName          string

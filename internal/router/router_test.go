@@ -3,6 +3,7 @@ package router_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +56,8 @@ func TestRoutes(t *testing.T) {
 		{name: "descendants need a session", method: http.MethodGet, path: "/api/persons/" + testID + "/descendants", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "the tree needs a session", method: http.MethodGet, path: "/api/tree", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "the family summary needs a session", method: http.MethodGet, path: "/api/family/summary", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
+		{name: "contacts need a session", method: http.MethodGet, path: "/api/persons/" + testID + "/contacts", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
+		{name: "my contacts need a session", method: http.MethodGet, path: "/api/me/contacts", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "adding a person needs a session", method: http.MethodPost, path: "/api/persons", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "linking people needs a session", method: http.MethodPost, path: "/api/relationships", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "logout without a session still clears", method: http.MethodPost, path: "/api/auth/logout", wantStatus: http.StatusNoContent},
@@ -82,6 +85,9 @@ func TestRoutes(t *testing.T) {
 				assert.Equal(t, tt.wantType, rec.Header().Get("Content-Type"))
 			}
 			assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"), "security headers on every response")
+			if strings.HasPrefix(tt.path, "/api/") {
+				assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"), "API answers are never cached")
+			}
 		})
 	}
 }
@@ -150,6 +156,13 @@ func TestFamilyWritesAreAdminOnly(t *testing.T) {
 		{name: "an admin can edit", method: http.MethodPatch, path: "/api/persons/" + testID, role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "an admin can delete", method: http.MethodDelete, path: "/api/persons/42", role: auth.RoleAdmin, wantStatus: http.StatusNotFound},
 		{name: "an admin can restore", method: http.MethodPost, path: "/api/persons/42/restore", role: auth.RoleAdmin, wantStatus: http.StatusNotFound},
+		{name: "a member can read contacts", method: http.MethodGet, path: "/api/persons/42/contacts", role: auth.RoleMember, wantStatus: http.StatusNotFound},
+		{name: "a member reaches their own contacts", method: http.MethodPost, path: "/api/me/contacts", role: auth.RoleMember, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "a member reaches an edit of theirs", method: http.MethodPatch, path: "/api/me/contacts/" + testID, role: auth.RoleMember, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "a member can't add for someone", method: http.MethodPost, path: "/api/persons/" + testID + "/contacts", role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "a member can't edit someone's", method: http.MethodPatch, path: "/api/persons/" + testID + "/contacts/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "a member can't delete someone's", method: http.MethodDelete, path: "/api/persons/" + testID + "/contacts/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "an admin can add for someone", method: http.MethodPost, path: "/api/persons/" + testID + "/contacts", role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "a member can't link people", method: http.MethodPost, path: "/api/relationships", role: auth.RoleMember, wantStatus: http.StatusForbidden},
 		{name: "a member can't edit a link", method: http.MethodPatch, path: "/api/relationships/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
 		{name: "a member can't delete a link", method: http.MethodDelete, path: "/api/relationships/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
@@ -161,7 +174,7 @@ func TestFamilyWritesAreAdminOnly(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sessions := mocks.NewSessionAuthenticator(t)
-			sessions.EXPECT().Authenticate(mock.Anything, "tok").Return(auth.Session{UserID: uuid.New(), Role: tt.role}, nil)
+			sessions.EXPECT().Authenticate(mock.Anything, "tok").Return(auth.Session{UserID: uuid.New(), Role: tt.role, PersonID: new(uuid.New())}, nil)
 			routes := newRoutesWith(t, sessions, 100, false)
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			req.AddCookie(&http.Cookie{Name: "__Host-fh_session", Value: "tok"})
@@ -185,10 +198,11 @@ func newRoutesWith(t *testing.T, sessions handler.SessionAuthenticator, perHour 
 	return router.New(
 		router.Handlers{
 			// Unreachable, so /ready answers 503 without needing Postgres.
-			Health: handler.NewHealth(testdb.UnreachablePool(t)),
-			Auth:   handler.NewAuth(mocks.NewAuthService(t), mocks.NewResetRequester(t), cookie),
-			Admin:  handler.NewAdmin(mocks.NewAdminService(t)),
-			Family: handler.NewFamily(mocks.NewFamilyService(t)),
+			Health:   handler.NewHealth(testdb.UnreachablePool(t)),
+			Auth:     handler.NewAuth(mocks.NewAuthService(t), mocks.NewResetRequester(t), cookie),
+			Admin:    handler.NewAdmin(mocks.NewAdminService(t)),
+			Family:   handler.NewFamily(mocks.NewFamilyService(t)),
+			Contacts: handler.NewContacts(mocks.NewContactsService(t)),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(sessions, cookie).Require,

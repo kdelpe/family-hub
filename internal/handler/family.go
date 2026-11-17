@@ -452,16 +452,16 @@ func currentViewer(w http.ResponseWriter, r *http.Request) (family.Viewer, bool)
 }
 
 func personID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	return pathID(w, r, family.ErrPersonNotFound)
+	return pathID(w, r, "id", family.ErrPersonNotFound)
 }
 
 func relationshipID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	return pathID(w, r, family.ErrRelationshipNotFound)
+	return pathID(w, r, "id", family.ErrRelationshipNotFound)
 }
 
 // pathID answers 404 for an id that isn't a UUID: no such thing can exist.
-func pathID(w http.ResponseWriter, r *http.Request, notFound error) (uuid.UUID, bool) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+func pathID(w http.ResponseWriter, r *http.Request, param string, notFound error) (uuid.UUID, bool) {
+	id, err := uuid.Parse(chi.URLParam(r, param))
 	if err != nil {
 		httpx.Error(w, http.StatusNotFound, "not_found", notFound.Error())
 		return uuid.Nil, false
