@@ -111,6 +111,8 @@ func TestRepeatsThatLoseARaceGiveTheirTokenBack(t *testing.T) {
 	t.Cleanup(func() { _ = first.Rollback(context.Background()) })
 	_, err = first.Exec(t.Context(), `INSERT INTO access_requests (full_name, email, source) VALUES ('First', 'darline@example.com', 'self')`)
 	require.NoError(t, err)
+	var firstPID int
+	require.NoError(t, first.QueryRow(t.Context(), `SELECT pg_backend_pid()`).Scan(&firstPID))
 
 	var wg sync.WaitGroup
 	for range accessRequestsPerEmail {
@@ -118,9 +120,12 @@ func TestRepeatsThatLoseARaceGiveTheirTokenBack(t *testing.T) {
 			assert.NoError(t, svc.Submit(t.Context(), AccessRequestInput{FullName: "Repeat", Email: "darline@example.com"}))
 		})
 	}
+	// Only waits on this test's transaction: other packages' tests share the database.
 	require.Eventually(t, func() bool {
-		return countRows(t, pool, `SELECT count(*) FROM pg_locks WHERE NOT granted`) == accessRequestsPerEmail
-	}, 5*time.Second, 10*time.Millisecond, "every repeat waits on the first")
+		var waiting int
+		require.NoError(t, pool.QueryRow(t.Context(), `SELECT count(*) FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))`, firstPID).Scan(&waiting))
+		return waiting == accessRequestsPerEmail
+	}, 10*time.Second, 10*time.Millisecond, "every repeat waits on the first")
 	require.NoError(t, first.Commit(t.Context()))
 	wg.Wait()
 
