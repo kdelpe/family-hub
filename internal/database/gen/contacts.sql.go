@@ -245,7 +245,8 @@ FROM (SELECT DISTINCT CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind EN
       WHERE c.person_id = $1 AND c.visibility = 'on_request'
         AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)) k
 LEFT JOIN contact_requests r ON r.person_id = $1 AND r.requester_id = $2 AND r.kind = k.kind
-WHERE r.status IS DISTINCT FROM 'shared'
+WHERE r.status IS DISTINCT FROM 'shared' OR NOT EXISTS (SELECT 1 FROM users ru
+  JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL WHERE ru.id = $2)
 ORDER BY k.kind
 `
 
@@ -260,7 +261,7 @@ type RequestableKindsRow struct {
 }
 
 // The kinds the viewer could ask for and hasn't been shown, never their values. Declined and revoked read
-// as requested, so a decline stays silent.
+// as requested, so a decline stays silent; so does a share ListVisibleContacts no longer honours.
 func (q *Queries) RequestableKinds(ctx context.Context, arg RequestableKindsParams) ([]RequestableKindsRow, error) {
 	rows, err := q.db.Query(ctx, requestableKinds, arg.PersonID, arg.RequesterID)
 	if err != nil {

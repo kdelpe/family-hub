@@ -180,14 +180,15 @@ func TestTwentyNewRequestsADay(t *testing.T) {
 
 func TestAShareEndsWhenEitherSideCantSeeIt(t *testing.T) {
 	tests := []struct {
-		name   string
-		change func(t *testing.T, pool *pgxpool.Pool, maya, darline family.Viewer)
+		name            string
+		change          func(t *testing.T, pool *pgxpool.Pool, maya, darline family.Viewer)
+		wantRequestable []Requestable
 	}{
-		{name: "the requester is unlinked", change: func(t *testing.T, pool *pgxpool.Pool, _, darline family.Viewer) {
+		{name: "the requester is unlinked", wantRequestable: []Requestable{{"phone", "requested"}}, change: func(t *testing.T, pool *pgxpool.Pool, _, darline family.Viewer) {
 			_, err := pool.Exec(t.Context(), `UPDATE users SET person_id = NULL WHERE id = $1`, darline.UserID)
 			require.NoError(t, err)
 		}},
-		{name: "the requester's person is deleted", change: func(t *testing.T, pool *pgxpool.Pool, _, darline family.Viewer) {
+		{name: "the requester's person is deleted", wantRequestable: []Requestable{{"phone", "requested"}}, change: func(t *testing.T, pool *pgxpool.Pool, _, darline family.Viewer) {
 			_, err := pool.Exec(t.Context(), `UPDATE persons SET deleted_at = now() WHERE id = $1`, *darline.PersonID)
 			require.NoError(t, err)
 		}},
@@ -214,6 +215,7 @@ func TestAShareEndsWhenEitherSideCantSeeIt(t *testing.T) {
 			listing, err := svc.List(t.Context(), family.Viewer{UserID: darline.UserID}, *maya.PersonID)
 			require.NoError(t, err)
 			assert.Empty(t, listing.Contacts, "the phone is no longer shown")
+			assert.Equal(t, tt.wantRequestable, listing.Requestable, "and reads as requested while it's still offered")
 		})
 	}
 }

@@ -30,14 +30,15 @@ WHERE c.person_id = @person_id AND (c.visibility = 'family' OR (c.visibility = '
 ORDER BY c.id;
 
 -- The kinds the viewer could ask for and hasn't been shown, never their values. Declined and revoked read
--- as requested, so a decline stays silent.
+-- as requested, so a decline stays silent; so does a share ListVisibleContacts no longer honours.
 -- name: RequestableKinds :many
 SELECT k.kind, CASE WHEN r.status IS NULL THEN 'none' ELSE 'requested' END::text AS my_request_status
 FROM (SELECT DISTINCT CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END::text AS kind FROM contact_methods c
       WHERE c.person_id = @person_id AND c.visibility = 'on_request'
         AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)) k
 LEFT JOIN contact_requests r ON r.person_id = @person_id AND r.requester_id = @requester_id AND r.kind = k.kind
-WHERE r.status IS DISTINCT FROM 'shared'
+WHERE r.status IS DISTINCT FROM 'shared' OR NOT EXISTS (SELECT 1 FROM users ru
+  JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL WHERE ru.id = @requester_id)
 ORDER BY k.kind;
 
 -- name: GetContact :one
