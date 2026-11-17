@@ -10,6 +10,23 @@ import (
 	"github.com/google/uuid"
 )
 
+type AccessRequest struct {
+	ID            uuid.UUID
+	FullName      string
+	Email         string
+	Side          *string
+	Relationship  *string
+	RelatedNames  []string
+	Note          *string
+	Source        string
+	SuggestedBy   *uuid.UUID
+	Status        string
+	ReviewedBy    *uuid.UUID
+	ReviewedAt    *time.Time
+	InvitedUserID *uuid.UUID
+	CreatedAt     time.Time
+}
+
 type AuthToken struct {
 	ID           uuid.UUID
 	UserID       uuid.UUID

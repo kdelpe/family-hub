@@ -49,6 +49,8 @@ type InviteInput struct {
 	// FromPersonID is who the invite is from; nil means the sending admin.
 	FromPersonID *uuid.UUID
 	SentBy       uuid.UUID
+	// AccessRequestID is the pending request this invite approves, if any.
+	AccessRequestID *uuid.UUID
 }
 
 // Invite creates a user without a password and emails them a link to set one. The email goes
@@ -87,6 +89,11 @@ func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 		return auth.User{}, ErrPersonTaken
 	case err != nil:
 		return auth.User{}, fmt.Errorf("create user: %w", err)
+	}
+	if in.AccessRequestID != nil {
+		if err := approveRequest(ctx, q, *in.AccessRequestID, in.SentBy, id); err != nil {
+			return auth.User{}, err
+		}
 	}
 	msg, err := s.invite(ctx, tx, id, email, sender)
 	if err != nil {

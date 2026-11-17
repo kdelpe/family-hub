@@ -46,5 +46,8 @@ func (c *Cleanup) prune(ctx context.Context) error {
 	if _, err := c.q.DeleteExpiredSessions(ctx, int32(authCleanupBatch)); err != nil {
 		return fmt.Errorf("delete expired sessions: %w", err)
 	}
+	if _, err := c.q.DeleteOldDeclinedAccessRequests(ctx, int32(authCleanupBatch)); err != nil {
+		return fmt.Errorf("delete old declined access requests: %w", err)
+	}
 	return nil
 }

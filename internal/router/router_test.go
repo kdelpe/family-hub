@@ -59,6 +59,8 @@ func TestRoutes(t *testing.T) {
 		{name: "contacts need a session", method: http.MethodGet, path: "/api/persons/" + testID + "/contacts", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "my contacts need a session", method: http.MethodGet, path: "/api/me/contacts", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "contact requests need a session", method: http.MethodGet, path: "/api/me/contact-requests", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
+		{name: "requesting access needs no session", method: http.MethodPost, path: "/api/access-requests", wantStatus: http.StatusUnsupportedMediaType, wantType: "application/json"},
+		{name: "the requests queue needs a session", method: http.MethodGet, path: "/api/admin/access-requests", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "adding a person needs a session", method: http.MethodPost, path: "/api/persons", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "linking people needs a session", method: http.MethodPost, path: "/api/relationships", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "logout without a session still clears", method: http.MethodPost, path: "/api/auth/logout", wantStatus: http.StatusNoContent},
@@ -111,6 +113,8 @@ func TestSignInRoutesAreRateLimitedPerClientIP(t *testing.T) {
 		{name: "forgot and login have their own limits", path: "/api/auth/password/forgot", secondPath: "/api/auth/login", wantStatus: http.StatusUnsupportedMediaType},
 		{name: "preview, same client", path: "/api/auth/invite/preview", wantStatus: http.StatusTooManyRequests},
 		{name: "reset and preview have their own limits", path: "/api/auth/password/reset", secondPath: "/api/auth/invite/preview", wantStatus: http.StatusUnsupportedMediaType},
+		{name: "access requests, same client", path: "/api/access-requests", wantStatus: http.StatusTooManyRequests},
+		{name: "access requests and forgot have their own limits", path: "/api/access-requests", secondPath: "/api/auth/password/forgot", wantStatus: http.StatusUnsupportedMediaType},
 		{name: "login and reset have their own limits", path: "/api/auth/login", secondPath: "/api/auth/password/reset", wantStatus: http.StatusUnsupportedMediaType},
 	}
 
@@ -166,6 +170,10 @@ func TestFamilyWritesAreAdminOnly(t *testing.T) {
 		{name: "an admin can add for someone", method: http.MethodPost, path: "/api/persons/" + testID + "/contacts", role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "a member can ask for contact details", method: http.MethodPost, path: "/api/persons/" + testID + "/contact-requests", role: auth.RoleMember, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "a member can answer a request", method: http.MethodPost, path: "/api/me/contact-requests/42/share", role: auth.RoleMember, wantStatus: http.StatusNotFound},
+		{name: "a member can't see access requests", method: http.MethodGet, path: "/api/admin/access-requests", role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "a member can't decline one", method: http.MethodPost, path: "/api/admin/access-requests/" + testID + "/decline", role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "a member can't reopen one", method: http.MethodPost, path: "/api/admin/access-requests/" + testID + "/reopen", role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "an admin can decline one", method: http.MethodPost, path: "/api/admin/access-requests/42/decline", role: auth.RoleAdmin, wantStatus: http.StatusNotFound},
 		{name: "a member can't link people", method: http.MethodPost, path: "/api/relationships", role: auth.RoleMember, wantStatus: http.StatusForbidden},
 		{name: "a member can't edit a link", method: http.MethodPatch, path: "/api/relationships/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
 		{name: "a member can't delete a link", method: http.MethodDelete, path: "/api/relationships/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
@@ -206,6 +214,7 @@ func newRoutesWith(t *testing.T, sessions handler.SessionAuthenticator, perHour 
 			Admin:    handler.NewAdmin(mocks.NewAdminService(t)),
 			Family:   handler.NewFamily(mocks.NewFamilyService(t)),
 			Contacts: handler.NewContacts(mocks.NewContactsService(t)),
+			Access:   handler.NewAccess(mocks.NewAccessService(t)),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(sessions, cookie).Require,
@@ -213,6 +222,7 @@ func newRoutesWith(t *testing.T, sessions handler.SessionAuthenticator, perHour 
 			LimitForgot:    httpx.LimitByIP(ratelimit.New(perHour, time.Hour)),
 			LimitReset:     httpx.LimitByIP(ratelimit.New(perHour, time.Hour)),
 			LimitPreview:   httpx.LimitByIP(ratelimit.New(perHour, time.Hour)),
+			LimitAccess:    httpx.LimitByIP(ratelimit.New(perHour, time.Hour)),
 			TrustedProxy:   trustedProxy,
 		},
 	)
