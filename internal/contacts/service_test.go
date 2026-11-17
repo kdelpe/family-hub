@@ -60,21 +60,36 @@ func TestWhoSeesWhat(t *testing.T) {
 	}
 }
 
-func TestAPersonWithoutALoginOffersNothingOnRequest(t *testing.T) {
-	svc, pool := newService(t)
-	maya := insertPerson(t, pool, "Maya")
-	login := linkLogin(t, pool, maya, "maya@example.com")
-	_, err := svc.Create(t.Context(), admin, maya, ContactInput{Kind: "address", Value: "Jacmel", Visibility: new("on_request")})
-	require.NoError(t, err)
-	_, err = pool.Exec(t.Context(), `UPDATE users SET person_id = NULL WHERE id = $1`, login)
-	require.NoError(t, err)
+func TestAPersonWhoCantAnswerOffersNothingOnRequest(t *testing.T) {
+	tests := []struct {
+		name     string
+		takeAway string
+	}{
+		{name: "an unlinked login", takeAway: `UPDATE users SET person_id = NULL WHERE id = $1`},
+		{name: "a disabled login", takeAway: `UPDATE users SET disabled_at = now() WHERE id = $1`},
+	}
 
-	got, err := svc.List(t.Context(), family.Viewer{}, maya)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, pool := newService(t)
+			maya := insertPerson(t, pool, "Maya")
+			login := linkLogin(t, pool, maya, "maya@example.com")
+			address, err := svc.Create(t.Context(), admin, maya, ContactInput{Kind: "address", Value: "Jacmel", Visibility: new("on_request")})
+			require.NoError(t, err)
+			_, err = pool.Exec(t.Context(), tt.takeAway, login)
+			require.NoError(t, err)
 
-	require.NoError(t, err)
-	assert.Equal(t, Listing{Contacts: []Contact{}}, got, "an unlinked person's rows stay with admins")
-	_, err = svc.Create(t.Context(), admin, maya, ContactInput{Kind: "phone", Value: "+1 555 010 0000", Visibility: new("on_request")})
-	assert.ErrorIs(t, err, ErrInvalidContact, "and none can be added")
+			got, err := svc.List(t.Context(), family.Viewer{}, maya)
+
+			require.NoError(t, err)
+			assert.Equal(t, Listing{Contacts: []Contact{}}, got, "their rows stay with admins")
+			_, err = svc.Create(t.Context(), admin, maya, ContactInput{Kind: "phone", Value: "+1 555 010 0000", Visibility: new("on_request")})
+			require.ErrorIs(t, err, ErrInvalidContact, "and none can be added")
+			edited, err := svc.Update(t.Context(), admin, maya, address.ID, ContactPatch{Value: family.Opt[string]{Set: true, Value: "Jacmel, Haiti"}})
+			require.NoError(t, err, "an existing one can still be fixed")
+			assert.Equal(t, "Jacmel, Haiti", edited.Value)
+		})
+	}
 }
 
 func TestWrites(t *testing.T) {

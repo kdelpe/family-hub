@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/kdelpe/family-hub/internal/auth"
@@ -65,33 +64,17 @@ type updateContactRequest struct {
 	Visibility required[string]  `json:"visibility"`
 }
 
-func (c *Contacts) ListMine(w http.ResponseWriter, r *http.Request)   { c.list(w, r, minePerson) }
-func (c *Contacts) CreateMine(w http.ResponseWriter, r *http.Request) { c.create(w, r, minePerson) }
-func (c *Contacts) UpdateMine(w http.ResponseWriter, r *http.Request) { c.update(w, r, minePerson) }
-func (c *Contacts) DeleteMine(w http.ResponseWriter, r *http.Request) { c.delete(w, r, minePerson) }
-func (c *Contacts) ListFor(w http.ResponseWriter, r *http.Request)    { c.list(w, r, pathPerson) }
-func (c *Contacts) CreateFor(w http.ResponseWriter, r *http.Request)  { c.create(w, r, pathPerson) }
-func (c *Contacts) UpdateFor(w http.ResponseWriter, r *http.Request)  { c.update(w, r, pathPerson) }
-func (c *Contacts) DeleteFor(w http.ResponseWriter, r *http.Request)  { c.delete(w, r, pathPerson) }
+func (c *Contacts) ListMine(w http.ResponseWriter, r *http.Request)   { c.list(w, r, true) }
+func (c *Contacts) CreateMine(w http.ResponseWriter, r *http.Request) { c.create(w, r, true) }
+func (c *Contacts) UpdateMine(w http.ResponseWriter, r *http.Request) { c.update(w, r, true) }
+func (c *Contacts) DeleteMine(w http.ResponseWriter, r *http.Request) { c.delete(w, r, true) }
+func (c *Contacts) ListFor(w http.ResponseWriter, r *http.Request)    { c.list(w, r, false) }
+func (c *Contacts) CreateFor(w http.ResponseWriter, r *http.Request)  { c.create(w, r, false) }
+func (c *Contacts) UpdateFor(w http.ResponseWriter, r *http.Request)  { c.update(w, r, false) }
+func (c *Contacts) DeleteFor(w http.ResponseWriter, r *http.Request)  { c.delete(w, r, false) }
 
-// whose picks the person a request is about; it answers the error itself when there's none.
-type whose func(c *Contacts, w http.ResponseWriter, r *http.Request, viewer family.Viewer) (uuid.UUID, bool)
-
-func minePerson(c *Contacts, w http.ResponseWriter, r *http.Request, viewer family.Viewer) (uuid.UUID, bool) {
-	id, err := contacts.Mine(viewer)
-	if err != nil {
-		c.fail(w, r, err, "my contacts")
-		return uuid.Nil, false
-	}
-	return id, true
-}
-
-func pathPerson(_ *Contacts, w http.ResponseWriter, r *http.Request, _ family.Viewer) (uuid.UUID, bool) {
-	return personID(w, r)
-}
-
-func (c *Contacts) list(w http.ResponseWriter, r *http.Request, person whose) {
-	viewer, personID, ok := c.target(w, r, person)
+func (c *Contacts) list(w http.ResponseWriter, r *http.Request, mine bool) {
+	viewer, personID, ok := c.target(w, r, mine)
 	if !ok {
 		return
 	}
@@ -111,8 +94,8 @@ func (c *Contacts) list(w http.ResponseWriter, r *http.Request, person whose) {
 	httpx.JSON(w, http.StatusOK, resp)
 }
 
-func (c *Contacts) create(w http.ResponseWriter, r *http.Request, person whose) {
-	viewer, personID, ok := c.target(w, r, person)
+func (c *Contacts) create(w http.ResponseWriter, r *http.Request, mine bool) {
+	viewer, personID, ok := c.target(w, r, mine)
 	if !ok {
 		return
 	}
@@ -124,8 +107,8 @@ func (c *Contacts) create(w http.ResponseWriter, r *http.Request, person whose) 
 	c.answer(w, r, http.StatusCreated, contact, err, "create contact")
 }
 
-func (c *Contacts) update(w http.ResponseWriter, r *http.Request, person whose) {
-	viewer, personID, ok := c.target(w, r, person)
+func (c *Contacts) update(w http.ResponseWriter, r *http.Request, mine bool) {
+	viewer, personID, ok := c.target(w, r, mine)
 	if !ok {
 		return
 	}
@@ -144,8 +127,8 @@ func (c *Contacts) update(w http.ResponseWriter, r *http.Request, person whose) 
 	c.answer(w, r, http.StatusOK, contact, err, "update contact")
 }
 
-func (c *Contacts) delete(w http.ResponseWriter, r *http.Request, person whose) {
-	viewer, personID, ok := c.target(w, r, person)
+func (c *Contacts) delete(w http.ResponseWriter, r *http.Request, mine bool) {
+	viewer, personID, ok := c.target(w, r, mine)
 	if !ok {
 		return
 	}
@@ -160,13 +143,22 @@ func (c *Contacts) delete(w http.ResponseWriter, r *http.Request, person whose) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (c *Contacts) target(w http.ResponseWriter, r *http.Request, person whose) (family.Viewer, uuid.UUID, bool) {
+// target is the viewer and the person the request is about: their own for /me, else the one in the path.
+func (c *Contacts) target(w http.ResponseWriter, r *http.Request, mine bool) (family.Viewer, uuid.UUID, bool) {
 	viewer, ok := currentViewer(w, r)
 	if !ok {
 		return family.Viewer{}, uuid.Nil, false
 	}
-	id, ok := person(c, w, r, viewer)
-	return viewer, id, ok
+	if !mine {
+		id, ok := personID(w, r)
+		return viewer, id, ok
+	}
+	id, err := contacts.Mine(viewer)
+	if err != nil {
+		c.fail(w, r, err, "my contacts")
+		return family.Viewer{}, uuid.Nil, false
+	}
+	return viewer, id, true
 }
 
 func (c *Contacts) answer(w http.ResponseWriter, r *http.Request, status int, contact contacts.Contact, err error, what string) {
@@ -194,10 +186,5 @@ func (c *Contacts) fail(w http.ResponseWriter, r *http.Request, err error, what 
 }
 
 func contactID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	id, err := uuid.Parse(chi.URLParam(r, "cid"))
-	if err != nil {
-		httpx.Error(w, http.StatusNotFound, "not_found", contacts.ErrContactNotFound.Error())
-		return uuid.Nil, false
-	}
-	return id, true
+	return pathID(w, r, "cid", contacts.ErrContactNotFound)
 }

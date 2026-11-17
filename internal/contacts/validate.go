@@ -9,8 +9,6 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
-
-	"github.com/google/uuid"
 )
 
 const (
@@ -33,17 +31,7 @@ var (
 	}
 )
 
-// contact is a row being checked; it has the same fields as Contact.
-type contact struct {
-	ID         uuid.UUID
-	Kind       string
-	Platform   *string
-	Label      *string
-	Value      string
-	Visibility string
-}
-
-func (c *contact) normalize() error {
+func (c *Contact) normalize() error {
 	if !slices.Contains([]string{"email", "phone", "address", "social", "other"}, c.Kind) {
 		return invalid("kind must be email, phone, address, social or other")
 	}
@@ -71,14 +59,14 @@ func (c *contact) normalize() error {
 }
 
 // visibilities are the two a kind allows: phones, WhatsApp and addresses are asked for, never listed (§5.2).
-func visibilities(c *contact) []string {
+func visibilities(c *Contact) []string {
 	if c.Kind == "phone" || c.Kind == "address" || (c.Platform != nil && *c.Platform == "whatsapp") {
 		return []string{"hidden", "on_request"}
 	}
 	return []string{"hidden", "family"}
 }
 
-func (c *contact) checkValue() error {
+func (c *Contact) checkValue() error {
 	address := c.Kind == "address"
 	limit := maxValueLength
 	if address {

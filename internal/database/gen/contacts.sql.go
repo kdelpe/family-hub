@@ -212,9 +212,11 @@ func (q *Queries) LockPersonForContacts(ctx context.Context, id uuid.UUID) (bool
 }
 
 const personHasLogin = `-- name: PersonHasLogin :one
-SELECT EXISTS (SELECT 1 FROM users WHERE person_id = $1)
+SELECT EXISTS (SELECT 1 FROM users WHERE person_id = $1 AND disabled_at IS NULL FOR SHARE)
 `
 
+// Someone who could answer a request. The login is held until the commit, so a disable or unlink can't
+// land between this check and the write.
 func (q *Queries) PersonHasLogin(ctx context.Context, id *uuid.UUID) (bool, error) {
 	row := q.db.QueryRow(ctx, personHasLogin, id)
 	var exists bool
@@ -225,7 +227,7 @@ func (q *Queries) PersonHasLogin(ctx context.Context, id *uuid.UUID) (bool, erro
 const requestableKinds = `-- name: RequestableKinds :many
 SELECT DISTINCT CASE WHEN kind = 'social' THEN platform ELSE kind END::text AS kind FROM contact_methods c
 WHERE c.person_id = $1 AND c.visibility = 'on_request'
-  AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id)
+  AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)
 ORDER BY 1
 `
 

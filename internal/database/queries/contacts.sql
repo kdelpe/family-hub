@@ -4,8 +4,10 @@
 -- name: LockPersonForContacts :one
 SELECT EXISTS (SELECT 1 FROM persons WHERE id = @id AND deleted_at IS NULL FOR NO KEY UPDATE);
 
+-- Someone who could answer a request. The login is held until the commit, so a disable or unlink can't
+-- land between this check and the write.
 -- name: PersonHasLogin :one
-SELECT EXISTS (SELECT 1 FROM users WHERE person_id = @id);
+SELECT EXISTS (SELECT 1 FROM users WHERE person_id = @id AND disabled_at IS NULL FOR SHARE);
 
 -- name: CountContacts :one
 SELECT count(*) FROM contact_methods WHERE person_id = @person_id;
@@ -21,7 +23,7 @@ WHERE person_id = @person_id AND visibility = 'family' ORDER BY id;
 -- name: RequestableKinds :many
 SELECT DISTINCT CASE WHEN kind = 'social' THEN platform ELSE kind END::text AS kind FROM contact_methods c
 WHERE c.person_id = @person_id AND c.visibility = 'on_request'
-  AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id)
+  AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)
 ORDER BY 1;
 
 -- name: GetContact :one

@@ -111,10 +111,11 @@ func (s *Service) List(ctx context.Context, viewer family.Viewer, personID uuid.
 }
 
 func (s *Service) Create(ctx context.Context, viewer family.Viewer, personID uuid.UUID, in ContactInput) (Contact, error) {
+	// The routes already keep members to their own person; this keeps the rule true for any caller.
 	if !canSeeAll(viewer, personID) {
 		return Contact{}, ErrNotYours
 	}
-	c := contact{Kind: in.Kind, Platform: in.Platform, Label: in.Label, Value: in.Value, Visibility: "hidden"}
+	c := Contact{Kind: in.Kind, Platform: in.Platform, Label: in.Label, Value: in.Value, Visibility: "hidden"}
 	if in.Visibility != nil {
 		c.Visibility = *in.Visibility
 	}
@@ -161,7 +162,7 @@ func (s *Service) Update(ctx context.Context, viewer family.Viewer, personID, id
 		if err != nil {
 			return fmt.Errorf("get contact: %w", err)
 		}
-		c := contact(row)
+		c := Contact(row)
 		if patch.Label.Set {
 			c.Label = patch.Label.Value
 		}
@@ -174,8 +175,11 @@ func (s *Service) Update(ctx context.Context, viewer family.Viewer, personID, id
 		if err := c.normalize(); err != nil {
 			return err
 		}
-		if err := checkRequestable(ctx, q, personID, c); err != nil {
-			return err
+		// Only a change asks again: a row already on request stays editable after its person loses their login.
+		if row.Visibility != c.Visibility {
+			if err := checkRequestable(ctx, q, personID, c); err != nil {
+				return err
+			}
 		}
 		saved, err := q.UpdateContact(ctx, gen.UpdateContactParams{ID: id, PersonID: personID, Label: c.Label, Value: c.Value, Visibility: c.Visibility})
 		if err != nil {
@@ -211,7 +215,7 @@ func canSeeAll(viewer family.Viewer, personID uuid.UUID) bool {
 }
 
 // checkRequestable refuses on_request for someone without a login: nobody could answer the request (§5.4).
-func checkRequestable(ctx context.Context, q *gen.Queries, personID uuid.UUID, c contact) error {
+func checkRequestable(ctx context.Context, q *gen.Queries, personID uuid.UUID, c Contact) error {
 	if c.Visibility != "on_request" {
 		return nil
 	}
