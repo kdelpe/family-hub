@@ -3,6 +3,7 @@ package router_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,6 +85,9 @@ func TestRoutes(t *testing.T) {
 				assert.Equal(t, tt.wantType, rec.Header().Get("Content-Type"))
 			}
 			assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"), "security headers on every response")
+			if strings.HasPrefix(tt.path, "/api/") {
+				assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"), "API answers are never cached")
+			}
 		})
 	}
 }

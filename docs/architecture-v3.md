@@ -1118,7 +1118,7 @@ For a "multi-decade" archive, this section matters more than any other.
 ## 12. Security & privacy checklist
 
 - Invite-only; enumeration-safe login, forgot-password, and access-request; the public request form never suggests or reveals names from the tree; Argon2id password hashes; single-use 256-bit emailed tokens; server-side revocable sessions, revoked on password reset (§5).
-- Security headers: strict CSP (`default-src 'self'; frame-ancestors 'none'`; `img-src`/`media-src` allow the bucket host), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `X-Robots-Tag: noindex`, HSTS in prod.
+- Security headers: strict CSP (`default-src 'self'; frame-ancestors 'none'`; `img-src`/`media-src` allow the bucket host), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `X-Robots-Tag: noindex`, HSTS in prod. Every `/api` answer also carries `Cache-Control: no-store`, since each depends on who is signed in and contacts must never be served from a cache (§5.2).
 - All SQL via sqlc (parameterized). JSON body size limits. Upload MIME allowlist; keys never derived from user filenames.
 - Secrets only from env/secret manager; separate S3 credentials for app vs. backup jobs; the app's key can't delete from the backup bucket.
 - Contact info is private by default, filtered server-side per viewer (§5.2), excluded from the tree payload, search and logs, and never includes the login email.

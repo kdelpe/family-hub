@@ -56,6 +56,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 	csrf.SetDenyHandler(http.HandlerFunc(httpx.CrossOriginRefused))
 
 	r.Route("/api", func(r chi.Router) {
+		r.Use(httpx.NoStore)
 		r.Use(csrf.Handler)
 		r.NotFound(httpx.NotFound)
 		r.MethodNotAllowed(httpx.MethodNotAllowed)

@@ -1,7 +1,9 @@
 package contacts
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -89,6 +91,58 @@ func TestAPersonWhoCantAnswerOffersNothingOnRequest(t *testing.T) {
 			require.NoError(t, err, "an existing one can still be fixed")
 			assert.Equal(t, "Jacmel, Haiti", edited.Value)
 		})
+	}
+}
+
+func TestOnRequestWaitsForALoginBeingTakenAway(t *testing.T) {
+	takeAways := map[string]string{
+		"disabled": `UPDATE users SET disabled_at = now() WHERE id = $1`,
+		"unlinked": `UPDATE users SET person_id = NULL WHERE id = $1`,
+	}
+	writes := map[string]func(ctx context.Context, svc *Service, maya uuid.UUID) error{
+		"a new row": func(ctx context.Context, svc *Service, maya uuid.UUID) error {
+			_, err := svc.Create(ctx, admin, maya, ContactInput{Kind: "phone", Value: "+1 555 010 0000", Visibility: new("on_request")})
+			return err
+		},
+		"a hidden row made requestable": func(ctx context.Context, svc *Service, maya uuid.UUID) error {
+			rows, err := svc.List(ctx, admin, maya)
+			if err != nil {
+				return err
+			}
+			_, err = svc.Update(ctx, admin, maya, rows.Contacts[0].ID, ContactPatch{Visibility: family.Opt[string]{Set: true, Value: "on_request"}})
+			return err
+		},
+	}
+
+	for takeName, takeAway := range takeAways {
+		for writeName, write := range writes {
+			t.Run(writeName+", login "+takeName, func(t *testing.T) {
+				svc, pool := newService(t)
+				maya := insertPerson(t, pool, "Maya")
+				login := linkLogin(t, pool, maya, "maya@example.com")
+				_, err := svc.Create(t.Context(), admin, maya, ContactInput{Kind: "address", Value: "Jacmel"})
+				require.NoError(t, err)
+				change, err := pool.Begin(t.Context())
+				require.NoError(t, err)
+				t.Cleanup(func() { _ = change.Rollback(context.Background()) })
+				_, err = change.Exec(t.Context(), takeAway, login)
+				require.NoError(t, err)
+
+				done := make(chan error, 1)
+				go func() { done <- write(t.Context(), svc, maya) }()
+				require.Eventually(t, func() bool {
+					var waiting int
+					require.NoError(t, pool.QueryRow(t.Context(), `SELECT count(*) FROM pg_locks WHERE NOT granted`).Scan(&waiting))
+					return waiting > 0
+				}, 5*time.Second, 10*time.Millisecond, "the write waits on the login's row")
+				require.NoError(t, change.Commit(t.Context()))
+
+				require.ErrorIs(t, <-done, ErrInvalidContact)
+				var requestable int
+				require.NoError(t, pool.QueryRow(t.Context(), `SELECT count(*) FROM contact_methods WHERE visibility = 'on_request'`).Scan(&requestable))
+				assert.Zero(t, requestable, "nothing left on request")
+			})
+		}
 	}
 }
 
