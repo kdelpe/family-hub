@@ -102,7 +102,12 @@ func TestRepeatsDontSpendTheAddressBudget(t *testing.T) {
 }
 
 func TestRepeatsThatLoseARaceGiveTheirTokenBack(t *testing.T) {
-	pool := testdb.MigratedPool(t, database.MigrateUp)
+	// Its own pool: the default is as small as 4 connections on a 4-CPU runner, and every repeat must wait at once.
+	cfg := testdb.MigratedPool(t, database.MigrateUp).Config()
+	cfg.MaxConns = accessRequestsPerEmail + 3
+	pool, err := pgxpool.NewWithConfig(t.Context(), cfg)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
 	svc := NewAccessRequests(pool)
 	admin := insertUser(t, pool, "admin@example.com")
 	// A request for the address still being stored: every Submit passes the pending check, then waits on it.
@@ -114,8 +119,9 @@ func TestRepeatsThatLoseARaceGiveTheirTokenBack(t *testing.T) {
 	var firstPID int
 	require.NoError(t, first.QueryRow(t.Context(), `SELECT pg_backend_pid()`).Scan(&firstPID))
 
+	const repeats = accessRequestsPerEmail
 	var wg sync.WaitGroup
-	for range accessRequestsPerEmail {
+	for range repeats {
 		wg.Go(func() {
 			assert.NoError(t, svc.Submit(t.Context(), AccessRequestInput{FullName: "Repeat", Email: "darline@example.com"}))
 		})
@@ -124,7 +130,7 @@ func TestRepeatsThatLoseARaceGiveTheirTokenBack(t *testing.T) {
 	require.Eventually(t, func() bool {
 		var waiting int
 		require.NoError(t, pool.QueryRow(t.Context(), `SELECT count(*) FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))`, firstPID).Scan(&waiting))
-		return waiting == accessRequestsPerEmail
+		return waiting == repeats
 	}, 10*time.Second, 10*time.Millisecond, "every repeat waits on the first")
 	require.NoError(t, first.Commit(t.Context()))
 	wg.Wait()
