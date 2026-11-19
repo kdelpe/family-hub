@@ -1,8 +1,8 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
-import { login } from '../../api/auth'
+import { authKeys, login } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { PasswordInput } from '../../components/PasswordInput/PasswordInput'
 import { errorMessage } from '../../lib/errorMessage'
@@ -13,9 +13,14 @@ export function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const signIn = useMutation({
     mutationFn: () => login(email, password),
-    onSuccess: () => void navigate('/', { replace: true }),
+    // Replaces a cached "signed out" answer, so the signed-in pages don't send you straight back here.
+    onSuccess: (user) => {
+      queryClient.setQueryData(authKeys.me, user)
+      void navigate('/', { replace: true })
+    },
   })
 
   // Only a shown error: resetting a pending sign-in would detach it, re-enabling the button and losing its answer.

@@ -41,25 +41,6 @@
   text-align: center;
 }
 
-.logoGround {
-  fill: var(--accent-tint);
-  stroke: var(--accent);
-}
-
-.logoStem {
-  fill: none;
-  stroke: var(--accent);
-  stroke-linecap: round;
-}
-
-.logoTop {
-  fill: var(--accent);
-}
-
-.logoLeaf {
-  fill: var(--logo-leaf);
-}
-
 .names {
   display: flex;
   flex-direction: column;

@@ -4,6 +4,8 @@ export type User = {
   id: string
   email: string
   role: 'admin' | 'member'
+  // Who they are in the tree; null until an admin links them.
+  person_id: string | null
 }
 
 export type LinkPreview = {
@@ -14,8 +16,11 @@ export type LinkPreview = {
 }
 
 export const authKeys = {
+  me: ['auth', 'me'] as const,
   preview: (token: string) => ['auth', 'preview', token] as const,
 }
+
+export const me = ({ signal }: { signal?: AbortSignal } = {}) => api<User>('GET', '/auth/me', { signal })
 
 export const login = (email: string, password: string) =>
   api<User>('POST', '/auth/login', { body: { email, password } })

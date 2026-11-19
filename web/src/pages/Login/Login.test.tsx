@@ -4,9 +4,15 @@ import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { authKeys } from '../../api/auth'
 import { Login } from './Login'
 
-const user = { id: '01890000-0000-7000-8000-000000000001', email: 'maya.pluviose@example.com', role: 'admin' }
+const user = {
+  id: '01890000-0000-7000-8000-000000000001',
+  email: 'maya.pluviose@example.com',
+  role: 'admin',
+  person_id: '01890000-0000-7000-8000-000000000002',
+}
 
 type Answer = { status: number; body?: unknown; headers?: Record<string, string> } | 'network error'
 
@@ -26,7 +32,7 @@ function stubLogin(answer?: Answer) {
   return fetch
 }
 
-function renderLogin() {
+function renderLogin(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   const router = createMemoryRouter(
     [
       { path: '/auth/login', element: <Login /> },
@@ -35,7 +41,7 @@ function renderLogin() {
     { initialEntries: ['/auth/login'] },
   )
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
@@ -69,6 +75,18 @@ describe('Login', () => {
 
     expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text')
     expect(screen.getByRole('button', { name: 'Hide' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('remembers who signed in, replacing an earlier signed-out answer', async () => {
+    stubLogin({ status: 200, body: user })
+    const client = new QueryClient()
+    client.setQueryData(authKeys.me, null)
+    renderLogin(client)
+
+    signIn()
+
+    await screen.findByText('Home page')
+    expect(client.getQueryData(authKeys.me)).toEqual(user)
   })
 
   it('signs in and goes home', async () => {

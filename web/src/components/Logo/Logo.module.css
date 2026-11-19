@@ -1,0 +1,18 @@
+.ground {
+  fill: var(--accent-tint);
+  stroke: var(--accent);
+}
+
+.stem {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+}
+
+.top {
+  fill: var(--accent);
+}
+
+.leaf {
+  fill: var(--logo-leaf);
+}

@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 
@@ -89,9 +89,13 @@ function SetPassword({ token, link }: { token: string; link: LinkPreview }) {
   const [password, setPasswordValue] = useState('')
   const [refusedHere, setRefusedHere] = useState<{ code: string; attempt: number } | null>(null)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const save = useMutation({
     mutationFn: () => setPassword(token, password),
-    onSuccess: () => void navigate(invite ? '/setup' : '/', { replace: true }),
+    onSuccess: (user) => {
+      queryClient.setQueryData(authKeys.me, user)
+      void navigate(invite ? '/setup' : '/', { replace: true })
+    },
   })
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {

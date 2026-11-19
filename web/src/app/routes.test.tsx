@@ -12,7 +12,7 @@ it.each([
   { path: '/auth/forgot', heading: 'Forgot your password?' },
   { path: '/auth/set-password', heading: 'This link doesn’t work anymore' },
   { path: '/setup', heading: 'Let the family see who you are' },
-  { path: '/people', heading: 'Pluviose-Monestime Family Hub' },
+  { path: '/no-such-page', heading: 'Pluviose-Monestime Family Hub' },
 ])('$path shows the page with heading "$heading"', async ({ path, heading }) => {
   render(
     <QueryClientProvider client={new QueryClient()}>

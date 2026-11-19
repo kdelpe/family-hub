@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router'
 
+import { Logo } from '../Logo/Logo'
 import { SignInTree } from '../SignInTree/SignInTree'
 import styles from './SignInLayout.module.css'
 
@@ -10,13 +11,7 @@ export function SignInLayout() {
     <div className={styles.page}>
       <section aria-label="About this site" className={styles.brand}>
         <div className={styles.identity}>
-          <svg aria-hidden="true" width="64" height="64" viewBox="0 0 52 52">
-            <circle cx="26" cy="26" r="25" className={styles.logoGround} strokeWidth="1.5" />
-            <path d="M26 42 V24 M26 30 L17 22 M26 30 L35 22 M26 24 L26 15" className={styles.logoStem} strokeWidth="2.4" />
-            <circle cx="26" cy="13" r="4" className={styles.logoTop} />
-            <circle cx="16" cy="20" r="3.4" className={styles.logoLeaf} />
-            <circle cx="36" cy="20" r="3.4" className={styles.logoLeaf} />
-          </svg>
+          <Logo size={64} />
           <span className={styles.names}>
             <span className={styles.familyName}>Pluviose-Monestime</span>
             <span className={styles.hub}>Family Hub</span>
