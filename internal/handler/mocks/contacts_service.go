@@ -343,6 +343,80 @@ func (_c *ContactsService_Delete_Call) RunAndReturn(run func(ctx context.Context
 	return _c
 }
 
+// Directory provides a mock function for the type ContactsService
+func (_mock *ContactsService) Directory(ctx context.Context, viewer family.Viewer, query string) ([]contacts.DirectoryEntry, error) {
+	ret := _mock.Called(ctx, viewer, query)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Directory")
+	}
+
+	var r0 []contacts.DirectoryEntry
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, string) ([]contacts.DirectoryEntry, error)); ok {
+		return returnFunc(ctx, viewer, query)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, string) []contacts.DirectoryEntry); ok {
+		r0 = returnFunc(ctx, viewer, query)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]contacts.DirectoryEntry)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, family.Viewer, string) error); ok {
+		r1 = returnFunc(ctx, viewer, query)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ContactsService_Directory_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Directory'
+type ContactsService_Directory_Call struct {
+	*mock.Call
+}
+
+// Directory is a helper method to define mock.On call
+//   - ctx context.Context
+//   - viewer family.Viewer
+//   - query string
+func (_e *ContactsService_Expecter) Directory(ctx any, viewer any, query any) *ContactsService_Directory_Call {
+	return &ContactsService_Directory_Call{Call: _e.mock.On("Directory", ctx, viewer, query)}
+}
+
+func (_c *ContactsService_Directory_Call) Run(run func(ctx context.Context, viewer family.Viewer, query string)) *ContactsService_Directory_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 family.Viewer
+		if args[1] != nil {
+			arg1 = args[1].(family.Viewer)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *ContactsService_Directory_Call) Return(directoryEntrys []contacts.DirectoryEntry, err error) *ContactsService_Directory_Call {
+	_c.Call.Return(directoryEntrys, err)
+	return _c
+}
+
+func (_c *ContactsService_Directory_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, query string) ([]contacts.DirectoryEntry, error)) *ContactsService_Directory_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // List provides a mock function for the type ContactsService
 func (_mock *ContactsService) List(ctx context.Context, viewer family.Viewer, personID uuid.UUID) (contacts.Listing, error) {
 	ret := _mock.Called(ctx, viewer, personID)

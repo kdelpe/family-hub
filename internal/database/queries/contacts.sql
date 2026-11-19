@@ -12,34 +12,48 @@ SELECT EXISTS (SELECT 1 FROM users WHERE person_id = @id AND disabled_at IS NULL
 -- name: CountContacts :one
 SELECT count(*) FROM contact_methods WHERE person_id = @person_id;
 
+-- The queries below take several people at once, for the directory; a profile passes one.
+
 -- name: ListContacts :many
-SELECT id, kind, platform, label, value, visibility FROM contact_methods WHERE person_id = @person_id ORDER BY id;
+SELECT person_id, id, kind, platform, label, value, visibility FROM contact_methods
+WHERE person_id = ANY(@person_ids::uuid[]) ORDER BY person_id, id;
 
 -- What someone other than the owner sees: family rows, and the on_request rows of each kind the owner shared
 -- with them (§5.2). A share counts only while both sides could still see it on their My profile: the owner
 -- has an enabled login, and the requester's login is linked to someone in the tree, so it can be revoked.
 -- name: ListVisibleContacts :many
-SELECT c.id, c.kind, c.platform, c.label, c.value, c.visibility FROM contact_methods c
-WHERE c.person_id = @person_id AND (c.visibility = 'family' OR (c.visibility = 'on_request'
+SELECT c.person_id, c.id, c.kind, c.platform, c.label, c.value, c.visibility FROM contact_methods c
+WHERE c.person_id = ANY(@person_ids::uuid[]) AND (c.visibility = 'family' OR (c.visibility = 'on_request'
   AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)
   AND EXISTS (SELECT 1 FROM contact_requests r
     JOIN users ru ON ru.id = r.requester_id
     JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL
     WHERE r.person_id = c.person_id AND r.requester_id = @requester_id AND r.status = 'shared'
       AND r.kind = CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END)))
-ORDER BY c.id;
+ORDER BY c.person_id, c.id;
 
 -- The kinds the viewer could ask for and hasn't been shown, never their values. Declined and revoked read
 -- as requested, so a decline stays silent; so does a share ListVisibleContacts no longer honours.
 -- name: RequestableKinds :many
-SELECT k.kind, CASE WHEN r.status IS NULL THEN 'none' ELSE 'requested' END::text AS my_request_status
-FROM (SELECT DISTINCT CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END::text AS kind FROM contact_methods c
-      WHERE c.person_id = @person_id AND c.visibility = 'on_request'
+SELECT k.person_id, k.kind, CASE WHEN r.status IS NULL THEN 'none' ELSE 'requested' END::text AS my_request_status
+FROM (SELECT DISTINCT c.person_id, CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END::text AS kind FROM contact_methods c
+      WHERE c.person_id = ANY(@person_ids::uuid[]) AND c.visibility = 'on_request'
         AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)) k
-LEFT JOIN contact_requests r ON r.person_id = @person_id AND r.requester_id = @requester_id AND r.kind = k.kind
+LEFT JOIN contact_requests r ON r.person_id = k.person_id AND r.requester_id = @requester_id AND r.kind = k.kind
 WHERE r.status IS DISTINCT FROM 'shared' OR NOT EXISTS (SELECT 1 FROM users ru
   JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL WHERE ru.id = @requester_id)
-ORDER BY k.kind;
+ORDER BY k.person_id, k.kind;
+
+-- The directory: living people in the tree who share something, a family row or a kind to ask for (§4.4).
+-- Search matches names only, never contact values (§5.2). The limit is a backstop at family scale.
+-- name: DirectoryPersons :many
+SELECT p.id, p.first_name, p.last_name, p.side FROM persons p
+WHERE p.deleted_at IS NULL AND NOT p.is_deceased
+  AND (@q::text = '' OR p.search_name ILIKE '%' || @q_like::text || '%' ESCAPE '\' OR p.search_name % @q::text)
+  AND EXISTS (SELECT 1 FROM contact_methods c WHERE c.person_id = p.id AND (c.visibility = 'family'
+    OR (c.visibility = 'on_request' AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = p.id AND u.disabled_at IS NULL))))
+ORDER BY lower(p.search_name), p.id
+LIMIT 5000;
 
 -- name: GetContact :one
 SELECT id, kind, platform, label, value, visibility FROM contact_methods WHERE id = @id AND person_id = @person_id;

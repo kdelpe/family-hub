@@ -114,12 +114,9 @@ type ListInput struct {
 
 // ListPersons searches by name when Query is set (best matches first), otherwise lists everyone A–Z.
 func (s *Service) ListPersons(ctx context.Context, viewer Viewer, in ListInput) ([]Person, error) {
-	query := strings.TrimSpace(in.Query)
-	if !storable(query) {
-		return nil, fmt.Errorf("%w: search contains a character that isn't allowed", ErrInvalidFilter)
-	}
-	if utf8.RuneCountInString(query) > maxQueryLength {
-		return nil, fmt.Errorf("%w: search is longer than %d characters", ErrInvalidFilter, maxQueryLength)
+	query, err := SearchQuery(in.Query)
+	if err != nil {
+		return nil, err
 	}
 	if in.Side != "" && !slices.Contains(sides, in.Side) {
 		return nil, fmt.Errorf("%w: side must be one of %s", ErrInvalidFilter, strings.Join(sides, ", "))
@@ -130,7 +127,7 @@ func (s *Service) ListPersons(ctx context.Context, viewer Viewer, in ListInput) 
 	}
 	rows, err := gen.New(s.pool).ListPersons(ctx, gen.ListPersonsParams{
 		ViewerIsAdmin: viewer.IsAdmin, ViewerPersonID: viewer.PersonID,
-		Q: query, QLike: escapeLike(query), Side: in.Side, Deceased: in.Deceased, MaxRows: int32(maxRows),
+		Q: query, QLike: EscapeLike(query), Side: in.Side, Deceased: in.Deceased, MaxRows: int32(maxRows),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list persons: %w", err)
@@ -443,8 +440,21 @@ func hasControl(s string) bool {
 	return strings.ContainsFunc(s, unicode.IsControl)
 }
 
+// SearchQuery is a name search as typed, trimmed; it's refused when it couldn't be one.
+func SearchQuery(q string) (string, error) {
+	q = strings.TrimSpace(q)
+	if !storable(q) {
+		return "", fmt.Errorf("%w: search contains a character that isn't allowed", ErrInvalidFilter)
+	}
+	if utf8.RuneCountInString(q) > maxQueryLength {
+		return "", fmt.Errorf("%w: search is longer than %d characters", ErrInvalidFilter, maxQueryLength)
+	}
+	return q, nil
+}
+
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
-func escapeLike(s string) string {
+// EscapeLike makes s match itself literally in a LIKE pattern with ESCAPE '\'.
+func EscapeLike(s string) string {
 	return likeEscaper.Replace(s)
 }

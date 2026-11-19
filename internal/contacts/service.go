@@ -81,7 +81,8 @@ func Mine(viewer family.Viewer) (uuid.UUID, error) {
 	return *viewer.PersonID, nil
 }
 
-// List gives the owner and admins every row; others get family rows and the kinds they could ask for.
+// List gives the owner and admins every row; others get family rows, what was shared with them, and the kinds
+// they could ask for.
 func (s *Service) List(ctx context.Context, viewer family.Viewer, personID uuid.UUID) (Listing, error) {
 	var listing Listing
 	err := s.read(ctx, "list contacts", func(q *gen.Queries) error {
@@ -92,32 +93,109 @@ func (s *Service) List(ctx context.Context, viewer family.Viewer, personID uuid.
 		if n == 0 {
 			return family.ErrPersonNotFound
 		}
-		if canSeeAll(viewer, personID) {
-			rows, err := q.ListContacts(ctx, personID)
-			if err != nil {
-				return fmt.Errorf("list contacts: %w", err)
-			}
-			listing.Contacts = toContacts(rows)
-			return nil
-		}
-		rows, err := q.ListVisibleContacts(ctx, gen.ListVisibleContactsParams{PersonID: personID, RequesterID: viewer.UserID})
-		if err != nil {
-			return fmt.Errorf("list visible contacts: %w", err)
-		}
-		listing.Contacts = toContacts(rows)
-		kinds, err := q.RequestableKinds(ctx, gen.RequestableKindsParams{PersonID: personID, RequesterID: viewer.UserID})
-		if err != nil {
-			return fmt.Errorf("requestable kinds: %w", err)
-		}
-		for _, k := range kinds {
-			listing.Requestable = append(listing.Requestable, Requestable(k))
-		}
-		return nil
+		listings, err := listingsFor(ctx, q, viewer, []uuid.UUID{personID})
+		listing = listings[personID]
+		return err
 	})
 	if err != nil {
 		return Listing{}, err
 	}
 	return listing, nil
+}
+
+// DirectoryEntry is one living person who shares something, with what this viewer may see of it.
+type DirectoryEntry struct {
+	ID        uuid.UUID
+	FirstName string
+	LastName  *string
+	Side      *string
+	Listing
+}
+
+// Directory is the family phone book (design-notes §4.4): living people with a family row or a kind to ask
+// for, A–Z, optionally searched by name. Each comes with exactly what List would give this viewer.
+func (s *Service) Directory(ctx context.Context, viewer family.Viewer, query string) ([]DirectoryEntry, error) {
+	query, err := family.SearchQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	var entries []DirectoryEntry
+	err = s.read(ctx, "directory", func(q *gen.Queries) error {
+		people, err := q.DirectoryPersons(ctx, gen.DirectoryPersonsParams{Q: query, QLike: family.EscapeLike(query)})
+		if err != nil {
+			return fmt.Errorf("directory persons: %w", err)
+		}
+		ids := make([]uuid.UUID, 0, len(people))
+		for _, p := range people {
+			ids = append(ids, p.ID)
+		}
+		listings, err := listingsFor(ctx, q, viewer, ids)
+		if err != nil {
+			return err
+		}
+		entries = make([]DirectoryEntry, 0, len(people))
+		for _, p := range people {
+			entries = append(entries, DirectoryEntry{ID: p.ID, FirstName: p.FirstName, LastName: p.LastName, Side: p.Side, Listing: listings[p.ID]})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+// listingsFor applies §5.2 to several people in three queries, whatever their number: every row of the
+// people the viewer may see in full, and for the rest the visible rows and the kinds to ask for.
+func listingsFor(ctx context.Context, q *gen.Queries, viewer family.Viewer, ids []uuid.UUID) (map[uuid.UUID]Listing, error) {
+	var full, others []uuid.UUID
+	for _, id := range ids {
+		if canSeeAll(viewer, id) {
+			full = append(full, id)
+		} else {
+			others = append(others, id)
+		}
+	}
+	listings := make(map[uuid.UUID]Listing, len(ids))
+	add := func(person uuid.UUID, c Contact) {
+		l := listings[person]
+		l.Contacts = append(l.Contacts, c)
+		listings[person] = l
+	}
+	if len(full) > 0 {
+		rows, err := q.ListContacts(ctx, full)
+		if err != nil {
+			return nil, fmt.Errorf("list contacts: %w", err)
+		}
+		for _, r := range rows {
+			add(r.PersonID, Contact{ID: r.ID, Kind: r.Kind, Platform: r.Platform, Label: r.Label, Value: r.Value, Visibility: r.Visibility})
+		}
+	}
+	if len(others) > 0 {
+		rows, err := q.ListVisibleContacts(ctx, gen.ListVisibleContactsParams{PersonIds: others, RequesterID: viewer.UserID})
+		if err != nil {
+			return nil, fmt.Errorf("list visible contacts: %w", err)
+		}
+		for _, r := range rows {
+			add(r.PersonID, Contact{ID: r.ID, Kind: r.Kind, Platform: r.Platform, Label: r.Label, Value: r.Value, Visibility: r.Visibility})
+		}
+		kinds, err := q.RequestableKinds(ctx, gen.RequestableKindsParams{PersonIds: others, RequesterID: viewer.UserID})
+		if err != nil {
+			return nil, fmt.Errorf("requestable kinds: %w", err)
+		}
+		for _, k := range kinds {
+			l := listings[k.PersonID]
+			l.Requestable = append(l.Requestable, Requestable{Kind: k.Kind, MyRequestStatus: k.MyRequestStatus})
+			listings[k.PersonID] = l
+		}
+	}
+	for _, id := range ids {
+		if l := listings[id]; l.Contacts == nil {
+			l.Contacts = []Contact{}
+			listings[id] = l
+		}
+	}
+	return listings, nil
 }
 
 func (s *Service) Create(ctx context.Context, viewer family.Viewer, personID uuid.UUID, in ContactInput) (Contact, error) {
@@ -286,12 +364,4 @@ func (s *Service) tx(ctx context.Context, what string, fn func(q *gen.Queries) e
 		return fmt.Errorf("commit %s: %w", what, err)
 	}
 	return nil
-}
-
-func toContacts[R gen.ListContactsRow | gen.ListVisibleContactsRow](rows []R) []Contact {
-	contacts := make([]Contact, 0, len(rows))
-	for _, r := range rows {
-		contacts = append(contacts, Contact(gen.ListContactsRow(r)))
-	}
-	return contacts
 }

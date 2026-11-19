@@ -84,6 +84,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 			// Members may change their own bio; the service checks (§4).
 			r.Patch("/persons/{id}", h.Family.UpdatePerson)
 			r.Get("/persons/{id}/contacts", h.Contacts.ListFor)
+			r.Get("/directory", h.Contacts.Directory)
 			r.Get("/me/contacts", h.Contacts.ListMine)
 			r.Post("/me/contacts", h.Contacts.CreateMine)
 			r.Patch("/me/contacts/{cid}", h.Contacts.UpdateMine)

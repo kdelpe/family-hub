@@ -2,6 +2,7 @@ package contacts
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -255,4 +256,86 @@ func linkLogin(t *testing.T, pool *pgxpool.Pool, person uuid.UUID, email string)
 	var id uuid.UUID
 	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role, person_id) VALUES ($1, 'member', $2) RETURNING id`, email, person).Scan(&id))
 	return id
+}
+
+func TestDirectory(t *testing.T) {
+	svc, pool := newService(t)
+	maya, darline := member(t, pool, "Maya", "Pluviose"), member(t, pool, "Darline", "Monestime")
+	rosa, gone, deleted := insertPerson(t, pool, "Rosa"), insertPerson(t, pool, "Gone"), insertPerson(t, pool, "Deleted")
+	quiet, unanswerable := insertPerson(t, pool, "Quiet"), insertPerson(t, pool, "Unanswerable")
+	add := func(person uuid.UUID, in ContactInput) Contact {
+		t.Helper()
+		c, err := svc.Create(t.Context(), admin, person, in)
+		require.NoError(t, err)
+		return c
+	}
+	mayaEmail := add(*maya.PersonID, ContactInput{Kind: "email", Value: "maya@example.com", Visibility: new("family")})
+	mayaPhone := add(*maya.PersonID, ContactInput{Kind: "phone", Value: "+1 555 010 0000", Visibility: new("on_request")})
+	rosaEmail := add(rosa, ContactInput{Kind: "email", Value: "rosa@example.com", Visibility: new("family")})
+	add(gone, ContactInput{Kind: "email", Value: "gone@example.com", Visibility: new("family")})
+	add(deleted, ContactInput{Kind: "email", Value: "deleted@example.com", Visibility: new("family")})
+	add(quiet, ContactInput{Kind: "email", Value: "quiet@example.com"})
+	unanswerableLogin := linkLogin(t, pool, unanswerable, "unanswerable@example.com")
+	add(unanswerable, ContactInput{Kind: "phone", Value: "+1 555 010 0001", Visibility: new("on_request")})
+	_, err := pool.Exec(t.Context(), `UPDATE users SET disabled_at = now() WHERE id = $1`, unanswerableLogin)
+	require.NoError(t, err)
+	_, err = pool.Exec(t.Context(), `UPDATE persons SET is_deceased = true WHERE id = $1`, gone)
+	require.NoError(t, err)
+	_, err = pool.Exec(t.Context(), `UPDATE persons SET deleted_at = now() WHERE id = $1`, deleted)
+	require.NoError(t, err)
+	pluviose := new("Pluviose")
+	mayaAsFamily := DirectoryEntry{ID: *maya.PersonID, FirstName: "Maya", LastName: pluviose,
+		Listing: Listing{Contacts: []Contact{mayaEmail}, Requestable: []Requestable{{"phone", "none"}}}}
+	rosaEntry := DirectoryEntry{ID: rosa, FirstName: "Rosa", Listing: Listing{Contacts: []Contact{rosaEmail}}}
+
+	tests := []struct {
+		name   string
+		viewer family.Viewer
+		query  string
+		want   []DirectoryEntry
+	}{
+		{name: "living people who share something, A–Z, as this viewer sees them", viewer: darline,
+			want: []DirectoryEntry{mayaAsFamily, rosaEntry}},
+		{name: "their own entry in full", viewer: maya,
+			want: []DirectoryEntry{{ID: *maya.PersonID, FirstName: "Maya", LastName: pluviose, Listing: Listing{Contacts: []Contact{mayaEmail, mayaPhone}}}, rosaEntry}},
+		{name: "searched by name", viewer: darline, query: "  pluvi ", want: []DirectoryEntry{mayaAsFamily}},
+		{name: "a typo still finds them", viewer: darline, query: "Mya Pluviose", want: []DirectoryEntry{mayaAsFamily}},
+		{name: "never by contact value", viewer: darline, query: "rosa@example.com", want: []DirectoryEntry{}},
+		{name: "wildcards match themselves", viewer: darline, query: "%", want: []DirectoryEntry{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := svc.Directory(t.Context(), tt.viewer, tt.query)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestDirectoryShowsWhatWasShared(t *testing.T) {
+	svc, pool := newService(t)
+	maya, darline := member(t, pool, "Maya", "Pluviose"), member(t, pool, "Darline", "Monestime")
+	phone, err := svc.Create(t.Context(), maya, *maya.PersonID, ContactInput{Kind: "phone", Value: "+1 555 010 0000", Visibility: new("on_request")})
+	require.NoError(t, err)
+	_, err = svc.Ask(t.Context(), darline, *maya.PersonID, "phone")
+	require.NoError(t, err)
+	requests, err := svc.Requests(t.Context(), maya)
+	require.NoError(t, err)
+	require.NoError(t, svc.Decide(t.Context(), maya, requests[0].ID, Share))
+
+	got, err := svc.Directory(t.Context(), darline, "")
+
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, Listing{Contacts: []Contact{phone}}, got[0].Listing)
+}
+
+func TestDirectorySearchRules(t *testing.T) {
+	svc, _ := newService(t)
+
+	_, err := svc.Directory(t.Context(), admin, strings.Repeat("a", 101))
+
+	require.ErrorIs(t, err, family.ErrInvalidFilter)
 }
