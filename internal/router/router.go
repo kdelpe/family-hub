@@ -90,6 +90,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 			r.Delete("/me/contacts/{cid}", h.Contacts.DeleteMine)
 			r.Post("/persons/{id}/contact-requests", h.Contacts.Ask)
 			r.Get("/me/contact-requests", h.Contacts.ListRequests)
+			r.Post("/me/suggestions", h.Access.Suggest)
 			r.Post("/me/contact-requests/{rid}/share", h.Contacts.Share)
 			r.Post("/me/contact-requests/{rid}/decline", h.Contacts.Decline)
 			r.Post("/me/contact-requests/{rid}/revoke", h.Contacts.Revoke)

@@ -14,6 +14,7 @@ import (
 
 type AccessService interface {
 	Submit(ctx context.Context, in admin.AccessRequestInput) error
+	Suggest(ctx context.Context, userID uuid.UUID, in admin.AccessRequestInput) error
 	List(ctx context.Context) ([]admin.AccessRequest, error)
 	Decline(ctx context.Context, adminID, id uuid.UUID) error
 	Reopen(ctx context.Context, id uuid.UUID) error
@@ -28,13 +29,19 @@ func NewAccess(svc AccessService) *Access {
 	return &Access{svc: svc}
 }
 
-type accessRequestRequest struct {
+// accessForm is what someone asking, or a member suggesting a relative, fills in. A member's is the whole body:
+// they're signed in, so it has no honeypot.
+type accessForm struct {
 	FullName     string   `json:"full_name"`
 	Email        string   `json:"email"`
 	Side         *string  `json:"side"`
 	Relationship *string  `json:"relationship"`
 	RelatedNames []string `json:"related_names"`
 	Note         *string  `json:"note"`
+}
+
+type accessRequestRequest struct {
+	accessForm
 	// Website is a honeypot: the form hides it, so only a bot fills it in.
 	Website string `json:"website"`
 }
@@ -75,14 +82,30 @@ func (a *Access) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Website == "" {
-		err := a.svc.Submit(r.Context(), admin.AccessRequestInput{
-			FullName: req.FullName, Email: req.Email, Side: req.Side, Relationship: req.Relationship,
-			RelatedNames: req.RelatedNames, Note: req.Note,
-		})
+		err := a.svc.Submit(r.Context(), admin.AccessRequestInput(req.accessForm))
 		if err != nil {
 			a.fail(w, r, err, "submit access request")
 			return
 		}
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// Suggest answers 202 whether the suggestion was stored or dropped as a repeat or over the daily limit, like
+// the public form (§5).
+func (a *Access) Suggest(w http.ResponseWriter, r *http.Request) {
+	session, ok := CurrentSession(r.Context())
+	if !ok {
+		internalError(w, r, errors.New("no session in context"), "suggestion mounted without RequireSession")
+		return
+	}
+	var req accessForm
+	if !httpx.DecodeJSON(w, r, &req) {
+		return
+	}
+	if err := a.svc.Suggest(r.Context(), session.UserID, admin.AccessRequestInput(req)); err != nil {
+		a.fail(w, r, err, "suggest a relative")
+		return
 	}
 	w.WriteHeader(http.StatusAccepted)
 }
@@ -141,6 +164,8 @@ func (a *Access) fail(w http.ResponseWriter, r *http.Request, err error, what st
 	case clientGone(r):
 	case errors.Is(err, admin.ErrInvalidAccessRequest):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
+	case errors.Is(err, admin.ErrNotLinked):
+		httpx.Error(w, http.StatusForbidden, "forbidden", err.Error())
 	case errors.Is(err, admin.ErrAccessRequestNotFound):
 		httpx.Error(w, http.StatusNotFound, "not_found", err.Error())
 	case errors.Is(err, admin.ErrAccessRequestState):

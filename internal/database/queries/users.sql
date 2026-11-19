@@ -1,6 +1,10 @@
 -- name: GetLoginUser :one
 SELECT id, password_hash, password_changed_at, disabled_at FROM users WHERE email = @email;
 
+-- Who a login is in the tree now, held until the commit so an unlink or relink can't land mid-write.
+-- name: LockUserLink :one
+SELECT person_id FROM users WHERE id = @id FOR SHARE;
+
 -- name: LockUser :one
 SELECT email, role, password_changed_at, disabled_at, (password_hash IS NOT NULL)::boolean AS set_up, person_id
 FROM users WHERE id = @id FOR UPDATE;

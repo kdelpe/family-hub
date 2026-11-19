@@ -43,9 +43,17 @@ WHERE id = @id AND status = 'declined';
 -- name: AccessRequestExists :one
 SELECT EXISTS (SELECT 1 FROM access_requests WHERE id = @id);
 
--- Held until the invite commits, so two admins can't both approve it.
+-- Held until the invite commits, so two admins can't both approve it. Gives the suggesting member's login,
+-- whom the invite is from by default (§5).
 -- name: LockPendingAccessRequest :one
-SELECT EXISTS (SELECT 1 FROM access_requests WHERE id = @id AND status = 'pending' FOR UPDATE);
+SELECT suggested_by FROM access_requests WHERE id = @id AND status = 'pending' FOR UPDATE;
+
+-- Serializes one member's suggestions, so the daily limit holds.
+-- name: LockSuggester :exec
+SELECT pg_advisory_xact_lock(hashtext('admin.suggestions'), hashtext(CAST(@user_id::uuid AS text)));
+
+-- name: SuggestionsToday :one
+SELECT count(*) FROM access_requests WHERE suggested_by = @user_id AND created_at > now() - interval '1 day';
 
 -- name: ApproveAccessRequest :exec
 UPDATE access_requests SET status = 'approved', reviewed_by = @reviewed_by, reviewed_at = now(), invited_user_id = @invited_user_id

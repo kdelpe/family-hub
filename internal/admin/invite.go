@@ -77,7 +77,20 @@ func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 	if err := lockPersonToLink(ctx, q, in.PersonID); err != nil {
 		return auth.User{}, err
 	}
-	sender, err := resolveSender(ctx, q, in.SentBy, in.FromPersonID)
+	from := in.FromPersonID
+	if in.AccessRequestID != nil {
+		suggester, err := lockRequest(ctx, q, *in.AccessRequestID)
+		if err != nil {
+			return auth.User{}, err
+		}
+		// From the member who suggested them by default, while they can send one (§5).
+		if from == nil {
+			if from, err = eligibleSender(ctx, q, suggester); err != nil {
+				return auth.User{}, err
+			}
+		}
+	}
+	sender, err := resolveSender(ctx, q, in.SentBy, from)
 	if err != nil {
 		return auth.User{}, err
 	}
@@ -91,8 +104,8 @@ func (s *Users) Invite(ctx context.Context, in InviteInput) (auth.User, error) {
 		return auth.User{}, fmt.Errorf("create user: %w", err)
 	}
 	if in.AccessRequestID != nil {
-		if err := approveRequest(ctx, q, *in.AccessRequestID, in.SentBy, id); err != nil {
-			return auth.User{}, err
+		if err := q.ApproveAccessRequest(ctx, gen.ApproveAccessRequestParams{ID: *in.AccessRequestID, ReviewedBy: &in.SentBy, InvitedUserID: &id}); err != nil {
+			return auth.User{}, fmt.Errorf("approve access request: %w", err)
 		}
 	}
 	msg, err := s.invite(ctx, tx, id, email, sender)
@@ -197,6 +210,15 @@ func senderName(ctx context.Context, q *gen.Queries, id *uuid.UUID) (*name, erro
 	}
 	first := oneLine(row.FirstName)
 	return &name{first: first, full: oneLine(auth.FullName(row.FirstName, row.LastName))}, nil
+}
+
+// eligibleSender is id when that person can send an invite, else nil.
+func eligibleSender(ctx context.Context, q *gen.Queries, id *uuid.UUID) (*uuid.UUID, error) {
+	n, err := senderName(ctx, q, id)
+	if err != nil || n == nil {
+		return nil, err
+	}
+	return id, nil
 }
 
 // oneLine keeps a name saved before line breaks were refused from breaking the email subject.

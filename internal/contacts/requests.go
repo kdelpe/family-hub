@@ -75,7 +75,7 @@ func (s *Service) Ask(ctx context.Context, viewer family.Viewer, personID uuid.U
 		if !answerable || !offered {
 			return fmt.Errorf("%w: they don't offer that on request", ErrInvalidRequest)
 		}
-		if err := q.LockRequester(ctx, viewer.UserID.String()); err != nil {
+		if err := q.LockRequester(ctx, viewer.UserID); err != nil {
 			return fmt.Errorf("lock requester: %w", err)
 		}
 		existing, err := q.GetMyRequestStatus(ctx, gen.GetMyRequestStatusParams{RequesterID: viewer.UserID, PersonID: personID, Kind: kind})
