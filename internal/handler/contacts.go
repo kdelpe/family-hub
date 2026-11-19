@@ -22,6 +22,7 @@ type ContactsService interface {
 	Ask(ctx context.Context, viewer family.Viewer, personID uuid.UUID, kind string) (string, error)
 	Requests(ctx context.Context, viewer family.Viewer) ([]contacts.Request, error)
 	Decide(ctx context.Context, viewer family.Viewer, id uuid.UUID, d contacts.Decision) error
+	Directory(ctx context.Context, viewer family.Viewer, query string) ([]contacts.DirectoryEntry, error)
 }
 
 // Contacts serves /api/me/contacts (the viewer's own person) and /api/persons/{id}/contacts.
@@ -51,6 +52,18 @@ type requestableResponse struct {
 
 type contactsResponse struct {
 	Contacts []any `json:"contacts"`
+}
+
+type directoryResponse struct {
+	People []directoryEntryResponse `json:"people"`
+}
+
+type directoryEntryResponse struct {
+	ID        uuid.UUID `json:"id"`
+	FirstName string    `json:"first_name"`
+	LastName  *string   `json:"last_name"`
+	Side      *string   `json:"side"`
+	contactsResponse
 }
 
 type askRequest struct {
@@ -162,6 +175,26 @@ func (c *Contacts) decide(w http.ResponseWriter, r *http.Request, d contacts.Dec
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Directory is GET /api/directory: each person with exactly what their contacts list would show this viewer.
+func (c *Contacts) Directory(w http.ResponseWriter, r *http.Request) {
+	viewer, ok := currentViewer(w, r)
+	if !ok {
+		return
+	}
+	entries, err := c.svc.Directory(r.Context(), viewer, r.URL.Query().Get("q"))
+	if err != nil {
+		c.fail(w, r, err, "directory")
+		return
+	}
+	resp := directoryResponse{People: make([]directoryEntryResponse, 0, len(entries))}
+	for _, e := range entries {
+		resp.People = append(resp.People, directoryEntryResponse{
+			ID: e.ID, FirstName: e.FirstName, LastName: e.LastName, Side: e.Side, contactsResponse: toContactsResponse(e.Listing),
+		})
+	}
+	httpx.JSON(w, http.StatusOK, resp)
+}
+
 func (c *Contacts) list(w http.ResponseWriter, r *http.Request, mine bool) {
 	viewer, personID, ok := c.target(w, r, mine)
 	if !ok {
@@ -172,6 +205,10 @@ func (c *Contacts) list(w http.ResponseWriter, r *http.Request, mine bool) {
 		c.fail(w, r, err, "list contacts")
 		return
 	}
+	httpx.JSON(w, http.StatusOK, toContactsResponse(listing))
+}
+
+func toContactsResponse(listing contacts.Listing) contactsResponse {
 	resp := contactsResponse{Contacts: make([]any, 0, len(listing.Contacts)+len(listing.Requestable))}
 	for _, contact := range listing.Contacts {
 		resp.Contacts = append(resp.Contacts, contactResponse(contact))
@@ -179,7 +216,7 @@ func (c *Contacts) list(w http.ResponseWriter, r *http.Request, mine bool) {
 	for _, k := range listing.Requestable {
 		resp.Contacts = append(resp.Contacts, requestableResponse{Kind: k.Kind, Requestable: true, MyRequestStatus: k.MyRequestStatus})
 	}
-	httpx.JSON(w, http.StatusOK, resp)
+	return resp
 }
 
 func (c *Contacts) create(w http.ResponseWriter, r *http.Request, mine bool) {
@@ -263,7 +300,7 @@ func (c *Contacts) fail(w http.ResponseWriter, r *http.Request, err error, what 
 	case clientGone(r):
 	case errors.As(err, &limited):
 		httpx.TooManyRequests(w, limited.RetryAfter)
-	case errors.Is(err, contacts.ErrInvalidContact), errors.Is(err, contacts.ErrInvalidRequest):
+	case errors.Is(err, contacts.ErrInvalidContact), errors.Is(err, contacts.ErrInvalidRequest), errors.Is(err, family.ErrInvalidFilter):
 		httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, contacts.ErrWrongState):
 		httpx.Error(w, http.StatusConflict, "conflict", err.Error())

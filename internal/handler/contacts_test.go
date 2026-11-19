@@ -241,3 +241,36 @@ func TestContactRequests(t *testing.T) {
 		})
 	}
 }
+
+func TestDirectory(t *testing.T) {
+	entry := contacts.DirectoryEntry{ID: testPersonID, FirstName: "Maya", LastName: new("Pluviose"), Side: new("paternal"),
+		Listing: contacts.Listing{Contacts: []contacts.Contact{testContact}, Requestable: []contacts.Requestable{{Kind: "phone", MyRequestStatus: "none"}}}}
+	tests := []struct {
+		name       string
+		query      string
+		entries    []contacts.DirectoryEntry
+		err        error
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "each person with what the viewer may see", query: "maya", entries: []contacts.DirectoryEntry{entry}, wantStatus: http.StatusOK,
+			wantBody: `{"people":[{"id":"` + testPersonID.String() + `","first_name":"Maya","last_name":"Pluviose","side":"paternal","contacts":[` +
+				testContactBody + `,{"kind":"phone","requestable":true,"my_request_status":"none"}]}]}`},
+		{name: "nobody", entries: []contacts.DirectoryEntry{}, wantStatus: http.StatusOK, wantBody: `{"people":[]}`},
+		{name: "a search too long", query: "maya", err: fmt.Errorf("%w: search is longer than 100 characters", family.ErrInvalidFilter),
+			wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"validation_error","message":"invalid filter: search is longer than 100 characters"}}`},
+		{name: "database error", err: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewContactsService(t)
+			svc.EXPECT().Directory(mock.Anything, memberViewer, tt.query).Return(tt.entries, tt.err)
+			req := httptest.NewRequest(http.MethodGet, "/api/directory?q="+tt.query, nil)
+
+			rec := serveWith(t, memberSession, handler.NewContacts(svc).Directory, req)
+
+			assertBody(t, rec, tt.wantStatus, tt.wantBody)
+		})
+	}
+}

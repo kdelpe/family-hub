@@ -57,6 +57,7 @@ func TestRoutes(t *testing.T) {
 		{name: "the tree needs a session", method: http.MethodGet, path: "/api/tree", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "the family summary needs a session", method: http.MethodGet, path: "/api/family/summary", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "contacts need a session", method: http.MethodGet, path: "/api/persons/" + testID + "/contacts", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
+		{name: "the directory needs a session", method: http.MethodGet, path: "/api/directory", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "my contacts need a session", method: http.MethodGet, path: "/api/me/contacts", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "contact requests need a session", method: http.MethodGet, path: "/api/me/contact-requests", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "requesting access needs no session", method: http.MethodPost, path: "/api/access-requests", wantStatus: http.StatusUnsupportedMediaType, wantType: "application/json"},

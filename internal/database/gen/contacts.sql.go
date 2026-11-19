@@ -84,6 +84,56 @@ func (q *Queries) DeleteContact(ctx context.Context, arg DeleteContactParams) (i
 	return result.RowsAffected(), nil
 }
 
+const directoryPersons = `-- name: DirectoryPersons :many
+SELECT p.id, p.first_name, p.last_name, p.side FROM persons p
+WHERE p.deleted_at IS NULL AND NOT p.is_deceased
+  AND ($1::text = '' OR p.search_name ILIKE '%' || $2::text || '%' ESCAPE '\' OR p.search_name % $1::text)
+  AND EXISTS (SELECT 1 FROM contact_methods c WHERE c.person_id = p.id AND (c.visibility = 'family'
+    OR (c.visibility = 'on_request' AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = p.id AND u.disabled_at IS NULL))))
+ORDER BY CASE WHEN $1::text = '' THEN 0 ELSE similarity(p.search_name, $1::text) END DESC, lower(p.search_name), p.id
+LIMIT 5000
+`
+
+type DirectoryPersonsParams struct {
+	Q     string
+	QLike string
+}
+
+type DirectoryPersonsRow struct {
+	ID        uuid.UUID
+	FirstName string
+	LastName  *string
+	Side      *string
+}
+
+// The directory: living people in the tree who share something, a family row or a kind to ask for (§4.4),
+// best matches first when searched.
+// Search matches names only, never contact values (§5.2). The limit is a backstop at family scale.
+func (q *Queries) DirectoryPersons(ctx context.Context, arg DirectoryPersonsParams) ([]DirectoryPersonsRow, error) {
+	rows, err := q.db.Query(ctx, directoryPersons, arg.Q, arg.QLike)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DirectoryPersonsRow
+	for rows.Next() {
+		var i DirectoryPersonsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.Side,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getContact = `-- name: GetContact :one
 SELECT id, kind, platform, label, value, visibility FROM contact_methods WHERE id = $1 AND person_id = $2
 `
@@ -117,10 +167,12 @@ func (q *Queries) GetContact(ctx context.Context, arg GetContactParams) (GetCont
 }
 
 const listContacts = `-- name: ListContacts :many
-SELECT id, kind, platform, label, value, visibility FROM contact_methods WHERE person_id = $1 ORDER BY id
+SELECT person_id, id, kind, platform, label, value, visibility FROM contact_methods
+WHERE person_id = ANY($1::uuid[]) ORDER BY person_id, id
 `
 
 type ListContactsRow struct {
+	PersonID   uuid.UUID
 	ID         uuid.UUID
 	Kind       string
 	Platform   *string
@@ -129,8 +181,8 @@ type ListContactsRow struct {
 	Visibility string
 }
 
-func (q *Queries) ListContacts(ctx context.Context, personID uuid.UUID) ([]ListContactsRow, error) {
-	rows, err := q.db.Query(ctx, listContacts, personID)
+func (q *Queries) ListContacts(ctx context.Context, personIds []uuid.UUID) ([]ListContactsRow, error) {
+	rows, err := q.db.Query(ctx, listContacts, personIds)
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +191,7 @@ func (q *Queries) ListContacts(ctx context.Context, personID uuid.UUID) ([]ListC
 	for rows.Next() {
 		var i ListContactsRow
 		if err := rows.Scan(
+			&i.PersonID,
 			&i.ID,
 			&i.Kind,
 			&i.Platform,
@@ -157,23 +210,24 @@ func (q *Queries) ListContacts(ctx context.Context, personID uuid.UUID) ([]ListC
 }
 
 const listVisibleContacts = `-- name: ListVisibleContacts :many
-SELECT c.id, c.kind, c.platform, c.label, c.value, c.visibility FROM contact_methods c
-WHERE c.person_id = $1 AND (c.visibility = 'family' OR (c.visibility = 'on_request'
+SELECT c.person_id, c.id, c.kind, c.platform, c.label, c.value, c.visibility FROM contact_methods c
+WHERE c.person_id = ANY($1::uuid[]) AND (c.visibility = 'family' OR (c.visibility = 'on_request'
   AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)
   AND EXISTS (SELECT 1 FROM contact_requests r
     JOIN users ru ON ru.id = r.requester_id
     JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL
     WHERE r.person_id = c.person_id AND r.requester_id = $2 AND r.status = 'shared'
       AND r.kind = CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END)))
-ORDER BY c.id
+ORDER BY c.person_id, c.id
 `
 
 type ListVisibleContactsParams struct {
-	PersonID    uuid.UUID
+	PersonIds   []uuid.UUID
 	RequesterID uuid.UUID
 }
 
 type ListVisibleContactsRow struct {
+	PersonID   uuid.UUID
 	ID         uuid.UUID
 	Kind       string
 	Platform   *string
@@ -186,7 +240,7 @@ type ListVisibleContactsRow struct {
 // with them (§5.2). A share counts only while both sides could still see it on their My profile: the owner
 // has an enabled login, and the requester's login is linked to someone in the tree, so it can be revoked.
 func (q *Queries) ListVisibleContacts(ctx context.Context, arg ListVisibleContactsParams) ([]ListVisibleContactsRow, error) {
-	rows, err := q.db.Query(ctx, listVisibleContacts, arg.PersonID, arg.RequesterID)
+	rows, err := q.db.Query(ctx, listVisibleContacts, arg.PersonIds, arg.RequesterID)
 	if err != nil {
 		return nil, err
 	}
@@ -195,6 +249,7 @@ func (q *Queries) ListVisibleContacts(ctx context.Context, arg ListVisibleContac
 	for rows.Next() {
 		var i ListVisibleContactsRow
 		if err := rows.Scan(
+			&i.PersonID,
 			&i.ID,
 			&i.Kind,
 			&i.Platform,
@@ -240,22 +295,23 @@ func (q *Queries) PersonHasLogin(ctx context.Context, id *uuid.UUID) (bool, erro
 }
 
 const requestableKinds = `-- name: RequestableKinds :many
-SELECT k.kind, CASE WHEN r.status IS NULL THEN 'none' ELSE 'requested' END::text AS my_request_status
-FROM (SELECT DISTINCT CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END::text AS kind FROM contact_methods c
-      WHERE c.person_id = $1 AND c.visibility = 'on_request'
+SELECT k.person_id, k.kind, CASE WHEN r.status IS NULL THEN 'none' ELSE 'requested' END::text AS my_request_status
+FROM (SELECT DISTINCT c.person_id, CASE WHEN c.kind = 'social' THEN c.platform ELSE c.kind END::text AS kind FROM contact_methods c
+      WHERE c.person_id = ANY($1::uuid[]) AND c.visibility = 'on_request'
         AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = c.person_id AND u.disabled_at IS NULL)) k
-LEFT JOIN contact_requests r ON r.person_id = $1 AND r.requester_id = $2 AND r.kind = k.kind
+LEFT JOIN contact_requests r ON r.person_id = k.person_id AND r.requester_id = $2 AND r.kind = k.kind
 WHERE r.status IS DISTINCT FROM 'shared' OR NOT EXISTS (SELECT 1 FROM users ru
   JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL WHERE ru.id = $2)
-ORDER BY k.kind
+ORDER BY k.person_id, k.kind
 `
 
 type RequestableKindsParams struct {
-	PersonID    uuid.UUID
+	PersonIds   []uuid.UUID
 	RequesterID uuid.UUID
 }
 
 type RequestableKindsRow struct {
+	PersonID        uuid.UUID
 	Kind            string
 	MyRequestStatus string
 }
@@ -263,7 +319,7 @@ type RequestableKindsRow struct {
 // The kinds the viewer could ask for and hasn't been shown, never their values. Declined and revoked read
 // as requested, so a decline stays silent; so does a share ListVisibleContacts no longer honours.
 func (q *Queries) RequestableKinds(ctx context.Context, arg RequestableKindsParams) ([]RequestableKindsRow, error) {
-	rows, err := q.db.Query(ctx, requestableKinds, arg.PersonID, arg.RequesterID)
+	rows, err := q.db.Query(ctx, requestableKinds, arg.PersonIds, arg.RequesterID)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +327,7 @@ func (q *Queries) RequestableKinds(ctx context.Context, arg RequestableKindsPara
 	var items []RequestableKindsRow
 	for rows.Next() {
 		var i RequestableKindsRow
-		if err := rows.Scan(&i.Kind, &i.MyRequestStatus); err != nil {
+		if err := rows.Scan(&i.PersonID, &i.Kind, &i.MyRequestStatus); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
