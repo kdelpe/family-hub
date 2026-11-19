@@ -6,13 +6,14 @@ import { FirstSetup } from '../pages/FirstSetup/FirstSetup'
 import { ForgotPassword } from '../pages/ForgotPassword/ForgotPassword'
 import { HomeHearth } from '../pages/HomeHearth/HomeHearth'
 import { Login } from '../pages/Login/Login'
+import { ManageAccess } from '../pages/ManageAccess/ManageAccess'
 import { RequestAccess } from '../pages/RequestAccess/RequestAccess'
 import { WelcomeInvite } from '../pages/WelcomeInvite/WelcomeInvite'
 import { AppShell } from './AppShell'
 import { NotBuiltYet } from './NotBuiltYet'
 import { adminPages, menuPages } from './signedInPages'
 
-const built: Record<string, ReactNode> = { '/': <HomeHearth /> }
+const built: Record<string, ReactNode> = { '/': <HomeHearth />, '/admin/members': <ManageAccess /> }
 
 // The only place routes are wired.
 export const routes: RouteObject[] = [
