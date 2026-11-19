@@ -1,0 +1,119 @@
+.page {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.menu {
+  flex: 1 1 220px;
+  /* As the mockups set it: the browser's own, not the paragraphs' 1.5. */
+  line-height: normal;
+  max-width: 260px;
+  padding: 32px 24px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.identity:hover {
+  color: var(--text);
+}
+
+.names {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.familyName {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.hub {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.adminLabel {
+  padding: 0 14px 4px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.item {
+  padding: 12px 14px;
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.item:hover,
+.item:focus-visible {
+  color: var(--text);
+  background-color: var(--brand-panel);
+  box-shadow: 0 1px 3px var(--shadow-press);
+}
+
+/* The current page keeps its own color and only gains the shadow. */
+.current,
+.current:hover,
+.current:focus-visible {
+  background-color: var(--nav-active);
+  font-weight: 600;
+}
+
+.content {
+  flex: 999 1 560px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.signedIn {
+  margin-top: auto;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.failed {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+}

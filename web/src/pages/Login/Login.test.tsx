@@ -6,7 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { Login } from './Login'
 
-const user = { id: '01890000-0000-7000-8000-000000000001', email: 'maya.pluviose@example.com', role: 'admin' }
+const user = {
+  id: '01890000-0000-7000-8000-000000000001',
+  email: 'maya.pluviose@example.com',
+  role: 'admin',
+  person_id: '01890000-0000-7000-8000-000000000002',
+}
 
 type Answer = { status: number; body?: unknown; headers?: Record<string, string> } | 'network error'
 
@@ -26,16 +31,18 @@ function stubLogin(answer?: Answer) {
   return fetch
 }
 
-function renderLogin() {
+function renderLogin(from?: unknown) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(
     [
       { path: '/auth/login', element: <Login /> },
       { path: '/', element: <p>Home page</p> },
+      { path: '/tree', element: <p>Tree page</p> },
     ],
-    { initialEntries: ['/auth/login'] },
+    { initialEntries: [{ pathname: '/auth/login', state: from === undefined ? null : { from } }] },
   )
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
@@ -69,6 +76,20 @@ describe('Login', () => {
 
     expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text')
     expect(screen.getByRole('button', { name: 'Hide' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it.each([
+    { name: 'back to the page they were headed for', from: '/tree', lands: 'Tree page' },
+    { name: 'home when that was another site', from: '//evil.example.com', lands: 'Home page' },
+    { name: 'home when that was another site, written with a backslash', from: '/\\evil.example.com', lands: 'Home page' },
+    { name: 'home when it isn’t a path', from: 42, lands: 'Home page' },
+  ])('signs in and goes $name', async ({ from, lands }) => {
+    stubLogin({ status: 200, body: user })
+    renderLogin(from)
+
+    signIn()
+
+    expect(await screen.findByText(lands)).toBeInTheDocument()
   })
 
   it('signs in and goes home', async () => {

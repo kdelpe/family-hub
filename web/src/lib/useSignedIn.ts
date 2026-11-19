@@ -1,0 +1,26 @@
+import { useQuery } from '@tanstack/react-query'
+
+import { authKeys, me } from '../api/auth'
+import { getPerson, personKeys } from '../api/persons'
+
+// The signed-in user and who they are in the tree. The shell and its pages share the cached answers.
+export function useSignedIn() {
+  const user = useQuery({ queryKey: authKeys.me, queryFn: ({ signal }) => me({ signal }) })
+  const personId = user.data?.person_id ?? null
+  const person = useQuery({
+    queryKey: personKeys.one(personId ?? ''),
+    queryFn: ({ signal }) => getPerson(personId!, { signal }),
+    enabled: personId !== null,
+    // The shell waits for this name; failing fast falls back to the email instead of a blank page. Not again
+    // when a page using it mounts, either: that would hide the page while it's read once more.
+    retry: false,
+    retryOnMount: false,
+  })
+  return {
+    user: user.data,
+    error: user.error,
+    // Undefined while it loads, and for good if the login isn't linked or the read fails: pages fall back to less.
+    person: person.data,
+    personSettled: personId === null || !person.isPending,
+  }
+}

@@ -1,8 +1,8 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 
-import { login } from '../../api/auth'
+import { authKeys, login } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { PasswordInput } from '../../components/PasswordInput/PasswordInput'
 import { errorMessage } from '../../lib/errorMessage'
@@ -13,9 +13,15 @@ export function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const navigate = useNavigate()
+  const from = returnPath(useLocation().state)
+  const queryClient = useQueryClient()
   const signIn = useMutation({
     mutationFn: () => login(email, password),
-    onSuccess: () => void navigate('/', { replace: true }),
+    // The answer is who's signed in, so the shell needn't ask again.
+    onSuccess: (user) => {
+      queryClient.setQueryData(authKeys.me, user)
+      void navigate(from, { replace: true })
+    },
   })
 
   // Only a shown error: resetting a pending sign-in would detach it, re-enabling the button and losing its answer.
@@ -115,4 +121,10 @@ function loginErrorMessage(error: Error): string {
     return 'That email and password don’t match. Check them and try again, or use Forgot password.'
   }
   return errorMessage(error)
+}
+
+// Where the signed-in shell sent them from; only a path on this site, so a crafted link can't send them away.
+function returnPath(state: unknown): string {
+  const from = (state as { from?: unknown } | null)?.from
+  return typeof from === 'string' && /^\/(?![/\\])/.test(from) ? from : '/'
 }

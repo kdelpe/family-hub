@@ -12,7 +12,8 @@ export function shouldRetry(failures: number, error: Error): boolean {
 export const createQueryClient = () =>
   new QueryClient({
     defaultOptions: {
-      queries: { retry: shouldRetry },
+      // Not paused while the browser says it's offline either: a paused query would leave the page blank.
+      queries: { retry: shouldRetry, networkMode: 'always' },
       // Not paused while the browser says it's offline: the request fails, and the page says so.
       mutations: { networkMode: 'always' },
     },

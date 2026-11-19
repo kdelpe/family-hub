@@ -1,0 +1,82 @@
+.page {
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  align-items: center;
+  padding: 36px;
+  border-radius: 20px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+
+.words {
+  flex: 1 1 340px;
+  line-height: normal;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: rise 0.8s ease-out both;
+}
+
+.dayPart {
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 52px;
+  font-weight: 500;
+  line-height: 1.05;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.primary,
+.secondary {
+  height: 48px;
+  padding: 0 22px;
+  display: flex;
+  align-items: center;
+  border-radius: 24px;
+  text-decoration: none;
+}
+
+.primary,
+.primary:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.secondary,
+.secondary:hover {
+  border: 1px solid var(--input-border);
+  color: var(--text);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
