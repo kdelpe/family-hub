@@ -1,32 +1,25 @@
-import { Link, Navigate, NavLink, Outlet } from 'react-router'
+import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router'
 
 import { ApiError } from '../api/client'
 import { Logo } from '../components/Logo/Logo'
 import { errorMessage } from '../lib/errorMessage'
 import { useSignedIn } from '../lib/useSignedIn'
 import styles from './AppShell.module.css'
-
-const pages = [
-  { to: '/', label: 'Home' },
-  { to: '/tree', label: 'Family tree' },
-  { to: '/people', label: 'People' },
-  { to: '/directory', label: 'Directory' },
-  { to: '/events', label: 'Events' },
-  { to: '/stories', label: 'Stories' },
-  { to: '/profile', label: 'My profile' },
-]
+import { adminPages, menuPages } from './signedInPages'
 
 const item = ({ isActive }: { isActive: boolean }) => (isActive ? `${styles.item} ${styles.current}` : styles.item)
 
 // The parent route of every signed-in page (design-notes §2.1): the left menu, then the page's own <main>.
-// Signed out, it sends you to sign in.
+// Signed out, it sends you to sign in, and back here after.
 export function AppShell() {
   const { user, person, personSettled, error } = useSignedIn()
+  const location = useLocation()
 
   if (error instanceof ApiError && error.status === 401) {
-    return <Navigate to="/auth/login" replace />
+    return <Navigate to="/auth/login" replace state={{ from: location.pathname + location.search }} />
   }
-  if (error) {
+  // A failed refetch keeps the answer it had, so a blip doesn't take the page away.
+  if (error && !user) {
     return (
       <main className={styles.failed}>
         <p role="alert">{errorMessage(error)}</p>
@@ -49,8 +42,8 @@ export function AppShell() {
           </span>
         </Link>
         <div className={styles.items}>
-          {pages.map(({ to, label }) => (
-            <NavLink key={to} to={to} end className={item}>
+          {menuPages.map(({ path, label }) => (
+            <NavLink key={path} to={path} end className={item}>
               {label}
             </NavLink>
           ))}
@@ -58,14 +51,18 @@ export function AppShell() {
         {user.role === 'admin' && (
           <div className={`${styles.items} ${styles.admin}`}>
             <span className={styles.adminLabel}>Admin</span>
-            <NavLink to="/admin/members" end className={item}>
-              Members &amp; invites
-            </NavLink>
+            {adminPages.map(({ path, label }) => (
+              <NavLink key={path} to={path} end className={item}>
+                {label}
+              </NavLink>
+            ))}
           </div>
         )}
         <div className={styles.signedIn}>Signed in as {person?.first_name ?? user.email}</div>
       </nav>
-      <Outlet />
+      <div className={styles.content}>
+        <Outlet />
+      </div>
     </div>
   )
 }

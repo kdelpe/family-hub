@@ -4,7 +4,6 @@ import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { authKeys } from '../../api/auth'
 import { Login } from './Login'
 
 const user = {
@@ -32,13 +31,15 @@ function stubLogin(answer?: Answer) {
   return fetch
 }
 
-function renderLogin(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+function renderLogin(from?: unknown) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(
     [
       { path: '/auth/login', element: <Login /> },
       { path: '/', element: <p>Home page</p> },
+      { path: '/tree', element: <p>Tree page</p> },
     ],
-    { initialEntries: ['/auth/login'] },
+    { initialEntries: [{ pathname: '/auth/login', state: from === undefined ? null : { from } }] },
   )
   render(
     <QueryClientProvider client={client}>
@@ -77,16 +78,18 @@ describe('Login', () => {
     expect(screen.getByRole('button', { name: 'Hide' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('remembers who signed in, replacing an earlier signed-out answer', async () => {
+  it.each([
+    { name: 'back to the page they were headed for', from: '/tree', lands: 'Tree page' },
+    { name: 'home when that was another site', from: '//evil.example.com', lands: 'Home page' },
+    { name: 'home when that was another site, written with a backslash', from: '/\\evil.example.com', lands: 'Home page' },
+    { name: 'home when it isn’t a path', from: 42, lands: 'Home page' },
+  ])('signs in and goes $name', async ({ from, lands }) => {
     stubLogin({ status: 200, body: user })
-    const client = new QueryClient()
-    client.setQueryData(authKeys.me, null)
-    renderLogin(client)
+    renderLogin(from)
 
     signIn()
 
-    await screen.findByText('Home page')
-    expect(client.getQueryData(authKeys.me)).toEqual(user)
+    expect(await screen.findByText(lands)).toBeInTheDocument()
   })
 
   it('signs in and goes home', async () => {

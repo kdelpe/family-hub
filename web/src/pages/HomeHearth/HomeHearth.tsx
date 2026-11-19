@@ -12,6 +12,7 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
 
   return (
     <main className={styles.page}>
+      <title>Home — Pluviose-Monestime Family Hub</title>
       <section aria-label="Welcome" className={styles.hero}>
         <div className={styles.words}>
           <span className={styles.dayPart}>{dayPartLabel(now)}</span>

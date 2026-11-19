@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 
 import { authKeys, login } from '../../api/auth'
 import { ApiError } from '../../api/client'
@@ -13,13 +13,14 @@ export function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const navigate = useNavigate()
+  const from = returnPath(useLocation().state)
   const queryClient = useQueryClient()
   const signIn = useMutation({
     mutationFn: () => login(email, password),
-    // Replaces a cached "signed out" answer, so the signed-in pages don't send you straight back here.
+    // The answer is who's signed in, so the shell needn't ask again.
     onSuccess: (user) => {
       queryClient.setQueryData(authKeys.me, user)
-      void navigate('/', { replace: true })
+      void navigate(from, { replace: true })
     },
   })
 
@@ -120,4 +121,10 @@ function loginErrorMessage(error: Error): string {
     return 'That email and password don’t match. Check them and try again, or use Forgot password.'
   }
   return errorMessage(error)
+}
+
+// Where the signed-in shell sent them from; only a path on this site, so a crafted link can't send them away.
+function returnPath(state: unknown): string {
+  const from = (state as { from?: unknown } | null)?.from
+  return typeof from === 'string' && /^\/(?![/\\])/.test(from) ? from : '/'
 }

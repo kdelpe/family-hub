@@ -11,6 +11,8 @@ export function useSignedIn() {
     queryKey: personKeys.one(personId ?? ''),
     queryFn: ({ signal }) => getPerson(personId!, { signal }),
     enabled: personId !== null,
+    // The shell waits for this name; failing fast falls back to the email instead of a blank page.
+    retry: false,
   })
   return {
     user: user.data,

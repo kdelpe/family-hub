@@ -1,6 +1,4 @@
 .page {
-  /* Takes the rest of the row beside the menu; alone, it fills the window. */
-  flex: 999 1 560px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;

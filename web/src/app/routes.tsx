@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { RouteObject } from 'react-router'
 
 import { SignInLayout } from '../components/SignInLayout/SignInLayout'
@@ -9,9 +10,9 @@ import { RequestAccess } from '../pages/RequestAccess/RequestAccess'
 import { WelcomeInvite } from '../pages/WelcomeInvite/WelcomeInvite'
 import { AppShell } from './AppShell'
 import { NotBuiltYet } from './NotBuiltYet'
+import { adminPages, menuPages } from './signedInPages'
 
-// Signed-in pages still to come; the menu already links to them.
-const comingSoon = ['/tree', '/people', '/directory', '/events', '/stories', '/profile', '/admin/members']
+const built: Record<string, ReactNode> = { '/': <HomeHearth /> }
 
 // The only place routes are wired.
 export const routes: RouteObject[] = [
@@ -28,8 +29,7 @@ export const routes: RouteObject[] = [
   {
     element: <AppShell />,
     children: [
-      { path: '/', element: <HomeHearth /> },
-      ...comingSoon.map((path) => ({ path, element: <NotBuiltYet /> })),
+      ...[...menuPages, ...adminPages].map(({ path }) => ({ path, element: built[path] ?? <NotBuiltYet /> })),
     ],
   },
   { path: '*', element: <NotBuiltYet /> },

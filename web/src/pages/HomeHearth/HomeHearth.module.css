@@ -1,6 +1,4 @@
 .page {
-  flex: 999 1 560px;
-  min-width: 0;
   padding: 40px;
   display: flex;
   flex-direction: column;
