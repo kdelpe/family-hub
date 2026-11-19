@@ -1,3 +1,4 @@
+import type { User } from './auth'
 import { api } from './client'
 
 export type Member = {
@@ -34,7 +35,8 @@ export async function listMembers({ signal }: { signal?: AbortSignal } = {}): Pr
   return members
 }
 
-export const invite = (input: InviteInput) => api<Member>('POST', '/admin/users', { body: input })
+// Answers with the new login as /auth/me shows one, not as the members list does.
+export const invite = (input: InviteInput) => api<User>('POST', '/admin/users', { body: input })
 
 // A fresh invite for someone who never set a password, otherwise a password reset.
 export const sendLink = (id: string) => api<void>('POST', `/admin/users/${encodeURIComponent(id)}/send-reset`)

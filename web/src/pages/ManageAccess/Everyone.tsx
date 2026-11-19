@@ -1,6 +1,6 @@
-import { useMutation, type UseQueryResult } from '@tanstack/react-query'
+import { useMutation, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 
-import { type Member, sendLink } from '../../api/admin'
+import { adminKeys, type Member, sendLink } from '../../api/admin'
 import { ApiError } from '../../api/client'
 import { errorMessage } from '../../lib/errorMessage'
 import { fullName } from '../../lib/names'
@@ -60,7 +60,12 @@ export function Everyone({ members, now = new Date() }: { members: UseQueryResul
 }
 
 function Row({ member, now }: { member: Member; now: Date }) {
-  const send = useMutation({ mutationFn: () => sendLink(member.id) })
+  const queryClient = useQueryClient()
+  // Reread after, so a resent invite's status shows its new expiry.
+  const send = useMutation({
+    mutationFn: () => sendLink(member.id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminKeys.members }),
+  })
   const action = member.status === 'active' ? 'Send password reset' : member.status === 'invited' ? 'Resend invitation' : null
   const name = member.person ? fullName(member.person) : 'Not linked to anyone yet'
 

@@ -112,6 +112,20 @@ describe('ManageAccess', () => {
     expect(await screen.findByText('Home page')).toBeInTheDocument()
   })
 
+  it('moves between tabs with the arrow keys', async () => {
+    stubApi(listAnswers)
+    renderPage()
+    const invite = await screen.findByRole('tab', { name: 'Invite someone' })
+
+    fireEvent.keyDown(invite, { key: 'ArrowRight' })
+
+    const everyone = screen.getByRole('tab', { name: 'Everyone (4)' })
+    expect(everyone).toHaveAttribute('aria-selected', 'true')
+    expect(everyone).toHaveFocus()
+    expect(invite).toHaveAttribute('tabindex', '-1')
+    expect(screen.getByRole('table')).toBeInTheDocument()
+  })
+
   it('lists everyone with one action each', async () => {
     stubApi(listAnswers)
     renderPage()
@@ -144,6 +158,19 @@ describe('ManageAccess', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resend invitation to Sabine Pluviose' }))
 
     expect(await screen.findByText(want)).toBeInTheDocument()
+  })
+
+  it('rereads the list after a resend, so the new expiry shows', async () => {
+    const fetch = stubApi({ ...listAnswers, 'POST /api/admin/users/u-sabine/send-reset': { status: 204 } })
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Everyone (4)' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resend invitation to Sabine Pluviose' }))
+
+    await screen.findByText('Email sent')
+    await vi.waitFor(() =>
+      expect(fetch.mock.calls.filter(([url]) => url === '/api/admin/users?limit=100')).toHaveLength(2),
+    )
   })
 
   it('finds a living person in the tree and marks who already has a login', async () => {

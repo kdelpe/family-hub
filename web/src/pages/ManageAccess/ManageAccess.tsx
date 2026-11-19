@@ -45,7 +45,16 @@ export function ManageAccess() {
             role="tab"
             id={`ma-tab-${id}`}
             aria-selected={tab === id}
-            aria-controls={`ma-panel-${id}`}
+            aria-controls={tab === id ? `ma-panel-${id}` : undefined}
+            tabIndex={tab === id ? 0 : -1}
+            onKeyDown={(event) => {
+              const next = { ArrowRight: 1, ArrowLeft: -1 }[event.key]
+              if (next !== undefined) {
+                const to = tabs[(tabs.findIndex((t) => t.id === tab) + next + tabs.length) % tabs.length]!.id
+                setTab(to)
+                document.getElementById(`ma-tab-${to}`)?.focus()
+              }
+            }}
             className={tab === id ? `${styles.tab} ${styles.tabOn}` : styles.tab}
             onClick={() => setTab(id)}
           >
@@ -55,7 +64,7 @@ export function ManageAccess() {
       </div>
 
       <div role="tabpanel" id={`ma-panel-${tab}`} aria-labelledby={`ma-tab-${tab}`}>
-        {tab === 'invite' ? <InviteForm members={members.data} /> : <Everyone members={members} />}
+        {tab === 'invite' ? <InviteForm members={members} /> : <Everyone members={members} />}
       </div>
     </main>
   )

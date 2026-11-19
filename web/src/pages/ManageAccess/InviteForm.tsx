@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
 import { Link } from 'react-router'
 
@@ -21,7 +21,7 @@ const roles: { id: Role; label: string; hint: string }[] = [
 
 const maxMatches = 6
 
-export function InviteForm({ members }: { members: Member[] | undefined }) {
+export function InviteForm({ members }: { members: UseQueryResult<Member[]> }) {
   const { person: me } = useSignedIn()
   const queryClient = useQueryClient()
   const tree = useQuery({ queryKey: treeKeys.all, queryFn: ({ signal }) => getTree({ signal }) })
@@ -29,15 +29,15 @@ export function InviteForm({ members }: { members: Member[] | undefined }) {
   const [personId, setPersonId] = useState<string | null>(null)
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<Role>('member')
-  // undefined until picked: the default is you, when you're in the tree.
-  const [pickedFrom, setPickedFrom] = useState<string | null | undefined>(undefined)
+  // null until picked: the default is you, when you're in the tree.
+  const [pickedFrom, setPickedFrom] = useState<string | null>(null)
   const [missingPerson, setMissingPerson] = useState(false)
 
-  const senders = sendersFor(me, members)
-  const fromId = pickedFrom !== undefined ? pickedFrom : (senders[0]?.personId ?? null)
-  const from = senders.find((s) => s.personId === fromId) ?? null
+  const senders = sendersFor(me, members.data)
+  // A pick that is no longer a sender (disabled meanwhile) falls back to you, so what's pressed is what's sent.
+  const from = senders.find((s) => s.personId === pickedFrom) ?? senders.find((s) => s.personId === me?.id) ?? null
   const invitee = tree.data?.persons.find((p) => p.id === personId) ?? null
-  const withLogin = new Set(members?.flatMap((m) => (m.person ? [m.person.id] : [])))
+  const withLogin = new Set(members.data?.flatMap((m) => (m.person ? [m.person.id] : [])))
 
   const send = useMutation({
     // The names ride along, so the note after sending says who it was for and from as they were when sent.
@@ -47,7 +47,7 @@ export function InviteForm({ members }: { members: Member[] | undefined }) {
       setPersonId(null)
       setEmail('')
       setRole('member')
-      setPickedFrom(undefined)
+      setPickedFrom(null)
       void queryClient.invalidateQueries({ queryKey: adminKeys.members })
     },
   })
@@ -69,8 +69,9 @@ export function InviteForm({ members }: { members: Member[] | undefined }) {
     })
   }
 
+  // Waits for the members too, so someone who already has a login is never offered.
   const matches =
-    tree.data && query.trim() !== '' && !invitee
+    tree.data && members.data && query.trim() !== '' && !invitee
       ? tree.data.persons
           .filter((p) => !p.is_deceased && nameMatches(fullName(p), query))
           .sort((a, b) => fullName(a).localeCompare(fullName(b)))
@@ -100,7 +101,7 @@ export function InviteForm({ members }: { members: Member[] | undefined }) {
             }}
             className={styles.input}
           />
-          {tree.error && <p role="alert">{errorMessage(tree.error)}</p>}
+          {(tree.error ?? members.error) && <p role="alert">{errorMessage((tree.error ?? members.error)!)}</p>}
           {invitee && tree.data && (
             <div className={`${styles.personCard} ${styles.personCardOn}`}>
               <Avatar person={invitee} />
@@ -142,7 +143,7 @@ export function InviteForm({ members }: { members: Member[] | undefined }) {
               })}
             </ul>
           )}
-          {tree.data && query.trim() !== '' && !invitee && matches.length === 0 && (
+          {tree.data && members.data && query.trim() !== '' && !invitee && matches.length === 0 && (
             <span className={styles.small}>Nobody in the tree by that name.</span>
           )}
           {missingPerson && !invitee && (
@@ -201,9 +202,9 @@ export function InviteForm({ members }: { members: Member[] | undefined }) {
                 <button
                   key={s.personId}
                   type="button"
-                  aria-pressed={s.personId === fromId}
+                  aria-pressed={s.personId === from?.personId}
                   className={
-                    s.personId === fromId ? `${styles.choice} ${styles.sender} ${styles.choiceOn}` : `${styles.choice} ${styles.sender}`
+                    s.personId === from?.personId ? `${styles.choice} ${styles.sender} ${styles.choiceOn}` : `${styles.choice} ${styles.sender}`
                   }
                   onClick={() => setPickedFrom(s.personId)}
                 >
@@ -319,10 +320,8 @@ function inviteErrorMessage(error: Error, invitee: TreePerson | null): string {
       case 'mail_failed':
         return 'The email couldn’t be sent, so nothing was saved. Try again.'
       case 'validation_error':
-        // The one refusal the form can't prevent besides a bad email: the sender lost their login meanwhile.
-        return error.message.startsWith('from_person_id')
-          ? 'That person can’t send invitations right now. Pick someone else.'
-          : 'Check the email address and try again.'
+        // Besides a bad email, the person or the sender may have changed since the page loaded.
+        return 'Check the email address. If it looks right, reload the page: who you picked may have changed.'
     }
   }
   return errorMessage(error)
