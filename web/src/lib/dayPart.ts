@@ -1,3 +1,4 @@
+// On the viewer's own clock: relatives live in several timezones (architecture §8, APP_TIMEZONE).
 export type DayPart = 'morning' | 'afternoon' | 'evening' | 'night'
 
 export function dayPart(date: Date): DayPart {
