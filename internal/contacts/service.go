@@ -145,7 +145,7 @@ func (s *Service) Directory(ctx context.Context, viewer family.Viewer, query str
 	return entries, nil
 }
 
-// listingsFor applies §5.2 to several people in three queries, whatever their number: every row of the
+// listingsFor applies §5.2 to several people in at most three queries, whatever their number: every row of the
 // people the viewer may see in full, and for the rest the visible rows and the kinds to ask for.
 func listingsFor(ctx context.Context, q *gen.Queries, viewer family.Viewer, ids []uuid.UUID) (map[uuid.UUID]Listing, error) {
 	var full, others []uuid.UUID
@@ -157,28 +157,30 @@ func listingsFor(ctx context.Context, q *gen.Queries, viewer family.Viewer, ids 
 		}
 	}
 	listings := make(map[uuid.UUID]Listing, len(ids))
-	add := func(person uuid.UUID, c Contact) {
-		l := listings[person]
-		l.Contacts = append(l.Contacts, c)
-		listings[person] = l
+	add := func(rows []gen.ListContactsRow) {
+		for _, r := range rows {
+			l := listings[r.PersonID]
+			l.Contacts = append(l.Contacts, Contact{ID: r.ID, Kind: r.Kind, Platform: r.Platform, Label: r.Label, Value: r.Value, Visibility: r.Visibility})
+			listings[r.PersonID] = l
+		}
 	}
 	if len(full) > 0 {
 		rows, err := q.ListContacts(ctx, full)
 		if err != nil {
 			return nil, fmt.Errorf("list contacts: %w", err)
 		}
-		for _, r := range rows {
-			add(r.PersonID, Contact{ID: r.ID, Kind: r.Kind, Platform: r.Platform, Label: r.Label, Value: r.Value, Visibility: r.Visibility})
-		}
+		add(rows)
 	}
 	if len(others) > 0 {
 		rows, err := q.ListVisibleContacts(ctx, gen.ListVisibleContactsParams{PersonIds: others, RequesterID: viewer.UserID})
 		if err != nil {
 			return nil, fmt.Errorf("list visible contacts: %w", err)
 		}
+		visible := make([]gen.ListContactsRow, 0, len(rows))
 		for _, r := range rows {
-			add(r.PersonID, Contact{ID: r.ID, Kind: r.Kind, Platform: r.Platform, Label: r.Label, Value: r.Value, Visibility: r.Visibility})
+			visible = append(visible, gen.ListContactsRow(r))
 		}
+		add(visible)
 		kinds, err := q.RequestableKinds(ctx, gen.RequestableKindsParams{PersonIds: others, RequesterID: viewer.UserID})
 		if err != nil {
 			return nil, fmt.Errorf("requestable kinds: %w", err)

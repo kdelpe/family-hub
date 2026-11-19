@@ -90,7 +90,7 @@ WHERE p.deleted_at IS NULL AND NOT p.is_deceased
   AND ($1::text = '' OR p.search_name ILIKE '%' || $2::text || '%' ESCAPE '\' OR p.search_name % $1::text)
   AND EXISTS (SELECT 1 FROM contact_methods c WHERE c.person_id = p.id AND (c.visibility = 'family'
     OR (c.visibility = 'on_request' AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = p.id AND u.disabled_at IS NULL))))
-ORDER BY lower(p.search_name), p.id
+ORDER BY CASE WHEN $1::text = '' THEN 0 ELSE similarity(p.search_name, $1::text) END DESC, lower(p.search_name), p.id
 LIMIT 5000
 `
 
@@ -106,7 +106,8 @@ type DirectoryPersonsRow struct {
 	Side      *string
 }
 
-// The directory: living people in the tree who share something, a family row or a kind to ask for (§4.4).
+// The directory: living people in the tree who share something, a family row or a kind to ask for (§4.4),
+// best matches first when searched.
 // Search matches names only, never contact values (§5.2). The limit is a backstop at family scale.
 func (q *Queries) DirectoryPersons(ctx context.Context, arg DirectoryPersonsParams) ([]DirectoryPersonsRow, error) {
 	rows, err := q.db.Query(ctx, directoryPersons, arg.Q, arg.QLike)
@@ -166,7 +167,6 @@ func (q *Queries) GetContact(ctx context.Context, arg GetContactParams) (GetCont
 }
 
 const listContacts = `-- name: ListContacts :many
-
 SELECT person_id, id, kind, platform, label, value, visibility FROM contact_methods
 WHERE person_id = ANY($1::uuid[]) ORDER BY person_id, id
 `
@@ -181,7 +181,6 @@ type ListContactsRow struct {
 	Visibility string
 }
 
-// The queries below take several people at once, for the directory; a profile passes one.
 func (q *Queries) ListContacts(ctx context.Context, personIds []uuid.UUID) ([]ListContactsRow, error) {
 	rows, err := q.db.Query(ctx, listContacts, personIds)
 	if err != nil {

@@ -332,6 +332,20 @@ func TestDirectoryShowsWhatWasShared(t *testing.T) {
 	assert.Equal(t, Listing{Contacts: []Contact{phone}}, got[0].Listing)
 }
 
+func TestDirectoryPutsTheBestMatchFirst(t *testing.T) {
+	svc, pool := newService(t)
+	for _, name := range []string{"Rosa", "Rosalind"} {
+		_, err := svc.Create(t.Context(), admin, insertPerson(t, pool, name), ContactInput{Kind: "email", Value: name + "@example.com", Visibility: new("family")})
+		require.NoError(t, err)
+	}
+
+	got, err := svc.Directory(t.Context(), admin, "Rosalind")
+
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, []string{"Rosalind", "Rosa"}, []string{got[0].FirstName, got[1].FirstName})
+}
+
 func TestDirectorySearchRules(t *testing.T) {
 	svc, _ := newService(t)
 
