@@ -10,7 +10,7 @@ import { adminPages, menuPages } from './signedInPages'
 const maya = { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: 'p1' }
 
 // The API as a signed-out visitor meets it, until they sign in.
-function stubApi() {
+function stubApi({ personFails = false } = {}) {
   let signedIn = false
   const json = (status: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status }))
   vi.stubGlobal(
@@ -23,7 +23,9 @@ function stubApi() {
         case '/api/auth/me':
           return signedIn ? json(200, maya) : json(401, { error: { code: 'unauthorized', message: 'sign in first' } })
         case '/api/persons/p1':
-          return json(200, { id: 'p1', first_name: 'Maya', last_name: 'Pluviose' })
+          return personFails
+            ? json(500, { error: { code: 'internal', message: 'x' } })
+            : json(200, { id: 'p1', first_name: 'Maya', last_name: 'Pluviose' })
         default:
           return json(404, { error: { code: 'not_found', message: 'not found' } })
       }
@@ -67,6 +69,16 @@ it.each([...menuPages, ...adminPages])('$path ($label) opens inside the menu', a
 
   const menu = await screen.findByRole('navigation', { name: 'Main' })
   expect(within(menu).getByRole('link', { name: label })).toHaveAttribute('aria-current', 'page')
+})
+
+it('Home stays up, greeting without a name, when the person can’t be read', async () => {
+  stubApi({ personFails: true }).signIn()
+  renderAt('/')
+
+  expect(await screen.findByText('Signed in as maya.pluviose@example.com')).toBeInTheDocument()
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(screen.getByRole('heading', { level: 1, name: /^Good (morning|afternoon|evening)$/ })).toBeInTheDocument()
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === '/api/persons/p1')).toHaveLength(1)
 })
 
 it('signing in from a page you were sent away from brings you back to it', async () => {

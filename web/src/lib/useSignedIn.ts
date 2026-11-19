@@ -11,8 +11,10 @@ export function useSignedIn() {
     queryKey: personKeys.one(personId ?? ''),
     queryFn: ({ signal }) => getPerson(personId!, { signal }),
     enabled: personId !== null,
-    // The shell waits for this name; failing fast falls back to the email instead of a blank page.
+    // The shell waits for this name; failing fast falls back to the email instead of a blank page. Not again
+    // when a page using it mounts, either: that would hide the page while it's read once more.
     retry: false,
+    retryOnMount: false,
   })
   return {
     user: user.data,
