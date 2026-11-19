@@ -12,7 +12,7 @@ SMTP_PORT         ?= 1025
 BASE_URL          ?= http://localhost:5173
 export DATABASE_URL TEST_DATABASE_URL TEST_MAILPIT_URL SMTP_HOST SMTP_PORT BASE_URL
 
-.PHONY: up down ui-stub dev-api dev-ui generate build ui build-go run test lint web-check vuln migrate-up
+.PHONY: up down ui-stub dev-api dev-ui generate build ui build-go run test lint web-check vuln migrate-up seed
 
 up:
 	docker compose up -d --wait
@@ -73,3 +73,7 @@ vuln: ui-stub
 
 migrate-up: ui-stub
 	go run ./cmd migrate up
+
+# The mockups' made-up family, into the dev database; safe to run again.
+seed: up migrate-up
+	docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < internal/database/seed.sql
