@@ -74,6 +74,9 @@ vuln: ui-stub
 migrate-up: ui-stub
 	go run ./cmd migrate up
 
-# The mockups' made-up family, into the dev database; safe to run again.
-seed: up migrate-up
-	docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < internal/database/seed.sql
+# The mockups' made-up family, into the same database migrate-up migrated; refuses one that isn't empty.
+# In order, not as two prerequisites: under `make -j` the migration could start before Postgres is up.
+seed:
+	$(MAKE) up
+	$(MAKE) migrate-up
+	docker compose exec -T postgres psql -q -v ON_ERROR_STOP=1 "$(DATABASE_URL)" < internal/database/seed.sql
