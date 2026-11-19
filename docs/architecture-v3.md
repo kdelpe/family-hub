@@ -885,7 +885,8 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 The end state after Phase 1. Each target lands in the PR that needs it, so the real Makefile grows toward this one.
 
 ```make
-DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
+COMPOSE_DATABASE_URL := postgres://app:app@localhost:5432/familyhub?sslmode=disable
+DATABASE_URL      ?= $(COMPOSE_DATABASE_URL)
 TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
 TEST_MAILPIT_URL  ?= http://localhost:8025
 SMTP_HOST         ?= localhost
@@ -907,7 +908,7 @@ ui-stub:
 generate:      ; go tool sqlc generate && mockery   # after checking the mockery version, as lint does
 migrate-new:   ; go tool migrate create -ext sql -dir internal/database/migrations -seq $(name)
 migrate-up: ui-stub ; go run ./cmd migrate up
-seed:          ; $(MAKE) up && $(MAKE) migrate-up && docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < internal/database/seed.sql
+seed:          ; $(MAKE) up && $(MAKE) migrate-up DATABASE_URL='$(COMPOSE_DATABASE_URL)' && docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < internal/database/seed.sql
 
 dev-api: up ui-stub ; AUTO_MIGRATE=true COOKIE_SECURE=false go run ./cmd
 dev-ui:        ; cd web && npm run dev
