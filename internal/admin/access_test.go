@@ -344,10 +344,15 @@ func TestSuggest(t *testing.T) {
 	var unlinked uuid.UUID
 	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role) VALUES ('unlinked@example.com', 'member') RETURNING id`).Scan(&unlinked))
 	require.ErrorIs(t, svc.Suggest(t.Context(), unlinked, kervens), ErrNotLinked, "a login linked to nobody can't suggest")
+	require.NoError(t, svc.Submit(t.Context(), AccessRequestInput{FullName: "Pending", Email: "pending@example.com"}))
+	require.ErrorIs(t, svc.Suggest(t.Context(), unlinked, AccessRequestInput{FullName: "Pending", Email: "pending@example.com"}), ErrNotLinked,
+		"the same answer for an email with a pending request, so it can't tell which have one")
+	_, err := pool.Exec(t.Context(), `DELETE FROM access_requests`)
+	require.NoError(t, err)
 	gone := insertNamedPerson(t, pool, "Gone", "Away")
 	var goneLogin uuid.UUID
 	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role, person_id) VALUES ('gone@example.com', 'member', $1) RETURNING id`, gone).Scan(&goneLogin))
-	_, err := pool.Exec(t.Context(), `UPDATE persons SET deleted_at = now() WHERE id = $1`, gone)
+	_, err = pool.Exec(t.Context(), `UPDATE persons SET deleted_at = now() WHERE id = $1`, gone)
 	require.NoError(t, err)
 	require.ErrorIs(t, svc.Suggest(t.Context(), goneLogin, kervens), ErrNotLinked, "nor one linked to someone deleted")
 	require.ErrorIs(t, svc.Suggest(t.Context(), member, AccessRequestInput{FullName: "Kervens", Email: "nope"}), ErrInvalidAccessRequest)

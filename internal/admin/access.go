@@ -173,13 +173,6 @@ func (s *AccessRequests) Suggest(ctx context.Context, userID uuid.UUID, in Acces
 	if err != nil {
 		return err
 	}
-	pending, err := gen.New(s.pool).PendingAccessRequestExists(ctx, r.Email)
-	if err != nil {
-		return fmt.Errorf("check pending request: %w", err)
-	}
-	if pending {
-		return nil
-	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin suggestion: %w", err)
@@ -200,6 +193,14 @@ func (s *AccessRequests) Suggest(ctx context.Context, userID uuid.UUID, in Acces
 	}
 	if inTree == 0 {
 		return ErrNotLinked
+	}
+	// Only after the link is checked: a 202 for a pending email but a 403 otherwise would tell which have one.
+	pending, err := q.PendingAccessRequestExists(ctx, r.Email)
+	if err != nil {
+		return fmt.Errorf("check pending request: %w", err)
+	}
+	if pending {
+		return nil
 	}
 	if err := q.LockSuggester(ctx, userID); err != nil {
 		return fmt.Errorf("lock suggester: %w", err)
