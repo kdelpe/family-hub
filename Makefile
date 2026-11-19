@@ -4,7 +4,8 @@ GOLANGCI_LINT_VERSION := 2.15.0
 # Keep in sync with the mockery version and checksum in .github/workflows/ci.yml.
 MOCKERY_VERSION := 3.8.1
 
-DATABASE_URL      ?= postgres://app:app@localhost:5432/familyhub?sslmode=disable
+COMPOSE_DATABASE_URL := postgres://app:app@localhost:5432/familyhub?sslmode=disable
+DATABASE_URL      ?= $(COMPOSE_DATABASE_URL)
 TEST_DATABASE_URL ?= postgres://app:app@localhost:5432/familyhub_test?sslmode=disable
 TEST_MAILPIT_URL  ?= http://localhost:8025
 SMTP_HOST         ?= localhost
@@ -12,7 +13,7 @@ SMTP_PORT         ?= 1025
 BASE_URL          ?= http://localhost:5173
 export DATABASE_URL TEST_DATABASE_URL TEST_MAILPIT_URL SMTP_HOST SMTP_PORT BASE_URL
 
-.PHONY: up down ui-stub dev-api dev-ui generate build ui build-go run test lint web-check vuln migrate-up
+.PHONY: up down ui-stub dev-api dev-ui generate build ui build-go run test lint web-check vuln migrate-up seed
 
 up:
 	docker compose up -d --wait
@@ -73,3 +74,11 @@ vuln: ui-stub
 
 migrate-up: ui-stub
 	go run ./cmd migrate up
+
+# The mockups' made-up family, into the compose database whatever DATABASE_URL says, so it migrates the one it
+# loads; refuses one that isn't empty. In order, not as prerequisites: under `make -j` the migration could
+# start before Postgres is up.
+seed:
+	$(MAKE) up
+	$(MAKE) migrate-up DATABASE_URL='$(COMPOSE_DATABASE_URL)'
+	docker compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < internal/database/seed.sql

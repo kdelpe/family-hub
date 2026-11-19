@@ -1,11 +1,16 @@
 package contacts
 
 import (
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kdelpe/family-hub/internal/database"
+	"github.com/kdelpe/family-hub/internal/testdb"
 )
 
 func TestNormalize(t *testing.T) {
@@ -71,6 +76,28 @@ func TestNormalize(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, *tt.want, got)
+		})
+	}
+}
+
+func TestTheSeedsContactsAreValid(t *testing.T) {
+	pool := testdb.MigratedPool(t, database.MigrateUp)
+	seed, err := os.ReadFile("../database/seed.sql")
+	require.NoError(t, err)
+	_, err = pool.Exec(t.Context(), string(seed))
+	require.NoError(t, err)
+	rows, err := pool.Query(t.Context(), `SELECT kind, platform, label, value, visibility FROM contact_methods`)
+	require.NoError(t, err)
+	contacts, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Contact, error) {
+		var c Contact
+		return c, r.Scan(&c.Kind, &c.Platform, &c.Label, &c.Value, &c.Visibility)
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, contacts)
+
+	for _, c := range contacts {
+		t.Run(c.Value, func(t *testing.T) {
+			assert.NoError(t, c.normalize(), "editable through the API as seeded")
 		})
 	}
 }
