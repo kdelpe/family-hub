@@ -1,11 +1,10 @@
 -- The made-up family from the mockups (design-notes §7), for local dev: `make seed`. Never real relatives.
--- Sign in as maya.pluviose@example.com (admin) with the dev password `sample-family-dev`; Nadège is the other
--- admin, and Fritz, Naïka, Jean-Robert, Mackenson and Stanley are members, all with the same password.
+-- Every login with a password has the dev one, `sample-family-dev`; Maya Pluviose is the admin to sign in as.
 BEGIN;
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM persons) OR EXISTS (SELECT 1 FROM users) THEN
+  IF EXISTS (SELECT 1 FROM persons) OR EXISTS (SELECT 1 FROM users) OR EXISTS (SELECT 1 FROM access_requests) THEN
     RAISE EXCEPTION 'seed: the database already has people or users; it only loads into an empty one';
   END IF;
 END $$;
@@ -89,12 +88,10 @@ FROM (VALUES
 ) AS r(x, y, subtype, ended)
 JOIN seed_person a ON a.k = r.x JOIN seed_person b ON b.k = r.y;
 
--- The Members & invites list: everyone signed up shares the dev password; Sabine and Rose were invited and
--- haven't set one yet.
-INSERT INTO users (email, role, person_id, password_hash, password_changed_at)
+INSERT INTO users (email, role, person_id, password_hash, password_changed_at, last_login_at)
 SELECT u.email, u.role, s.id, CASE WHEN u.active THEN
   '$argon2id$v=19$m=19456,t=2,p=1$8olbmBbyQUOCTh2R/l6EDA$RwSZHioctZ59fvax9nrTT/cvdg9yCUg2WaacpaEfMmA' END,
-  CASE WHEN u.active THEN now() END
+  CASE WHEN u.active THEN now() END, CASE WHEN u.active THEN now() END
 FROM (VALUES
   ('0f', 'maya.pluviose@example.com', 'admin', true),
   ('08', 'nadege.p@example.com', 'admin', true),
@@ -107,6 +104,14 @@ FROM (VALUES
   ('06', 'rose.monestime@example.com', 'member', false)
 ) AS u(k, email, role, active)
 JOIN seed_person s USING (k);
+
+-- As the mockup shows them: Sabine's invite still open, Rose's expired. Nobody holds these tokens; an admin
+-- resends one to try the Welcome page.
+INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at, from_person_id, sent_by_user_id)
+SELECT u.id, 'invite', sha256(convert_to(gen_random_uuid()::text, 'UTF8')), now() + i.expires_in, maya.person_id, maya.id
+FROM (VALUES ('sabine.p@example.com', interval '5 days'), ('rose.monestime@example.com', interval '-1 day')) AS i(email, expires_in)
+JOIN users u USING (email)
+CROSS JOIN (SELECT id, person_id FROM users WHERE email = 'maya.pluviose@example.com') maya;
 
 -- Maya's from My profile, the rest from the Directory.
 INSERT INTO contact_methods (person_id, kind, platform, label, value, visibility)

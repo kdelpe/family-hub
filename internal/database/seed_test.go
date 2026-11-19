@@ -41,9 +41,11 @@ func TestSeed(t *testing.T) {
 		{name: "a suggestion names its member", query: `SELECT count(*) FROM access_requests WHERE suggested_by IS NOT NULL`, want: 1},
 		{name: "nobody has more than two parents",
 			query: `SELECT count(*) FROM (SELECT 1 FROM relationships WHERE type = 'parent_child' GROUP BY person_b HAVING count(*) > 2) x`},
-		{name: "every parent was born before their child, so no link is backwards",
+		{name: "every parent is at least 15 years older than their child, so no link is backwards",
 			query: `SELECT count(*) FROM relationships r JOIN persons p ON p.id = r.person_a JOIN persons c ON c.id = r.person_b
-				WHERE r.type = 'parent_child' AND p.birth_date >= c.birth_date`},
+				WHERE r.type = 'parent_child' AND p.birth_date > c.birth_date - interval '15 years'`},
+		{name: "invites as the mockup shows them, one open and one expired",
+			query: `SELECT count(*) FROM auth_tokens WHERE purpose = 'invite' AND consumed_at IS NULL`, want: 2},
 	}
 
 	for _, tt := range tests {
