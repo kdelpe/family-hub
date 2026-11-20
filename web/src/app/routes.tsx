@@ -7,13 +7,14 @@ import { ForgotPassword } from '../pages/ForgotPassword/ForgotPassword'
 import { HomeHearth } from '../pages/HomeHearth/HomeHearth'
 import { Login } from '../pages/Login/Login'
 import { ManageAccess } from '../pages/ManageAccess/ManageAccess'
+import { People } from '../pages/People/People'
 import { RequestAccess } from '../pages/RequestAccess/RequestAccess'
 import { WelcomeInvite } from '../pages/WelcomeInvite/WelcomeInvite'
 import { AppShell } from './AppShell'
 import { NotBuiltYet } from './NotBuiltYet'
 import { adminPages, menuPages } from './signedInPages'
 
-const built: Record<string, ReactNode> = { '/': <HomeHearth />, '/admin/members': <ManageAccess /> }
+const built: Record<string, ReactNode> = { '/': <HomeHearth />, '/people': <People />, '/admin/members': <ManageAccess /> }
 
 // The only place routes are wired.
 export const routes: RouteObject[] = [
@@ -31,6 +32,7 @@ export const routes: RouteObject[] = [
     element: <AppShell />,
     children: [
       ...[...menuPages, ...adminPages].map(({ path }) => ({ path, element: built[path] ?? <NotBuiltYet /> })),
+      { path: '/people/:id', element: <NotBuiltYet /> },
     ],
   },
   { path: '*', element: <NotBuiltYet /> },

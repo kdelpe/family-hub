@@ -1,9 +1,11 @@
 import type { FamilySide } from '../api/accessRequests'
 
-// The labels will come from FAMILY_SIDES once the server shares its settings; the sample family's for now.
+// The two family names will come from FAMILY_SIDES once the server shares its settings; the sample family's for now.
+export const familyLines = { first: 'Pluviose', second: 'Monestime' } as const
+
 export const familySides: { value: FamilySide; label: string }[] = [
-  { value: 'first', label: 'Pluviose side' },
-  { value: 'second', label: 'Monestime side' },
+  { value: 'first', label: `${familyLines.first} side` },
+  { value: 'second', label: `${familyLines.second} side` },
   { value: 'married_in', label: 'Married into the family' },
 ]
 
