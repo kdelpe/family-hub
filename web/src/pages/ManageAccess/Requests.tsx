@@ -112,7 +112,16 @@ function Request({
       <div className={styles.requestActions}>
         {request.status === 'pending' ? (
           <>
-            <button type="button" className={`pill ${styles.approve}`} onClick={() => onApprove(request)}>
+            <button
+              type="button"
+              className={`pill ${styles.approve}`}
+              aria-disabled={change.isPending}
+              onClick={() => {
+                if (!change.isPending) {
+                  onApprove(request)
+                }
+              }}
+            >
               Approve &amp; invite
             </button>
             <button type="button" className={`pill ${styles.notNow}`} aria-disabled={change.isPending} onClick={act}>
@@ -142,8 +151,9 @@ function Request({
 }
 
 function changeErrorMessage(error: Error, status: AccessRequestItem['status']): string {
+  // An undo is refused both when someone already undid it and when a newer request from that email is waiting.
   if (error instanceof ApiError && status === 'declined' && error.status === 409) {
-    return 'Another request from this email is already waiting.'
+    return 'This request changed meanwhile, or a newer one from this email is waiting. Reload the page.'
   }
   if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
     return 'This request changed meanwhile. Reload the page.'

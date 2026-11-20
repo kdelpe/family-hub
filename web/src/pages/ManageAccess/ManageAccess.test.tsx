@@ -230,7 +230,7 @@ describe('ManageAccess', () => {
 
     fireEvent.click(within(await screen.findByRole('article', { name: 'Rose Monestime' })).getByRole('button', { name: 'Undo' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Another request from this email is already waiting.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('This request changed meanwhile, or a newer one from this email is waiting. Reload the page.')
   })
 
   it('approves a request through the invite form, filled in for them', async () => {
@@ -281,6 +281,52 @@ describe('ManageAccess', () => {
       'NPNadège PluvioseAdmin',
     ])
     expect(senders[0]).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('keeps your own label when you suggested them yourself', async () => {
+    stubApi({
+      ...listAnswers,
+      'GET /api/admin/access-requests': {
+        status: 200,
+        body: { requests: [accessRequest({ source: 'member_suggestion', suggested_by: { person_id: 'p-maya', name: 'Maya Pluviose' } })] },
+      },
+    })
+    renderPage()
+    await screen.findByRole('tab', { name: 'Everyone (4)' })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve & invite' }))
+
+    const senders = within(screen.getByRole('group', { name: 'Invitation from' })).getAllByRole('button')
+    expect(senders.map((b) => b.textContent)).toEqual(['MPMaya PluvioseYou', 'NPNadège PluvioseAdmin'])
+  })
+
+  it('keeps an approval filled in when an earlier invite finishes sending', async () => {
+    let answer!: (r: Response) => void
+    const fetch = stubApi(listAnswers)
+    const listed = fetch.getMockImplementation()!
+    fetch.mockImplementation((url: string, init?: RequestInit) =>
+      url === '/api/admin/users' && init?.method === 'POST' ? new Promise<Response>((r) => (answer = r)) : listed(url, init),
+    )
+    renderPage()
+    await openInvite()
+    type('Find a person in the tree', 'fabi')
+    fireEvent.click(await screen.findByRole('button', { name: /Fabienne Pluviose/ }))
+    type('Email', 'fabienne.p@example.com')
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
+    await vi.waitFor(() => expect(answer).toBeDefined())
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Requests (2)' }))
+    fireEvent.click(
+      within(screen.getByRole('article', { name: 'Kervens Pluviose' })).getByRole('button', { name: 'Approve & invite' }),
+    )
+    answer(new Response(JSON.stringify({ id: 'u-fabienne' }), { status: 201 }))
+
+    await vi.waitFor(() =>
+      expect(fetch.mock.calls.filter(([url]) => url === '/api/admin/access-requests')).toHaveLength(2),
+    )
+    expect(screen.getByLabelText('Email')).toHaveValue('kervens.p@example.com')
+    expect(screen.getByText('Selected')).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
   it('stops approving the request once the email is changed', async () => {

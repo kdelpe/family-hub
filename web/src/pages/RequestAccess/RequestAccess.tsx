@@ -267,10 +267,11 @@ export function RequestAccess() {
               </div>
 
               <div aria-hidden="true" className={styles.trap}>
-                <label htmlFor="ra-website">Website</label>
+                {/* Named so no autofill recognizes it: a real person's homepage filled in here would drop their request. */}
+                <label htmlFor="ra-website">Leave this empty</label>
                 <input
                   id="ra-website"
-                  name="website"
+                  name="ra-extra"
                   type="text"
                   tabIndex={-1}
                   autoComplete="off"

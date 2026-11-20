@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import { type AccessRequestItem, adminKeys, invite, type InviteInput, type Member } from '../../api/admin'
@@ -39,23 +39,38 @@ export function InviteForm({ members, approval }: { members: UseQueryResult<Memb
   const [missingPerson, setMissingPerson] = useState(false)
   const [request, setRequest] = useState<AccessRequestItem | null>(null)
   const [seenApproval, setSeenApproval] = useState(approval)
+  const [pickName, setPickName] = useState<string | null>(null)
+  // Each approval starts a new form; a send from an earlier one doesn't clear it or show its outcome here.
+  const [generation, setGeneration] = useState(0)
+  const generationNow = useRef(generation)
+  useEffect(() => {
+    generationNow.current = generation
+  }, [generation])
 
   const withLogin = new Set(members.data?.flatMap((m) => (m.person ? [m.person.id] : [])))
   if (approval !== seenApproval) {
     setSeenApproval(approval)
     if (approval) {
       const r = approval.request
-      // Picked straight away when exactly one living person without a login has that name.
-      const same = (tree.data?.persons ?? []).filter(
-        (p) => !p.is_deceased && !withLogin.has(p.id) && foldName(fullName(p)) === foldName(r.full_name),
-      )
+      setGeneration((g) => g + 1)
       setRequest(r)
       setQuery(r.full_name)
-      setPersonId(same.length === 1 ? same[0]!.id : null)
+      setPersonId(null)
+      setPickName(r.full_name)
       setEmail(r.email)
       setRole('member')
       setPickedFrom(r.suggested_by?.person_id ?? null)
       setMissingPerson(false)
+    }
+  }
+  // Picked once the tree and logins are known: when exactly one living person without a login has that name.
+  if (pickName !== null && tree.data && members.data) {
+    setPickName(null)
+    const same = tree.data.persons.filter(
+      (p) => !p.is_deceased && !withLogin.has(p.id) && foldName(fullName(p)) === foldName(pickName),
+    )
+    if (same.length === 1) {
+      setPersonId(same[0]!.id)
     }
   }
   // The request is approved only while the email is still theirs, so an unrelated invite can't approve it.
@@ -68,19 +83,25 @@ export function InviteForm({ members, approval }: { members: UseQueryResult<Memb
 
   const send = useMutation({
     // The names ride along, so the note after sending says who it was for and from as they were when sent.
-    mutationFn: ({ input }: { input: InviteInput; inviteeFirst: string; fromName: string | null }) => invite(input),
-    onSuccess: () => {
+    mutationFn: ({ input }: { input: InviteInput; inviteeFirst: string; fromName: string | null; generation: number }) =>
+      invite(input),
+    onSuccess: (_, sent) => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.members })
+      void queryClient.invalidateQueries({ queryKey: adminKeys.requests })
+      if (sent.generation !== generationNow.current) {
+        return
+      }
       setQuery('')
       setPersonId(null)
       setEmail('')
       setRole('member')
       setPickedFrom(null)
       setRequest(null)
-      void queryClient.invalidateQueries({ queryKey: adminKeys.members })
-      void queryClient.invalidateQueries({ queryKey: adminKeys.requests })
     },
   })
-  const sent = send.isSuccess ? send.variables : undefined
+  const current = send.variables?.generation === generation
+  const sent = send.isSuccess && current ? send.variables : undefined
+  const sendError = current ? send.error : null
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -101,6 +122,7 @@ export function InviteForm({ members, approval }: { members: UseQueryResult<Memb
       },
       inviteeFirst: invitee?.first_name ?? '',
       fromName: from?.name ?? null,
+      generation,
     })
   }
 
@@ -256,9 +278,9 @@ export function InviteForm({ members, approval }: { members: UseQueryResult<Memb
           )}
         </div>
 
-        {send.error && (
+        {sendError && (
           <p role="alert" className={styles.error}>
-            {inviteErrorMessage(send.error, invitee)}
+            {inviteErrorMessage(sendError, invitee)}
           </p>
         )}
         <button type="submit" className={`pill ${styles.send}`} aria-disabled={send.isPending}>
@@ -341,7 +363,7 @@ function sendersFor(
   const suggester = members?.find(
     (m) => m.status === 'active' && m.person && m.person.id === approving?.suggested_by?.person_id,
   )?.person
-  if (suggester && approving) {
+  if (suggester && approving && suggester.id !== me?.id) {
     add(suggester, `Suggested ${approving.full_name.split(' ')[0]}`)
   }
   if (me) {
