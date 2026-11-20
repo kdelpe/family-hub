@@ -79,6 +79,18 @@ describe('People', () => {
     expect(nadege).toHaveAttribute('href', '/people/nadege')
   })
 
+  it('sorts by first name before the rest', async () => {
+    tree.persons.push(person('anna-maria', 'Anna Maria', { last_name: 'Adams' }), person('anna', 'Anna', { last_name: 'Zimmer' }))
+    try {
+      renderPage()
+      await screen.findByText('Anna Zimmer')
+
+      expect(cards().map((c) => c.getAttribute('href')).slice(0, 2)).toEqual(['/people/anna', '/people/anna-maria'])
+    } finally {
+      tree.persons.splice(-2)
+    }
+  })
+
   it.each([
     { filter: 'Living', want: ['Maya Pluviose', 'Nadège Pluviose', 'Stanley Jean-Louis'] },
     { filter: 'Remembered', want: ['Anne-Marie Pluviose'] },

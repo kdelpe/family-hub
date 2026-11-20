@@ -53,7 +53,8 @@ export function People() {
       (tree.data?.persons ?? [])
         .map((p) => ({ p, name: fullName(p) }))
         .filter(({ p, name }) => keep[filter](p) && nameMatches(name, query))
-        .sort((a, b) => a.name.localeCompare(b.name))
+        // A–Z by first name (design-notes §4.3), then the rest of the name.
+        .sort((a, b) => a.p.first_name.localeCompare(b.p.first_name) || a.name.localeCompare(b.name))
         .map(({ p }) => p),
     [tree.data, filter, query],
   )

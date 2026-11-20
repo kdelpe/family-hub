@@ -1,3 +1,4 @@
+import { useMotionPaused } from '../../lib/motion'
 import styles from './SignInTree.module.css'
 import { branches, grass, leaves, mountains, roots } from './signInTreeData'
 
@@ -15,8 +16,10 @@ const seconds = (s: number) => `${Math.round(s * 1000) / 1000}s`
 const atSpeed = (s: number) => seconds(s / growthSpeed)
 
 export function SignInTree() {
+  // No pause button here (owner's exception, design-notes §6.4), but a pause chosen elsewhere still holds.
+  const [paused] = useMotionPaused()
   return (
-    <svg aria-hidden="true" viewBox="-120 -239 723 889" className={styles.tree}>
+    <svg aria-hidden="true" viewBox="-120 -239 723 889" className={paused ? `${styles.tree} ${styles.paused}` : styles.tree}>
       {(['back', 'front', 'ground'] as const).map((which) => {
         const [d, duration, delay] = mountains[which]
         return (
