@@ -4,15 +4,9 @@ import { Link } from 'react-router'
 
 import { type FamilySide, requestAccess } from '../../api/accessRequests'
 import { errorMessage } from '../../lib/errorMessage'
+import { familySides } from '../../lib/familySides'
 import page from '../../styles/signInForm.module.css'
 import styles from './RequestAccess.module.css'
-
-// The labels will come from FAMILY_SIDES once the server shares its settings; the sample family's for now.
-const sides: { value: FamilySide; label: string }[] = [
-  { value: 'first', label: 'Pluviose side' },
-  { value: 'second', label: 'Monestime side' },
-  { value: 'married_in', label: 'Married into the family' },
-]
 
 const relationships = [
   'daughter',
@@ -36,6 +30,7 @@ export function RequestAccess() {
   const [relationship, setRelationship] = useState('daughter')
   const [names, setNames] = useState(['', ''])
   const [note, setNote] = useState('')
+  const [website, setWebsite] = useState('')
   const [nameMissing, setNameMissing] = useState(false)
   const [addedName, setAddedName] = useState<number | null>(null)
   const nameInput = useRef<HTMLInputElement>(null)
@@ -48,6 +43,7 @@ export function RequestAccess() {
         relationship,
         related_names: names.map((name) => name.trim()).filter((name) => name !== ''),
         note: note.trim(),
+        website,
       }),
   })
   const sentHeading = useRef<HTMLHeadingElement>(null)
@@ -166,7 +162,7 @@ export function RequestAccess() {
               <fieldset className={styles.group}>
                 <legend className={`${page.label} ${styles.sideLegend}`}>How are you connected to the family?</legend>
                 <div className={styles.sides}>
-                  {sides.map((option) => (
+                  {familySides.map((option) => (
                     <label key={option.value} className={styles.side}>
                       <input
                         type="radio"
@@ -267,6 +263,20 @@ export function RequestAccess() {
                     clearError()
                   }}
                   className={styles.note}
+                />
+              </div>
+
+              <div aria-hidden="true" className={styles.trap}>
+                {/* Named so no autofill recognizes it: a real person's homepage filled in here would drop their request. */}
+                <label htmlFor="ra-website">Leave this empty</label>
+                <input
+                  id="ra-website"
+                  name="ra-extra"
+                  type="text"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={website}
+                  onChange={(event) => setWebsite(event.target.value)}
                 />
               </div>
 

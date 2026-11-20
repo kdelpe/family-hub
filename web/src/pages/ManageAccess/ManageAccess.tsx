@@ -2,21 +2,28 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Navigate } from 'react-router'
 
-import { adminKeys, listMembers } from '../../api/admin'
+import { type AccessRequestItem, adminKeys, listAccessRequests, listMembers } from '../../api/admin'
 import { useSignedIn } from '../../lib/useSignedIn'
 import { Everyone } from './Everyone'
-import { InviteForm } from './InviteForm'
+import { type Approval, InviteForm } from './InviteForm'
 import styles from './ManageAccess.module.css'
+import { Requests } from './Requests'
 
-type Tab = 'invite' | 'everyone'
+type Tab = 'requests' | 'invite' | 'everyone'
 
-// Members & invites (design-notes §4.10). The Requests tab comes with the requests queue.
+// Members & invites (design-notes §4.10).
 export function ManageAccess() {
   const { user } = useSignedIn()
-  const [tab, setTab] = useState<Tab>('invite')
+  const [tab, setTab] = useState<Tab>('requests')
+  const [approval, setApproval] = useState<Approval | null>(null)
   const members = useQuery({
     queryKey: adminKeys.members,
     queryFn: ({ signal }) => listMembers({ signal }),
+    enabled: user?.role === 'admin',
+  })
+  const requests = useQuery({
+    queryKey: adminKeys.requests,
+    queryFn: ({ signal }) => listAccessRequests({ signal }),
     enabled: user?.role === 'admin',
   })
 
@@ -24,7 +31,16 @@ export function ManageAccess() {
     return <Navigate to="/" replace />
   }
 
+  const waiting = requests.data?.filter((r) => r.status === 'pending').length
+  const approve = (request: AccessRequestItem) => {
+    setApproval((current) => ({ request, n: (current?.n ?? 0) + 1 }))
+    setTab('invite')
+    // The focused button is about to be hidden; keyboard users carry on from the tab they're taken to.
+    document.getElementById('ma-tab-invite')?.focus()
+  }
+
   const tabs: { id: Tab; label: string }[] = [
+    { id: 'requests', label: waiting === undefined ? 'Requests' : `Requests (${waiting})` },
     { id: 'invite', label: 'Invite someone' },
     { id: 'everyone', label: members.data ? `Everyone (${members.data.length})` : 'Everyone' },
   ]
@@ -63,9 +79,12 @@ export function ManageAccess() {
         ))}
       </div>
 
-      {/* Both stay mounted, so an invite or resend still sending isn't lost by switching tabs. */}
+      {/* All stay mounted, so an invite or resend still sending isn't lost by switching tabs. */}
+      <div role="tabpanel" id="ma-panel-requests" aria-labelledby="ma-tab-requests" hidden={tab !== 'requests'}>
+        <Requests requests={requests} onApprove={approve} />
+      </div>
       <div role="tabpanel" id="ma-panel-invite" aria-labelledby="ma-tab-invite" hidden={tab !== 'invite'}>
-        <InviteForm members={members} />
+        <InviteForm members={members} approval={approval} />
       </div>
       <div role="tabpanel" id="ma-panel-everyone" aria-labelledby="ma-tab-everyone" hidden={tab !== 'everyone'}>
         <Everyone members={members} />

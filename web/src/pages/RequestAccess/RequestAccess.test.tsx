@@ -58,8 +58,26 @@ describe('RequestAccess', () => {
         relationship: 'son',
         related_names: ['Frantz Monestime'],
         note: 'Cousin Maya told me about the site.',
+        website: '',
       }),
     })
+  })
+
+  it('sends what a bot puts in the hidden website field, so the server can drop it', async () => {
+    const fetch = renderPage()
+    fillRequired()
+    const trap = document.getElementById('ra-website')!
+    expect(trap.closest('[aria-hidden="true"]')).not.toBeNull()
+    expect(trap).toHaveAttribute('tabindex', '-1')
+
+    fireEvent.change(trap, { target: { value: 'https://spam.example.com' } })
+    send()
+
+    await screen.findByRole('heading', { name: 'Thank you, Darline' })
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/access-requests',
+      expect.objectContaining({ body: expect.stringContaining('"website":"https://spam.example.com"') }),
+    )
   })
 
   it('offers the sides as one choice', () => {
