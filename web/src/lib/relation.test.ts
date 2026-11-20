@@ -148,6 +148,39 @@ describe('relationsTo, from the other side', () => {
     expect(relationsTo(tree, viewer).get(id) ?? null).toBe(want)
   })
 
+  it.each([
+    { name: 'a great-aunt or great-uncle', viewer: 'v', id: 'x', want: 'Your great-aunt or great-uncle' },
+    { name: 'an in-law', viewer: 'p', id: 'y', want: 'Your aunt-in-law or uncle-in-law' },
+  ])('words $name of unknown gender in full', ({ viewer, id, want }) => {
+    const unknown: Tree = {
+      persons: ['v', 'm', 'g', 'gg', 'x', 'p', 'y'].map((i) => person(i, i === 'x' || i === 'y' ? null : 'female')),
+      relationships: [
+        parent('m', 'v'),
+        parent('g', 'm'),
+        parent('gg', 'g'),
+        parent('gg', 'x'),
+        couple('v', 'p', { married: false }),
+        parent('g', 'y'),
+      ],
+    }
+    expect(relationsTo(unknown, viewer).get(id)).toBe(want)
+  })
+
+  it('prefers a current tie to an ended one, across both in-law sides', () => {
+    const mixed: Tree = {
+      persons: ['me', 'bro', 'ex', 'wife', 'exparent'].map((i) => person(i, i === 'wife' || i === 'me' ? 'female' : 'male')),
+      relationships: [
+        parent('mom', 'me'),
+        parent('mom', 'bro'),
+        couple('me', 'ex', { ended: true }),
+        parent('exparent', 'ex'),
+        parent('exparent', 'wife'),
+        couple('bro', 'wife'),
+      ],
+    }
+    expect(relationsTo(mixed, 'me').get('wife')).toBe('Your sister-in-law')
+  })
+
   it('treats an adoptive parent as a parent, and ignores foster links for siblings', () => {
     const adopted: Tree = {
       persons: [person('a', 'female'), person('b', 'male'), person('c', 'female')],

@@ -37,7 +37,13 @@ export function useMotionPaused(): [boolean, (paused: boolean) => void] {
 }
 
 const reducedQuery = '(prefers-reduced-motion: reduce)'
-const media = () => (typeof window.matchMedia === 'function' ? window.matchMedia(reducedQuery) : null)
+let reducedMedia: MediaQueryList | null = null
+const media = () => {
+  if (!reducedMedia && typeof window.matchMedia === 'function') {
+    reducedMedia = window.matchMedia(reducedQuery)
+  }
+  return reducedMedia
+}
 
 const subscribeReduced = (listener: () => void) => {
   const m = media()

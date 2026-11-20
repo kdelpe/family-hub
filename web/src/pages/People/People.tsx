@@ -102,7 +102,11 @@ export function People() {
       </div>
 
       {tree.error && <p role="alert">{errorMessage(tree.error)}</p>}
-      {tree.data && people.length === 0 && <p className={styles.none}>Nobody here matches.</p>}
+      {tree.data && people.length === 0 && (
+        <p className={styles.none}>
+          {tree.data.persons.length === 0 ? 'Nobody is in the family tree yet.' : 'Nobody here matches.'}
+        </p>
+      )}
       {people.length > 0 && (
         <ul className={paused ? `${styles.grid} ${styles.paused}` : styles.grid}>
           {people.map((p) => (

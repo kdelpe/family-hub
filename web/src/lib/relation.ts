@@ -20,6 +20,7 @@ const cousinWord = (up: number, down: number) => {
   return `${ordinal}cousin${removals[gap] ?? ` ${gap} times removed`}`
 }
 const former = (ended: boolean, word: string) => (ended ? `former ${word}` : word)
+const inLaw = (word: string) => word.split(' or ').map((w) => `${w}-in-law`).join(' or ')
 
 const add = <T,>(map: Map<string, T[]>, key: string, value: T) => {
   const list = map.get(key)
@@ -134,10 +135,12 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
       return inLaw ? gendered(g, 'brother', 'sister', 'sibling') : siblingWord(a, b, g)
     }
     if (down === 1) {
-      return `${greats(up - 2)}${gendered(g, 'uncle', 'aunt', 'aunt or uncle')}`
+      const gr = greats(up - 2)
+      return gendered(g, `${gr}uncle`, `${gr}aunt`, `${gr}aunt or ${gr}uncle`)
     }
     if (up === 1) {
-      return `${greats(down - 2)}${gendered(g, 'nephew', 'niece', 'niece or nephew')}`
+      const gr = greats(down - 2)
+      return gendered(g, `${gr}nephew`, `${gr}niece`, `${gr}niece or ${gr}nephew`)
     }
     return cousinWord(up, down)
   }
@@ -146,7 +149,10 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
   const stepCouple = (child: string, person: string) =>
     parentsOf(child).has(person) || fosterParentsOf(child).has(person)
       ? undefined
-      : [...parentsOf(child)].flatMap((p) => partnersOf(p)).find((c) => c.partner === person)
+      : [...parentsOf(child)]
+          .flatMap((p) => partnersOf(p))
+          .filter((c) => c.partner === person)
+          .sort((x, y) => Number(x.ended) - Number(y.ended))[0]
 
   const viewerParents = parentsOf(viewerId)
   const viewerFoster = fosterParentsOf(viewerId)
@@ -196,29 +202,29 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
       return gendered(g, 'foster brother', 'foster sister', 'foster sibling')
     }
 
-    // In-laws: one couple hop from the above (§3.4). First your partner's family…
-    for (const { partner, ended } of partnersOf(viewerId)) {
-      const k = kin(partner, id)
-      const w = k && kinWord(partner, id, k, g, true)
-      if (k && w) {
-        // Your partner's child or grandchild who isn't yours is a step-relation, and their niece is your
-        // niece, as their aunt's husband is their uncle below.
-        if (k.up === 1 && k.down >= 2) {
-          return former(ended, w)
+    // In-laws: one couple hop from the above (§3.4), current couples before ended ones on either side.
+    for (const pass of [false, true]) {
+      // Your partner's family: their niece is your niece; their grandchild who isn't yours, a step-grandchild.
+      for (const { partner, ended } of partnersOf(viewerId).filter((c) => c.ended === pass)) {
+        const k = kin(partner, id)
+        const w = k && kinWord(partner, id, k, g, true)
+        if (k && w) {
+          if (k.up === 1 && k.down >= 2) {
+            return former(ended, w)
+          }
+          return former(ended, k.up === 0 ? `step-${w}` : inLaw(w))
         }
-        return former(ended, k.up === 0 ? `step-${w}` : `${w}-in-law`)
       }
-    }
-    // …then your relatives' partners.
-    for (const { partner, ended } of partnersOf(id)) {
-      const k = kin(viewerId, partner)
-      const w = k && kinWord(viewerId, partner, k, g, true)
-      if (k && w) {
-        // Your aunt's husband is your uncle; your grandmother's husband, a step-grandfather.
-        if (k.down === 1 && k.up >= 2) {
-          return former(ended, w)
+      // Your relatives' partners: your aunt's husband is your uncle; your grandmother's, a step-grandfather.
+      for (const { partner, ended } of partnersOf(id).filter((c) => c.ended === pass)) {
+        const k = kin(viewerId, partner)
+        const w = k && kinWord(viewerId, partner, k, g, true)
+        if (k && w) {
+          if (k.down === 1 && k.up >= 2) {
+            return former(ended, w)
+          }
+          return former(ended, k.down === 0 ? `step-${w}` : inLaw(w))
         }
-        return former(ended, k.down === 0 ? `step-${w}` : `${w}-in-law`)
       }
     }
     return null
