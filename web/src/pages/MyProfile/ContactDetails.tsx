@@ -70,7 +70,7 @@ function useContactSaved(personId: string) {
   const queryClient = useQueryClient()
   return {
     saved: (update: (rows: ContactMethod[]) => ContactMethod[]) => {
-      queryClient.setQueryData<ContactMethod[]>(contactKeys.mine, (rows) => rows && update(rows))
+      queryClient.setQueryData<ContactMethod[]>(contactKeys.mine(personId), (rows) => rows && update(rows))
       void queryClient.invalidateQueries({ queryKey: contactKeys.of(personId) })
       void queryClient.invalidateQueries({ queryKey: directoryKeys.all })
     },
@@ -79,7 +79,7 @@ function useContactSaved(personId: string) {
 }
 
 export function ContactDetails({ personId }: { personId: string }) {
-  const contacts = useQuery(myContactsQuery)
+  const contacts = useQuery(myContactsQuery(personId))
   const [adding, setAdding] = useState(false)
   // Each open editor stands alone, so opening another never closes one mid-save.
   const [editing, setEditing] = useState<ReadonlySet<string>>(new Set())

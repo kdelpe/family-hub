@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { authKeys, type User } from '../../api/auth'
-import type { ContactMethod } from '../../api/contacts'
+import { type ContactMethod, contactKeys } from '../../api/contacts'
 import { type Person, personKeys } from '../../api/persons'
 import { MyProfile } from './MyProfile'
 
@@ -67,7 +67,7 @@ function renderPage(answers: Record<string, Answer> = {}, user: Partial<User> = 
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
-  return { fetch, client }
+  return { fetch, client, router }
 }
 
 const sent = (fetch: ReturnType<typeof vi.fn>, method: string, url: string) =>
@@ -374,5 +374,29 @@ describe('MyProfile', () => {
 
     expect(screen.getByRole('form', { name: 'Edit Phone' })).toBeInTheDocument()
     expect(screen.getByRole('form', { name: 'Edit Email' })).toBeInTheDocument()
+  })
+
+  it('forgets your contact rows once you leave', async () => {
+    const { client, router } = renderPage()
+    await screen.findByRole('switch', { name: 'Mobile' })
+
+    await act(() => router.navigate('/auth/login'))
+
+    await vi.waitFor(() => expect(client.getQueryData(contactKeys.mine('maya'))).toBeUndefined())
+  })
+
+  it('shows the rows of whoever you are now when an admin relinks your login', async () => {
+    const answers: Record<string, Answer> = {}
+    const { client } = renderPage(answers)
+    await screen.findByRole('switch', { name: 'Mobile' })
+    const fritzRows = [method({ id: 'f1', kind: 'email', value: 'fritz@example.com' })]
+    answers['GET /api/me/contacts'] = { status: 200, body: { contacts: fritzRows } }
+    client.setQueryData(personKeys.one('fritz'), { ...maya, id: 'fritz', first_name: 'Fritz', bio: null })
+
+    act(() => client.setQueryData(authKeys.me, { id: 'u', email: 'maya@example.com', role: 'member', person_id: 'fritz' }))
+
+    await vi.waitFor(() => expect(screen.queryByRole('switch', { name: 'Mobile' })).not.toBeInTheDocument())
+    expect(await screen.findByRole('switch', { name: 'Email' })).toBeInTheDocument()
+    expect(screen.getAllByRole('switch')).toHaveLength(1)
   })
 })

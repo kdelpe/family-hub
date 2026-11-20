@@ -32,7 +32,8 @@ export const kindOf = (c: ContactMethod): RequestKind | null =>
 
 export const contactKeys = {
   of: (personId: string) => ['contacts', personId] as const,
-  mine: ['contacts', 'mine'] as const,
+  // Whose rows too: an admin can relink a login, and /me/contacts then answers for the new person.
+  mine: (personId: string) => ['contacts', 'mine', personId] as const,
 }
 
 export const directoryKeys = {
@@ -84,11 +85,13 @@ const platformLabels: Record<string, string> = {
 
 export const platformLabel = (platform: string | null) => (platform && platformLabels[platform]) || 'Other'
 
-export const myContactsQuery = {
-  queryKey: contactKeys.mine,
+// Never kept once My profile is left, like everyone else's contacts (§5.2).
+export const myContactsQuery = (personId: string) => ({
+  queryKey: contactKeys.mine(personId),
   queryFn: async ({ signal }: { signal?: AbortSignal }) =>
     (await api<{ contacts: ContactMethod[] }>('GET', '/me/contacts', { signal })).contacts,
-}
+  gcTime: 0,
+})
 
 export type NewContact = Pick<ContactMethod, 'kind' | 'platform' | 'label' | 'value' | 'visibility'>
 
