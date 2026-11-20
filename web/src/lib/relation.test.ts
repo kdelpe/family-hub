@@ -35,6 +35,7 @@ const tree: Tree = {
     ...['jeanbaptiste', 'joseph', 'jeanrobert', 'fritz', 'kervens', 'tim', 'mackenson', 'lucien', 'frantz', 'stanley', 'wesner', 'ralph', 'henri', 'pierre', 'paul', 'xavier'].map((id) => person(id, 'male')),
     ...['annemarie', 'marieclaire', 'marietherese', 'nadege', 'maya', 'sabine', 'guerline', 'fabienne', 'naika', 'naomie', 'rose', 'mirlande', 'darline', 'odette', 'lise', 'lucie'].map((id) => person(id, 'female')),
     person('alex', null),
+    ...['ginette', 'carline', 'yves', 'yvette', 'colette', 'ana', 'bea'].map((id) => person(id, id === 'yves' ? 'male' : 'female')),
   ],
   relationships: [
     couple('jeanbaptiste', 'annemarie'),
@@ -68,11 +69,18 @@ const tree: Tree = {
     ...parents('darline', 'frantz', 'mirlande'),
     couple('maya', 'pierre', { ended: true }),
     parent('maya', 'lucie', 'foster'),
+    parent('ginette', 'odette'),
+    couple('kervens', 'carline'),
+    couple('darline', 'yves'),
+    parent('yvette', 'pierre'),
+    couple('joseph', 'colette'),
+    parent('wesner', 'ana'),
+    parent('wesner', 'bea'),
   ],
 }
 
 describe('relationsTo, as Maya', () => {
-  const relation = relationsTo(tree, 'maya')
+  const labels = relationsTo(tree, 'maya')
 
   it.each([
     { id: 'maya', want: 'You' },
@@ -99,11 +107,16 @@ describe('relationsTo, as Maya', () => {
     { id: 'fabienne', want: 'Your sister-in-law' },
     { id: 'ralph', want: 'Your son-in-law' },
     { id: 'guerline', want: 'Your former stepmother' },
-    { id: 'paul', want: 'Your stepbrother' },
+    { id: 'paul', want: 'Your former stepbrother' },
     { id: 'lucie', want: 'Your foster daughter' },
+    { id: 'ginette', want: 'Your grandmother-in-law' },
+    { id: 'carline', want: 'Your niece-in-law' },
+    { id: 'yves', want: 'Your cousin-in-law' },
+    { id: 'yvette', want: 'Your former mother-in-law' },
+    { id: 'colette', want: 'Your step-grandmother' },
     { id: 'xavier', want: null },
   ])('$id: $want', ({ id, want }) => {
-    expect(relation(id)).toBe(want)
+    expect(labels.get(id) ?? null).toBe(want)
   })
 })
 
@@ -111,6 +124,9 @@ describe('relationsTo, from the other side', () => {
   it.each([
     { viewer: 'sabine', id: 'nadege', want: 'Your stepmother' },
     { viewer: 'paul', id: 'jeanrobert', want: 'Your former stepfather' },
+    { viewer: 'paul', id: 'maya', want: 'Your former stepsister' },
+    { viewer: 'ana', id: 'bea', want: 'Your sibling' },
+    { viewer: 'stanley', id: 'naika', want: 'Your daughter' },
     { viewer: 'darline', id: 'maya', want: 'Your cousin' },
     { viewer: 'kervens', id: 'maya', want: 'Your aunt' },
     { viewer: 'lucie', id: 'maya', want: 'Your foster mother' },
@@ -118,7 +134,7 @@ describe('relationsTo, from the other side', () => {
     { viewer: 'naomie', id: 'jeanrobert', want: 'Your great-grandfather' },
     { viewer: 'stanley', id: 'jeanrobert', want: 'Your father-in-law' },
   ])('$viewer sees $id as $want', ({ viewer, id, want }) => {
-    expect(relationsTo(tree, viewer)(id)).toBe(want)
+    expect(relationsTo(tree, viewer).get(id) ?? null).toBe(want)
   })
 
   it('treats an adoptive parent as a parent, and ignores foster links for siblings', () => {
@@ -126,7 +142,7 @@ describe('relationsTo, from the other side', () => {
       persons: [person('a', 'female'), person('b', 'male'), person('c', 'female')],
       relationships: [parent('a', 'b', 'adoptive'), parent('a', 'c', 'foster')],
     }
-    expect(relationsTo(adopted, 'b')('a')).toBe('Your mother')
-    expect(relationsTo(adopted, 'b')('c')).toBe('Your foster sister')
+    expect(relationsTo(adopted, 'b').get('a')).toBe('Your mother')
+    expect(relationsTo(adopted, 'b').get('c')).toBe('Your foster sister')
   })
 })

@@ -1,0 +1,52 @@
+import { useSyncExternalStore } from 'react'
+
+const pausedKey = 'fh-motion-paused'
+const listeners = new Set<() => void>()
+
+// Session storage can throw (private windows, blocked storage); the choice then lasts until the page reloads.
+let paused: boolean | null = null
+const readPaused = () => {
+  if (paused === null) {
+    try {
+      paused = sessionStorage.getItem(pausedKey) === '1'
+    } catch {
+      paused = false
+    }
+  }
+  return paused
+}
+
+const subscribePaused = (listener: () => void) => {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+const setPaused = (next: boolean) => {
+  paused = next
+  try {
+    sessionStorage.setItem(pausedKey, next ? '1' : '0')
+  } catch {
+    // Kept in memory only.
+  }
+  listeners.forEach((l) => l())
+}
+
+// One Pause motion choice for the whole site, kept for the session (design-notes §6.4).
+export function useMotionPaused(): [boolean, (paused: boolean) => void] {
+  return [useSyncExternalStore(subscribePaused, readPaused, () => false), setPaused]
+}
+
+const reducedQuery = '(prefers-reduced-motion: reduce)'
+const media = () => (typeof window.matchMedia === 'function' ? window.matchMedia(reducedQuery) : null)
+
+export function useReducedMotion(): boolean {
+  return useSyncExternalStore(
+    (listener) => {
+      const m = media()
+      m?.addEventListener('change', listener)
+      return () => m?.removeEventListener('change', listener)
+    },
+    () => media()?.matches ?? false,
+    () => false,
+  )
+}
