@@ -104,7 +104,7 @@ describe('AppShell', () => {
     stubApi({
       '/api/auth/me': { status: 200, body: maya },
       '/api/persons/p1': { status: 200, body: mayaPerson },
-      '/api/me/contact-requests': { status: 200, body: { requests } },
+      '/api/me/contact-requests': { status: 200, body: { person_id: 'p1', requests } },
     })
     renderShell()
 

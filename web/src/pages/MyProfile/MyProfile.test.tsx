@@ -5,7 +5,7 @@ import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { authKeys, type User } from '../../api/auth'
-import { type ContactMethod, contactKeys } from '../../api/contacts'
+import { type ContactMethod, contactKeys, contactRequestKeys } from '../../api/contacts'
 import { type Person, personKeys } from '../../api/persons'
 import { MyProfile } from './MyProfile'
 
@@ -46,9 +46,11 @@ function renderPage(answers: Record<string, Answer> = {}, user: Partial<User> = 
     const method = init?.method ?? 'GET'
     const key = `${method} ${url}`
     // Read at call time, so a test can change an answer midway.
+    // Like the server, the /me lists answer for whoever the login is linked to now.
+    const linked = client.getQueryData<User>(authKeys.me)?.person_id
     const defaults: Record<string, Answer> = {
-      'GET /api/me/contacts': { status: 200, body: { contacts: rows } },
-      'GET /api/me/contact-requests': { status: 200, body: { requests: [] } },
+      'GET /api/me/contacts': { status: 200, body: { person_id: linked, contacts: rows } },
+      'GET /api/me/contact-requests': { status: 200, body: { person_id: linked, requests: [] } },
     }
     const answer = answers[key] ?? defaults[key]
     // Like the server, a write that worked changes what the next read of your contacts returns.
@@ -460,7 +462,7 @@ describe('MyProfile', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Mobile' }))
     await vi.waitFor(() => expect(screen.getByRole('switch', { name: 'Mobile' })).toHaveTextContent('Family can ask'))
     // The refresh read the rows before the save, and only answers now.
-    act(() => read.release({ contacts }))
+    act(() => read.release({ person_id: 'maya', contacts }))
 
     await settled(client)
     expect(screen.getByRole('switch', { name: 'Mobile' })).toHaveTextContent('Family can ask')
@@ -471,7 +473,7 @@ describe('MyProfile', () => {
     const { client } = renderPage(answers)
     await screen.findByRole('switch', { name: 'Mobile' })
     const fritzRows = [method({ id: 'f1', kind: 'email', value: 'fritz@example.com' })]
-    answers['GET /api/me/contacts'] = { status: 200, body: { contacts: fritzRows } }
+    answers['GET /api/me/contacts'] = { status: 200, body: { person_id: 'fritz', contacts: fritzRows } }
     client.setQueryData(personKeys.one('fritz'), { ...maya, id: 'fritz', first_name: 'Fritz', bio: null })
 
     act(() => client.setQueryData(authKeys.me, { id: 'u', email: 'maya@example.com', role: 'member', person_id: 'fritz' }))
@@ -500,12 +502,13 @@ describe('MyProfile', () => {
   it('drops answers given and a suggestion begun for you when an admin relinks your login', async () => {
     const asked = { id: 'r1', kind: 'phone', status: 'pending', created_at: '2026-11-01T10:00:00Z', decided_at: null, from: { person_id: 'darline', name: 'Darline Monestime' } }
     const answers: Record<string, Answer> = {
-      'GET /api/me/contact-requests': { status: 200, body: { requests: [asked] } },
+      'GET /api/me/contact-requests': { status: 200, body: { person_id: 'maya', requests: [asked] } },
       'POST /api/me/contact-requests/r1/decline': { status: 204 },
     }
     const { client } = renderPage(answers)
     fireEvent.click(await screen.findByRole('button', { name: 'Not now' }))
-    answers['GET /api/me/contact-requests'] = { status: 200, body: { requests: [] } }
+    // From now on, no requests for whoever the login is linked to.
+    delete answers['GET /api/me/contact-requests']
     fireEvent.click(screen.getByRole('button', { name: 'Yes, don’t share' }))
     await screen.findByText('Not shared. Darline won’t be told.')
     fireEvent.click(screen.getByRole('button', { name: 'Suggest a relative' }))
@@ -519,6 +522,33 @@ describe('MyProfile', () => {
     expect(screen.queryByRole('form', { name: 'Suggest a relative' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Suggest a relative' }))
     expect(screen.getByLabelText('Related to')).toHaveValue('Fritz Pluviose')
+  })
+
+  it.each([
+    { list: 'contacts', queryKey: contactKeys.mine('maya') },
+    { list: 'requests', queryKey: contactRequestKeys.mine('maya') },
+  ])('takes no $list read for someone else as yours, and finds out who you are now', async ({ queryKey }) => {
+    const signedIn = { id: 'u', email: 'maya@example.com', role: 'member', person_id: 'maya' }
+    const asked = { id: 'r1', kind: 'phone', status: 'pending', created_at: '2026-11-01T10:00:00Z', decided_at: null, from: { person_id: 'darline', name: 'Darline Monestime' } }
+    const answers: Record<string, Answer> = { 'GET /api/auth/me': { status: 200, body: signedIn } }
+    const { client } = renderPage(answers)
+    await screen.findByRole('switch', { name: 'Mobile' })
+    await settled(client)
+    // An admin relinks the login to Fritz; the server knows at once, this page not yet.
+    Object.assign(answers, {
+      'GET /api/me/contacts': { status: 200, body: { person_id: 'fritz', contacts: [method({ id: 'f1', kind: 'email', value: 'fritz@example.com' })] } },
+      'GET /api/me/contact-requests': { status: 200, body: { person_id: 'fritz', requests: [asked] } },
+      'GET /api/auth/me': { status: 200, body: { ...signedIn, person_id: 'fritz' } },
+      'GET /api/persons/fritz': { status: 200, body: { ...maya, id: 'fritz', first_name: 'Fritz', bio: null } },
+    })
+
+    act(() => void client.invalidateQueries({ queryKey }))
+
+    // Shown as Fritz's own, once the page knows it's him.
+    expect(await screen.findByText('Fritz Pluviose')).toBeInTheDocument()
+    expect(await screen.findByRole('switch', { name: 'Email' })).toBeInTheDocument()
+    expect(screen.getAllByRole('switch')).toHaveLength(1)
+    expect(await screen.findByText(/asked for your phone number/)).toBeInTheDocument()
   })
 
   it.each([

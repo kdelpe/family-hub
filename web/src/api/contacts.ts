@@ -1,3 +1,6 @@
+import type { QueryClient } from '@tanstack/react-query'
+
+import { authKeys } from './auth'
 import { api } from './client'
 import type { TreePerson } from './tree'
 
@@ -91,8 +94,10 @@ export const contactRequestKeys = {
 // Pending ones first, then those shared, each oldest first.
 export const myRequestsQuery = (personId: string) => ({
   queryKey: contactRequestKeys.mine(personId),
-  queryFn: async ({ signal }: { signal?: AbortSignal }) =>
-    (await api<{ requests: ContactRequest[] }>('GET', '/me/contact-requests', { signal })).requests,
+  queryFn: async ({ signal, client }: MineContext) => {
+    const answer = await api<{ person_id: string; requests: ContactRequest[] }>('GET', '/me/contact-requests', { signal })
+    return (await ownedBy(client, personId, answer)).requests
+  },
 })
 
 export const decideRequest = (id: string, decision: 'share' | 'decline' | 'revoke') =>
@@ -110,11 +115,25 @@ const platformLabels: Record<string, string> = {
 
 export const platformLabel = (platform: string | null) => (platform && platformLabels[platform]) || 'Other'
 
+type MineContext = { signal?: AbortSignal; client: QueryClient }
+
+// A /me read answers for whoever the login is linked to now, and an admin can relink it at any time (§5.1).
+// Rows for someone else never go under this person's key: who you are is read again first, so the page moves on.
+async function ownedBy<T extends { person_id: string }>(client: QueryClient, personId: string, answer: T) {
+  if (answer.person_id !== personId) {
+    await client.refetchQueries({ queryKey: authKeys.me })
+    throw new Error('your login is linked to someone else now')
+  }
+  return answer
+}
+
 // Never kept once My profile is left, like everyone else's contacts (§5.2).
 export const myContactsQuery = (personId: string) => ({
   queryKey: contactKeys.mine(personId),
-  queryFn: async ({ signal }: { signal?: AbortSignal }) =>
-    (await api<{ contacts: ContactMethod[] }>('GET', '/me/contacts', { signal })).contacts,
+  queryFn: async ({ signal, client }: MineContext) => {
+    const answer = await api<{ person_id: string; contacts: ContactMethod[] }>('GET', '/me/contacts', { signal })
+    return (await ownedBy(client, personId, answer)).contacts
+  },
   gcTime: 0,
 })
 
