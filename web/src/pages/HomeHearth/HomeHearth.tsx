@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
-import { type ReactNode, useMemo } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import { type Birthday, type Home, homeQuery, type Newcomer } from '../../api/home'
@@ -50,14 +50,13 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
             New in the family
           </h2>
           <Newcomers query={home} viewerId={user?.person_id ?? null} now={now} />
-          <Link to="/people" className={styles.seeAll}>
-            See everyone
-          </Link>
         </section>
       </div>
     </main>
   )
 }
+
+const shownAtFirst = 3
 
 function Cards<T>({
   query,
@@ -70,13 +69,45 @@ function Cards<T>({
   empty: string
   children: (item: T, index: number) => ReactNode
 }) {
+  const [open, setOpen] = useState(false)
+  const rows = useRef<HTMLDivElement>(null)
+  const byKeyboard = useRef(false)
+  // The button is gone once pressed, so keyboard focus moves on to the first row it showed.
+  useEffect(() => {
+    if (open && byKeyboard.current) {
+      rows.current?.children[shownAtFirst]?.querySelector('a')?.focus()
+    }
+  }, [open])
+
   if (query.isError && !items) {
     return <p role="alert">{errorMessage(query.error)}</p>
   }
   if (!items) {
     return <p className={styles.muted}>Loading…</p>
   }
-  return items.length === 0 ? <p className={styles.muted}>{empty}</p> : items.map(children)
+  if (items.length === 0) {
+    return <p className={styles.muted}>{empty}</p>
+  }
+  return (
+    <>
+      <div ref={rows} className={styles.rows}>
+        {(open ? items : items.slice(0, shownAtFirst)).map(children)}
+      </div>
+      {!open && items.length > shownAtFirst && (
+        <button
+          type="button"
+          onClick={(event) => {
+            // detail is 0 for a keyboard press; a mouse click keeps focus where it is.
+            byKeyboard.current = event.detail === 0
+            setOpen(true)
+          }}
+          className={styles.more}
+        >
+          See more
+        </button>
+      )}
+    </>
+  )
 }
 
 function BirthdayRow({ birthday, soonest }: { birthday: Birthday; soonest: boolean }) {
