@@ -3,7 +3,7 @@ import { type FormEvent, useState } from 'react'
 import { Link } from 'react-router'
 
 import { adminKeys } from '../../api/admin'
-import { onSessionEnded } from '../../api/auth'
+import { onSessionEnded, sameSession, sessionGeneration } from '../../api/auth'
 import { directoryKeys } from '../../api/contacts'
 import { familyKeys } from '../../api/family'
 import { type Person, personKeys, updateOwnProfile } from '../../api/persons'
@@ -63,8 +63,13 @@ function StoryCard({ person }: { person: Person }) {
   const changed = draft !== null && draft.trim() !== saved
   const save = useMutation({
     mutationFn: () => updateOwnProfile(person.id, { bio: text.trim() || null }),
-    onSuccess: (updated) => {
-      queryClient.setQueryData(personKeys.one(person.id), updated)
+    onMutate: sessionGeneration,
+    onSuccess: (updated, _, since) => {
+      if (!sameSession(since)) {
+        return
+      }
+      // Only the story: a details save answering out of order mustn't be undone by this one.
+      queryClient.setQueryData<Person>(personKeys.one(person.id), (old) => old && { ...old, bio: updated.bio })
       setDraft(null)
       setJustSaved(true)
     },
@@ -174,8 +179,16 @@ function Details({ person }: { person: Person }) {
 
   const save = useMutation({
     mutationFn: () => updateOwnProfile(person.id, changes),
-    onSuccess: (updated) => {
-      queryClient.setQueryData(personKeys.one(person.id), updated)
+    onMutate: sessionGeneration,
+    onSuccess: (updated, _, since) => {
+      if (!sameSession(since)) {
+        return
+      }
+      const { first_name, last_name, birth_date, birth_date_precision } = updated
+      queryClient.setQueryData<Person>(
+        personKeys.one(person.id),
+        (old) => old && { ...old, first_name, last_name, birth_date, birth_date_precision },
+      )
       // Where else a name or birthday shows.
       for (const queryKey of [personKeys.some([]), treeKeys.all, directoryKeys.all, familyKeys.summary, adminKeys.members]) {
         void queryClient.invalidateQueries({ queryKey })
@@ -250,6 +263,7 @@ function Details({ person }: { person: Person }) {
             <input
               id="mp-first"
               autoComplete="given-name"
+              readOnly={save.isPending}
               value={first}
               onChange={(e) => setFirst(e.target.value)}
               aria-invalid={noFirst || undefined}
@@ -269,6 +283,7 @@ function Details({ person }: { person: Person }) {
             <input
               id="mp-last"
               autoComplete="family-name"
+              readOnly={save.isPending}
               value={last}
               onChange={(e) => setLast(e.target.value)}
               className={styles.input}
@@ -282,6 +297,7 @@ function Details({ person }: { person: Person }) {
           <input
             id="mp-birthday"
             type="date"
+            readOnly={save.isPending}
             value={date}
             max={today()}
             aria-invalid={future || undefined}

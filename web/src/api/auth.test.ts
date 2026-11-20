@@ -1,8 +1,8 @@
 import { QueryClient } from '@tanstack/react-query'
 import { waitFor } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { authKeys, followSessionChanges, startSession, type User } from './auth'
+import { authKeys, endSession, followSessionChanges, sameSession, sessionGeneration, startSession, type User } from './auth'
 
 const before: User = { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: 'maya' }
 const after: User = { id: 'u2', email: 'fritz.pluviose@example.com', role: 'member', person_id: 'fritz' }
@@ -60,4 +60,17 @@ it('signs in even when the browser blocks storage', () => {
   startSession(client, after)
 
   expect(client.getQueryData(authKeys.me)).toEqual(after)
+})
+
+describe('sameSession', () => {
+  it('turns down an answer that started before the session changed', () => {
+    const queryClient = new QueryClient()
+    const since = sessionGeneration()
+    expect(sameSession(since)).toBe(true)
+
+    endSession(queryClient)
+
+    expect(sameSession(since)).toBe(false)
+    expect(sameSession(sessionGeneration())).toBe(true)
+  })
 })

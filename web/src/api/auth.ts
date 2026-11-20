@@ -26,6 +26,13 @@ export const authKeys = {
 
 const sessionChangedKey = 'fh-session-changed'
 
+// Bumped whenever the cached data is dropped for a session change. A save captures it when it starts
+// (onMutate: sessionGeneration) and writes its answer to the cache only if it's unchanged (sameSession), so a
+// late answer from an ended session can't put the last person's details back.
+let generation = 0
+export const sessionGeneration = () => generation
+export const sameSession = (since: number | undefined) => since === generation
+
 // A link preview depends on its token, not on who's signed in, and a tab may be mid-way through setting a password
 // with it; everything else was fetched as someone.
 const fetchedAsSomeone = (query: Query) => query.queryKey[0] !== previewKey[0] || query.queryKey[1] !== previewKey[1]
@@ -41,6 +48,7 @@ export function startSession(queryClient: QueryClient, user: User) {
 export const endSession = (queryClient: QueryClient) => dropSessionData(queryClient)
 
 function dropSessionData(queryClient: QueryClient) {
+  generation++
   queryClient.removeQueries({ predicate: fetchedAsSomeone })
   try {
     // The cookie changed for every tab; writing this fires a storage event in the others (followSessionChanges).
@@ -56,6 +64,7 @@ export const onSessionEnded = (queryClient: QueryClient) => (error: Error) => {
   if (error instanceof ApiError && error.status === 401) {
     // Kept, then refetched: the shell is watching it, and a removed query wouldn't be fetched again.
     const isMe = (query: Query) => query.queryKey[0] === authKeys.me[0] && query.queryKey[1] === authKeys.me[1]
+    generation++
     queryClient.removeQueries({ predicate: (query) => fetchedAsSomeone(query) && !isMe(query) })
     void queryClient.invalidateQueries({ queryKey: authKeys.me })
   }
@@ -66,6 +75,7 @@ export const onSessionEnded = (queryClient: QueryClient) => (error: Error) => {
 export function followSessionChanges(queryClient: QueryClient): () => void {
   const onStorage = (event: StorageEvent) => {
     if (event.key === sessionChangedKey) {
+      generation++
       void queryClient.resetQueries({ predicate: fetchedAsSomeone })
     }
   }

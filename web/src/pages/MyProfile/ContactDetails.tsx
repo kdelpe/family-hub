@@ -13,7 +13,7 @@ import {
   removeMyContact,
   updateMyContact,
 } from '../../api/contacts'
-import { onSessionEnded } from '../../api/auth'
+import { onSessionEnded, sameSession, sessionGeneration } from '../../api/auth'
 import { errorMessage, refusedMessage } from '../../lib/errorMessage'
 import { formatPhone } from '../../lib/phone'
 import styles from './MyProfile.module.css'
@@ -120,7 +120,8 @@ function ContactRow({ personId, contact, onEdit }: { personId: string; contact: 
   const status = { hidden: 'Only me', on_request: 'Family can ask', family: 'Visible to family' }[contact.visibility]
   const toggle = useMutation({
     mutationFn: () => updateMyContact(contact.id, { visibility: on ? 'hidden' : askedFor(contact) ? 'on_request' : 'family' }),
-    onSuccess: (row) => saved((rows) => rows.map((r) => (r.id === row.id ? row : r))),
+    onMutate: sessionGeneration,
+    onSuccess: (row, _, since) => sameSession(since) && saved((rows) => rows.map((r) => (r.id === row.id ? row : r))),
     onError,
   })
 
@@ -184,17 +185,23 @@ function ContactForm({ personId, contact, onDone }: { personId: string; contact?
       const row: NewContact = { kind: type.kind, platform: type.platform, visibility: 'hidden', ...fields }
       return addMyContact(row)
     },
-    onSuccess: (row) => {
-      saved((rows) => (contact ? rows.map((r) => (r.id === row.id ? row : r)) : [...rows, row]))
-      onDone()
+    onMutate: sessionGeneration,
+    onSuccess: (row, _, since) => {
+      if (sameSession(since)) {
+        saved((rows) => (contact ? rows.map((r) => (r.id === row.id ? row : r)) : [...rows, row]))
+        onDone()
+      }
     },
     onError,
   })
   const remove = useMutation({
     mutationFn: () => removeMyContact(contact!.id),
-    onSuccess: () => {
-      saved((rows) => rows.filter((r) => r.id !== contact!.id))
-      onDone()
+    onMutate: sessionGeneration,
+    onSuccess: (_, __, since) => {
+      if (sameSession(since)) {
+        saved((rows) => rows.filter((r) => r.id !== contact!.id))
+        onDone()
+      }
     },
     onError,
   })
@@ -226,6 +233,7 @@ function ContactForm({ personId, contact, onDone }: { personId: string; contact?
           <select
             id={`${id}-type`}
             value={typeId}
+            disabled={busy}
             onChange={(e) => {
               setTypeId(e.target.value)
               setValue('')
@@ -250,6 +258,7 @@ function ContactForm({ personId, contact, onDone }: { personId: string; contact?
             id={`${id}-value`}
             rows={3}
             required
+            readOnly={busy}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             className={`${styles.input} ${styles.textarea}`}
@@ -259,6 +268,7 @@ function ContactForm({ personId, contact, onDone }: { personId: string; contact?
             id={`${id}-value`}
             type={type.kind === 'email' ? 'email' : isPhone ? 'tel' : 'text'}
             required
+            readOnly={busy}
             value={value}
             placeholder={type.hint}
             // Only while typing at the end: regrouping mid-number would throw the cursor to the end.
@@ -276,6 +286,7 @@ function ContactForm({ personId, contact, onDone }: { personId: string; contact?
         </label>
         <input
           id={`${id}-label`}
+          readOnly={busy}
           value={label}
           placeholder={type.platform === 'other' ? 'Like Mastodon' : 'Like Mobile or Work'}
           onChange={(e) => setLabel(e.target.value)}

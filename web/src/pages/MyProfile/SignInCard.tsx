@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
 import { useNavigate } from 'react-router'
 
@@ -10,13 +10,18 @@ import { errorMessage } from '../../lib/errorMessage'
 import { lengthRefusal, passwordRule } from '../../lib/passwordStrength'
 import styles from './MyProfile.module.css'
 
+const signInKey = ['sign-in'] as const
+
 export function SignInCard({ email }: { email: string }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [changing, setChanging] = useState(false)
   const [changed, setChanged] = useState(false)
 
+  // One at a time: a password change answering after sign-out would set a fresh cookie and sign them back in.
+  const signInBusy = useIsMutating({ mutationKey: signInKey }) > 0
   const signOut = useMutation({
+    mutationKey: signInKey,
     mutationFn: logout,
     // Off this page first, so the shell isn't left to refetch with the ended session.
     onSuccess: async () => {
@@ -64,8 +69,8 @@ export function SignInCard({ email }: { email: string }) {
       </span>
       <button
         type="button"
-        onClick={() => !signOut.isPending && signOut.mutate()}
-        aria-disabled={signOut.isPending || undefined}
+        onClick={() => !signInBusy && signOut.mutate()}
+        aria-disabled={signInBusy || undefined}
         className={styles.signOut}
       >
         Sign out
@@ -84,7 +89,9 @@ function PasswordForm({ email, onDone }: { email: string; onDone: (changed: bool
   const [noCurrent, setNoCurrent] = useState(false)
   // Remounts the error each try, so the same refusal is announced again.
   const [attempt, setAttempt] = useState(0)
+  const signInBusy = useIsMutating({ mutationKey: signInKey }) > 0
   const save = useMutation({
+    mutationKey: signInKey,
     mutationFn: () => changePassword(current, next),
     onSuccess: () => onDone(true),
     onError: onSessionEnded(queryClient),
@@ -92,7 +99,7 @@ function PasswordForm({ email, onDone }: { email: string; onDone: (changed: bool
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (save.isPending) {
+    if (signInBusy) {
       return
     }
     setAttempt((n) => n + 1)
@@ -124,6 +131,7 @@ function PasswordForm({ email, onDone }: { email: string; onDone: (changed: bool
           id="mp-current"
           autoComplete="current-password"
           value={current}
+          readOnly={save.isPending}
           onChange={(value) => {
             setCurrent(value)
             if (wrongCurrent) {
@@ -147,6 +155,7 @@ function PasswordForm({ email, onDone }: { email: string; onDone: (changed: bool
           id="mp-new"
           autoComplete="new-password"
           value={next}
+          readOnly={save.isPending}
           onChange={setNext}
           invalid={newRule !== null}
           describedBy={newRule ? 'mp-new-error' : undefined}
