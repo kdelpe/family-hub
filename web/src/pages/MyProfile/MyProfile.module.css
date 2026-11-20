@@ -150,8 +150,16 @@ form.who {
   color: var(--muted);
 }
 
-.small:empty {
-  display: none;
+/* Empty status lines stay in the accessibility tree, only out of sight, so the message that fills one is read out. */
+.small:empty,
+.sideText:empty,
+.answer:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .story,
@@ -460,10 +468,6 @@ form.who {
   color: var(--text-2);
 }
 
-.sideText:empty {
-  display: none;
-}
-
 .requests {
   border: 2px solid var(--accent);
 }
@@ -495,10 +499,6 @@ form.who {
 .answer {
   font-size: 14px;
   color: var(--text-2);
-}
-
-.answer:empty {
-  display: none;
 }
 
 .sharedWith {
