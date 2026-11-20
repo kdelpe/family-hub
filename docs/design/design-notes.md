@@ -200,10 +200,10 @@ Everyone in the archive (including those who have passed and people without acco
 - Each card links to the full profile.
 
 ### 4.4 Directory
-The family phone book for **living relatives only**. One row per person (framed avatar, name, relation) with only what they chose to share:
-- **Email**, shown with an **Email** button, if marked visible.
+Title **Directory** and a name search; no intro line, since the rows explain themselves. The family phone book for **living relatives only**. One row per person (framed avatar, name, relation) with only what they chose to share:
+- **Email**, shown with an **Email** button, if marked visible: a green pill shaped like the social pills (regular weight, envelope icon), so it doesn't outweigh the rest of the row.
 - **Social accounts** as small pill buttons with a neutral link icon and the platform name (Instagram, Facebook, TikTok, YouTube, X…), linking out. Use an official icon set for platform marks in the real build rather than hand-drawn logos.
-- **Phone numbers, WhatsApp and addresses are never listed.** If the person allows it, a dashed **Request phone number / Request WhatsApp / Request address** button appears; after asking it becomes *"✓ Phone number requested"*. The person then decides in My profile (§4.8). WhatsApp counts as a phone number because opening a chat reveals it.
+- **Phone numbers, WhatsApp and addresses are never listed.** If the person allows it, a dashed **Request phone number / Request WhatsApp / Request address** button appears; after asking it becomes *"✓ Phone number requested"*. The person then decides in My profile (§4.8). Once they share it, the row says *"✓ Phone number shared with you"*, linking to their profile, where the number is shown. Admins, who can't ask, see *"Phone number and address on request"* instead of the buttons. WhatsApp counts as a phone number because opening a chat reveals it.
 - Footer: only living members appear; phone/address are shared only on request; link to My profile.
 People stays the page for *everyone* (including those who have passed and people without accounts); the two are kept separate on purpose.
 
