@@ -87,9 +87,25 @@ describe('RequestsCard', () => {
   })
 
   it.each([
-    { name: 'shares', button: 'Share', decision: 'share', after: [{ ...darline, status: 'shared' as const }], says: 'Shared with Darline.' },
-    { name: 'quietly declines', button: 'Not now', decision: 'decline', after: [], says: 'Not shared. Darline won’t be told.' },
-  ])('$name a request, and keeps it in place saying so', async ({ button, decision, after, says }) => {
+    {
+      name: 'shares',
+      button: 'Share',
+      question: 'Share your phone number with Darline?',
+      yes: 'Yes, share',
+      decision: 'share',
+      after: [{ ...darline, status: 'shared' as const }],
+      says: 'Shared with Darline.',
+    },
+    {
+      name: 'quietly declines',
+      button: 'Not now',
+      question: 'Not share your phone number with Darline?',
+      yes: 'Yes, don’t share',
+      decision: 'decline',
+      after: [],
+      says: 'Not shared. Darline won’t be told.',
+    },
+  ])('$name a request once you say yes, and keeps it in place saying so', async ({ button, question, yes, decision, after, says }) => {
     const answers = {
       'GET /api/me/contact-requests': listed([darline]),
       [`POST /api/me/contact-requests/r1/${decision}`]: { status: 204 },
@@ -97,7 +113,9 @@ describe('RequestsCard', () => {
     const { fetch, client } = renderCard(answers)
 
     fireEvent.click(await screen.findByRole('button', { name: button }))
+    expect(posted(fetch, `/api/me/contact-requests/r1/${decision}`)).toBe(false)
     answers['GET /api/me/contact-requests'] = listed(after)
+    fireEvent.click(within(screen.getByRole('group', { name: question })).getByRole('button', { name: yes }))
 
     expect(await screen.findByText(says)).toBeInTheDocument()
     expect(posted(fetch, `/api/me/contact-requests/r1/${decision}`)).toBe(true)
@@ -112,23 +130,39 @@ describe('RequestsCard', () => {
     }
   })
 
+  it.each([
+    { button: 'Share', question: 'Share your phone number with Darline?', note: undefined },
+    { button: 'Not now', question: 'Not share your phone number with Darline?', note: 'You can’t change your mind later.' },
+  ])('asks before it answers “$button”, and Cancel sends nothing', async ({ button, question, note }) => {
+    const { fetch } = renderCard({ 'GET /api/me/contact-requests': listed([darline]) })
+
+    fireEvent.click(await screen.findByRole('button', { name: button }))
+    const confirm = screen.getByRole('group', { name: question })
+    if (note) {
+      expect(confirm).toHaveAccessibleDescription(note)
+    }
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument()
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+  })
+
   it('asks before it stops sharing, then takes the share back', async () => {
     const answers = {
       'GET /api/me/contact-requests': listed([naika]),
       'POST /api/me/contact-requests/r3/revoke': { status: 204 },
     }
     const { fetch } = renderCard(answers)
+    const confirm = () => within(screen.getByRole('group', { name: 'Stop sharing your WhatsApp number with Naïka?' }))
 
     fireEvent.click(await screen.findByRole('button', { name: 'Stop sharing' }))
-    let confirm = within(screen.getByRole('group', { name: 'Stop sharing?' }))
-    expect(confirm.getByText('Stop sharing your WhatsApp number with Naïka?')).toBeInTheDocument()
-    fireEvent.click(confirm.getByRole('button', { name: 'Keep sharing' }))
+    fireEvent.click(confirm().getByRole('button', { name: 'Keep sharing' }))
     expect(posted(fetch, '/api/me/contact-requests/r3/revoke')).toBe(false)
 
     fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }))
-    confirm = within(screen.getByRole('group', { name: 'Stop sharing?' }))
     answers['GET /api/me/contact-requests'] = listed([])
-    fireEvent.click(confirm.getByRole('button', { name: 'Yes, stop' }))
+    fireEvent.click(confirm().getByRole('button', { name: 'Yes, stop' }))
 
     expect(await screen.findByText('Stopped sharing your WhatsApp number with Naïka.')).toBeInTheDocument()
     expect(screen.queryByRole('listitem')).not.toBeInTheDocument()
@@ -145,6 +179,7 @@ describe('RequestsCard', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Share' }))
     // Shared from another tab meanwhile.
     answers['GET /api/me/contact-requests'] = listed([{ ...darline, status: 'shared' }])
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, share' }))
 
     expect(await screen.findByRole('listitem')).toHaveTextContent('Darline Monestime · phone number')
     expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument()

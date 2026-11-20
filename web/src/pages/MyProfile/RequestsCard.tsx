@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 import { onSessionEnded, sameSession, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
@@ -104,6 +104,52 @@ function useDecision(personId: string, request: ContactRequest, onDecided: (deci
 const decisionError = (error: Error) =>
   error instanceof ApiError && error.status === 409 ? 'This was already answered.' : errorMessage(error)
 
+// The second step before an answer goes out, inside the row, like Remove on a contact.
+function Confirm({
+  question,
+  note,
+  yes,
+  no,
+  busy,
+  onYes,
+  onNo,
+}: {
+  question: string
+  note?: string
+  yes: string
+  no: string
+  busy: boolean
+  onYes: () => void
+  onNo: () => void
+}) {
+  const id = useId()
+  return (
+    <div
+      role="group"
+      aria-labelledby={`${id}-question`}
+      aria-describedby={note ? `${id}-note` : undefined}
+      className={styles.confirming}
+    >
+      <span id={`${id}-question`} className={styles.confirm}>
+        {question}
+      </span>
+      {note && (
+        <span id={`${id}-note`} className={styles.confirmNote}>
+          {note}
+        </span>
+      )}
+      <div className={styles.choices}>
+        <button type="button" onClick={() => !busy && onYes()} aria-disabled={busy || undefined} className={`pill ${styles.save}`}>
+          {yes}
+        </button>
+        <button type="button" onClick={() => !busy && onNo()} aria-disabled={busy || undefined} className={`pill ${styles.cancel}`}>
+          {no}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function RequestRow({
   personId,
   request,
@@ -115,39 +161,41 @@ function RequestRow({
   answer: Answer | undefined
   onAnswered: (answer: Answer) => void
 }) {
+  // Both ask first: a decline can't be taken back, and a share shows the detail at once (owner's call).
+  const [confirming, setConfirming] = useState<'share' | 'decline' | null>(null)
   const decide = useDecision(personId, request, (d) => onAnswered(d === 'share' ? 'shared' : 'declined'))
   const first = firstName(request.from.name)
-  const choose = (decision: 'share' | 'decline') => {
-    if (!decide.isPending) {
-      decide.mutate(decision)
-    }
-  }
+  const detail = yourDetail[request.kind]
 
   return (
     <div className={styles.request}>
       <span>
-        <strong>{request.from.name}</strong> asked for your {yourDetail[request.kind]}.
+        <strong>{request.from.name}</strong> asked for your {detail}.
       </span>
-      {!answer && (
-        <div className={styles.choices}>
-          <button
-            type="button"
-            onClick={() => choose('share')}
-            aria-disabled={decide.isPending || undefined}
-            className={`pill ${styles.save}`}
-          >
-            Share
-          </button>
-          <button
-            type="button"
-            onClick={() => choose('decline')}
-            aria-disabled={decide.isPending || undefined}
-            className={`pill ${styles.cancel}`}
-          >
-            Not now
-          </button>
-        </div>
-      )}
+      {!answer &&
+        (confirming ? (
+          <Confirm
+            question={confirming === 'share' ? `Share your ${detail} with ${first}?` : `Not share your ${detail} with ${first}?`}
+            note={confirming === 'decline' ? 'You can’t change your mind later.' : undefined}
+            yes={confirming === 'share' ? 'Yes, share' : 'Yes, don’t share'}
+            no="Cancel"
+            busy={decide.isPending}
+            onYes={() => decide.mutate(confirming)}
+            onNo={() => {
+              setConfirming(null)
+              decide.reset()
+            }}
+          />
+        ) : (
+          <div className={styles.choices}>
+            <button type="button" onClick={() => setConfirming('share')} className={`pill ${styles.save}`}>
+              Share
+            </button>
+            <button type="button" onClick={() => setConfirming('decline')} className={`pill ${styles.cancel}`}>
+              Not now
+            </button>
+          </div>
+        ))}
       {/* Mounted before the answer, so screen readers announce it. */}
       <span role="status" className={styles.answer}>
         {answer === 'shared' ? `Shared with ${first}.` : answer === 'declined' ? `Not shared. ${first} won’t be told.` : ''}
@@ -173,29 +221,17 @@ function SharedLine({ personId, request, onStopped }: { personId: string; reques
         {request.from.name} · {detail}
       </span>
       {confirming ? (
-        <div role="group" aria-label="Stop sharing?" className={styles.stopping}>
-          <span className={styles.confirm}>
-            Stop sharing your {detail} with {firstName(request.from.name)}?
-          </span>
-          <div className={styles.choices}>
-            <button
-              type="button"
-              onClick={() => !stop.isPending && stop.mutate('revoke')}
-              aria-disabled={stop.isPending || undefined}
-              className={`pill ${styles.save}`}
-            >
-              Yes, stop
-            </button>
-            <button
-              type="button"
-              onClick={() => !stop.isPending && setConfirming(false)}
-              aria-disabled={stop.isPending || undefined}
-              className={`pill ${styles.cancel}`}
-            >
-              Keep sharing
-            </button>
-          </div>
-        </div>
+        <Confirm
+          question={`Stop sharing your ${detail} with ${firstName(request.from.name)}?`}
+          yes="Yes, stop"
+          no="Keep sharing"
+          busy={stop.isPending}
+          onYes={() => stop.mutate('revoke')}
+          onNo={() => {
+            setConfirming(false)
+            stop.reset()
+          }}
+        />
       ) : (
         <button type="button" onClick={() => setConfirming(true)} className={styles.remove}>
           Stop sharing

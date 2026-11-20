@@ -506,6 +506,7 @@ describe('MyProfile', () => {
     const { client } = renderPage(answers)
     fireEvent.click(await screen.findByRole('button', { name: 'Not now' }))
     answers['GET /api/me/contact-requests'] = { status: 200, body: { requests: [] } }
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, don’t share' }))
     await screen.findByText('Not shared. Darline won’t be told.')
     fireEvent.click(screen.getByRole('button', { name: 'Suggest a relative' }))
     fireEvent.change(screen.getByLabelText('Their full name'), { target: { value: 'Darline Monestime' } })

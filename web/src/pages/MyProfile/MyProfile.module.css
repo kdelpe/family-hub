@@ -529,12 +529,20 @@ form.who {
   line-height: 1.4;
 }
 
-.stopping {
-  flex-basis: 100%;
-  padding: 6px 0 8px;
+.confirming {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.confirmNote {
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.sharedLine > .confirming {
+  flex-basis: 100%;
+  padding: 6px 0 8px;
 }
 
 .suggest {
