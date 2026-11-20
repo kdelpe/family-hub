@@ -32,6 +32,8 @@ export const kindOf = (c: ContactMethod): RequestKind | null =>
 
 export const contactKeys = {
   of: (personId: string) => ['contacts', personId] as const,
+  // Whose rows too: an admin can relink a login, and /me/contacts then answers for the new person.
+  mine: (personId: string) => ['contacts', 'mine', personId] as const,
 }
 
 export const directoryKeys = {
@@ -82,3 +84,20 @@ const platformLabels: Record<string, string> = {
 }
 
 export const platformLabel = (platform: string | null) => (platform && platformLabels[platform]) || 'Other'
+
+// Never kept once My profile is left, like everyone else's contacts (§5.2).
+export const myContactsQuery = (personId: string) => ({
+  queryKey: contactKeys.mine(personId),
+  queryFn: async ({ signal }: { signal?: AbortSignal }) =>
+    (await api<{ contacts: ContactMethod[] }>('GET', '/me/contacts', { signal })).contacts,
+  gcTime: 0,
+})
+
+export type NewContact = Pick<ContactMethod, 'kind' | 'platform' | 'label' | 'value' | 'visibility'>
+
+export const addMyContact = (c: NewContact) => api<ContactMethod>('POST', '/me/contacts', { body: c })
+
+export const updateMyContact = (id: string, patch: Partial<Pick<ContactMethod, 'label' | 'value' | 'visibility'>>) =>
+  api<ContactMethod>('PATCH', `/me/contacts/${encodeURIComponent(id)}`, { body: patch })
+
+export const removeMyContact = (id: string) => api<void>('DELETE', `/me/contacts/${encodeURIComponent(id)}`)

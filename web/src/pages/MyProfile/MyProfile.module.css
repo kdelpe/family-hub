@@ -1,0 +1,504 @@
+.page {
+  padding: 32px 40px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  align-items: flex-start;
+  align-content: flex-start;
+  line-height: normal;
+}
+
+.column {
+  flex: 999 1 460px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 40px;
+  font-weight: 500;
+}
+
+.card {
+  margin: 0;
+  padding: 24px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: center;
+}
+
+.avatarButton {
+  position: relative;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.avatarButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.camera {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera path,
+.camera circle {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.photo {
+  flex: none;
+  width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.detailsFields {
+  flex: 1 1 280px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.nameFields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.nameFields > .field {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+form.who {
+  align-items: flex-start;
+}
+
+.avatar {
+  width: 96px;
+  height: 96px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+  font-size: 32px;
+}
+
+.whoWords {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.name {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+}
+
+.small {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.small:empty {
+  display: none;
+}
+
+.story,
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  font: inherit;
+  color: var(--text);
+}
+
+.textarea {
+  padding: 12px 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.bio {
+  padding: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.input:focus-visible,
+.switch:focus-visible,
+.edit:focus-visible,
+.signOut:focus-visible,
+.remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.confirm {
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.save,
+.cancel {
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 22px;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.save {
+  border: 0;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.story .save[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.cancel {
+  border: 1px solid var(--input-border);
+  background: transparent;
+  color: var(--text);
+}
+
+.formError,
+.rowError {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--warning-tint);
+  font-size: 15px;
+}
+
+.rowError {
+  flex-basis: 100%;
+}
+
+.fieldError {
+  font-size: 15px;
+  color: var(--text);
+}
+
+.cardHeading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.contact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 14px 0;
+  border-top: 1px solid var(--divider);
+}
+
+.contactText {
+  flex: 1 1 220px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.labelLine {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.contactLabel {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.contactValue {
+  font-size: 18px;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.edit,
+.signOut,
+.remove {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.edit {
+  position: relative;
+  font-size: 14px;
+}
+
+/* A 44px tap without making the row taller (design-notes §1.3). */
+.edit::after {
+  content: '';
+  position: absolute;
+  inset: -12px -8px;
+}
+
+.remove {
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 6px;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.switch[aria-disabled='true'] {
+  cursor: progress;
+}
+
+.track {
+  width: 52px;
+  height: 30px;
+  flex: none;
+  border-radius: 15px;
+  background: var(--switch-off);
+  position: relative;
+}
+
+.knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--on-accent);
+  transition: left 0.15s ease;
+}
+
+.switch[aria-checked='true'] .track {
+  background: var(--accent);
+}
+
+.switch[aria-checked='true'] .knob {
+  left: 25px;
+}
+
+.status {
+  min-width: 150px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.contactForm {
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.contactForm .input {
+  background: var(--surface);
+}
+
+.add {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px dashed var(--line);
+  border-radius: 22px;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--text);
+}
+
+.aside {
+  flex: 1 1 260px;
+  min-width: 0;
+  max-width: 320px;
+  padding-top: 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.side {
+  padding: 20px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sideTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.sideButton {
+  height: 44px;
+  border: 1px solid var(--input-border);
+  border-radius: 22px;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--text);
+}
+
+.signOut {
+  height: 44px;
+}
+
+.date {
+  width: auto;
+  max-width: 100%;
+}
+
+.passwordForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.seeMe {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 24px;
+  background: var(--accent);
+  color: var(--on-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.seeMe:hover,
+.seeMe:focus-visible {
+  color: var(--on-accent);
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 24px 16px;
+  }
+
+  .aside {
+    max-width: none;
+    padding-top: 0;
+  }
+
+  .card {
+    padding: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .knob {
+    transition: none;
+  }
+}

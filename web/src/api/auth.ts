@@ -1,6 +1,6 @@
 import type { Query, QueryClient } from '@tanstack/react-query'
 
-import { api } from './client'
+import { api, ApiError } from './client'
 
 export type User = {
   id: string
@@ -26,6 +26,13 @@ export const authKeys = {
 
 const sessionChangedKey = 'fh-session-changed'
 
+// Bumped whenever the cached data is dropped for a session change. A save captures it when it starts
+// (onMutate: sessionGeneration) and writes its answer to the cache only if it's unchanged (sameSession), so a
+// late answer from an ended session can't put the last person's details back.
+let generation = 0
+export const sessionGeneration = () => generation
+export const sameSession = (since: number | undefined) => since === generation
+
 // A link preview depends on its token, not on who's signed in, and a tab may be mid-way through setting a password
 // with it; everything else was fetched as someone.
 const fetchedAsSomeone = (query: Query) => query.queryKey[0] !== previewKey[0] || query.queryKey[1] !== previewKey[1]
@@ -33,21 +40,44 @@ const fetchedAsSomeone = (query: Query) => query.queryKey[0] !== previewKey[0] |
 // Everything fetched as whoever was signed in before (birth years, shared phone numbers) goes, so the next person on a
 // shared computer never sees it, not even briefly.
 export function startSession(queryClient: QueryClient, user: User) {
-  queryClient.removeQueries({ predicate: fetchedAsSomeone })
+  dropSessionData(queryClient)
   queryClient.setQueryData(authKeys.me, user)
+}
+
+// Signed out here, so this tab and every other one drops what it fetched as this person.
+export const endSession = (queryClient: QueryClient) => dropSessionData(queryClient)
+
+function dropSessionData(queryClient: QueryClient) {
+  generation++
+  queryClient.removeQueries({ predicate: fetchedAsSomeone })
   try {
-    // The new cookie is every tab's now; writing this fires a storage event in the others (followSessionChanges).
+    // The cookie changed for every tab; writing this fires a storage event in the others (followSessionChanges).
     localStorage.setItem(sessionChangedKey, String(Date.now()))
   } catch {
     // Storage can be blocked; the other tabs then catch up on their next fetch.
   }
 }
 
-// Another tab signed someone in, so this tab's cookie is theirs now: drop everything it fetched for the last person
-// (a reset also stops any answer still on its way) and fetch again as the new one.
+// A save answered 401: the session ended elsewhere. What was fetched as them is cleared and read again: into a
+// 401 and sign-in if it really ended, or as before if they're still signed in. A 401 from a save started in an
+// earlier session says nothing about this one, so it's ignored.
+export const onSessionEnded =
+  (queryClient: QueryClient) =>
+  (error: Error, _variables: unknown, since: number | undefined) => {
+    if (!(error instanceof ApiError) || error.status !== 401 || !sameSession(since)) {
+      return
+    }
+    generation++
+    // A reset, not a removal: queries a page is watching are fetched again instead of left empty.
+    void queryClient.resetQueries({ predicate: fetchedAsSomeone })
+  }
+
+// Another tab signed someone in or out, so this tab's cookie changed: drop everything it fetched for the last person
+// (a reset also stops any answer still on its way) and fetch again, as the new one or into a 401 and sign-in.
 export function followSessionChanges(queryClient: QueryClient): () => void {
   const onStorage = (event: StorageEvent) => {
     if (event.key === sessionChangedKey) {
+      generation++
       void queryClient.resetQueries({ predicate: fetchedAsSomeone })
     }
   }
@@ -70,3 +100,9 @@ export const previewLink = (token: string, { signal }: { signal?: AbortSignal } 
 
 export const setPassword = (token: string, password: string) =>
   api<User>('POST', '/auth/password/reset', { body: { token, password } })
+
+export const logout = () => api<void>('POST', '/auth/logout')
+
+// Signs out every other session too; this one gets a new cookie.
+export const changePassword = (currentPassword: string, newPassword: string) =>
+  api<void>('POST', '/auth/password/change', { body: { current_password: currentPassword, new_password: newPassword } })

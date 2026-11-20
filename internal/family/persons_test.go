@@ -47,6 +47,10 @@ func TestCreateRefusesAnInvalidPerson(t *testing.T) {
 		{name: "a tab in the birth place", in: PersonInput{FirstName: "Rosa", BirthPlace: new("Jac\tmel")}, wantErrMsg: "the birth place contains a character that isn't allowed"},
 		{name: "a NUL in the bio", in: PersonInput{FirstName: "Rosa", Bio: new("Tells\x00stories")}, wantErrMsg: "the bio contains a character that isn't allowed"},
 		{name: "a last name that isn't UTF-8", in: PersonInput{FirstName: "Rosa", LastName: new("Pi\xffrre")}, wantErrMsg: "the last name contains a character that isn't allowed"},
+		{name: "a death date two days ahead", in: PersonInput{FirstName: "Rosa", DeathDate: new(time.Now().AddDate(0, 0, 2).Format(time.DateOnly)),
+			DeathDatePrecision: new("day"), IsDeceased: true}, wantErrMsg: "the death date is in the future"},
+		{name: "a birthday three days ahead", in: PersonInput{FirstName: "Rosa", BirthDate: new(time.Now().AddDate(0, 0, 3).Format(time.DateOnly)),
+			BirthDatePrecision: new("day")}, wantErrMsg: "the birth date is in the future"},
 	}
 
 	for _, tt := range tests {
@@ -57,6 +61,15 @@ func TestCreateRefusesAnInvalidPerson(t *testing.T) {
 			assert.Equal(t, "invalid person: "+tt.wantErrMsg, err.Error())
 		})
 	}
+}
+
+func TestABirthdayMayBeTomorrowSomewhereElse(t *testing.T) {
+	// UTC's tomorrow: the earliest date that is already today east of UTC.
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1).Format(time.DateOnly)
+
+	_, err := normalize(PersonInput{FirstName: "Rosa", BirthDate: &tomorrow, BirthDatePrecision: new("day")})
+
+	require.NoError(t, err)
 }
 
 func TestPartialDatesAreComparedAsRanges(t *testing.T) {
@@ -290,26 +303,44 @@ func TestUpdateChangesOnlyTheFieldsSent(t *testing.T) {
 	}
 }
 
-func TestAMemberChangesOnlyTheirOwnBio(t *testing.T) {
+func TestAMemberChangesOnlyTheirOwnNameBirthdayAndBio(t *testing.T) {
 	svc, admin := newService(t)
 	ids := addPeople(t, svc, admin, "Maya", "Rosa")
 	maya, rosa := ids["Maya"], ids["Rosa"]
 	bio := PersonPatch{Bio: Opt[*string]{Set: true, Value: new("Tells the best stories.")}}
 
 	tests := []struct {
-		name    string
-		viewer  Viewer
-		id      uuid.UUID
-		patch   PersonPatch
-		wantBio *string
-		wantErr error
+		name      string
+		viewer    Viewer
+		id        uuid.UUID
+		patch     PersonPatch
+		wantBio   *string
+		wantBirth *string
+		wantFirst string
+		wantLast  *string
+		wantErr   error
 	}{
 		{name: "their own bio", viewer: Viewer{PersonID: &maya}, id: maya, patch: bio, wantBio: new("Tells the best stories.")},
+		{name: "their own birthday", viewer: Viewer{PersonID: &maya}, id: maya,
+			patch: PersonPatch{
+				BirthDate:          Opt[*string]{Set: true, Value: new("1978-06-06")},
+				BirthDatePrecision: Opt[*string]{Set: true, Value: new("day")},
+			}, wantBirth: new("1978-06-06")},
+		{name: "someone else's birthday", viewer: Viewer{PersonID: &maya}, id: rosa,
+			patch:   PersonPatch{BirthDate: Opt[*string]{Set: true, Value: new("1978-06-06")}, BirthDatePrecision: Opt[*string]{Set: true, Value: new("day")}},
+			wantErr: ErrNotYourProfile},
 		{name: "clearing it", viewer: Viewer{PersonID: &maya}, id: maya, patch: PersonPatch{Bio: Opt[*string]{Set: true}}},
 		{name: "someone else's bio", viewer: Viewer{PersonID: &maya}, id: rosa, patch: bio, wantErr: ErrNotYourProfile},
 		{name: "a login linked to nobody", viewer: Viewer{}, id: maya, patch: bio, wantErr: ErrNotYourProfile},
+		{name: "their own maiden name", viewer: Viewer{PersonID: &maya}, id: maya,
+			patch: PersonPatch{Bio: bio.Bio, MaidenName: Opt[*string]{Set: true, Value: new("Jean")}}, wantErr: ErrNotYourProfile},
+		{name: "someone else's name", viewer: Viewer{PersonID: &maya}, id: rosa,
+			patch: PersonPatch{FirstName: Opt[string]{Set: true, Value: "Rose"}}, wantErr: ErrNotYourProfile},
+
+		// Last: the cases share Maya's row, and this one renames her.
 		{name: "their own name", viewer: Viewer{PersonID: &maya}, id: maya,
-			patch: PersonPatch{Bio: bio.Bio, FirstName: Opt[string]{Set: true, Value: "May"}}, wantErr: ErrNotYourProfile},
+			patch:     PersonPatch{FirstName: Opt[string]{Set: true, Value: "May"}, LastName: Opt[*string]{Set: true, Value: new("Pluviose-Jean")}},
+			wantFirst: "May", wantLast: new("Pluviose-Jean")},
 	}
 
 	for _, tt := range tests {
@@ -327,8 +358,21 @@ func TestAMemberChangesOnlyTheirOwnBio(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantBio, got.Bio)
-			assert.Equal(t, "Maya", got.FirstName)
+			// The cases share Maya's row, so each checks only what it sent.
+			if tt.patch.Bio.Set {
+				assert.Equal(t, tt.wantBio, got.Bio)
+			}
+			if tt.patch.BirthDate.Set {
+				assert.Equal(t, tt.wantBirth, got.BirthDate)
+			}
+			if tt.patch.LastName.Set {
+				assert.Equal(t, tt.wantLast, got.LastName)
+			}
+			wantFirst := "Maya"
+			if tt.patch.FirstName.Set {
+				wantFirst = tt.wantFirst
+			}
+			assert.Equal(t, wantFirst, got.FirstName)
 		})
 	}
 }

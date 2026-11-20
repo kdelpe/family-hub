@@ -30,3 +30,23 @@ export function passwordStrength(raw: string): Strength {
   }
   return { level: 2, label: 'Fair' }
 }
+
+// The plain-language rule a refused password broke (design-notes §3.3), or null for any other failure.
+export function passwordRule(code: string | null): string | null {
+  switch (code) {
+    case 'password_too_short':
+      return `Use at least ${minPasswordLength} characters.`
+    case 'password_too_long':
+      return `Use at most ${maxPasswordLength} characters.`
+    case 'password_too_common':
+      return 'That password is too common — try a short phrase.'
+    default:
+      return null
+  }
+}
+
+// The length rule a password breaks before it's sent, as the server's code; null when it fits.
+export function lengthRefusal(password: string): 'password_too_short' | 'password_too_long' | null {
+  const length = passwordLength(password)
+  return length < minPasswordLength ? 'password_too_short' : length > maxPasswordLength ? 'password_too_long' : null
+}

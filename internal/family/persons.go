@@ -201,14 +201,18 @@ func (s *Service) CreatePerson(ctx context.Context, createdBy uuid.UUID, in Pers
 	return person, nil
 }
 
-// UpdatePerson lets an admin change anything, and a member only their own linked person's bio (§4).
+// UpdatePerson lets an admin change anything, and a member only their own name, birthday and bio (§4).
 func (s *Service) UpdatePerson(ctx context.Context, viewer Viewer, id uuid.UUID, patch PersonPatch) (Person, error) {
 	if !viewer.IsAdmin {
 		if viewer.PersonID == nil || *viewer.PersonID != id {
 			return Person{}, fmt.Errorf("%w: you can change only your own profile", ErrNotYourProfile)
 		}
-		if patch != (PersonPatch{Bio: patch.Bio}) {
-			return Person{}, fmt.Errorf("%w: members can change only their bio", ErrNotYourProfile)
+		own := PersonPatch{
+			FirstName: patch.FirstName, LastName: patch.LastName,
+			BirthDate: patch.BirthDate, BirthDatePrecision: patch.BirthDatePrecision, Bio: patch.Bio,
+		}
+		if patch != own {
+			return Person{}, fmt.Errorf("%w: members can change only their name, birthday and bio", ErrNotYourProfile)
 		}
 	}
 	var person Person
@@ -361,10 +365,11 @@ func normalize(in PersonInput) (fields, error) {
 		return fields{}, fmt.Errorf("%w: gender must be one of %s", ErrInvalidPerson, strings.Join(genders, ", "))
 	}
 	var err error
-	if f.birthDate, err = parseDate("birth", f.BirthDate, f.BirthDatePrecision); err != nil {
+	// A birthday gets a day of grace: a member enters their own, and it's already tomorrow in Asia.
+	if f.birthDate, err = parseDate("birth", f.BirthDate, f.BirthDatePrecision, 1); err != nil {
 		return fields{}, err
 	}
-	if f.deathDate, err = parseDate("death", f.DeathDate, f.DeathDatePrecision); err != nil {
+	if f.deathDate, err = parseDate("death", f.DeathDate, f.DeathDatePrecision, 0); err != nil {
 		return fields{}, err
 	}
 	if f.deathDate != nil && !f.IsDeceased {
@@ -387,7 +392,7 @@ func lastDay(date time.Time, precision string) time.Time {
 	return date
 }
 
-func parseDate(what string, value, precision *string) (*time.Time, error) {
+func parseDate(what string, value, precision *string, graceDays int) (*time.Time, error) {
 	if (value == nil) != (precision == nil) {
 		return nil, fmt.Errorf("%w: give the %s date and its precision together", ErrInvalidPerson, what)
 	}
@@ -402,7 +407,7 @@ func parseDate(what string, value, precision *string) (*time.Time, error) {
 	if err != nil || len(*value) != len(layout) {
 		return nil, fmt.Errorf("%w: the %s date must look like %s for precision %s", ErrInvalidPerson, what, layout, *precision)
 	}
-	if date.After(time.Now()) {
+	if date.After(time.Now().AddDate(0, 0, graceDays)) {
 		return nil, fmt.Errorf("%w: the %s date is in the future", ErrInvalidPerson, what)
 	}
 	return &date, nil
