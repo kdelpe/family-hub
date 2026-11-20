@@ -54,7 +54,7 @@ export function MyProfile() {
         <SignInCard email={user.email} />
         {person && (
           <>
-            <SuggestCard key={person.id} yourName={fullName(person)} />
+            <SuggestCard key={person.id} personId={person.id} yourName={fullName(person)} />
             <Link to="/tree" className={`pill ${styles.seeMe}`}>
               See me in the tree
             </Link>

@@ -343,9 +343,9 @@ func TestSuggest(t *testing.T) {
 
 	var unlinked uuid.UUID
 	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role) VALUES ('unlinked@example.com', 'member') RETURNING id`).Scan(&unlinked))
-	require.ErrorIs(t, svc.Suggest(t.Context(), unlinked, kervens), ErrNotLinked, "a login linked to nobody can't suggest")
+	require.ErrorIs(t, svc.Suggest(t.Context(), unlinked, stanley, kervens), ErrNotLinked, "a login linked to nobody can't suggest")
 	require.NoError(t, svc.Submit(t.Context(), AccessRequestInput{FullName: "Pending", Email: "pending@example.com"}))
-	require.ErrorIs(t, svc.Suggest(t.Context(), unlinked, AccessRequestInput{FullName: "Pending", Email: "pending@example.com"}), ErrNotLinked,
+	require.ErrorIs(t, svc.Suggest(t.Context(), unlinked, stanley, AccessRequestInput{FullName: "Pending", Email: "pending@example.com"}), ErrNotLinked,
 		"the same answer for an email with a pending request, so it can't tell which have one")
 	_, err := pool.Exec(t.Context(), `DELETE FROM access_requests`)
 	require.NoError(t, err)
@@ -354,12 +354,13 @@ func TestSuggest(t *testing.T) {
 	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role, person_id) VALUES ('gone@example.com', 'member', $1) RETURNING id`, gone).Scan(&goneLogin))
 	_, err = pool.Exec(t.Context(), `UPDATE persons SET deleted_at = now() WHERE id = $1`, gone)
 	require.NoError(t, err)
-	require.ErrorIs(t, svc.Suggest(t.Context(), goneLogin, kervens), ErrNotLinked, "nor one linked to someone deleted")
-	require.ErrorIs(t, svc.Suggest(t.Context(), member, AccessRequestInput{FullName: "Kervens", Email: "nope"}), ErrInvalidAccessRequest)
-	require.NoError(t, svc.Suggest(t.Context(), member, kervens))
+	require.ErrorIs(t, svc.Suggest(t.Context(), goneLogin, gone, kervens), ErrNotLinked, "nor one linked to someone deleted")
+	require.ErrorIs(t, svc.Suggest(t.Context(), member, stanley, AccessRequestInput{FullName: "Kervens", Email: "nope"}), ErrInvalidAccessRequest)
+	require.ErrorIs(t, svc.Suggest(t.Context(), member, gone, kervens), ErrRelinked, "nor one made as someone the login was linked to before")
+	require.NoError(t, svc.Suggest(t.Context(), member, stanley, kervens))
 	require.NoError(t, svc.Submit(t.Context(), AccessRequestInput{FullName: "Someone else", Email: "kervens@example.com"}), "a stranger's repeat is dropped")
 
-	require.NoError(t, svc.Suggest(t.Context(), member, AccessRequestInput{FullName: "Kervens again", Email: "kervens@example.com"}),
+	require.NoError(t, svc.Suggest(t.Context(), member, stanley, AccessRequestInput{FullName: "Kervens again", Email: "kervens@example.com"}),
 		"a member's repeat is dropped too")
 
 	requests, err := svc.List(t.Context())
@@ -386,7 +387,7 @@ func TestASuggestionWaitsForAnUnlinkInProgress(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- svc.Suggest(t.Context(), member, AccessRequestInput{FullName: "Kervens Pluviose", Email: "kervens@example.com"})
+		done <- svc.Suggest(t.Context(), member, stanley, AccessRequestInput{FullName: "Kervens Pluviose", Email: "kervens@example.com"})
 	}()
 	require.Eventually(t, func() bool {
 		var waiting int
@@ -407,7 +408,7 @@ func TestTwentySuggestionsADay(t *testing.T) {
 	require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role, person_id) VALUES ('stanley@example.com', 'member', $1) RETURNING id`, stanley).Scan(&member))
 
 	for i := range suggestionsPerDay + 1 {
-		require.NoError(t, svc.Suggest(t.Context(), member, AccessRequestInput{FullName: "Relative", Email: fmt.Sprintf("relative%d@example.com", i)}))
+		require.NoError(t, svc.Suggest(t.Context(), member, stanley, AccessRequestInput{FullName: "Relative", Email: fmt.Sprintf("relative%d@example.com", i)}))
 	}
 
 	assert.Equal(t, suggestionsPerDay, countRows(t, pool, `SELECT count(*) FROM access_requests`), "the 21st is dropped")
@@ -438,7 +439,7 @@ func TestASuggestedInviteIsFromTheMember(t *testing.T) {
 			require.NoError(t, pool.QueryRow(t.Context(), `INSERT INTO users (email, role, person_id, password_hash, password_changed_at, disabled_at)
 				VALUES ('stanley@example.com', 'member', $1, 'hash', now(), CASE WHEN $2 THEN now() END) RETURNING id`,
 				stanley, tt.suggesterDisabled).Scan(&member))
-			require.NoError(t, NewAccessRequests(pool).Suggest(t.Context(), member,
+			require.NoError(t, NewAccessRequests(pool).Suggest(t.Context(), member, stanley,
 				AccessRequestInput{FullName: "Kervens Pluviose", Email: "kervens@example.com"}))
 			var request uuid.UUID
 			require.NoError(t, pool.QueryRow(t.Context(), `SELECT id FROM access_requests`).Scan(&request))

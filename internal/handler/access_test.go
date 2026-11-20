@@ -126,7 +126,7 @@ func TestDeclineAndReopenAccessRequests(t *testing.T) {
 }
 
 func TestSuggestARelative(t *testing.T) {
-	const body = `{"full_name":"Kervens Pluviose","email":"kervens@example.com","relationship":"cousin","related_names":[]}`
+	body := `{"person_id":"` + testPersonID.String() + `","full_name":"Kervens Pluviose","email":"kervens@example.com","relationship":"cousin","related_names":[]}`
 	in := admin.AccessRequestInput{FullName: "Kervens Pluviose", Email: "kervens@example.com", Relationship: new("cousin"), RelatedNames: []string{}}
 	tests := []struct {
 		name       string
@@ -139,6 +139,10 @@ func TestSuggestARelative(t *testing.T) {
 		{name: "received", body: body, wantCall: true, wantStatus: http.StatusAccepted},
 		{name: "a login linked to nobody", body: body, wantCall: true, err: admin.ErrNotLinked, wantStatus: http.StatusForbidden,
 			wantBody: `{"error":{"code":"forbidden","message":"your login isn't linked to anyone in the tree yet"}}`},
+		{name: "made as someone the login isn't linked to now", body: body, wantCall: true, err: admin.ErrRelinked, wantStatus: http.StatusConflict,
+			wantBody: `{"error":{"code":"conflict","message":"your login is linked to someone else now"}}`},
+		{name: "without saying who it's made as", body: `{"full_name":"Kervens Pluviose","email":"kervens@example.com"}`, wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"person_id is required"}}`},
 		{name: "refused by the rules", body: body, wantCall: true, err: admin.ErrInvalidAccessRequest, wantStatus: http.StatusBadRequest,
 			wantBody: `{"error":{"code":"validation_error","message":"invalid access request"}}`},
 		{name: "no honeypot for members", body: `{"full_name":"Kervens","website":"x"}`, wantStatus: http.StatusBadRequest,
@@ -149,7 +153,7 @@ func TestSuggestARelative(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewAccessService(t)
 			if tt.wantCall {
-				svc.EXPECT().Suggest(mock.Anything, testUser.ID, in).Return(tt.err)
+				svc.EXPECT().Suggest(mock.Anything, testUser.ID, testPersonID, in).Return(tt.err)
 			}
 			req := httptest.NewRequest(http.MethodPost, "/api/me/suggestions", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")

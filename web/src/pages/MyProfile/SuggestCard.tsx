@@ -1,32 +1,43 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { type FormEvent, useId, useState } from 'react'
+import { type FormEvent, useEffect, useId, useRef, useState } from 'react'
 
 import { relationships, suggestRelative } from '../../api/accessRequests'
-import { onSessionEnded, sameSession, sessionGeneration } from '../../api/auth'
+import { authKeys, onSessionEnded, sameSession, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { refusedMessage } from '../../lib/errorMessage'
 import styles from './MyProfile.module.css'
 
 // design-notes §4.8. The mockup draws only the button; the form was settled with the owner.
-export function SuggestCard({ yourName }: { yourName: string }) {
+export function SuggestCard({ personId, yourName }: { personId: string; yourName: string }) {
   const [open, setOpen] = useState(false)
   // The first name of whoever was just suggested, for the thank-you line.
   const [sent, setSent] = useState<string | null>(null)
+  // Where keyboard focus goes once the form closes: back to the button, or to the thank-you line.
+  const [focusAfter, setFocusAfter] = useState<'button' | 'thanks' | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const thanksRef = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (focusAfter) {
+      ;(focusAfter === 'thanks' ? thanksRef : buttonRef).current?.focus()
+    }
+  }, [focusAfter])
 
   return (
     <section aria-labelledby="mp-suggest" className={styles.side}>
       <h2 id="mp-suggest" className={styles.sideTitle}>
         Know someone who should be here?
       </h2>
-      <span role="status" className={styles.sideText}>
+      <span ref={thanksRef} tabIndex={-1} role="status" className={styles.sideText}>
         {sent && `Thanks. An admin will take a look, and if they approve, ${sent} gets an invitation by email.`}
       </span>
       {open ? (
         <SuggestForm
+          personId={personId}
           yourName={yourName}
           onDone={(sentTo) => {
             setOpen(false)
             setSent(sentTo)
+            setFocusAfter(sentTo ? 'thanks' : 'button')
           }}
         />
       ) : (
@@ -37,9 +48,11 @@ export function SuggestCard({ yourName }: { yourName: string }) {
             </p>
           )}
           <button
+            ref={buttonRef}
             type="button"
             onClick={() => {
               setSent(null)
+              setFocusAfter(null)
               setOpen(true)
             }}
             className={`pill ${styles.suggest}`}
@@ -52,8 +65,19 @@ export function SuggestCard({ yourName }: { yourName: string }) {
   )
 }
 
-function SuggestForm({ yourName, onDone }: { yourName: string; onDone: (sentTo: string | null) => void }) {
+function SuggestForm({
+  personId,
+  yourName,
+  onDone,
+}: {
+  personId: string
+  yourName: string
+  onDone: (sentTo: string | null) => void
+}) {
   const id = useId()
+  const nameRef = useRef<HTMLInputElement>(null)
+  // Straight to the first field, so the keyboard isn't left on the button the form replaced.
+  useEffect(() => nameRef.current?.focus(), [])
   const queryClient = useQueryClient()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -70,6 +94,7 @@ function SuggestForm({ yourName, onDone }: { yourName: string; onDone: (sentTo: 
         relationship: relationship || null,
         related_names: relatedTo.trim() ? [relatedTo.trim()] : [],
         note: note.trim(),
+        person_id: personId,
       }),
     onMutate: sessionGeneration,
     onSuccess: (_, __, since) => {
@@ -77,7 +102,13 @@ function SuggestForm({ yourName, onDone }: { yourName: string; onDone: (sentTo: 
         onDone(fullName.trim().split(/\s+/)[0] ?? fullName.trim())
       }
     },
-    onError: onSessionEnded(queryClient),
+    onError: (error, variables, since) => {
+      onSessionEnded(queryClient)(error, variables, since)
+      // Relinked: who you are is read again, and the page moves on to them.
+      if (error instanceof ApiError && error.status === 409) {
+        void queryClient.refetchQueries({ queryKey: authKeys.me })
+      }
+    },
   })
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -103,6 +134,7 @@ function SuggestForm({ yourName, onDone }: { yourName: string; onDone: (sentTo: 
           Their full name
         </label>
         <input
+          ref={nameRef}
           id={`${id}-name`}
           type="text"
           // Someone else's details: the browser would fill in yours.
@@ -189,7 +221,9 @@ function SuggestForm({ yourName, onDone }: { yourName: string; onDone: (sentTo: 
         <p role="alert" className={styles.formError}>
           {send.error instanceof ApiError && send.error.status === 403
             ? 'Your login isn’t linked to you in the tree yet, so you can’t suggest anyone. An admin can link it.'
-            : refusedMessage(send.error)}
+            : send.error instanceof ApiError && send.error.status === 409
+              ? 'Your login is now linked to someone else in the tree.'
+              : refusedMessage(send.error)}
         </p>
       )}
       <div className={styles.actions}>

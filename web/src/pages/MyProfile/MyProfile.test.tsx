@@ -559,6 +559,25 @@ describe('MyProfile', () => {
     expect(alerts).toEqual([])
   })
 
+  it('moves to the unlinked note, hiding your rows, when an admin unlinks your login', async () => {
+    const signedIn = { id: 'u', email: 'maya@example.com', role: 'member', person_id: 'maya' }
+    const answers: Record<string, Answer> = { 'GET /api/auth/me': { status: 200, body: signedIn } }
+    const { client } = renderPage(answers)
+    await screen.findByRole('switch', { name: 'Mobile' })
+    await settled(client)
+    const forbidden = { status: 403, body: { error: { code: 'forbidden', message: 'your login isn’t linked to anyone in the tree yet' } } }
+    Object.assign(answers, {
+      'GET /api/me/contacts': forbidden,
+      'GET /api/me/contact-requests': forbidden,
+      'GET /api/auth/me': { status: 200, body: { ...signedIn, person_id: null } },
+    })
+
+    act(() => void client.invalidateQueries({ queryKey: contactKeys.mine('maya') }))
+
+    expect(await screen.findByText(/Your login isn’t linked to you in the tree yet/)).toBeInTheDocument()
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+  })
+
   it.each([
     {
       name: 'story',

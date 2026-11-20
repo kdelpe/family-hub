@@ -44,6 +44,8 @@ var (
 	// ErrAccessRequestState is a decline or approval of a request that isn't pending, or a reopen of one not declined.
 	ErrAccessRequestState = errors.New("access request can't change that way")
 	ErrNotLinked          = errors.New("your login isn't linked to anyone in the tree yet")
+	// ErrRelinked is a suggestion made as someone the login is no longer linked to: an admin relinked it meanwhile.
+	ErrRelinked = errors.New("your login is linked to someone else now")
 )
 
 // AccessRequestInput is the public form: someone asking for an invitation.
@@ -167,8 +169,8 @@ func (s *AccessRequests) List(ctx context.Context) ([]AccessRequest, error) {
 
 // Suggest is a member suggesting a relative: an access request from them, answered like the public form.
 // Past the input checks it stores nothing for a repeat while one is pending or past 20 a day (§5), and the
-// caller answers the same either way.
-func (s *AccessRequests) Suggest(ctx context.Context, userID uuid.UUID, in AccessRequestInput) error {
+// caller answers the same either way. asPerson is who the form was filled in as: a login relinked since is refused.
+func (s *AccessRequests) Suggest(ctx context.Context, userID, asPerson uuid.UUID, in AccessRequestInput) error {
 	r, err := normalizeRequest(in)
 	if err != nil {
 		return err
@@ -193,6 +195,9 @@ func (s *AccessRequests) Suggest(ctx context.Context, userID uuid.UUID, in Acces
 	}
 	if inTree == 0 {
 		return ErrNotLinked
+	}
+	if *personID != asPerson {
+		return ErrRelinked
 	}
 	// Only after the link is checked: a 202 for a pending email but a 403 otherwise would tell which have one.
 	pending, err := q.PendingAccessRequestExists(ctx, r.Email)

@@ -41,6 +41,7 @@ function renderShell() {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -134,7 +135,6 @@ describe('AppShell', () => {
     await act(() => vi.advanceTimersByTimeAsync(60_000))
 
     expect(await screen.findByRole('link', { name: 'My profile, 2 requests for your details' })).toBeInTheDocument()
-    vi.useRealTimers()
   })
 
   it('asks for no requests for a login linked to nobody', async () => {

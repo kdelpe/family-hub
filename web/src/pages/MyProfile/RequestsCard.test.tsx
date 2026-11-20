@@ -61,6 +61,7 @@ async function settled(client: QueryClient) {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -209,6 +210,59 @@ describe('RequestsCard', () => {
     expect(await screen.findByText('Stopped sharing your WhatsApp number with Naïka.')).toBeInTheDocument()
     expect(screen.queryByRole('listitem')).not.toBeInTheDocument()
     expect(posted(fetch, '/api/me/contact-requests/r3/revoke')).toBe(true)
+  })
+
+  it('hides the rows, so none can be answered, when a reread is for someone else and who you are can’t be read', async () => {
+    const answers: Record<string, Answer> = { 'GET /api/me/contact-requests': listed([darline]) }
+    const { client } = renderCard(answers)
+    await screen.findByRole('button', { name: 'Share' })
+    answers['GET /api/me/contact-requests'] = { status: 200, body: { person_id: 'fritz', requests: [darline] } }
+
+    act(() => void client.invalidateQueries({ queryKey: ['contact-requests', 'maya'] }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong')
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument()
+  })
+
+  it('keeps your rows when a reread for someone else was a blip and the next one is yours', async () => {
+    const answers: Record<string, Answer> = { 'GET /api/me/contact-requests': listed([darline]) }
+    const { client, fetch } = renderCard(answers)
+    await screen.findByRole('button', { name: 'Share' })
+    let reads = 0
+    const yours = fetch.getMockImplementation()!
+    fetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/me/contact-requests' && reads++ === 0) {
+        return Promise.resolve(new Response(JSON.stringify({ person_id: 'fritz', requests: [] }), { status: 200 }))
+      }
+      return yours(url, init)
+    })
+
+    act(() => void client.invalidateQueries({ queryKey: ['contact-requests', 'maya'] }))
+    await settled(client)
+
+    expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('no longer says “Shared with” once a share given on this visit is taken back', async () => {
+    const answers: Record<string, Answer> = {
+      'GET /api/me/contact-requests': listed([darline]),
+      'POST /api/me/contact-requests/r1/share': { status: 204 },
+      'POST /api/me/contact-requests/r1/revoke': { status: 204 },
+    }
+    const { client } = renderCard(answers)
+    fireEvent.click(await screen.findByRole('button', { name: 'Share' }))
+    answers['GET /api/me/contact-requests'] = listed([{ ...darline, status: 'shared' }])
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, share' }))
+    await screen.findByText('Shared with Darline.')
+    await settled(client)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }))
+    answers['GET /api/me/contact-requests'] = listed([])
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, stop' }))
+
+    expect(await screen.findByText('Stopped sharing your phone number with Darline.')).toBeInTheDocument()
+    expect(screen.queryByText('Shared with Darline.')).not.toBeInTheDocument()
   })
 
   it('shows where a request stands once it was answered elsewhere', async () => {

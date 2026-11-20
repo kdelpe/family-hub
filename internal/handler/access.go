@@ -14,7 +14,7 @@ import (
 
 type AccessService interface {
 	Submit(ctx context.Context, in admin.AccessRequestInput) error
-	Suggest(ctx context.Context, userID uuid.UUID, in admin.AccessRequestInput) error
+	Suggest(ctx context.Context, userID, asPerson uuid.UUID, in admin.AccessRequestInput) error
 	List(ctx context.Context) ([]admin.AccessRequest, error)
 	Decline(ctx context.Context, adminID, id uuid.UUID) error
 	Reopen(ctx context.Context, id uuid.UUID) error
@@ -38,6 +38,12 @@ type accessForm struct {
 	Relationship *string  `json:"relationship"`
 	RelatedNames []string `json:"related_names"`
 	Note         *string  `json:"note"`
+}
+
+// suggestionRequest also says who the member filled it in as, since an admin can relink the login meanwhile (§5.1).
+type suggestionRequest struct {
+	accessForm
+	PersonID uuid.UUID `json:"person_id"`
 }
 
 type accessRequestRequest struct {
@@ -99,11 +105,15 @@ func (a *Access) Suggest(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, errors.New("no session in context"), "suggestion mounted without RequireSession")
 		return
 	}
-	var req accessForm
+	var req suggestionRequest
 	if !httpx.DecodeJSON(w, r, &req) {
 		return
 	}
-	if err := a.svc.Suggest(r.Context(), session.UserID, admin.AccessRequestInput(req)); err != nil {
+	if req.PersonID == uuid.Nil {
+		httpx.Error(w, http.StatusBadRequest, "validation_error", "person_id is required")
+		return
+	}
+	if err := a.svc.Suggest(r.Context(), session.UserID, req.PersonID, admin.AccessRequestInput(req.accessForm)); err != nil {
 		a.fail(w, r, err, "suggest a relative")
 		return
 	}
@@ -168,7 +178,7 @@ func (a *Access) fail(w http.ResponseWriter, r *http.Request, err error, what st
 		httpx.Error(w, http.StatusForbidden, "forbidden", err.Error())
 	case errors.Is(err, admin.ErrAccessRequestNotFound):
 		httpx.Error(w, http.StatusNotFound, "not_found", err.Error())
-	case errors.Is(err, admin.ErrAccessRequestState):
+	case errors.Is(err, admin.ErrAccessRequestState), errors.Is(err, admin.ErrRelinked):
 		httpx.Error(w, http.StatusConflict, "conflict", err.Error())
 	default:
 		internalError(w, r, err, what)

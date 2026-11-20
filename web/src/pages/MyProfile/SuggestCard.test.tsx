@@ -16,7 +16,7 @@ function renderCard(answers: Record<string, Answer> = {}) {
   vi.stubGlobal('fetch', fetch)
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <SuggestCard yourName="Maya Pluviose" />
+      <SuggestCard personId="maya" yourName="Maya Pluviose" />
     </QueryClientProvider>,
   )
   return { fetch }
@@ -42,12 +42,12 @@ describe('SuggestCard', () => {
     {
       name: 'everything filled in, related to you by default',
       fields: { 'Their full name': ' Darline Monestime ', 'Their email': 'darline@example.com', Relationship: 'cousin', 'Anything else? (optional)': 'Lives in Montréal.' },
-      body: { full_name: 'Darline Monestime', email: 'darline@example.com', relationship: 'cousin', related_names: ['Maya Pluviose'], note: 'Lives in Montréal.' },
+      body: { full_name: 'Darline Monestime', email: 'darline@example.com', relationship: 'cousin', related_names: ['Maya Pluviose'], note: 'Lives in Montréal.', person_id: 'maya' },
     },
     {
       name: 'only a name and an email',
       fields: { 'Their full name': 'Darline Monestime', 'Their email': 'darline@example.com', 'Related to': ' ' },
-      body: { full_name: 'Darline Monestime', email: 'darline@example.com', relationship: null, related_names: [], note: '' },
+      body: { full_name: 'Darline Monestime', email: 'darline@example.com', relationship: null, related_names: [], note: '', person_id: 'maya' },
     },
   ])('sends a suggestion with $name, then thanks you', async ({ fields, body }) => {
     const { fetch } = renderCard({ 'POST /api/me/suggestions': { status: 202, body: {} } })
@@ -95,6 +95,12 @@ describe('SuggestCard', () => {
       },
       says: 'The email must be an address like name@example.com.',
     },
+    {
+      name: 'a login relinked meanwhile is told to refresh',
+      fields: { 'Their full name': 'Darline Monestime', 'Their email': 'darline@example.com' },
+      answer: { status: 409, body: { error: { code: 'conflict', message: 'your login is linked to someone else now' } } },
+      says: 'Your login is now linked to someone else in the tree.',
+    },
   ])('$name', async ({ fields, answer, says }) => {
     const { fetch } = renderCard(answer ? { 'POST /api/me/suggestions': answer } : {})
     fireEvent.click(screen.getByRole('button', { name: 'Suggest a relative' }))
@@ -114,7 +120,18 @@ describe('SuggestCard', () => {
     fireEvent.click(form().getByRole('button', { name: 'Cancel' }))
 
     expect(screen.queryByRole('form')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Suggest a relative' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Suggest a relative' })).toHaveFocus()
     expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('moves keyboard focus into the form, then to the thank-you line once sent', async () => {
+    renderCard({ 'POST /api/me/suggestions': { status: 202, body: {} } })
+    fireEvent.click(screen.getByRole('button', { name: 'Suggest a relative' }))
+    expect(form().getByLabelText('Their full name')).toHaveFocus()
+    fill({ 'Their full name': 'Darline Monestime', 'Their email': 'darline@example.com' })
+
+    fireEvent.click(form().getByRole('button', { name: 'Send suggestion' }))
+
+    expect(await screen.findByText(/Thanks\. An admin will take a look/)).toHaveFocus()
   })
 })

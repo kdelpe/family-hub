@@ -9,6 +9,7 @@ import {
   kindOf,
   myContactsQuery,
   type NewContact,
+  NotYoursError,
   platformLabel,
   RelinkedError,
   removeMyContact,
@@ -107,7 +108,7 @@ export function ContactDetails({ personId }: { personId: string }) {
       </div>
       {(contacts.isPending || contacts.error instanceof RelinkedError) && <p className={styles.muted}>Loading…</p>}
       {contacts.isError && !(contacts.error instanceof RelinkedError) && <p role="alert">{errorMessage(contacts.error)}</p>}
-      {(contacts.data && !(contacts.error instanceof RelinkedError) ? [...contacts.data].sort(byType) : []).map((c) =>
+      {(contacts.data && !(contacts.error instanceof NotYoursError) ? [...contacts.data].sort(byType) : []).map((c) =>
         editing.has(c.id) ? (
           <ContactForm key={c.id} personId={personId} contact={c} onDone={() => edit(c.id, false)} />
         ) : (

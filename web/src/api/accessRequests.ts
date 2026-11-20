@@ -32,6 +32,8 @@ export const relationships = [
 
 export type Suggestion = Pick<AccessRequest, 'full_name' | 'email' | 'related_names' | 'note'> & {
   relationship: string | null
+  // Who it was filled in as: refused with a 409 if an admin has relinked the login since.
+  person_id: string
 }
 
 // Answers the same as the public form, however it ends: a repeat, or one past the day's limit, is dropped.

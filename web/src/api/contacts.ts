@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import { authKeys } from './auth'
-import { api } from './client'
+import { api, ApiError } from './client'
 import type { TreePerson } from './tree'
 
 export type RequestKind = 'phone' | 'whatsapp' | 'address'
@@ -95,8 +95,8 @@ export const contactRequestKeys = {
 export const myRequestsQuery = (personId: string) => ({
   queryKey: contactRequestKeys.mine(personId),
   queryFn: async ({ signal, client }: MineContext) => {
-    const answer = await api<{ person_id: string; requests: ContactRequest[] }>('GET', '/me/contact-requests', { signal })
-    return (await ownedBy(client, personId, answer)).requests
+    const answer = await readMine<{ person_id: string; requests: ContactRequest[] }>(client, personId, '/me/contact-requests', signal)
+    return answer.requests
   },
 })
 
@@ -115,8 +115,16 @@ const platformLabels: Record<string, string> = {
 
 export const platformLabel = (platform: string | null) => (platform && platformLabels[platform]) || 'Other'
 
+// A /me read that answered for someone other than the person shown: rows kept from before are no longer theirs,
+// so pages hide them and offer nothing to act on.
+export class NotYoursError extends Error {
+  constructor(message = 'your profile didn’t load') {
+    super(message)
+  }
+}
+
 // Not a failure to show: the page is about to reload as whoever the login is linked to now.
-export class RelinkedError extends Error {
+export class RelinkedError extends NotYoursError {
   constructor() {
     super('your login is linked to someone else now')
   }
@@ -124,24 +132,43 @@ export class RelinkedError extends Error {
 
 type MineContext = { signal?: AbortSignal; client: QueryClient }
 
-// A /me read answers for whoever the login is linked to now, and an admin can relink it at any time (§5.1).
-// Rows for someone else never go under this person's key: who you are is read again first, so the page moves on.
-async function ownedBy<T extends { person_id: string }>(client: QueryClient, personId: string, answer: T) {
-  if (answer.person_id !== personId) {
-    await client.refetchQueries({ queryKey: authKeys.me })
-    // Quiet only if the page will move on; otherwise a plain failure, so it never just says Loading… for good.
-    const now = client.getQueryData<{ person_id: string | null }>(authKeys.me)
-    throw now && now.person_id !== personId ? new RelinkedError() : new Error('your profile didn’t load')
+// An admin can relink or unlink a login at any time (§5.1), so rows for someone else never go under this
+// person's key: who you are is read again first, and the page moves on.
+async function readMine<T extends { person_id: string }>(client: QueryClient, personId: string, path: string, signal?: AbortSignal) {
+  const read = async () => {
+    try {
+      return await api<T>('GET', path, { signal })
+    } catch (error) {
+      // Unlinked: the server no longer has anyone to answer for.
+      if (error instanceof ApiError && error.status === 403) {
+        return null
+      }
+      throw error
+    }
   }
-  return answer
+  const answer = await read()
+  if (answer?.person_id === personId) {
+    return answer
+  }
+  await client.refetchQueries({ queryKey: authKeys.me })
+  const now = client.getQueryData<{ person_id: string | null }>(authKeys.me)
+  if (now && now.person_id !== personId) {
+    throw new RelinkedError()
+  }
+  // Still them as far as we know (relinked and back, say): read once more before calling it a failure.
+  const again = await read()
+  if (again?.person_id === personId) {
+    return again
+  }
+  throw new NotYoursError()
 }
 
 // Never kept once My profile is left, like everyone else's contacts (§5.2).
 export const myContactsQuery = (personId: string) => ({
   queryKey: contactKeys.mine(personId),
   queryFn: async ({ signal, client }: MineContext) => {
-    const answer = await api<{ person_id: string; contacts: ContactMethod[] }>('GET', '/me/contacts', { signal })
-    return (await ownedBy(client, personId, answer)).contacts
+    const answer = await readMine<{ person_id: string; contacts: ContactMethod[] }>(client, personId, '/me/contacts', signal)
+    return answer.contacts
   },
   gcTime: 0,
 })

@@ -8,6 +8,7 @@ import {
   contactRequestKeys,
   decideRequest,
   myRequestsQuery,
+  NotYoursError,
   RelinkedError,
   type RequestKind,
 } from '../../api/contacts'
@@ -39,7 +40,7 @@ export function RequestsCard({ personId }: { personId: string }) {
   }, [stopped])
 
   // Rows kept from before a relink are someone else's: none are shown, so none can be answered.
-  const rows = requests.error instanceof RelinkedError ? [] : (requests.data ?? [])
+  const rows = requests.error instanceof NotYoursError ? [] : (requests.data ?? [])
   const asked = [
     ...rows
       .filter((r) => r.status === 'pending' && !answered.some((a) => a.request.id === r.id))
@@ -70,7 +71,12 @@ export function RequestsCard({ personId }: { personId: string }) {
           <h3 className={styles.sharedTitle}>Shared with</h3>
           <ul className={styles.sharedList}>
             {shared.map((request) => (
-              <SharedLine key={request.id} personId={personId} request={request} onStopped={() => setStopped(request)} />
+              <SharedLine key={request.id} personId={personId} request={request} onStopped={() => {
+                  setStopped(request)
+                  // A share given on this visit and then taken back no longer says "Shared with".
+                  setAnswered((list) => list.filter((a) => a.request.id !== request.id))
+                }}
+              />
             ))}
           </ul>
         </div>
