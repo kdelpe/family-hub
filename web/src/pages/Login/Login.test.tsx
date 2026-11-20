@@ -4,6 +4,7 @@ import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { authKeys } from '../../api/auth'
 import { Login } from './Login'
 
 const user = {
@@ -46,6 +47,7 @@ function renderLogin(from?: unknown) {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
+  return client
 }
 
 function signIn() {
@@ -104,6 +106,18 @@ describe('Login', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: user.email, password: 'kafe-ak-pen-patat' }),
     })
+  })
+
+  it('drops what was cached for whoever signed in before', async () => {
+    stubLogin({ status: 200, body: user })
+    const client = renderLogin()
+    client.setQueryData(['contacts', 'nadege'], [{ kind: 'phone', value: '+1 718 555 0123' }])
+
+    signIn()
+
+    await screen.findByText('Home page')
+    expect(client.getQueryData(['contacts', 'nadege'])).toBeUndefined()
+    expect(client.getQueryData(authKeys.me)).toEqual(user)
   })
 
   it('keeps a pending sign-in when the user types', () => {

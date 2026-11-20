@@ -22,6 +22,13 @@ export const contactKeys = {
   of: (personId: string) => ['contacts', personId] as const,
 }
 
+// Never kept once no page shows them (§5.2): each visit asks afresh, so a share taken back is gone at once.
+export const contactsQuery = (personId: string) => ({
+  queryKey: contactKeys.of(personId),
+  queryFn: ({ signal }: { signal?: AbortSignal }) => getContacts(personId, { signal }),
+  gcTime: 0,
+})
+
 export const getContacts = async (personId: string, { signal }: { signal?: AbortSignal } = {}) =>
   (await api<{ contacts: Contact[] }>('GET', `/persons/${encodeURIComponent(personId)}/contacts`, { signal })).contacts
 

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 
-import { authKeys, type LinkPreview, previewLink, setPassword } from '../../api/auth'
+import { authKeys, type LinkPreview, previewLink, setPassword, startSession } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { PasswordInput } from '../../components/PasswordInput/PasswordInput'
 import { PasswordStrength } from '../../components/PasswordStrength/PasswordStrength'
@@ -93,7 +93,7 @@ function SetPassword({ token, link }: { token: string; link: LinkPreview }) {
   const save = useMutation({
     mutationFn: () => setPassword(token, password),
     onSuccess: (user) => {
-      queryClient.setQueryData(authKeys.me, user)
+      startSession(queryClient, user)
       void navigate(invite ? '/setup' : '/', { replace: true })
     },
   })

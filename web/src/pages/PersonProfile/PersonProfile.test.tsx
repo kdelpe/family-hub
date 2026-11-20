@@ -74,10 +74,10 @@ function renderPage({
 }: {
   role?: 'member' | 'admin'
   contacts?: Contact[]
-  answers?: Record<string, Answer>
+  answers?: Record<string, Answer | Answer[]>
   cached?: Record<string, { person: Person; contacts: Contact[] }>
 } = {}) {
-  const all: Record<string, Answer> = {
+  const all: Record<string, Answer | Answer[]> = {
     'GET /api/persons/nadege': { status: 200, body: nadege },
     'GET /api/tree': { status: 200, body: tree },
     'GET /api/persons': { status: 200, body: { persons: everyone } },
@@ -85,7 +85,9 @@ function renderPage({
     ...answers,
   }
   const fetch = vi.fn((url: string, init?: RequestInit) => {
-    const answer = all[`${init?.method ?? 'GET'} ${url}`]
+    const queued = all[`${init?.method ?? 'GET'} ${url}`]
+    // A list answers in turn, then keeps giving its last answer.
+    const answer = Array.isArray(queued) ? (queued.length > 1 ? queued.shift() : queued[0]) : queued
     return answer
       ? Promise.resolve(new Response(answer.body === undefined ? null : JSON.stringify(answer.body), { status: answer.status }))
       : Promise.reject(new TypeError('Failed to fetch'))
@@ -165,6 +167,31 @@ describe('PersonProfile', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Jean-Robert Pluviose' })).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: 'Request phone number' })).toBeInTheDocument()
     expect(screen.queryByText('✓ Phone number requested')).not.toBeInTheDocument()
+  })
+
+  it('asks for contacts afresh on each visit, never showing what an earlier one saw', async () => {
+    const sharedPhone: Contact = { id: 'c1', kind: 'phone', platform: null, label: null, value: '+1 718 555 0123', visibility: 'on_request' }
+    renderPage({
+      answers: {
+        'GET /api/persons/nadege/contacts': [
+          { status: 200, body: { contacts: [sharedPhone] } },
+          // Nadège took the share back while Maya was on Jean-Robert's profile.
+          { status: 200, body: { contacts: [{ kind: 'phone', requestable: true, my_request_status: 'requested' }] } },
+        ],
+        'GET /api/persons/jeanrobert': { status: 200, body: full('jeanrobert') },
+        'GET /api/persons/jeanrobert/contacts': { status: 200, body: { contacts: [] } },
+      },
+    })
+    expect(await screen.findByText('Phone: +1 718 555 0123')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: /Jean-Robert Pluviose/ }))
+    await screen.findByRole('heading', { level: 1, name: 'Jean-Robert Pluviose' })
+
+    fireEvent.click(await screen.findByRole('link', { name: /Nadège Pluviose/ }))
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Nadège Pluviose' })).toBeInTheDocument()
+    expect(screen.queryByText('Phone: +1 718 555 0123')).not.toBeInTheDocument()
+    expect(await screen.findByText('✓ Phone number requested')).toBeInTheDocument()
+    expect(screen.queryByText('Phone: +1 718 555 0123')).not.toBeInTheDocument()
   })
 
   it('drops the button when the number was already shared', async () => {

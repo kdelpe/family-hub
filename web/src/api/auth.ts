@@ -1,3 +1,5 @@
+import type { QueryClient } from '@tanstack/react-query'
+
 import { api } from './client'
 
 export type User = {
@@ -18,6 +20,13 @@ export type LinkPreview = {
 export const authKeys = {
   me: ['auth', 'me'] as const,
   preview: (token: string) => ['auth', 'preview', token] as const,
+}
+
+// Everything else cached was fetched as whoever was signed in before (birth years, shared phone numbers), so a new
+// session keeps only the sign-in answers: the next person on a shared computer must never see it, not even briefly.
+export function startSession(queryClient: QueryClient, user: User) {
+  queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== authKeys.me[0] })
+  queryClient.setQueryData(authKeys.me, user)
 }
 
 export const me = ({ signal }: { signal?: AbortSignal } = {}) => api<User>('GET', '/auth/me', { signal })

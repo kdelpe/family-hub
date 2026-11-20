@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { ApiError } from '../../api/client'
-import { askFor, type Contact, contactKeys, type ContactMethod, getContacts, isRequestable, type RequestKind } from '../../api/contacts'
+import { askFor, type Contact, contactKeys, type ContactMethod, contactsQuery, isRequestable, type RequestKind } from '../../api/contacts'
 import { getPerson, listPersons, type Person, personKeys } from '../../api/persons'
 import { getTree, type Tree, treeKeys } from '../../api/tree'
 import { birthday, lifespan, year } from '../../lib/dates'
@@ -30,7 +30,7 @@ export function PersonProfile() {
   const person = useQuery({ queryKey: personKeys.one(id), queryFn: ({ signal }) => getPerson(id, { signal }) })
   const tree = useQuery({ queryKey: treeKeys.all, queryFn: ({ signal }) => getTree({ signal }) })
   const everyone = useQuery({ queryKey: personKeys.all, queryFn: ({ signal }) => listPersons({ signal }) })
-  const contacts = useQuery({ queryKey: contactKeys.of(id), queryFn: ({ signal }) => getContacts(id, { signal }) })
+  const contacts = useQuery(contactsQuery(id))
   const relations = useMemo(
     () => (tree.data && viewerId ? relationsTo(tree.data, viewerId) : new Map<string, string>()),
     [tree.data, viewerId],
