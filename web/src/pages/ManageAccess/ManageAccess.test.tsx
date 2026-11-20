@@ -243,6 +243,7 @@ describe('ManageAccess', () => {
     )
 
     expect(screen.getByRole('tab', { name: 'Invite someone' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Invite someone' })).toHaveFocus()
     expect(screen.getByText('Selected')).toBeInTheDocument()
     expect(screen.getByLabelText('Email')).toHaveValue('kervens.p@example.com')
     expect(screen.getByRole('button', { name: /Maya Pluviose.*You/ })).toHaveAttribute('aria-pressed', 'true')

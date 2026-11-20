@@ -35,6 +35,8 @@ export function ManageAccess() {
   const approve = (request: AccessRequestItem) => {
     setApproval((current) => ({ request, n: (current?.n ?? 0) + 1 }))
     setTab('invite')
+    // The focused button is about to be hidden; keyboard users carry on from the tab they're taken to.
+    document.getElementById('ma-tab-invite')?.focus()
   }
 
   const tabs: { id: Tab; label: string }[] = [
