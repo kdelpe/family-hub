@@ -454,6 +454,71 @@ form.who {
   height: 44px;
 }
 
+.requests {
+  border: 2px solid var(--accent);
+}
+
+.request {
+  padding-top: 10px;
+  border-top: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.choices {
+  display: flex;
+  gap: 8px;
+}
+
+.choices > .save,
+.choices > .cancel {
+  flex: 1;
+  padding: 0 12px;
+}
+
+.answer {
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.answer:empty {
+  display: none;
+}
+
+.sharedWith {
+  padding-top: 10px;
+  border-top: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sharedTitle {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.sharedList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sharedLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+  line-height: 1.4;
+}
+
+.sharedLine > .actions {
+  padding-bottom: 8px;
+}
+
 .date {
   width: auto;
   max-width: 100%;

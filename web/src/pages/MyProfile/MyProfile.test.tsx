@@ -46,7 +46,11 @@ function renderPage(answers: Record<string, Answer> = {}, user: Partial<User> = 
     const method = init?.method ?? 'GET'
     const key = `${method} ${url}`
     // Read at call time, so a test can change an answer midway.
-    const answer = answers[key] ?? (key === 'GET /api/me/contacts' ? { status: 200, body: { contacts: rows } } : undefined)
+    const defaults: Record<string, Answer> = {
+      'GET /api/me/contacts': { status: 200, body: { contacts: rows } },
+      'GET /api/me/contact-requests': { status: 200, body: { requests: [] } },
+    }
+    const answer = answers[key] ?? defaults[key]
     // Like the server, a write that worked changes what the next read of your contacts returns.
     if (answer && answer.status < 300 && url.startsWith('/api/me/contacts') && method !== 'GET') {
       const id = url.split('/').pop()
@@ -266,7 +270,10 @@ describe('MyProfile', () => {
 
     expect(screen.getByText(/Your login isn’t linked to you in the tree yet/)).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'See me in the tree' })).not.toBeInTheDocument()
+    // Both answer a login linked to nobody with a 403.
+    expect(screen.queryByRole('heading', { name: 'Requests for your details' })).not.toBeInTheDocument()
     expect(fetch).not.toHaveBeenCalledWith('/api/me/contacts', expect.anything())
+    expect(fetch).not.toHaveBeenCalledWith('/api/me/contact-requests', expect.anything())
   })
 
   it('says the profile didn’t load, not that the login isn’t linked', async () => {

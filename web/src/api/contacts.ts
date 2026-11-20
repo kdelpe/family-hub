@@ -73,6 +73,31 @@ export const askFor = (personId: string, kind: RequestKind) =>
     { body: { kind } },
   )
 
+// Someone asking for one of my details: waiting for my answer, or shared with them.
+export type ContactRequest = {
+  id: string
+  kind: RequestKind
+  status: 'pending' | 'shared'
+  created_at: string
+  decided_at: string | null
+  from: { person_id: string; name: string }
+}
+
+export const contactRequestKeys = {
+  // Whose, as for contactKeys.mine: a relinked login answers for the new person.
+  mine: (personId: string) => ['contact-requests', personId] as const,
+}
+
+// Pending ones first, then those shared, each oldest first.
+export const myRequestsQuery = (personId: string) => ({
+  queryKey: contactRequestKeys.mine(personId),
+  queryFn: async ({ signal }: { signal?: AbortSignal }) =>
+    (await api<{ requests: ContactRequest[] }>('GET', '/me/contact-requests', { signal })).requests,
+})
+
+export const decideRequest = (id: string, decision: 'share' | 'decline' | 'revoke') =>
+  api<void>('POST', `/me/contact-requests/${encodeURIComponent(id)}/${decision}`)
+
 const platformLabels: Record<string, string> = {
   instagram: 'Instagram',
   facebook: 'Facebook',
