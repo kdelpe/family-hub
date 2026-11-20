@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
@@ -41,10 +41,23 @@ const contacts: ContactMethod[] = [
 type Answer = { status: number; body?: unknown }
 
 function renderPage(answers: Record<string, Answer> = {}, user: Partial<User> = {}, person: Person | null = maya) {
+  let rows = contacts
   const fetch = vi.fn((url: string, init?: RequestInit) => {
-    const key = `${init?.method ?? 'GET'} ${url}`
+    const method = init?.method ?? 'GET'
+    const key = `${method} ${url}`
     // Read at call time, so a test can change an answer midway.
-    const answer = answers[key] ?? (key === 'GET /api/me/contacts' ? { status: 200, body: { contacts } } : undefined)
+    const answer = answers[key] ?? (key === 'GET /api/me/contacts' ? { status: 200, body: { contacts: rows } } : undefined)
+    // Like the server, a write that worked changes what the next read of your contacts returns.
+    if (answer && answer.status < 300 && url.startsWith('/api/me/contacts') && method !== 'GET') {
+      const id = url.split('/').pop()
+      const row = answer.body as ContactMethod
+      rows =
+        method === 'POST'
+          ? [...rows, row]
+          : method === 'DELETE'
+            ? rows.filter((r) => r.id !== id)
+            : rows.map((r) => (r.id === id ? row : r))
+    }
     return answer
       ? Promise.resolve(new Response(answer.body === undefined ? null : JSON.stringify(answer.body), { status: answer.status }))
       : Promise.reject(new TypeError('Failed to fetch'))
@@ -70,6 +83,34 @@ function renderPage(answers: Record<string, Answer> = {}, user: Partial<User> = 
   return { fetch, client, router }
 }
 
+// Holds the next read of url until the test answers it, the way a slow refresh overtakes a save.
+function holdNextRead(fetch: ReturnType<typeof renderPage>['fetch'], url: string) {
+  const answer = fetch.getMockImplementation()!
+  let release: (body: unknown) => void = () => {}
+  let held = false
+  fetch.mockImplementation((u, init) => {
+    if (u === url && (init?.method ?? 'GET') === 'GET' && !held) {
+      held = true
+      return new Promise<Response>((resolve) => (release = (body) => resolve(Response.json(body))))
+    }
+    return answer(u, init)
+  })
+  return { isHeld: () => held, release: (body: unknown) => release(body) }
+}
+
+// Coming back to the window refreshes what the page shows.
+const refocus = () =>
+  act(() => {
+    focusManager.setFocused(false)
+    focusManager.setFocused(true)
+  })
+
+// Until nothing is being read and the page has caught up.
+async function settled(client: QueryClient) {
+  await vi.waitFor(() => expect(client.isFetching()).toBe(0))
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+}
+
 const sent = (fetch: ReturnType<typeof vi.fn>, method: string, url: string) =>
   fetch.mock.calls.find(([u, init]) => u === url && (init as RequestInit | undefined)?.method === method)?.[1] as
     | RequestInit
@@ -77,6 +118,7 @@ const sent = (fetch: ReturnType<typeof vi.fn>, method: string, url: string) =>
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  focusManager.setFocused(undefined)
 })
 
 describe('MyProfile', () => {
@@ -385,6 +427,24 @@ describe('MyProfile', () => {
     await vi.waitFor(() => expect(client.getQueryData(contactKeys.mine('maya'))).toBeUndefined())
   })
 
+  it('keeps a saved switch when an older refresh answers after the save', async () => {
+    const { fetch, client } = renderPage({
+      'PATCH /api/me/contacts/c3': { status: 200, body: { ...contacts[2], visibility: 'on_request' } },
+    })
+    await screen.findByRole('switch', { name: 'Mobile' })
+    const read = holdNextRead(fetch, '/api/me/contacts')
+    refocus()
+    await vi.waitFor(() => expect(read.isHeld()).toBe(true))
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Mobile' }))
+    await vi.waitFor(() => expect(screen.getByRole('switch', { name: 'Mobile' })).toHaveTextContent('Family can ask'))
+    // The refresh read the rows before the save, and only answers now.
+    act(() => read.release({ contacts }))
+
+    await settled(client)
+    expect(screen.getByRole('switch', { name: 'Mobile' })).toHaveTextContent('Family can ask')
+  })
+
   it('shows the rows of whoever you are now when an admin relinks your login', async () => {
     const answers: Record<string, Answer> = {}
     const { client } = renderPage(answers)
@@ -398,5 +458,45 @@ describe('MyProfile', () => {
     await vi.waitFor(() => expect(screen.queryByRole('switch', { name: 'Mobile' })).not.toBeInTheDocument())
     expect(await screen.findByRole('switch', { name: 'Email' })).toBeInTheDocument()
     expect(screen.getAllByRole('switch')).toHaveLength(1)
+  })
+
+  it.each([
+    {
+      name: 'story',
+      saved: { ...maya, bio: 'Nurse in Boston.' },
+      save: async () => {
+        fireEvent.change(screen.getByLabelText('Your story'), { target: { value: 'Nurse in Boston.' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+        await screen.findByText('Saved.')
+      },
+      shown: () => expect(screen.getByLabelText('Your story')).toHaveValue('Nurse in Boston.'),
+    },
+    {
+      name: 'name',
+      saved: { ...maya, last_name: 'Pluviose-Jean' },
+      save: async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Edit your name, birthday and photo' }))
+        const form = within(screen.getByRole('form', { name: 'Your details' }))
+        fireEvent.change(form.getByLabelText('Last name'), { target: { value: 'Pluviose-Jean' } })
+        fireEvent.click(form.getByRole('button', { name: 'Save' }))
+        await screen.findByText('Maya Pluviose-Jean')
+      },
+      shown: () => expect(screen.getByText('Maya Pluviose-Jean')).toBeInTheDocument(),
+    },
+  ])('keeps the saved $name when an older read of your profile answers after the save', async ({ saved, save, shown }) => {
+    const answers: Record<string, Answer> = { 'PATCH /api/persons/maya': { status: 200, body: saved } }
+    const { fetch, client } = renderPage(answers)
+    await screen.findByRole('switch', { name: 'Mobile' })
+    const read = holdNextRead(fetch, '/api/persons/maya')
+    refocus()
+    await vi.waitFor(() => expect(read.isHeld()).toBe(true))
+    answers['GET /api/persons/maya'] = { status: 200, body: saved }
+
+    await save()
+    // The refresh read the profile before the save, and only answers now.
+    act(() => read.release(maya))
+
+    await settled(client)
+    shown()
   })
 })

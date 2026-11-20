@@ -71,8 +71,10 @@ function useContactSaved(personId: string) {
   return {
     saved: (update: (rows: ContactMethod[]) => ContactMethod[]) => {
       queryClient.setQueryData<ContactMethod[]>(contactKeys.mine(personId), (rows) => rows && update(rows))
-      void queryClient.invalidateQueries({ queryKey: contactKeys.of(personId) })
-      void queryClient.invalidateQueries({ queryKey: directoryKeys.all })
+      // Your own rows too: a refresh that read them before this save mustn't land after it.
+      for (const queryKey of [contactKeys.mine(personId), contactKeys.of(personId), directoryKeys.all]) {
+        void queryClient.invalidateQueries({ queryKey })
+      }
     },
     onError: onSessionEnded(queryClient),
   }

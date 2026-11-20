@@ -70,6 +70,8 @@ function StoryCard({ person }: { person: Person }) {
       }
       // Only the story: a details save answering out of order mustn't be undone by this one.
       queryClient.setQueryData<Person>(personKeys.one(person.id), (old) => old && { ...old, bio: updated.bio })
+      // A read that left before this save mustn't land after it: fetch what was committed.
+      void queryClient.invalidateQueries({ queryKey: personKeys.one(person.id) })
       setDraft(null)
       setJustSaved(true)
     },
@@ -189,8 +191,15 @@ function Details({ person }: { person: Person }) {
         personKeys.one(person.id),
         (old) => old && { ...old, first_name, last_name, birth_date, birth_date_precision },
       )
-      // Where else a name or birthday shows.
-      for (const queryKey of [personKeys.some([]), treeKeys.all, directoryKeys.all, familyKeys.summary, adminKeys.members]) {
+      // This profile too (a read that left before the save mustn't land after it), and where else a name or birthday shows.
+      for (const queryKey of [
+        personKeys.one(person.id),
+        personKeys.some([]),
+        treeKeys.all,
+        directoryKeys.all,
+        familyKeys.summary,
+        adminKeys.members,
+      ]) {
         void queryClient.invalidateQueries({ queryKey })
       }
       setEditing(false)
