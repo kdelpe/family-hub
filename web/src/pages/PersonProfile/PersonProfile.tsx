@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router'
 
 import { ApiError } from '../../api/client'
 import { askFor, type Contact, contactKeys, type ContactMethod, contactsQuery, isRequestable, type RequestKind } from '../../api/contacts'
-import { getPerson, listPersons, type Person, personKeys } from '../../api/persons'
+import { getPerson, getPersons, type Person, personKeys } from '../../api/persons'
 import { getTree, type Tree, treeKeys } from '../../api/tree'
 import { birthday, lifespan, year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
@@ -29,7 +29,6 @@ export function PersonProfile() {
   const viewerId = user?.person_id ?? null
   const person = useQuery({ queryKey: personKeys.one(id), queryFn: ({ signal }) => getPerson(id, { signal }) })
   const tree = useQuery({ queryKey: treeKeys.all, queryFn: ({ signal }) => getTree({ signal }) })
-  const everyone = useQuery({ queryKey: personKeys.all, queryFn: ({ signal }) => listPersons({ signal }) })
   const contacts = useQuery(contactsQuery(id))
   const relations = useMemo(
     () => (tree.data && viewerId ? relationsTo(tree.data, viewerId) : new Map<string, string>()),
@@ -103,7 +102,7 @@ export function PersonProfile() {
       </section>
 
       {tree.error && <p role="alert">{errorMessage(tree.error)}</p>}
-      {tree.data && <Family tree={tree.data} person={p} relations={relations} everyone={everyone.data} />}
+      {tree.data && <Family tree={tree.data} person={p} relations={relations} />}
     </main>
   )
 }
@@ -168,20 +167,19 @@ function AskButton({ personId, kind, asked }: { personId: string; kind: RequestK
   )
 }
 
-function Family({
-  tree,
-  person,
-  relations,
-  everyone,
-}: {
-  tree: Tree
-  person: Person
-  relations: Map<string, string>
-  everyone: Person[] | undefined
-}) {
+function Family({ tree, person, relations }: { tree: Tree; person: Person; relations: Map<string, string> }) {
   const byId = new Map(tree.persons.map((t) => [t.id, t]))
-  const details = new Map(everyone?.map((e) => [e.id, e]))
   const g = familyGroups(tree, person.id)
+  // The tree carries no dates (§10), so the relatives shown are fetched for theirs.
+  const shown = [
+    ...new Set([...g.parents, ...g.partners.map((x) => x.id), ...g.children, ...g.stepChildren.map((s) => s.id), ...g.grandchildren]),
+  ].sort()
+  const relatives = useQuery({
+    queryKey: personKeys.some(shown),
+    queryFn: ({ signal }) => getPersons(shown, { signal }),
+    enabled: shown.length > 0,
+  })
+  const details = new Map(relatives.data?.map((r) => [r.id, r]))
   const via = new Map(g.stepChildren.map((s) => [s.id, s.via]))
   const born = (id: string) => year(details.get(id)?.birth_date ?? null, null) ?? '9999'
   const name = (id: string) => (byId.get(id) ? fullName(byId.get(id)!) : '')
@@ -230,6 +228,7 @@ function Family({
       <h2 id="pp-family" className={styles.familyTitle}>
         {person.first_name}’s family
       </h2>
+      {relatives.error && <p role="alert">{errorMessage(relatives.error)}</p>}
       {groups.map((group) => (
         <div key={group.title} className={styles.group}>
           <h3 className={styles.groupTitle}>{group.title}</h3>

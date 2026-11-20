@@ -20,6 +20,14 @@ SELECT p.id, p.first_name, p.middle_name, p.last_name, p.maiden_name, p.side, p.
 FROM persons p
 WHERE p.id = @id AND p.deleted_at IS NULL;
 
+-- name: GetPersons :many
+SELECT p.id, p.first_name, p.middle_name, p.last_name, p.maiden_name, p.side, p.birth_place, p.gender,
+  coalesce(masked_birth_date(p, @viewer_is_admin::boolean, sqlc.narg(viewer_person_id)::uuid), '')::text AS birth_date,
+  p.birth_date_precision, p.death_date, p.death_date_precision, p.is_deceased, p.bio
+FROM persons p
+WHERE p.id = ANY(@ids::uuid[]) AND p.deleted_at IS NULL
+ORDER BY lower(p.search_name), p.id;
+
 -- The unmasked row, to apply a PATCH to; never returned as is. NO KEY, so an invite linking a login doesn't block it.
 -- name: LockPerson :one
 SELECT id, first_name, middle_name, last_name, maiden_name, side, birth_place, gender,

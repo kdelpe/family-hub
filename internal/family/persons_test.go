@@ -217,6 +217,33 @@ func TestListRefusesABadFilter(t *testing.T) {
 	}
 }
 
+func TestGetPersonsReturnsOnlyTheOnesAskedFor(t *testing.T) {
+	svc, admin := newService(t)
+	ids := addPeople(t, svc, admin, "Rosa", "Jean", "Marie", "Paul")
+	rosa, err := svc.UpdatePerson(t.Context(), Viewer{UserID: admin, IsAdmin: true}, ids["Rosa"], PersonPatch{
+		BirthDate: Opt[*string]{Set: true, Value: new("1950-03-14")}, BirthDatePrecision: Opt[*string]{Set: true, Value: new("day")},
+	})
+	require.NoError(t, err)
+	require.NoError(t, svc.DeletePerson(t.Context(), ids["Paul"]))
+
+	got, err := svc.GetPersons(t.Context(), Viewer{}, []uuid.UUID{ids["Rosa"], ids["Jean"], ids["Paul"], uuid.New()})
+
+	require.NoError(t, err)
+	names := []string{}
+	for _, p := range got {
+		names = append(names, p.FirstName)
+	}
+	assert.Equal(t, []string{"Jean", "Rosa"}, names, "A–Z, without the deleted, the unknown or anyone not asked for")
+	assert.Equal(t, rosa.ID, got[1].ID)
+	assert.Equal(t, new("--03-14"), got[1].BirthDate, "masked as everywhere else")
+}
+
+func TestGetPersonsRefusesTooMany(t *testing.T) {
+	_, err := NewService(nil).GetPersons(t.Context(), Viewer{}, make([]uuid.UUID, maxIDs+1))
+
+	assert.ErrorIs(t, err, ErrInvalidFilter)
+}
+
 func TestUpdateChangesOnlyTheFieldsSent(t *testing.T) {
 	tests := []struct {
 		name    string

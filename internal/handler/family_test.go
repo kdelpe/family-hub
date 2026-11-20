@@ -85,6 +85,49 @@ func TestSearchPersons(t *testing.T) {
 	}
 }
 
+func TestGetPersonsByID(t *testing.T) {
+	const idsError = `{"error":{"code":"validation_error","message":"ids must be person ids, separated by commas"}}`
+	both := "?ids=" + testPersonID.String() + "," + otherPersonID.String()
+
+	tests := []struct {
+		name       string
+		query      string
+		wantIDs    []uuid.UUID
+		getErr     error
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "the people asked for", query: both, wantIDs: []uuid.UUID{testPersonID, otherPersonID},
+			wantStatus: http.StatusOK, wantBody: `{"persons":[` + testPersonBody + `]}`},
+		{name: "an id that isn't one", query: "?ids=" + testPersonID.String() + ",42", wantStatus: http.StatusBadRequest, wantBody: idsError},
+		{name: "no ids", query: "?ids=", wantStatus: http.StatusBadRequest, wantBody: idsError},
+		{name: "ids with a search", query: both + "&q=ros", wantStatus: http.StatusBadRequest,
+			wantBody: `{"error":{"code":"validation_error","message":"ids can't be combined with q, side or living"}}`},
+		{name: "too many", query: both, wantIDs: []uuid.UUID{testPersonID, otherPersonID}, getErr: family.ErrInvalidFilter,
+			wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"validation_error","message":"invalid filter"}}`},
+		{name: "database error", query: both, wantIDs: []uuid.UUID{testPersonID, otherPersonID}, getErr: errors.New("db down"),
+			wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewFamilyService(t)
+			if tt.wantIDs != nil {
+				people := []family.Person{testPerson}
+				if tt.getErr != nil {
+					people = nil
+				}
+				svc.EXPECT().GetPersons(mock.Anything, family.Viewer{UserID: testUser.ID}, tt.wantIDs).Return(people, tt.getErr)
+			}
+			req := httptest.NewRequest(http.MethodGet, "/api/persons"+tt.query, nil)
+
+			rec := serveAs(t, auth.RoleMember, handler.NewFamily(svc).SearchPersons, req)
+
+			assertBody(t, rec, tt.wantStatus, tt.wantBody)
+		})
+	}
+}
+
 func TestReadsPassTheLinkedPerson(t *testing.T) {
 	linked := auth.Session{UserID: testUser.ID, Role: auth.RoleMember, PersonID: new(otherPersonID)}
 	viewer := family.Viewer{UserID: testUser.ID, PersonID: new(otherPersonID)}

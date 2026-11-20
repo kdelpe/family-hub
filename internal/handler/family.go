@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -17,6 +19,7 @@ import (
 
 type FamilyService interface {
 	ListPersons(ctx context.Context, viewer family.Viewer, in family.ListInput) ([]family.Person, error)
+	GetPersons(ctx context.Context, viewer family.Viewer, ids []uuid.UUID) ([]family.Person, error)
 	GetPerson(ctx context.Context, viewer family.Viewer, id uuid.UUID) (family.Person, error)
 	CreatePerson(ctx context.Context, createdBy uuid.UUID, in family.PersonInput) (family.Person, error)
 	UpdatePerson(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch family.PersonPatch) (family.Person, error)
@@ -198,6 +201,16 @@ func (f *Family) SearchPersons(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := r.URL.Query()
+	if query.Has("ids") {
+		ids, err := personIDs(query)
+		if err != nil {
+			httpx.Error(w, http.StatusBadRequest, "validation_error", err.Error())
+			return
+		}
+		people, err := f.svc.GetPersons(r.Context(), viewer, ids)
+		f.persons(w, r, people, err, "get persons")
+		return
+	}
 	in := family.ListInput{Query: query.Get("q"), Side: query.Get("side")}
 	switch query.Get("living") {
 	case "":
@@ -210,8 +223,12 @@ func (f *Family) SearchPersons(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	people, err := f.svc.ListPersons(r.Context(), viewer, in)
+	f.persons(w, r, people, err, "list persons")
+}
+
+func (f *Family) persons(w http.ResponseWriter, r *http.Request, people []family.Person, err error, what string) {
 	if err != nil {
-		f.fail(w, r, err, "list persons")
+		f.fail(w, r, err, what)
 		return
 	}
 	resp := personsResponse{Persons: make([]personResponse, 0, len(people))}
@@ -219,6 +236,22 @@ func (f *Family) SearchPersons(w http.ResponseWriter, r *http.Request) {
 		resp.Persons = append(resp.Persons, toPersonResponse(p))
 	}
 	httpx.JSON(w, http.StatusOK, resp)
+}
+
+// personIDs reads ?ids=a,b,c: a known set of people, which the list's filters don't apply to.
+func personIDs(query url.Values) ([]uuid.UUID, error) {
+	if query.Has("q") || query.Has("side") || query.Has("living") {
+		return nil, errors.New("ids can't be combined with q, side or living")
+	}
+	var ids []uuid.UUID
+	for _, s := range strings.Split(strings.Join(query["ids"], ","), ",") {
+		id, err := uuid.Parse(s)
+		if err != nil {
+			return nil, errors.New("ids must be person ids, separated by commas")
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 func (f *Family) GetPerson(w http.ResponseWriter, r *http.Request) {

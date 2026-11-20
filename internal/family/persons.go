@@ -23,8 +23,11 @@ const (
 	maxQueryLength = 100
 
 	searchResults = 20
-	// The People page lists everyone at once; family scale is hundreds, so this is only a backstop.
+	// Only a backstop: the family will pass this as ancestry is traced, so pages read the tree or ask for a known set
+	// of people by id (GetPersons), never for everyone from here.
 	listResults = 5000
+	// A profile's relatives fit easily; a page with more asks in batches.
+	maxIDs = 100
 )
 
 var (
@@ -141,6 +144,24 @@ func (s *Service) ListPersons(ctx context.Context, viewer Viewer, in ListInput) 
 
 func (s *Service) GetPerson(ctx context.Context, viewer Viewer, id uuid.UUID) (Person, error) {
 	return get(ctx, gen.New(s.pool), viewer, id)
+}
+
+// GetPersons returns the people with these ids that the viewer may see, A–Z; unknown and deleted ones are left out.
+func (s *Service) GetPersons(ctx context.Context, viewer Viewer, ids []uuid.UUID) ([]Person, error) {
+	if len(ids) > maxIDs {
+		return nil, fmt.Errorf("%w: ask for at most %d people at a time", ErrInvalidFilter, maxIDs)
+	}
+	rows, err := gen.New(s.pool).GetPersons(ctx, gen.GetPersonsParams{
+		ViewerIsAdmin: viewer.IsAdmin, ViewerPersonID: viewer.PersonID, Ids: ids,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get persons: %w", err)
+	}
+	people := make([]Person, 0, len(rows))
+	for _, row := range rows {
+		people = append(people, toPerson(gen.GetPersonRow(row)))
+	}
+	return people, nil
 }
 
 func get(ctx context.Context, q *gen.Queries, viewer Viewer, id uuid.UUID) (Person, error) {

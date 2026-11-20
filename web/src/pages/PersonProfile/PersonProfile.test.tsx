@@ -80,11 +80,15 @@ function renderPage({
   const all: Record<string, Answer | Answer[]> = {
     'GET /api/persons/nadege': { status: 200, body: nadege },
     'GET /api/tree': { status: 200, body: tree },
-    'GET /api/persons': { status: 200, body: { persons: everyone } },
     'GET /api/persons/nadege/contacts': { status: 200, body: { contacts } },
     ...answers,
   }
   const fetch = vi.fn((url: string, init?: RequestInit) => {
+    const ids = url.startsWith('/api/persons?ids=') ? url.slice('/api/persons?ids='.length).split(',') : null
+    if (ids && !answers[`GET ${url}`]) {
+      const persons = everyone.filter((p) => ids.includes(p.id))
+      return Promise.resolve(new Response(JSON.stringify({ persons }), { status: 200 }))
+    }
     const queued = all[`${init?.method ?? 'GET'} ${url}`]
     // A list answers in turn, then keeps giving its last answer.
     const answer = Array.isArray(queued) ? (queued.length > 1 ? queued.shift() : queued[0]) : queued
@@ -116,6 +120,15 @@ afterEach(() => {
 })
 
 describe('PersonProfile', () => {
+  it('asks only for the relatives it shows, never everyone', async () => {
+    const fetch = renderPage()
+
+    await screen.findByText('c. 1935 – 1998')
+
+    const asked = fetch.mock.calls.map(([url]) => url).filter((url) => url.startsWith('/api/persons?'))
+    expect(asked).toEqual([`/api/persons?ids=${['jeanrobert', 'lucien', 'maya', 'sabine'].join(',')}`])
+  })
+
   it('shows who they are to you, their facts, and their family', async () => {
     renderPage()
 
@@ -209,6 +222,7 @@ describe('PersonProfile', () => {
   it.each([
     { name: 'the tree', key: 'GET /api/tree' },
     { name: 'the contacts', key: 'GET /api/persons/nadege/contacts' },
+    { name: 'the relatives', key: `GET /api/persons?ids=${['jeanrobert', 'lucien', 'maya', 'sabine'].join(',')}` },
   ])('says when $name can’t load', async ({ key }) => {
     renderPage({ answers: { [key]: { status: 500, body: { error: { code: 'internal', message: 'x' } } } } })
 

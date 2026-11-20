@@ -108,7 +108,7 @@ type DirectoryPersonsRow struct {
 
 // The directory: living people in the tree who share something, a family row or a kind to ask for (§4.4),
 // best matches first when searched.
-// Search matches names only, never contact values (§5.2). The limit is a backstop at family scale.
+// Search matches names only, never contact values (§5.2). The limit is a backstop: only living people with a way to reach them are listed.
 func (q *Queries) DirectoryPersons(ctx context.Context, arg DirectoryPersonsParams) ([]DirectoryPersonsRow, error) {
 	rows, err := q.db.Query(ctx, directoryPersons, arg.Q, arg.QLike)
 	if err != nil {
