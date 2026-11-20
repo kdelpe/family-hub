@@ -31,7 +31,11 @@ export function SuggestCard({ yourName }: { yourName: string }) {
         />
       ) : (
         <>
-          {!sent && <p className={styles.sideText}>Suggest a relative and an admin will send them an invitation.</p>}
+          {!sent && (
+            <p className={styles.sideText}>
+              Suggest a relative and an admin will take a look. If they approve, your relative gets an invitation by email.
+            </p>
+          )}
           <button
             type="button"
             onClick={() => {

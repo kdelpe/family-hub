@@ -51,7 +51,9 @@ describe('SuggestCard', () => {
     },
   ])('sends a suggestion with $name, then thanks you', async ({ fields, body }) => {
     const { fetch } = renderCard({ 'POST /api/me/suggestions': { status: 202, body: {} } })
-    expect(screen.getByText('Suggest a relative and an admin will send them an invitation.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Suggest a relative and an admin will take a look. If they approve, your relative gets an invitation by email.'),
+    ).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Suggest a relative' }))
     expect(form().getByLabelText('Related to')).toHaveValue('Maya Pluviose')

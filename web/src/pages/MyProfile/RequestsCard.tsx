@@ -69,7 +69,10 @@ export function RequestsCard({ personId }: { personId: string }) {
       <span role="status" className={styles.answer}>
         {stopped && `Stopped sharing your ${yourDetail[stopped.kind]} with ${firstName(stopped.from.name)}.`}
       </span>
-      <span className={styles.small}>Sharing shows it to that one person only. You can stop sharing any time.</span>
+      <span className={styles.small}>
+        Sharing shows that one person every detail of that kind you’ve set to “Family can ask”, including ones you add
+        later. You can stop sharing any time.
+      </span>
     </section>
   )
 }
@@ -176,7 +179,12 @@ function RequestRow({
         (confirming ? (
           <Confirm
             question={confirming === 'share' ? `Share your ${detail} with ${first}?` : `Not share your ${detail} with ${first}?`}
-            note={confirming === 'decline' ? 'You can’t change your mind later.' : undefined}
+            // A share covers every value of the kind, now and later (§5.2), not just the one they may have in mind.
+            note={
+              confirming === 'share'
+                ? `${first} will see every ${detail} you’ve set to “Family can ask”, including ones you add later.`
+                : 'You can’t change your mind later.'
+            }
             yes={confirming === 'share' ? 'Yes, share' : 'Yes, don’t share'}
             no="Cancel"
             busy={decide.isPending}

@@ -76,7 +76,11 @@ describe('RequestsCard', () => {
     expect(screen.getAllByRole('button', { name: 'Not now' })).toHaveLength(2)
     expect(screen.getByRole('heading', { name: 'Shared with' })).toBeInTheDocument()
     expect(screen.getByRole('listitem')).toHaveTextContent('Naïka Jean-Louis · WhatsApp number')
-    expect(screen.getByText('Sharing shows it to that one person only. You can stop sharing any time.')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Sharing shows that one person every detail of that kind you’ve set to “Family can ask”, including ones you add later. You can stop sharing any time.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('says when no one has asked', async () => {
@@ -131,16 +135,18 @@ describe('RequestsCard', () => {
   })
 
   it.each([
-    { button: 'Share', question: 'Share your phone number with Darline?', note: undefined },
+    {
+      button: 'Share',
+      question: 'Share your phone number with Darline?',
+      note: 'Darline will see every phone number you’ve set to “Family can ask”, including ones you add later.',
+    },
     { button: 'Not now', question: 'Not share your phone number with Darline?', note: 'You can’t change your mind later.' },
   ])('asks before it answers “$button”, and Cancel sends nothing', async ({ button, question, note }) => {
     const { fetch } = renderCard({ 'GET /api/me/contact-requests': listed([darline]) })
 
     fireEvent.click(await screen.findByRole('button', { name: button }))
     const confirm = screen.getByRole('group', { name: question })
-    if (note) {
-      expect(confirm).toHaveAccessibleDescription(note)
-    }
+    expect(confirm).toHaveAccessibleDescription(note)
     fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
 
     expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument()
