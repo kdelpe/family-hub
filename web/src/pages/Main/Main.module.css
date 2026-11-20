@@ -1,0 +1,534 @@
+.page {
+  --card-width: 150px;
+  padding: 32px 40px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  line-height: normal;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 40px;
+  font-weight: 500;
+}
+
+.search {
+  position: relative;
+  max-width: 100%;
+}
+
+.searchInput {
+  box-sizing: border-box;
+  width: 260px;
+  max-width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--input-border);
+  border-radius: 24px;
+  background: var(--surface);
+  font: inherit;
+  color: var(--text);
+}
+
+.matches {
+  position: absolute;
+  top: 54px;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--input-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.match {
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+
+.match:hover,
+.match:focus-visible {
+  background: var(--chip);
+}
+
+.matchName {
+  font-weight: 600;
+}
+
+.matchRelation {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.back {
+  height: 48px;
+  padding: 0 18px;
+  border: 1px solid var(--input-border);
+  border-radius: 24px;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.back:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.home {
+  height: 48px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 24px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.trail {
+  min-height: 32px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.here {
+  padding: 4px 6px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.stepButton {
+  min-height: 44px;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tip {
+  margin-left: auto;
+  font-size: 14px;
+}
+
+.note {
+  margin: 0;
+  color: var(--muted);
+}
+
+.panel {
+  position: relative;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+
+/* Only the lines are clipped to the panel, so a quick look can hang past its bottom edge. */
+.lines {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 22px;
+  pointer-events: none;
+  animation: fade 0.3s ease-out 0.45s both;
+}
+
+.lines svg {
+  display: block;
+}
+
+.lines path {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.rows {
+  position: relative;
+  padding: 22px 20px 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+}
+
+.up {
+  animation: slide-up 0.5s ease-out both;
+}
+
+.down {
+  animation: slide-down 0.5s ease-out both;
+}
+
+.side {
+  animation: side 0.5s ease-out both;
+}
+
+.generation {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The label's own background stops a line passing behind it instead of striking through it. */
+.generationLabel {
+  position: relative;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+
+.row {
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.group {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 10px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.household {
+  border: 2px solid var(--accent);
+  background: var(--accent-tint);
+}
+
+.groupLabel {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.groupRow {
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.person {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.card {
+  box-sizing: border-box;
+  width: var(--card-width);
+  min-height: 118px;
+  padding: 12px 8px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font: inherit;
+  color: var(--text);
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.focusCard {
+  border: 3px solid var(--accent);
+}
+
+.former {
+  border: 1px dashed var(--line);
+}
+
+.lifted {
+  position: relative;
+  z-index: 2;
+  transform: translateY(-3px) scale(1.04);
+  box-shadow: 0 10px 24px var(--shadow-lift);
+}
+
+.avatar {
+  position: relative;
+  overflow: hidden;
+  flex: none;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: var(--avatar);
+  color: var(--text);
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 0 0 5px var(--avatar);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+  font-size: 19px;
+}
+
+.focusAvatar {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.name {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.sub {
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+.more {
+  position: relative;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--input-border);
+  border-radius: 15px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+/* A 44px tap target around the small pill. */
+.more::after {
+  content: '';
+  position: absolute;
+  inset: -7px -4px;
+}
+
+.glance {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  z-index: 20;
+  width: 250px;
+  padding-top: 8px;
+}
+
+.glanceCard {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 12px 28px var(--shadow-lift);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text);
+  text-align: left;
+  animation: pop 0.16s ease-out both;
+}
+
+.glanceRelation {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.glanceStory {
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.glanceFoot {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--divider);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.profileLink {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+}
+
+.centerHere {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pause {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(-48px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(48px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes side {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .page {
+    /* Two cards side by side inside a group, on the narrowest phones too. */
+    --card-width: min(150px, calc((100vw - 110px) / 2));
+    padding: 24px 16px 40px;
+  }
+
+  .rows {
+    padding: 22px 8px 26px;
+  }
+
+  .group {
+    padding: 8px;
+  }
+
+  .tip {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+
+  .lifted {
+    transform: none;
+  }
+}
