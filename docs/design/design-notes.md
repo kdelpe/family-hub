@@ -94,6 +94,7 @@ White text only ever sits on `--accent` (buttons, the focus avatar).
 - Items, in order: **Home · Family tree · People · Directory · Events · Stories · My profile**.
 - **Admin** section (admins only), under a thin divider and small "ADMIN" label: **Members & invites**.
 - Bottom: "Signed in as Maya".
+- **My profile's badge:** how many requests for your details wait for an answer (architecture §5.2), as a small accent pill after the label, read out as *"My profile, 2 requests for your details"*. Only a login linked to someone in the tree gets one.
 - Current page: `--nav-active` background, 600 weight, `aria-current="page"`.
 - **Hover / keyboard focus:** `--brand-panel` background plus `box-shadow: 0 1px 3px rgba(43,38,32,.12)`, transition 150ms. The current page keeps its own color and only gains the shadow.
 
@@ -246,6 +247,9 @@ Not drawn in the mockup, settled with the owner (November 2026):
 - **Phone and WhatsApp numbers** get dashes once all 10 digits are in, with no +1 needed: *1115550000* reads *111-555-0000*, and *11115550000* reads *1-111-555-0000*. Any other number (with a **+**, or shorter or longer, like a Haitian *3412-3456*) stays as typed.
 - The mockup's line *"Admins can see all information you enter."* is dropped (owner's call); the invitation email and First setup still say it.
 - A login not yet linked to anyone in the tree sees *"Your login isn't linked to you in the tree yet, so there's no profile to fill in. An admin can link it."* and the Sign-in card.
+- **Requests for your details** stays at the top of the side column even with nothing to answer: *"No requests right now."* An answered request stays in place for the rest of the visit, saying *"Shared with Darline."* or *"Not shared. Darline won't be told."* **Shared with** sits inside the same card, under the requests, once something is shared.
+- **Stop sharing** asks first: *"Stop sharing your phone number with Darline?"* **Yes, stop** / **Keep sharing**. A share taken back can't be given again, and they can't ask twice; **Not now** is just as final, only silent. Afterwards: *"Stopped sharing your phone number with Darline."*
+- **Suggest a relative** opens a form inside its card: **Their full name**, **Their email**, *"How are they related? (optional)"* as *"They're the [—] of [your name]"* (Request access's list; the name starts as yours and can be changed, so the admins' queue can find it in the tree), *"Anything else? (optional)"*, then **Send suggestion** / **Cancel**. Afterwards: *"Thanks. An admin will take a look, and if they approve, Darline gets an invitation by email."* and **Suggest someone else**. A login linked to nobody sees neither card.
 
 ### 4.9 Full profile (from "Open full profile" / "View profile")
 Back to the tree · portrait, relation, name, maiden name, birthday, place, story · **Center the tree on Nadège** and a dashed **Request phone number** button (never the number itself, unless she has shared it with you) · family grouped as Parents / Married to / Children / Step-children / Grandchildren · photos · moments (events + stories).
