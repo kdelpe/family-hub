@@ -6,6 +6,7 @@ import { adminKeys } from '../../api/admin'
 import { onSessionEnded, sameSession, sessionGeneration } from '../../api/auth'
 import { directoryKeys } from '../../api/contacts'
 import { familyKeys } from '../../api/family'
+import { homeKeys } from '../../api/home'
 import { type Person, personKeys, updateOwnProfile } from '../../api/persons'
 import { treeKeys } from '../../api/tree'
 import { bornOn } from '../../lib/dates'
@@ -210,6 +211,7 @@ function Details({ person }: { person: Person }) {
         directoryKeys.all,
         familyKeys.summary,
         adminKeys.members,
+        homeKeys.all,
       ]) {
         void queryClient.invalidateQueries({ queryKey })
       }

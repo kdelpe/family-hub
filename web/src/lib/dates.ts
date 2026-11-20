@@ -45,3 +45,31 @@ export function lifespan(p: Person): string | null {
   }
   return `${born ?? '?'} – ${died ?? '?'}`
 }
+
+const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+// "Today", "Tomorrow", "In 6 days".
+export const inDays = (days: number) => (days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`)
+
+// "Nov 19" for a YYYY-MM-DD date, as on Coming up's date tiles.
+export function monthAndDay(date: string): { month: string; day: number } {
+  const [, m = '1', d = '1'] = date.split('-')
+  return { month: months[Number(m) - 1]!.slice(0, 3), day: Number(d) }
+}
+
+// "today", "yesterday", "Tuesday" within the week, then "Nov 3": when someone was added, on the viewer's clock.
+export function addedOn(addedAt: string, now: Date): string {
+  const added = new Date(addedAt)
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const days = Math.round((midnight(now) - midnight(added)) / 86_400_000)
+  if (days <= 0) {
+    return 'today'
+  }
+  if (days === 1) {
+    return 'yesterday'
+  }
+  if (days < 7) {
+    return weekdays[added.getDay()]!
+  }
+  return `${months[added.getMonth()]!.slice(0, 3)} ${added.getDate()}`
+}
