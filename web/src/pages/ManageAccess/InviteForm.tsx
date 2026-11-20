@@ -154,6 +154,7 @@ export function InviteForm({ members, approval }: { members: UseQueryResult<Memb
             onChange={(event) => {
               setQuery(event.target.value)
               setPersonId(null)
+              setPickName(null)
               if (!send.isPending) {
                 send.reset()
               }

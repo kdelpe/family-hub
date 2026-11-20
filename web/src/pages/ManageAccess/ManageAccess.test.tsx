@@ -330,6 +330,26 @@ describe('ManageAccess', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
+  it('doesn’t pick the requester over a search edited while the tree loads', async () => {
+    let answerTree!: (r: Response) => void
+    const fetch = stubApi(listAnswers)
+    const listed = fetch.getMockImplementation()!
+    fetch.mockImplementation((url: string, init?: RequestInit) =>
+      url === '/api/tree' ? new Promise<Response>((r) => (answerTree = r)) : listed(url, init),
+    )
+    renderPage()
+    await screen.findByRole('tab', { name: 'Everyone (4)' })
+    fireEvent.click(
+      within(screen.getByRole('article', { name: 'Kervens Pluviose' })).getByRole('button', { name: 'Approve & invite' }),
+    )
+
+    type('Find a person in the tree', 'fabi')
+    answerTree(new Response(JSON.stringify(tree), { status: 200 }))
+
+    expect(await screen.findByRole('button', { name: /Fabienne Pluviose/ })).toBeInTheDocument()
+    expect(screen.queryByText('Selected')).not.toBeInTheDocument()
+  })
+
   it('stops approving the request once the email is changed', async () => {
     const fetch = stubApi({ ...listAnswers, 'POST /api/admin/users': { status: 201, body: { id: 'u-kervens' } } })
     renderPage()
