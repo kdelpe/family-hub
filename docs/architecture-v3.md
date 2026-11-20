@@ -449,7 +449,7 @@ Down migrations are a local-dev convenience. In production, fix forward with a n
 
 Only parent links and couples are stored. Everything else is computed from them, client-side for the tree and labels, server-side where a query needs it, so it can never drift out of sync.
 
-**Which parent links count.** A *family parent* is a `biological` or `adoptive` parent link: adoption makes a child a full member of the family, so the two are treated identically for every rule below. `foster` links never create family relations; they only produce the foster labels at the end of the table. (Whether a link is biological or adoptive is shown on the person's profile, not in the sibling label.)
+**Which parent links count.** A *family parent* is a `biological` or `adoptive` parent link: adoption makes a child a full member of the family, so the two are treated identically for every rule below. `foster` links never create family relations; they only produce the foster labels at the end of the table. (No label says whether a link is biological or adoptive, not even on profiles for now: owner's decision, November 2026.)
 
 | Relation | Rule |
 |---|---|
