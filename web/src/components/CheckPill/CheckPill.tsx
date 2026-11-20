@@ -15,7 +15,7 @@ export function CheckPill({ size, to, children }: { size: 'large' | 'small'; to?
     </>
   )
   return to ? (
-    <Link to={to} className={`${className} ${styles.link}`}>
+    <Link to={to} className={`${className} ${styles.link}${size === 'small' ? ' tap' : ''}`}>
       {content}
     </Link>
   ) : (

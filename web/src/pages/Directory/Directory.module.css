@@ -172,13 +172,20 @@
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px 6px;
+}
+
+.socials li {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .social {
-  height: 36px;
+  min-height: 36px;
+  max-width: 100%;
   box-sizing: border-box;
-  padding: 0 12px;
+  padding: 6px 12px;
+  overflow-wrap: anywhere;
   display: inline-flex;
   align-items: center;
   gap: 6px;

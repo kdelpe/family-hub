@@ -140,7 +140,7 @@ function Row({ entry, relation }: { entry: DirectoryEntry; relation: string | nu
         {emails.map((c) => (
           <div key={c.id} className={styles.email}>
             <span className={styles.value}>{c.value}</span>
-            <a href={mailto(c.value)} className={`pill ${styles.emailButton}`} aria-label={emails.length > 1 ? `Email ${entry.first_name} at ${c.value}` : `Email ${entry.first_name}`}>
+            <a href={mailto(c.value)} className={`pill tap ${styles.emailButton}`} aria-label={emails.length > 1 ? `Email ${entry.first_name} at ${c.value}` : `Email ${entry.first_name}`}>
               {mailIcon}
               Email
             </a>
@@ -161,7 +161,7 @@ function Row({ entry, relation }: { entry: DirectoryEntry; relation: string | nu
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label={`${entry.first_name} on ${label}`}
-                      className={`pill ${styles.social}`}
+                      className={`pill tap ${styles.social}`}
                     >
                       {linkIcon}
                       {label}

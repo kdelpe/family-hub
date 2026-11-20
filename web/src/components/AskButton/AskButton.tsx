@@ -58,7 +58,7 @@ export function AskButton({
         <span className={styles.ask}>
           <button
             type="button"
-            className={`pill ${styles.button} ${size === 'large' ? styles.large : styles.small}`}
+            className={`pill ${styles.button} ${size === 'large' ? styles.large : `tap ${styles.small}`}`}
             aria-disabled={ask.isPending}
             onClick={() => {
               if (!ask.isPending) {
