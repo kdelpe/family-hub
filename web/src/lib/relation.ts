@@ -1,7 +1,7 @@
 import type { Tree, TreePerson } from '../api/tree'
+import { familyLinks, type FamilyLinks } from './familyLinks'
 
 type Gender = TreePerson['gender']
-type Couple = { partner: string; married: boolean; ended: boolean }
 type Kin = { up: number; down: number }
 
 export const gendered = (gender: Gender, male: string, female: string, other: string) =>
@@ -30,47 +30,11 @@ const inLaw = (word: string) =>
     .map((w) => w.replace(/( (?:once|twice|\d+ times) removed)?$/, '-in-law$1'))
     .join(' or ')
 
-const add = <T,>(map: Map<string, T[]>, key: string, value: T) => {
-  const list = map.get(key)
-  if (list) {
-    list.push(value)
-  } else {
-    map.set(key, [value])
-  }
-}
-
 // Each person's relation to the viewer ("You", "Half-sister"), from parent links and couples by §3.4;
 // someone the tree doesn't connect to the viewer has no entry.
-export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
+export function relationsTo(tree: Tree, viewerId: string, links: FamilyLinks = familyLinks(tree)): Map<string, string> {
   const gender = new Map(tree.persons.map((p) => [p.id, p.gender]))
-  const parentLists = new Map<string, string[]>()
-  const fosterParentLists = new Map<string, string[]>()
-  const couples = new Map<string, Couple[]>()
-  for (const r of tree.relationships) {
-    if (r.type === 'parent_child') {
-      // Foster links never make family (§3.4): they only give the foster labels.
-      if (r.subtype === 'foster') {
-        add(fosterParentLists, r.child_id, r.parent_id)
-      } else {
-        add(parentLists, r.child_id, r.parent_id)
-      }
-    } else {
-      const [a, b] = r.person_ids
-      const married = r.subtype === 'married'
-      add(couples, a, { partner: b, married, ended: r.ended })
-      add(couples, b, { partner: a, married, ended: r.ended })
-    }
-  }
-  const none = new Set<string>()
-  const parentSets = new Map([...parentLists].map(([id, list]) => [id, new Set(list)]))
-  const fosterParentSets = new Map([...fosterParentLists].map(([id, list]) => [id, new Set(list)]))
-  // Current couples first, so a pair who split and got back together reads as current.
-  for (const list of couples.values()) {
-    list.sort((x, y) => Number(x.ended) - Number(y.ended))
-  }
-  const parentsOf = (id: string) => parentSets.get(id) ?? none
-  const fosterParentsOf = (id: string) => fosterParentSets.get(id) ?? none
-  const partnersOf = (id: string) => couples.get(id) ?? []
+  const { parentsOf, fosterParentsOf, partnersOf } = links
 
   const ancestorCache = new Map<string, Map<string, number>>()
   // Each ancestor with its fewest generations up, the person themself at 0.
@@ -112,12 +76,10 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
   const siblingWord = (a: string, b: string, g: Gender) => {
     const pa = parentsOf(a)
     const pb = parentsOf(b)
-    const aOnly = [...pa].some((p) => !pb.has(p))
-    const bOnly = [...pb].some((p) => !pa.has(p))
-    if (aOnly && bOnly) {
+    if (links.halfSiblings(a, b)) {
       return gendered(g, 'half-brother', 'half-sister', 'half-sibling')
     }
-    return !aOnly && !bOnly && pa.size >= 2 ? gendered(g, 'brother', 'sister', 'sibling') : 'sibling'
+    return pa.size >= 2 && pa.size === pb.size && [...pa].every((p) => pb.has(p)) ? gendered(g, 'brother', 'sister', 'sibling') : 'sibling'
   }
 
   // The word for someone of gender g standing where b stands from a. In-laws don't tell full from half.
@@ -155,7 +117,7 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
       ? undefined
       : [...parentsOf(child)]
           .flatMap((p) => partnersOf(p))
-          .filter((c) => c.partner === person)
+          .filter((c) => c.id === person)
           .sort((x, y) => Number(x.ended) - Number(y.ended))[0]
 
   const viewerParents = parentsOf(viewerId)
@@ -163,7 +125,7 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
   // Step-siblings come only through a current couple: a former step-parent's later children were never family.
   const viewerStepParents = [...viewerParents]
     .flatMap((p) => partnersOf(p))
-    .filter((c) => !c.ended && stepCouple(viewerId, c.partner))
+    .filter((c) => !c.ended && stepCouple(viewerId, c.id))
 
   const fosterWord = (id: string, g: Gender): string | null => {
     if (viewerFoster.has(id)) {
@@ -185,7 +147,7 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
   const word = (id: string): string | null => {
     const g = gender.get(id) ?? null
 
-    const couple = partnersOf(viewerId).find((c) => c.partner === id)
+    const couple = partnersOf(viewerId).find((c) => c.id === id)
     if (couple) {
       return former(couple.ended, couple.married ? gendered(g, 'husband', 'wife', 'spouse') : 'partner')
     }
@@ -212,7 +174,7 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
       return former(asStepChild.ended, gendered(g, 'stepson', 'stepdaughter', 'stepchild'))
     }
     // A step-parent's child; sharing a parent would have made them a sibling above.
-    const viaStepParent = viewerStepParents.find((c) => parentsOf(id).has(c.partner))
+    const viaStepParent = viewerStepParents.find((c) => parentsOf(id).has(c.id))
     if (viaStepParent) {
       return gendered(g, 'stepbrother', 'stepsister', 'step-sibling')
     }
@@ -220,7 +182,7 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
     // In-laws: one couple hop from the above (§3.4), current couples before ended ones on either side.
     for (const pass of [false, true]) {
       // Your partner's family: their niece is your niece; their grandchild who isn't yours, a step-grandchild.
-      for (const { partner, ended } of partnersOf(viewerId).filter((c) => c.ended === pass)) {
+      for (const { id: partner, ended } of partnersOf(viewerId).filter((c) => c.ended === pass)) {
         const k = kin(partner, id)
         const w = k && kinWord(partner, id, k, g, true)
         if (k && w) {
@@ -231,7 +193,7 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
         }
       }
       // Your relatives' partners: your aunt's husband is your uncle; your grandmother's, a step-grandfather.
-      for (const { partner, ended } of partnersOf(id).filter((c) => c.ended === pass)) {
+      for (const { id: partner, ended } of partnersOf(id).filter((c) => c.ended === pass)) {
         const k = kin(viewerId, partner)
         const w = k && kinWord(viewerId, partner, k, g, true)
         if (k && w) {

@@ -17,6 +17,7 @@ const slim = (id: string, first_name: string, gender: TreePerson['gender'], is_d
   side: 'first',
   gender,
   is_deceased,
+  bio_excerpt: null,
 })
 
 const tree: Tree = {

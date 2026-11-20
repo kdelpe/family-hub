@@ -8,6 +8,7 @@ export type TreePerson = {
   side: FamilySide | 'both' | null
   gender: 'male' | 'female' | 'other' | 'unknown' | null
   is_deceased: boolean
+  bio_excerpt: string | null
 }
 
 export type TreeRelationship =

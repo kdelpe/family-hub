@@ -10,6 +10,7 @@ import { AskButton, SharedValue } from '../../components/AskButton/AskButton'
 import { birthday, lifespan, year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
 import { familyGroups } from '../../lib/familyGroups'
+import { familyLinks, type FamilyLinks } from '../../lib/familyLinks'
 import { fullName, initials } from '../../lib/names'
 import { gendered, relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
@@ -23,9 +24,10 @@ export function PersonProfile() {
   const person = useQuery({ queryKey: personKeys.one(id), queryFn: ({ signal }) => getPerson(id, { signal }) })
   const tree = useQuery(treeQuery)
   const contacts = useQuery(contactsQuery(id))
+  const links = useMemo(() => tree.data && familyLinks(tree.data), [tree.data])
   const relations = useMemo(
-    () => (tree.data && viewerId ? relationsTo(tree.data, viewerId) : new Map<string, string>()),
-    [tree.data, viewerId],
+    () => (tree.data && links && viewerId ? relationsTo(tree.data, viewerId, links) : new Map<string, string>()),
+    [tree.data, links, viewerId],
   )
 
   const notFound = person.error instanceof ApiError && person.error.status === 404
@@ -94,7 +96,7 @@ export function PersonProfile() {
       </section>
 
       {tree.error && <p role="alert">{errorMessage(tree.error)}</p>}
-      {tree.data && <Family tree={tree.data} person={p} relations={relations} />}
+      {tree.data && links && <Family tree={tree.data} links={links} person={p} relations={relations} />}
     </main>
   )
 }
@@ -123,9 +125,9 @@ function Reach({ personId, contacts, showShared }: { personId: string; contacts:
   )
 }
 
-function Family({ tree, person, relations }: { tree: Tree; person: Person; relations: Map<string, string> }) {
+function Family({ tree, links, person, relations }: { tree: Tree; links: FamilyLinks; person: Person; relations: Map<string, string> }) {
   const byId = new Map(tree.persons.map((t) => [t.id, t]))
-  const g = familyGroups(tree, person.id)
+  const g = familyGroups(tree, person.id, links)
   // The tree carries no dates (§10), so the relatives shown are fetched for theirs.
   const shown = [
     ...new Set([...g.parents, ...g.partners.map((x) => x.id), ...g.children, ...g.stepChildren.map((s) => s.id), ...g.grandchildren]),

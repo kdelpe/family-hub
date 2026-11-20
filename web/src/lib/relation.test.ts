@@ -10,6 +10,7 @@ const person = (id: string, gender: TreePerson['gender']): TreePerson => ({
   side: null,
   gender,
   is_deceased: false,
+  bio_excerpt: null,
 })
 
 let n = 0
