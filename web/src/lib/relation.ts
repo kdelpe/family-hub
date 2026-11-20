@@ -23,7 +23,12 @@ const cousinWord = (up: number, down: number) => {
   return `${ordinals[degree - 1] ?? ordinal(degree)}cousin${removals[gap] ?? ` ${gap} times removed`}`
 }
 const former = (ended: boolean, word: string) => (ended ? `former ${word}` : word)
-const inLaw = (word: string) => word.split(' or ').map((w) => `${w}-in-law`).join(' or ')
+// "Cousin-in-law once removed": the suffix goes on the relation, before any removal.
+const inLaw = (word: string) =>
+  word
+    .split(' or ')
+    .map((w) => w.replace(/( (?:once|twice|\d+ times) removed)?$/, '-in-law$1'))
+    .join(' or ')
 
 const add = <T,>(map: Map<string, T[]>, key: string, value: T) => {
   const list = map.get(key)
@@ -160,6 +165,23 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
     .flatMap((p) => partnersOf(p))
     .filter((c) => !c.ended && stepCouple(viewerId, c.partner))
 
+  const fosterWord = (id: string, g: Gender): string | null => {
+    if (viewerFoster.has(id)) {
+      return gendered(g, 'foster father', 'foster mother', 'foster parent')
+    }
+    if (fosterParentsOf(id).has(viewerId)) {
+      return gendered(g, 'foster son', 'foster daughter', 'foster child')
+    }
+    const theirFoster = fosterParentsOf(id)
+    if (
+      [...viewerFoster].some((p) => theirFoster.has(p) || parentsOf(id).has(p)) ||
+      [...theirFoster].some((p) => viewerParents.has(p))
+    ) {
+      return gendered(g, 'foster brother', 'foster sister', 'foster sibling')
+    }
+    return null
+  }
+
   const word = (id: string): string | null => {
     const g = gender.get(id) ?? null
 
@@ -168,7 +190,15 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
       return former(couple.ended, couple.married ? gendered(g, 'husband', 'wife', 'spouse') : 'partner')
     }
 
+    // A close blood tie wins; growing up together as foster family says more than distant cousinhood.
     const blood = kin(viewerId, id)
+    if (blood && !(blood.up >= 2 && blood.down >= 2)) {
+      return kinWord(viewerId, id, blood, g)
+    }
+    const foster = fosterWord(id, g)
+    if (foster) {
+      return foster
+    }
     if (blood) {
       return kinWord(viewerId, id, blood, g)
     }
@@ -185,20 +215,6 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
     const viaStepParent = viewerStepParents.find((c) => parentsOf(id).has(c.partner))
     if (viaStepParent) {
       return gendered(g, 'stepbrother', 'stepsister', 'step-sibling')
-    }
-
-    if (viewerFoster.has(id)) {
-      return gendered(g, 'foster father', 'foster mother', 'foster parent')
-    }
-    if (fosterParentsOf(id).has(viewerId)) {
-      return gendered(g, 'foster son', 'foster daughter', 'foster child')
-    }
-    const theirFoster = fosterParentsOf(id)
-    if (
-      [...viewerFoster].some((p) => theirFoster.has(p) || parentsOf(id).has(p)) ||
-      [...theirFoster].some((p) => viewerParents.has(p))
-    ) {
-      return gendered(g, 'foster brother', 'foster sister', 'foster sibling')
     }
 
     // In-laws: one couple hop from the above (§3.4), current couples before ended ones on either side.

@@ -184,6 +184,27 @@ describe('relationsTo, from the other side', () => {
     expect(relationsTo(far, 'l1').get('r4')).toBe('Your cousin 3 times removed')
   })
 
+  it('puts -in-law before the removal, and names a foster sibling over a distant cousin', () => {
+    const t: Tree = {
+      persons: ['me', 'mom', 'gm', 'aunt', 'cousin', 'kid', 'kidwife', 'home', 'fos'].map((i) => person(i, 'female')),
+      relationships: [
+        parent('mom', 'me'),
+        parent('gm', 'mom'),
+        parent('gm', 'aunt'),
+        parent('aunt', 'cousin'),
+        parent('cousin', 'kid'),
+        couple('kid', 'kidwife'),
+        parent('mom', 'fos', 'foster'),
+        parent('aunt', 'home'),
+        parent('home', 'fos'),
+      ],
+    }
+    const labels = relationsTo(t, 'me')
+    expect(labels.get('kid')).toBe('Your cousin once removed')
+    expect(labels.get('kidwife')).toBe('Your cousin-in-law once removed')
+    expect(labels.get('fos')).toBe('Your foster sister')
+  })
+
   it('prefers a current tie to an ended one, across both in-law sides', () => {
     const mixed: Tree = {
       persons: ['me', 'bro', 'ex', 'wife', 'exparent'].map((i) => person(i, i === 'wife' || i === 'me' ? 'female' : 'male')),
