@@ -41,6 +41,8 @@ type Contact struct {
 type Listing struct {
 	Contacts    []Contact
 	Requestable []Requestable
+	// Full is true for the owner and admins; for anyone else an on_request row is one shared with them.
+	Full bool
 }
 
 type Requestable struct {
@@ -148,15 +150,16 @@ func (s *Service) Directory(ctx context.Context, viewer family.Viewer, query str
 // listingsFor applies §5.2 to several people in at most three queries, whatever their number: every row of the
 // people the viewer may see in full, and for the rest the visible rows and the kinds to ask for.
 func listingsFor(ctx context.Context, q *gen.Queries, viewer family.Viewer, ids []uuid.UUID) (map[uuid.UUID]Listing, error) {
+	listings := make(map[uuid.UUID]Listing, len(ids))
 	var full, others []uuid.UUID
 	for _, id := range ids {
 		if canSeeAll(viewer, id) {
 			full = append(full, id)
+			listings[id] = Listing{Full: true}
 		} else {
 			others = append(others, id)
 		}
 	}
-	listings := make(map[uuid.UUID]Listing, len(ids))
 	add := func(rows []gen.ListContactsRow) {
 		for _, r := range rows {
 			l := listings[r.PersonID]
@@ -209,7 +212,7 @@ func (s *Service) Create(ctx context.Context, viewer family.Viewer, personID uui
 	if in.Visibility != nil {
 		c.Visibility = *in.Visibility
 	}
-	if err := c.normalize(); err != nil {
+	if err := c.normalize(true); err != nil {
 		return Contact{}, err
 	}
 	var created Contact
@@ -262,7 +265,7 @@ func (s *Service) Update(ctx context.Context, viewer family.Viewer, personID, id
 		if patch.Visibility.Set {
 			c.Visibility = patch.Visibility.Value
 		}
-		if err := c.normalize(); err != nil {
+		if err := c.normalize(cleanValue(c.Value) != row.Value || (c.Visibility == "family" && row.Visibility != "family")); err != nil {
 			return err
 		}
 		// Only a change asks again: a row already on request stays editable after its person loses their login.

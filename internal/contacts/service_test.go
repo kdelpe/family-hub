@@ -42,9 +42,9 @@ func TestWhoSeesWhat(t *testing.T) {
 		want   Listing
 	}{
 		{name: "the owner sees every row", viewer: family.Viewer{PersonID: &maya}, person: maya,
-			want: Listing{Contacts: []Contact{email, hidden, phone, second, whatsapp}}},
+			want: Listing{Contacts: []Contact{email, hidden, phone, second, whatsapp}, Full: true}},
 		{name: "an admin sees every row", viewer: admin, person: maya,
-			want: Listing{Contacts: []Contact{email, hidden, phone, second, whatsapp}}},
+			want: Listing{Contacts: []Contact{email, hidden, phone, second, whatsapp}, Full: true}},
 		{name: "family sees family rows and what they could ask for, once per kind", viewer: family.Viewer{PersonID: &rosa}, person: maya,
 			want: Listing{Contacts: []Contact{email}, Requestable: []Requestable{{"phone", "none"}, {"whatsapp", "none"}}}},
 		{name: "an unlinked member too", viewer: family.Viewer{}, person: maya,
@@ -297,7 +297,7 @@ func TestDirectory(t *testing.T) {
 		{name: "living people who share something, A–Z, as this viewer sees them", viewer: darline,
 			want: []DirectoryEntry{mayaAsFamily, rosaEntry}},
 		{name: "their own entry in full", viewer: maya,
-			want: []DirectoryEntry{{ID: *maya.PersonID, FirstName: "Maya", LastName: pluviose, Listing: Listing{Contacts: []Contact{mayaEmail, mayaPhone}}}, rosaEntry}},
+			want: []DirectoryEntry{{ID: *maya.PersonID, FirstName: "Maya", LastName: pluviose, Listing: Listing{Contacts: []Contact{mayaEmail, mayaPhone}, Full: true}}, rosaEntry}},
 		{name: "searched by name", viewer: darline, query: "  pluvi ", want: []DirectoryEntry{mayaAsFamily}},
 		{name: "a typo still finds them", viewer: darline, query: "Mya Pluviose", want: []DirectoryEntry{mayaAsFamily}},
 		{name: "never by contact value", viewer: darline, query: "rosa@example.com", want: []DirectoryEntry{}},
@@ -352,4 +352,36 @@ func TestDirectorySearchRules(t *testing.T) {
 	_, err := svc.Directory(t.Context(), admin, strings.Repeat("a", 101))
 
 	require.ErrorIs(t, err, family.ErrInvalidFilter)
+}
+
+func TestEditingKeepsALinkSavedUnderTheOlderRule(t *testing.T) {
+	svc, pool := newService(t)
+	maya := insertPerson(t, pool, "Maya")
+	me := family.Viewer{PersonID: &maya}
+	var id uuid.UUID
+	// A post link passed the looser check that came before profile links (§5.2).
+	err := pool.QueryRow(t.Context(), `INSERT INTO contact_methods (person_id, kind, platform, value, visibility)
+		VALUES ($1, 'social', 'instagram', 'https://www.instagram.com/p/XYZ/', 'hidden') RETURNING id`, maya).Scan(&id)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		patch   ContactPatch
+		wantErr error
+	}{
+		{name: "a label-only edit", patch: ContactPatch{Label: family.Opt[*string]{Set: true, Value: new("Old account")}}},
+		{name: "the same value sent back with a space", patch: ContactPatch{Value: family.Opt[string]{Set: true, Value: "https://www.instagram.com/p/XYZ/ "}}},
+		{name: "showing it to the family is held to the rule", patch: ContactPatch{Visibility: family.Opt[string]{Set: true, Value: "family"}},
+			wantErr: ErrInvalidContact},
+		{name: "a new value is held to the rule", patch: ContactPatch{Value: family.Opt[string]{Set: true, Value: "https://www.instagram.com/p/ABC/"}},
+			wantErr: ErrInvalidContact},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := svc.Update(t.Context(), me, maya, id, tt.patch)
+
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
 }

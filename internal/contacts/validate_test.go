@@ -67,7 +67,7 @@ func TestNormalize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.in
-			err := got.normalize()
+			err := got.normalize(true)
 
 			if tt.wantErr != "" {
 				require.ErrorIs(t, err, ErrInvalidContact)
@@ -97,7 +97,7 @@ func TestTheSeedsContactsAreValid(t *testing.T) {
 
 	for _, c := range contacts {
 		t.Run(c.Value, func(t *testing.T) {
-			assert.NoError(t, c.normalize(), "editable through the API as seeded")
+			assert.NoError(t, c.normalize(true), "editable through the API as seeded")
 		})
 	}
 }

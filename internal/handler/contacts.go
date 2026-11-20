@@ -41,6 +41,16 @@ type contactResponse struct {
 	Label      *string   `json:"label"`
 	Value      string    `json:"value"`
 	Visibility string    `json:"visibility"`
+	// Href is the only link a page may make of a social account (§5.2); null for anything else.
+	Href          *string `json:"href"`
+	SharedWithYou bool    `json:"shared_with_you"`
+}
+
+func toContactResponse(c contacts.Contact, sharedWithYou bool) contactResponse {
+	return contactResponse{
+		ID: c.ID, Kind: c.Kind, Platform: c.Platform, Label: c.Label, Value: c.Value, Visibility: c.Visibility,
+		Href: contacts.ProfileLink(c.Platform, c.Value), SharedWithYou: sharedWithYou,
+	}
 }
 
 // requestableResponse stands in for on_request rows the viewer can't see: the kind, never the value (§5.2).
@@ -211,7 +221,7 @@ func (c *Contacts) list(w http.ResponseWriter, r *http.Request, mine bool) {
 func toContactsResponse(listing contacts.Listing) contactsResponse {
 	resp := contactsResponse{Contacts: make([]any, 0, len(listing.Contacts)+len(listing.Requestable))}
 	for _, contact := range listing.Contacts {
-		resp.Contacts = append(resp.Contacts, contactResponse(contact))
+		resp.Contacts = append(resp.Contacts, toContactResponse(contact, !listing.Full && contact.Visibility == "on_request"))
 	}
 	for _, k := range listing.Requestable {
 		resp.Contacts = append(resp.Contacts, requestableResponse{Kind: k.Kind, Requestable: true, MyRequestStatus: k.MyRequestStatus})
@@ -291,7 +301,7 @@ func (c *Contacts) answer(w http.ResponseWriter, r *http.Request, status int, co
 		c.fail(w, r, err, what)
 		return
 	}
-	httpx.JSON(w, status, contactResponse(contact))
+	httpx.JSON(w, status, toContactResponse(contact, false))
 }
 
 func (c *Contacts) fail(w http.ResponseWriter, r *http.Request, err error, what string) {
