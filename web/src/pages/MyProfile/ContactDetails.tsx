@@ -10,6 +10,7 @@ import {
   myContactsQuery,
   type NewContact,
   platformLabel,
+  RelinkedError,
   removeMyContact,
   updateMyContact,
 } from '../../api/contacts'
@@ -104,9 +105,9 @@ export function ContactDetails({ personId }: { personId: string }) {
         </h2>
         <span className={styles.muted}>Nothing is shared until you turn it on.</span>
       </div>
-      {contacts.isPending && <p className={styles.muted}>Loading…</p>}
-      {contacts.isError && <p role="alert">{errorMessage(contacts.error)}</p>}
-      {(contacts.data ? [...contacts.data].sort(byType) : []).map((c) =>
+      {(contacts.isPending || contacts.error instanceof RelinkedError) && <p className={styles.muted}>Loading…</p>}
+      {contacts.isError && !(contacts.error instanceof RelinkedError) && <p role="alert">{errorMessage(contacts.error)}</p>}
+      {(contacts.data && !(contacts.error instanceof RelinkedError) ? [...contacts.data].sort(byType) : []).map((c) =>
         editing.has(c.id) ? (
           <ContactForm key={c.id} personId={personId} contact={c} onDone={() => edit(c.id, false)} />
         ) : (

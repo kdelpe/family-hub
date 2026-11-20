@@ -8,6 +8,7 @@ import {
   contactRequestKeys,
   decideRequest,
   myRequestsQuery,
+  RelinkedError,
   type RequestKind,
 } from '../../api/contacts'
 import { errorMessage } from '../../lib/errorMessage'
@@ -30,7 +31,8 @@ export function RequestsCard({ personId }: { personId: string }) {
   const [answered, setAnswered] = useState<{ request: ContactRequest; answer: Answer }[]>([])
   const [stopped, setStopped] = useState<ContactRequest | null>(null)
 
-  const rows = requests.data ?? []
+  // Rows kept from before a relink are someone else's: none are shown, so none can be answered.
+  const rows = requests.error instanceof RelinkedError ? [] : (requests.data ?? [])
   const asked = [
     ...rows
       .filter((r) => r.status === 'pending' && !answered.some((a) => a.request.id === r.id))
@@ -44,8 +46,8 @@ export function RequestsCard({ personId }: { personId: string }) {
       <h2 id="mp-requests" className={styles.sideTitle}>
         Requests for your details
       </h2>
-      {requests.isPending && <p className={styles.muted}>Loading…</p>}
-      {requests.isError && <p role="alert">{errorMessage(requests.error)}</p>}
+      {(requests.isPending || requests.error instanceof RelinkedError) && <p className={styles.muted}>Loading…</p>}
+      {requests.isError && !(requests.error instanceof RelinkedError) && <p role="alert">{errorMessage(requests.error)}</p>}
       {requests.isSuccess && asked.length === 0 && <p className={styles.muted}>No requests right now.</p>}
       {asked.map(({ request, answer }) => (
         <RequestRow
@@ -178,7 +180,7 @@ function RequestRow({
       {!answer &&
         (confirming ? (
           <Confirm
-            question={confirming === 'share' ? `Share your ${detail} with ${first}?` : `Not share your ${detail} with ${first}?`}
+            question={confirming === 'share' ? `Share your ${detail} with ${first}?` : `Don’t share your ${detail} with ${first}?`}
             // A share covers every value of the kind, now and later (§5.2), not just the one they may have in mind.
             note={
               confirming === 'share'
@@ -200,7 +202,7 @@ function RequestRow({
               Share
             </button>
             <button type="button" onClick={() => setConfirming('decline')} className={`pill ${styles.cancel}`}>
-              Not now
+              Don’t share
             </button>
           </div>
         ))}

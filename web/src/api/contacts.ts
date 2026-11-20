@@ -115,6 +115,13 @@ const platformLabels: Record<string, string> = {
 
 export const platformLabel = (platform: string | null) => (platform && platformLabels[platform]) || 'Other'
 
+// Not a failure to show: the page is about to reload as whoever the login is linked to now.
+export class RelinkedError extends Error {
+  constructor() {
+    super('your login is linked to someone else now')
+  }
+}
+
 type MineContext = { signal?: AbortSignal; client: QueryClient }
 
 // A /me read answers for whoever the login is linked to now, and an admin can relink it at any time (§5.1).
@@ -122,7 +129,9 @@ type MineContext = { signal?: AbortSignal; client: QueryClient }
 async function ownedBy<T extends { person_id: string }>(client: QueryClient, personId: string, answer: T) {
   if (answer.person_id !== personId) {
     await client.refetchQueries({ queryKey: authKeys.me })
-    throw new Error('your login is linked to someone else now')
+    // Quiet only if the page will move on; otherwise a plain failure, so it never just says Loading… for good.
+    const now = client.getQueryData<{ person_id: string | null }>(authKeys.me)
+    throw now && now.person_id !== personId ? new RelinkedError() : new Error('your profile didn’t load')
   }
   return answer
 }

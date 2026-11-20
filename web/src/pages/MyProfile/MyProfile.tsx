@@ -20,7 +20,7 @@ import { SuggestCard } from './SuggestCard'
 
 // design-notes §4.8. Photo uploads arrive in Phase 5.
 export function MyProfile() {
-  const { user, person } = useSignedIn()
+  const { user, person, personSettled } = useSignedIn()
   if (!user) {
     return null
   }
@@ -35,6 +35,9 @@ export function MyProfile() {
             <StoryCard person={person} />
             <ContactDetails personId={person.id} />
           </Fragment>
+        ) : !personSettled ? (
+          // Briefly, after an admin relinks the login: who it's linked to now is still loading.
+          <p className={styles.card}>Loading…</p>
         ) : user.person_id ? (
           <p role="alert" className={styles.card}>
             Your profile didn’t load. Refresh the page to try again.

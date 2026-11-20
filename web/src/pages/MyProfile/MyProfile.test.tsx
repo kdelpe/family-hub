@@ -506,7 +506,7 @@ describe('MyProfile', () => {
       'POST /api/me/contact-requests/r1/decline': { status: 204 },
     }
     const { client } = renderPage(answers)
-    fireEvent.click(await screen.findByRole('button', { name: 'Not now' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Don’t share' }))
     // From now on, no requests for whoever the login is linked to.
     delete answers['GET /api/me/contact-requests']
     fireEvent.click(screen.getByRole('button', { name: 'Yes, don’t share' }))
@@ -542,6 +542,12 @@ describe('MyProfile', () => {
       'GET /api/persons/fritz': { status: 200, body: { ...maya, id: 'fritz', first_name: 'Fritz', bio: null } },
     })
 
+    // No "Something went wrong" on the way: the page just reloads as him.
+    const alerts: string[] = []
+    const watch = new MutationObserver(() =>
+      document.querySelectorAll('[role="alert"]').forEach((e) => e.textContent && alerts.push(e.textContent)),
+    )
+    watch.observe(document.body, { subtree: true, childList: true, characterData: true })
     act(() => void client.invalidateQueries({ queryKey }))
 
     // Shown as Fritz's own, once the page knows it's him.
@@ -549,6 +555,8 @@ describe('MyProfile', () => {
     expect(await screen.findByRole('switch', { name: 'Email' })).toBeInTheDocument()
     expect(screen.getAllByRole('switch')).toHaveLength(1)
     expect(await screen.findByText(/asked for your phone number/)).toBeInTheDocument()
+    watch.disconnect()
+    expect(alerts).toEqual([])
   })
 
   it.each([
