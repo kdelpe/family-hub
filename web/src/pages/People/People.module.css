@@ -34,6 +34,7 @@
 }
 
 .strip,
+.filterRow,
 .filters {
   display: flex;
   flex-wrap: wrap;

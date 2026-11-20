@@ -79,7 +79,7 @@ export function People() {
 
       {summary.data && <Strip summary={summary.data} />}
 
-      <div className={styles.filters}>
+      <div className={styles.filterRow}>
         <div role="group" aria-label="Filter people" className={styles.filters}>
           {filters.map((f) => (
             <button

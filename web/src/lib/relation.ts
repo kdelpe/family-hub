@@ -10,14 +10,17 @@ export const gendered = (gender: Gender, male: string, female: string, other: st
 const greats = (n: number) => 'great-'.repeat(Math.max(0, n))
 
 const ordinals = ['', 'second ', 'third ', 'fourth ', 'fifth ']
+const ordinal = (n: number) => {
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')
+  return `${n}${suffix} `
+}
 const removals = ['', ' once removed', ' twice removed']
 
 // "Cousin", "second cousin", "cousin once removed": the degree from the nearer generation, removed by the gap.
 const cousinWord = (up: number, down: number) => {
   const degree = Math.min(up, down) - 1
   const gap = Math.abs(up - down)
-  const ordinal = ordinals[degree - 1] ?? `${degree}th `
-  return `${ordinal}cousin${removals[gap] ?? ` ${gap} times removed`}`
+  return `${ordinals[degree - 1] ?? ordinal(degree)}cousin${removals[gap] ?? ` ${gap} times removed`}`
 }
 const former = (ended: boolean, word: string) => (ended ? `former ${word}` : word)
 const inLaw = (word: string) => word.split(' or ').map((w) => `${w}-in-law`).join(' or ')
@@ -36,19 +39,15 @@ const add = <T,>(map: Map<string, T[]>, key: string, value: T) => {
 export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
   const gender = new Map(tree.persons.map((p) => [p.id, p.gender]))
   const parentLists = new Map<string, string[]>()
-  const childLists = new Map<string, string[]>()
   const fosterParentLists = new Map<string, string[]>()
-  const fosterChildLists = new Map<string, string[]>()
   const couples = new Map<string, Couple[]>()
   for (const r of tree.relationships) {
     if (r.type === 'parent_child') {
       // Foster links never make family (§3.4): they only give the foster labels.
       if (r.subtype === 'foster') {
         add(fosterParentLists, r.child_id, r.parent_id)
-        add(fosterChildLists, r.parent_id, r.child_id)
       } else {
         add(parentLists, r.child_id, r.parent_id)
-        add(childLists, r.parent_id, r.child_id)
       }
     } else {
       const [a, b] = r.person_ids
@@ -60,7 +59,7 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
   const none = new Set<string>()
   const parentSets = new Map([...parentLists].map(([id, list]) => [id, new Set(list)]))
   const fosterParentSets = new Map([...fosterParentLists].map(([id, list]) => [id, new Set(list)]))
-  // Current couples first, so a current tie wins over an ended one.
+  // Current couples first, so a pair who split and got back together reads as current.
   for (const list of couples.values()) {
     list.sort((x, y) => Number(x.ended) - Number(y.ended))
   }

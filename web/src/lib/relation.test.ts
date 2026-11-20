@@ -166,6 +166,24 @@ describe('relationsTo, from the other side', () => {
     expect(relationsTo(unknown, viewer).get(id)).toBe(want)
   })
 
+  it('names far cousins with real ordinals', () => {
+    const line = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`)
+    const left = line('l', 23)
+    const right = line('r', 23)
+    const far: Tree = {
+      persons: ['root', ...left, ...right].map((i) => person(i, 'female')),
+      relationships: [
+        parent('root', 'l0'),
+        parent('root', 'r0'),
+        ...left.slice(1).map((id, i) => parent(left[i]!, id)),
+        ...right.slice(1).map((id, i) => parent(right[i]!, id)),
+      ],
+    }
+    expect(relationsTo(far, 'l21').get('r21')).toBe('Your 21st cousin')
+    expect(relationsTo(far, 'l10').get('r10')).toBe('Your 10th cousin')
+    expect(relationsTo(far, 'l1').get('r4')).toBe('Your cousin 3 times removed')
+  })
+
   it('prefers a current tie to an ended one, across both in-law sides', () => {
     const mixed: Tree = {
       persons: ['me', 'bro', 'ex', 'wife', 'exparent'].map((i) => person(i, i === 'wife' || i === 'me' ? 'female' : 'male')),
