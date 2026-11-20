@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -85,12 +85,13 @@ function renderPage(over: Record<string, Answer> = {}) {
     ],
     { initialEntries: ['/setup'] },
   )
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
-  return { answers, fetch }
+  return { answers, fetch, client }
 }
 
 const click = (name: string) => fireEvent.click(screen.getByRole('button', { name }))
@@ -131,6 +132,19 @@ describe('FirstSetup', () => {
 
     expect(await screen.findByRole('heading', { name: 'How can family reach you?' })).toHaveFocus()
     expect(sent(fetch, 'PATCH', '/api/persons/darline')).toEqual([{ bio: 'Always bringing the pikliz.' }])
+  })
+
+  it('follows a story refreshed meanwhile, and doesn’t write the old one back', async () => {
+    const { answers, fetch, client } = renderPage()
+    await screen.findByLabelText('A line or two about you')
+    answers['GET /api/persons/darline'] = { status: 200, body: { ...darline, bio: 'Moved to Orlando.' } }
+
+    await act(() => client.invalidateQueries({ queryKey: ['persons', 'darline'] }))
+
+    await vi.waitFor(() => expect(screen.getByLabelText('A line or two about you')).toHaveValue('Moved to Orlando.'))
+    click('Continue')
+    expect(screen.getByRole('heading', { name: 'How can family reach you?' })).toBeInTheDocument()
+    expect(sent(fetch, 'PATCH', '/api/persons/darline')).toEqual([])
   })
 
   it('stays on the story, saying why, when it can’t be saved', async () => {

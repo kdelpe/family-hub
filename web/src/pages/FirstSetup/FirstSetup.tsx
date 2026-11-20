@@ -53,7 +53,10 @@ export function FirstSetup() {
 function Steps({ person }: { person: Person }) {
   const queryClient = useQueryClient()
   const [step, setStep] = useState(0)
-  const [bio, setBio] = useState(person.bio ?? '')
+  // Only what they've typed: until then it follows the story on file, which may be refreshed meanwhile.
+  const [draft, setDraft] = useState<string | null>(null)
+  const bio = draft ?? person.bio ?? ''
+  const changed = draft !== null && draft.trim() !== (person.bio ?? '').trim()
   const heading = useRef<HTMLHeadingElement>(null)
   const moved = useRef(false)
 
@@ -79,6 +82,7 @@ function Steps({ person }: { person: Person }) {
       }
       queryClient.setQueryData<Person>(personKeys.one(person.id), (old) => old && { ...old, bio: updated.bio })
       void queryClient.invalidateQueries({ queryKey: personKeys.one(person.id) })
+      setDraft(null)
       goTo(1)
     },
     onError: onSessionEnded(queryClient),
@@ -88,10 +92,10 @@ function Steps({ person }: { person: Person }) {
     if (step !== 0) {
       goTo(step + 1)
     } else if (!saveBio.isPending) {
-      if (bio.trim() === (person.bio ?? '').trim()) {
-        goTo(1)
-      } else {
+      if (changed) {
         saveBio.mutate()
+      } else {
+        goTo(1)
       }
     }
   }
@@ -137,7 +141,7 @@ function Steps({ person }: { person: Person }) {
               readOnly={saveBio.isPending}
               value={bio}
               onChange={(event) => {
-                setBio(event.target.value)
+                setDraft(event.target.value)
                 saveBio.reset()
               }}
               className={`${page.input} ${styles.bio}`}
