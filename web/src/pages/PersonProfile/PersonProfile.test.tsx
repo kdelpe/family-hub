@@ -119,7 +119,7 @@ describe('PersonProfile', () => {
     renderPage()
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Nadège Pluviose' })).toBeInTheDocument()
-    expect(screen.getByText('Your mother')).toBeInTheDocument()
+    expect(screen.getByText('Mother')).toBeInTheDocument()
     expect(screen.getByText('née Monestime · Birthday November 19 · Brooklyn, New York')).toBeInTheDocument()
     expect(screen.getByText('Taught third grade for thirty years.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Center the tree on Nadège' })).toHaveAttribute('href', '/tree?person=nadege')
@@ -128,7 +128,7 @@ describe('PersonProfile', () => {
     await within(family).findByText('c. 1935 – 1998')
     const group = (title: string) => within(screen.getByRole('heading', { name: title }).parentElement!).getAllByRole('link')
     expect(group('Parents').map((a) => a.textContent)).toEqual(['LMLucien Monestimec. 1935 – 1998'])
-    expect(group('Married to').map((a) => a.textContent)).toEqual(['JPJean-Robert PluvioseYour father'])
+    expect(group('Married to').map((a) => a.textContent)).toEqual(['JPJean-Robert PluvioseFather'])
     expect(group('Children').map((a) => a.textContent)).toEqual(['MPMaya PluvioseYou'])
     expect(group('Step-children').map((a) => a.textContent)).toEqual(['SPSabine PluvioseJean-Robert’s daughter'])
     expect(group('Children')[0]).toHaveAttribute('href', '/people/maya')

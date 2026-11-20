@@ -90,39 +90,39 @@ describe('relationsTo, as Maya', () => {
 
   it.each([
     { id: 'maya', want: 'You' },
-    { id: 'jeanrobert', want: 'Your father' },
-    { id: 'nadege', want: 'Your mother' },
-    { id: 'joseph', want: 'Your grandfather' },
-    { id: 'annemarie', want: 'Your great-grandmother' },
-    { id: 'fritz', want: 'Your brother' },
-    { id: 'alex', want: 'Your sibling' },
-    { id: 'sabine', want: 'Your half-sister' },
-    { id: 'naika', want: 'Your daughter' },
-    { id: 'naomie', want: 'Your granddaughter' },
-    { id: 'marietherese', want: 'Your aunt' },
-    { id: 'henri', want: 'Your uncle' },
-    { id: 'mirlande', want: 'Your aunt' },
-    { id: 'lise', want: 'Your cousin' },
-    { id: 'darline', want: 'Your cousin' },
-    { id: 'kervens', want: 'Your nephew' },
-    { id: 'tim', want: 'Your great-nephew' },
-    { id: 'stanley', want: 'Your husband' },
-    { id: 'pierre', want: 'Your former husband' },
-    { id: 'odette', want: 'Your mother-in-law' },
-    { id: 'wesner', want: 'Your brother-in-law' },
-    { id: 'fabienne', want: 'Your sister-in-law' },
-    { id: 'ralph', want: 'Your son-in-law' },
-    { id: 'guerline', want: 'Your former stepmother' },
+    { id: 'jeanrobert', want: 'Father' },
+    { id: 'nadege', want: 'Mother' },
+    { id: 'joseph', want: 'Grandfather' },
+    { id: 'annemarie', want: 'Great-grandmother' },
+    { id: 'fritz', want: 'Brother' },
+    { id: 'alex', want: 'Sibling' },
+    { id: 'sabine', want: 'Half-sister' },
+    { id: 'naika', want: 'Daughter' },
+    { id: 'naomie', want: 'Granddaughter' },
+    { id: 'marietherese', want: 'Aunt' },
+    { id: 'henri', want: 'Uncle' },
+    { id: 'mirlande', want: 'Aunt' },
+    { id: 'lise', want: 'Cousin' },
+    { id: 'darline', want: 'Cousin' },
+    { id: 'kervens', want: 'Nephew' },
+    { id: 'tim', want: 'Great-nephew' },
+    { id: 'stanley', want: 'Husband' },
+    { id: 'pierre', want: 'Former husband' },
+    { id: 'odette', want: 'Mother-in-law' },
+    { id: 'wesner', want: 'Brother-in-law' },
+    { id: 'fabienne', want: 'Sister-in-law' },
+    { id: 'ralph', want: 'Son-in-law' },
+    { id: 'guerline', want: 'Former stepmother' },
     { id: 'paul', want: null },
-    { id: 'lucie', want: 'Your foster daughter' },
-    { id: 'ginette', want: 'Your grandmother-in-law' },
-    { id: 'carline', want: 'Your niece-in-law' },
-    { id: 'yves', want: 'Your cousin-in-law' },
-    { id: 'yvette', want: 'Your former mother-in-law' },
-    { id: 'colette', want: 'Your step-grandmother' },
-    { id: 'dina', want: 'Your cousin once removed' },
-    { id: 'gina', want: 'Your second cousin' },
-    { id: 'flore', want: 'Your cousin once removed' },
+    { id: 'lucie', want: 'Foster daughter' },
+    { id: 'ginette', want: 'Grandmother-in-law' },
+    { id: 'carline', want: 'Niece-in-law' },
+    { id: 'yves', want: 'Cousin-in-law' },
+    { id: 'yvette', want: 'Former mother-in-law' },
+    { id: 'colette', want: 'Step-grandmother' },
+    { id: 'dina', want: 'Cousin once removed' },
+    { id: 'gina', want: 'Second cousin' },
+    { id: 'flore', want: 'Cousin once removed' },
     { id: 'xavier', want: null },
   ])('$id: $want', ({ id, want }) => {
     expect(labels.get(id) ?? null).toBe(want)
@@ -131,26 +131,26 @@ describe('relationsTo, as Maya', () => {
 
 describe('relationsTo, from the other side', () => {
   it.each([
-    { viewer: 'sabine', id: 'nadege', want: 'Your stepmother' },
-    { viewer: 'paul', id: 'jeanrobert', want: 'Your former stepfather' },
+    { viewer: 'sabine', id: 'nadege', want: 'Stepmother' },
+    { viewer: 'paul', id: 'jeanrobert', want: 'Former stepfather' },
     { viewer: 'paul', id: 'maya', want: null },
-    { viewer: 'mirlande', id: 'maya', want: 'Your niece' },
-    { viewer: 'carline', id: 'maya', want: 'Your aunt-in-law' },
-    { viewer: 'ana', id: 'bea', want: 'Your sibling' },
-    { viewer: 'stanley', id: 'naika', want: 'Your daughter' },
-    { viewer: 'darline', id: 'maya', want: 'Your cousin' },
-    { viewer: 'kervens', id: 'maya', want: 'Your aunt' },
-    { viewer: 'lucie', id: 'maya', want: 'Your foster mother' },
-    { viewer: 'lucie', id: 'naika', want: 'Your foster sister' },
-    { viewer: 'naomie', id: 'jeanrobert', want: 'Your great-grandfather' },
-    { viewer: 'stanley', id: 'jeanrobert', want: 'Your father-in-law' },
+    { viewer: 'mirlande', id: 'maya', want: 'Niece' },
+    { viewer: 'carline', id: 'maya', want: 'Aunt-in-law' },
+    { viewer: 'ana', id: 'bea', want: 'Sibling' },
+    { viewer: 'stanley', id: 'naika', want: 'Daughter' },
+    { viewer: 'darline', id: 'maya', want: 'Cousin' },
+    { viewer: 'kervens', id: 'maya', want: 'Aunt' },
+    { viewer: 'lucie', id: 'maya', want: 'Foster mother' },
+    { viewer: 'lucie', id: 'naika', want: 'Foster sister' },
+    { viewer: 'naomie', id: 'jeanrobert', want: 'Great-grandfather' },
+    { viewer: 'stanley', id: 'jeanrobert', want: 'Father-in-law' },
   ])('$viewer sees $id as $want', ({ viewer, id, want }) => {
     expect(relationsTo(tree, viewer).get(id) ?? null).toBe(want)
   })
 
   it.each([
-    { name: 'a great-aunt or great-uncle', viewer: 'v', id: 'x', want: 'Your great-aunt or great-uncle' },
-    { name: 'an in-law', viewer: 'p', id: 'y', want: 'Your aunt-in-law or uncle-in-law' },
+    { name: 'a great-aunt or great-uncle', viewer: 'v', id: 'x', want: 'Great-aunt or great-uncle' },
+    { name: 'an in-law', viewer: 'p', id: 'y', want: 'Aunt-in-law or uncle-in-law' },
   ])('words $name of unknown gender in full', ({ viewer, id, want }) => {
     const unknown: Tree = {
       persons: ['v', 'm', 'g', 'gg', 'x', 'p', 'y'].map((i) => person(i, i === 'x' || i === 'y' ? null : 'female')),
@@ -179,9 +179,9 @@ describe('relationsTo, from the other side', () => {
         ...right.slice(1).map((id, i) => parent(right[i]!, id)),
       ],
     }
-    expect(relationsTo(far, 'l21').get('r21')).toBe('Your 21st cousin')
-    expect(relationsTo(far, 'l10').get('r10')).toBe('Your 10th cousin')
-    expect(relationsTo(far, 'l1').get('r4')).toBe('Your cousin 3 times removed')
+    expect(relationsTo(far, 'l21').get('r21')).toBe('21st cousin')
+    expect(relationsTo(far, 'l10').get('r10')).toBe('10th cousin')
+    expect(relationsTo(far, 'l1').get('r4')).toBe('Cousin 3 times removed')
   })
 
   it('puts -in-law before the removal, and names a foster sibling over a distant cousin', () => {
@@ -200,9 +200,9 @@ describe('relationsTo, from the other side', () => {
       ],
     }
     const labels = relationsTo(t, 'me')
-    expect(labels.get('kid')).toBe('Your cousin once removed')
-    expect(labels.get('kidwife')).toBe('Your cousin-in-law once removed')
-    expect(labels.get('fos')).toBe('Your foster sister')
+    expect(labels.get('kid')).toBe('Cousin once removed')
+    expect(labels.get('kidwife')).toBe('Cousin-in-law once removed')
+    expect(labels.get('fos')).toBe('Foster sister')
   })
 
   it('prefers a current tie to an ended one, across both in-law sides', () => {
@@ -217,7 +217,7 @@ describe('relationsTo, from the other side', () => {
         couple('bro', 'wife'),
       ],
     }
-    expect(relationsTo(mixed, 'me').get('wife')).toBe('Your sister-in-law')
+    expect(relationsTo(mixed, 'me').get('wife')).toBe('Sister-in-law')
   })
 
   it('treats an adoptive parent as a parent, and ignores foster links for siblings', () => {
@@ -225,7 +225,7 @@ describe('relationsTo, from the other side', () => {
       persons: [person('a', 'female'), person('b', 'male'), person('c', 'female')],
       relationships: [parent('a', 'b', 'adoptive'), parent('a', 'c', 'foster')],
     }
-    expect(relationsTo(adopted, 'b').get('a')).toBe('Your mother')
-    expect(relationsTo(adopted, 'b').get('c')).toBe('Your foster sister')
+    expect(relationsTo(adopted, 'b').get('a')).toBe('Mother')
+    expect(relationsTo(adopted, 'b').get('c')).toBe('Foster sister')
   })
 })
