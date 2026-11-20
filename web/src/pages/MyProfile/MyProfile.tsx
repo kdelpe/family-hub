@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, Fragment, useState } from 'react'
 import { Link } from 'react-router'
 
 import { adminKeys } from '../../api/admin'
@@ -28,10 +28,11 @@ export function MyProfile() {
       <div className={styles.column}>
         <h1 className={styles.title}>My profile</h1>
         {person ? (
-          <>
+          // Keyed by person: if an admin relinks the login, nothing typed for one person may be saved to another.
+          <Fragment key={person.id}>
             <StoryCard person={person} />
             <ContactDetails personId={person.id} />
-          </>
+          </Fragment>
         ) : user.person_id ? (
           <p role="alert" className={styles.card}>
             Your profile didn’t load. Refresh the page to try again.

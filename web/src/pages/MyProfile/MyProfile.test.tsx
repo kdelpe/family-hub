@@ -460,6 +460,22 @@ describe('MyProfile', () => {
     expect(screen.getAllByRole('switch')).toHaveLength(1)
   })
 
+  it('drops what was typed for you when an admin relinks your login to someone else', async () => {
+    const { client } = renderPage()
+    fireEvent.change(screen.getByLabelText('Your story'), { target: { value: 'Nurse in Boston.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit your name, birthday and photo' }))
+    fireEvent.click(await screen.findByRole('button', { name: '+ Add a phone, email, address or social account' }))
+    client.setQueryData(personKeys.one('fritz'), { ...maya, id: 'fritz', first_name: 'Fritz', bio: 'Built the house in Jacmel.' })
+
+    act(() => client.setQueryData(authKeys.me, { id: 'u', email: 'maya@example.com', role: 'member', person_id: 'fritz' }))
+
+    await vi.waitFor(() => expect(screen.getByLabelText('Your story')).toHaveValue('Built the house in Jacmel.'))
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('aria-disabled', 'true')
+    // It was filled in with Maya's name and birthday.
+    expect(screen.queryByRole('form', { name: 'Your details' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('form', { name: 'Add a contact' })).not.toBeInTheDocument()
+  })
+
   it.each([
     {
       name: 'story',
