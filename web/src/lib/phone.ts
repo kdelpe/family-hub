@@ -6,9 +6,12 @@ export function formatPhone(typed: string): string {
   if (typed.includes('+') || /[^\d\s().-]/.test(typed)) {
     return typed
   }
-  // A digit typed past a formatted US number: not one after all, so the dashes added for it come out.
-  if (digits.length > 10 && !usOne && /^\d{3}-\d{3}-\d{5,}$/.test(typed)) {
+  // Typed past or deleted from a formatted number: its dashes no longer fit, so they come out.
+  if (!usOne && (/^\d{3}-\d{3}-\d{5,}$/.test(typed) || /^1-\d{3}-\d{3}-\d{5,}$/.test(typed))) {
     return digits
+  }
+  if (/^1-/.test(typed) && !usOne) {
+    return typed
   }
   if (digits.length !== 10 && !usOne) {
     return typed

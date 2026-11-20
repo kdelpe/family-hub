@@ -50,9 +50,13 @@ function dropSessionData(queryClient: QueryClient) {
   }
 }
 
-// A save answered 401: the session ended elsewhere, so the shell, rechecking, sends them to sign in.
+// A save answered 401: the session ended elsewhere. Everything fetched as them goes, as at sign-out, and the
+// shell, rechecking who's signed in, sends them to sign in.
 export const onSessionEnded = (queryClient: QueryClient) => (error: Error) => {
   if (error instanceof ApiError && error.status === 401) {
+    // Kept, then refetched: the shell is watching it, and a removed query wouldn't be fetched again.
+    const isMe = (query: Query) => query.queryKey[0] === authKeys.me[0] && query.queryKey[1] === authKeys.me[1]
+    queryClient.removeQueries({ predicate: (query) => fetchedAsSomeone(query) && !isMe(query) })
     void queryClient.invalidateQueries({ queryKey: authKeys.me })
   }
 }

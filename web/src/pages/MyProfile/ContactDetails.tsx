@@ -93,7 +93,7 @@ export function ContactDetails({ personId }: { personId: string }) {
       </div>
       {contacts.isPending && <p className={styles.muted}>Loading…</p>}
       {contacts.isError && <p role="alert">{errorMessage(contacts.error)}</p>}
-      {contacts.data?.toSorted(byType).map((c) =>
+      {(contacts.data ? [...contacts.data].sort(byType) : []).map((c) =>
         editing === c.id ? (
           <ContactForm key={c.id} personId={personId} contact={c} onDone={() => setEditing(null)} />
         ) : (
@@ -204,10 +204,15 @@ function ContactForm({ personId, contact, onDone }: { personId: string; contact?
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!busy) {
-      remove.reset()
-      save.mutate()
+    if (busy) {
+      return
     }
+    if (contact && value === contact.value && (label.trim() || null) === contact.label) {
+      onDone()
+      return
+    }
+    remove.reset()
+    save.mutate()
   }
 
   return (
