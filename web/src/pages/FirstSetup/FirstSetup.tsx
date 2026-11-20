@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate } from 'react-router'
 
@@ -7,7 +7,7 @@ import { ApiError } from '../../api/client'
 import { myContactsQuery, NotYoursError, RelinkedError } from '../../api/contacts'
 import { type Person, personKeys, updateOwnProfile } from '../../api/persons'
 import { type Tree, treeQuery, type TreePerson } from '../../api/tree'
-import { ContactSwitch } from '../../components/ContactSwitch/ContactSwitch'
+import { ContactSwitch, contactSwitchKey } from '../../components/ContactSwitch/ContactSwitch'
 import { byType, typeName } from '../../lib/contactTypes'
 import { errorMessage, refusedMessage } from '../../lib/errorMessage'
 import { familyLines } from '../../lib/familySides'
@@ -67,6 +67,8 @@ function Steps({ person }: { person: Person }) {
     }
   }, [step])
 
+  // Held while a save runs: leaving its step would hide its failure, and with it a change that never saved.
+  const switching = useIsMutating({ mutationKey: contactSwitchKey() }) > 0
   const goTo = (next: number) => {
     moved.current = true
     setStep(next)
@@ -88,10 +90,14 @@ function Steps({ person }: { person: Person }) {
     onError: onSessionEnded(queryClient),
   })
 
+  const busy = saveBio.isPending || switching
   const onContinue = () => {
+    if (busy) {
+      return
+    }
     if (step !== 0) {
       goTo(step + 1)
-    } else if (!saveBio.isPending) {
+    } else {
       if (changed) {
         saveBio.mutate()
       } else {
@@ -175,7 +181,12 @@ function Steps({ person }: { person: Person }) {
 
       <div className={styles.nav}>
         {step > 0 && (
-          <button type="button" onClick={() => goTo(step - 1)} className={`pill ${page.secondary} ${styles.back}`}>
+          <button
+            type="button"
+            onClick={() => !busy && goTo(step - 1)}
+            aria-disabled={busy || undefined}
+            className={`pill ${page.secondary} ${styles.back}`}
+          >
             Back
           </button>
         )}
@@ -187,7 +198,7 @@ function Steps({ person }: { person: Person }) {
           <button
             type="button"
             onClick={onContinue}
-            aria-disabled={saveBio.isPending || undefined}
+            aria-disabled={busy || undefined}
             className={`pill ${page.primary} ${styles.next}`}
           >
             Continue
@@ -198,12 +209,12 @@ function Steps({ person }: { person: Person }) {
         <button
           type="button"
           onClick={() => {
-            if (!saveBio.isPending) {
+            if (!busy) {
               saveBio.reset()
               goTo(step + 1)
             }
           }}
-          aria-disabled={saveBio.isPending || undefined}
+          aria-disabled={busy || undefined}
           className={styles.skip}
         >
           Skip for now

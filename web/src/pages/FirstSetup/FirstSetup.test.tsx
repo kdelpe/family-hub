@@ -203,6 +203,30 @@ describe('FirstSetup', () => {
     expect(sent(fetch, 'PATCH', `/api/me/contacts/${id}`)).toEqual([{ visibility }])
   })
 
+  it('stays on the step while a switch saves, so a failure is never missed', async () => {
+    let finish: (r: Response) => void = () => {}
+    const { fetch } = renderPage()
+    const yours = fetch.getMockImplementation()!
+    fetch.mockImplementation((url: string, init?: RequestInit) =>
+      init?.method === 'PATCH' ? new Promise<Response>((resolve) => (finish = resolve)) : yours(url, init),
+    )
+    await screen.findByLabelText('A line or two about you')
+    click('Continue')
+    const toggle = await screen.findByRole('switch', { name: 'Phone' })
+    fireEvent.click(toggle)
+    await vi.waitFor(() => expect(toggle).toHaveAttribute('aria-disabled', 'true'))
+
+    for (const name of ['Continue', 'Back', 'Skip for now']) {
+      click(name)
+      expect(screen.getByText('Step 2 of 3')).toBeInTheDocument()
+    }
+    await act(async () => finish(new Response(JSON.stringify({ error: { code: 'internal', message: 'x' } }), { status: 500 })))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong')
+    click('Continue')
+    expect(screen.getByText('Step 3 of 3')).toBeInTheDocument()
+  })
+
   it('lists your rows in the usual order', async () => {
     renderPage()
     await screen.findByLabelText('A line or two about you')

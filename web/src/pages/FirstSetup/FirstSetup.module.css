@@ -141,6 +141,8 @@
 
 .people {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
 }
 
@@ -193,6 +195,12 @@
 
 .next {
   flex: 1;
+  /* Room for "Go to my home page" to take two lines on the narrowest phones. */
+  height: auto;
+  min-height: 52px;
+  padding: 6px 16px;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .skip {

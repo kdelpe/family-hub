@@ -6,8 +6,8 @@ import { refusedMessage } from '../../lib/errorMessage'
 import { useContactSaved } from '../../lib/useContactSaved'
 import styles from './ContactSwitch.module.css'
 
-// Lets a row's other controls wait while its switch saves (useIsMutating).
-export const contactSwitchKey = (contactId: string) => ['contact-switch', contactId] as const
+// Lets other controls wait while a switch saves (useIsMutating): one row's, or with no id, any row's.
+export const contactSwitchKey = (contactId?: string) => (contactId ? (['contact-switch', contactId] as const) : (['contact-switch'] as const))
 
 const statuses = { hidden: 'Only me', on_request: 'Family can ask', family: 'Visible to family' }
 
