@@ -152,6 +152,7 @@
 
 .portrait {
   position: relative;
+  overflow: hidden;
   margin-top: -40px;
   width: 80px;
   height: 80px;
@@ -166,6 +167,93 @@
   justify-content: center;
   font-family: var(--font-serif);
   font-size: 26px;
+}
+
+.photo {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: swap 6s ease-in-out infinite;
+}
+
+.head,
+.shoulders {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--surface);
+  opacity: 0.6;
+}
+
+.head {
+  left: 32%;
+  top: 16%;
+  width: 36%;
+  height: 36%;
+}
+
+.shoulders {
+  left: 14%;
+  top: 60%;
+  width: 72%;
+  height: 54%;
+}
+
+.tone0 {
+  background: var(--leaf-3);
+}
+
+.tone1 {
+  background: var(--leaf-4);
+}
+
+.tone2 {
+  background: var(--portrait-umber);
+}
+
+.tone3 {
+  background: var(--leaf-5);
+}
+
+.tone4 {
+  background: var(--leaf-6);
+}
+
+.tone5 {
+  background: var(--leaf-7);
+}
+
+/* Paused, every portrait stays on its initials. */
+.paused .photo {
+  animation: none;
+}
+
+@keyframes swap {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  42% {
+    opacity: 1;
+  }
+  54% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.pause {
+  min-height: 44px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
 }
 
 .portraitYou {
@@ -231,6 +319,10 @@
 @media (prefers-reduced-motion: reduce) {
   .card {
     transition: none;
+  }
+
+  .photo {
+    animation: none;
   }
 
   .card:hover,

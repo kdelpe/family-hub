@@ -5,7 +5,8 @@ import { Link } from 'react-router'
 import { familyKeys, type FamilySummary, getFamilySummary } from '../../api/family'
 import { getTree, type TreePerson, treeKeys } from '../../api/tree'
 import { errorMessage } from '../../lib/errorMessage'
-import { familyLines } from '../../lib/familySides'
+import { familyLines, sideLabel } from '../../lib/familySides'
+import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, initials, nameMatches } from '../../lib/names'
 import { relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
@@ -17,13 +18,13 @@ const filters: { id: Filter; label: string }[] = [
   { id: 'everyone', label: 'Everyone' },
   { id: 'living', label: 'Living' },
   { id: 'remembered', label: 'Remembered' },
-  { id: 'first', label: `${familyLines.first} side` },
-  { id: 'second', label: `${familyLines.second} side` },
+  { id: 'first', label: sideLabel('first') },
+  { id: 'second', label: sideLabel('second') },
 ]
 
 const sides = {
-  first: { label: `${familyLines.first} side`, band: styles.bandFirst },
-  second: { label: `${familyLines.second} side`, band: styles.bandSecond },
+  first: { label: sideLabel('first'), band: styles.bandFirst },
+  second: { label: sideLabel('second'), band: styles.bandSecond },
   both: { label: 'Both sides', band: styles.bandBoth },
   married_in: { label: 'Married in', band: styles.bandMarriedIn },
 }
@@ -46,8 +47,10 @@ export function People() {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('everyone')
 
-  const relation = useMemo(
-    () => (tree.data && viewerId ? relationsTo(tree.data, viewerId) : () => null),
+  const [paused, setPaused] = useMotionPaused()
+  const reducedMotion = useReducedMotion()
+  const relations = useMemo(
+    () => (tree.data && viewerId ? relationsTo(tree.data, viewerId) : new Map<string, string>()),
     [tree.data, viewerId],
   )
   const people = (tree.data?.persons ?? [])
@@ -87,14 +90,20 @@ export function People() {
             {f.label}
           </button>
         ))}
+        {/* The portraits' fade runs on; with reduced motion there's none to pause (design-notes §6.4). */}
+        {!reducedMotion && (
+          <button type="button" aria-pressed={paused} className={styles.pause} onClick={() => setPaused(!paused)}>
+            {paused ? 'Play motion' : 'Pause motion'}
+          </button>
+        )}
       </div>
 
       {tree.error && <p role="alert">{errorMessage(tree.error)}</p>}
       {tree.data && people.length === 0 && <p className={styles.none}>Nobody here matches.</p>}
-      <ul className={styles.grid}>
+      <ul className={paused ? `${styles.grid} ${styles.paused}` : styles.grid}>
         {people.map((p) => (
           <li key={p.id}>
-            <Card person={p} relation={relation(p.id)} you={p.id === viewerId} />
+            <Card person={p} relation={relations.get(p.id) ?? null} you={p.id === viewerId} />
           </li>
         ))}
       </ul>
@@ -126,8 +135,18 @@ function Strip({ summary }: { summary: FamilySummary }) {
   )
 }
 
+const tones = [styles.tone0, styles.tone1, styles.tone2, styles.tone3, styles.tone4, styles.tone5]
+
+// Until photos arrive, each portrait fades now and then to a placeholder silhouette, at its own pace, as in
+// the mockup.
+function fade(name: string) {
+  const h = [...name].reduce((sum, c) => sum + c.charCodeAt(0), 0)
+  return { tone: tones[h % tones.length], delay: `${((h % 11) * 0.6 + 0.8).toFixed(1)}s` }
+}
+
 function Card({ person, relation, you }: { person: TreePerson; relation: string | null; you: boolean }) {
   const side = person.side ? sides[person.side] : null
+  const { tone, delay } = fade(fullName(person))
   return (
     <Link to={`/people/${person.id}`} className={you ? `${styles.card} ${styles.cardYou}` : styles.card}>
       <span aria-hidden="true" className={`${styles.band} ${you ? styles.bandYou : (side?.band ?? '')}`}>
@@ -137,6 +156,10 @@ function Card({ person, relation, you }: { person: TreePerson; relation: string 
       </span>
       <span aria-hidden="true" className={you ? `${styles.portrait} ${styles.portraitYou}` : styles.portrait}>
         {initials(person)}
+        <span className={`${styles.photo} ${tone}`} style={{ animationDelay: delay }}>
+          <span className={styles.head} />
+          <span className={styles.shoulders} />
+        </span>
       </span>
       <span className={styles.words}>
         <span className={styles.name}>{fullName(person)}</span>

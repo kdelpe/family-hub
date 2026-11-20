@@ -105,6 +105,30 @@ describe('People', () => {
     expect(screen.getByText('Nobody here matches.')).toBeInTheDocument()
   })
 
+  it('pauses the portraits for the session', async () => {
+    renderPage()
+    await screen.findByText('Stanley Jean-Louis')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause motion' }))
+
+    expect(screen.getByRole('button', { name: 'Play motion' })).toHaveAttribute('aria-pressed', 'true')
+    expect(sessionStorage.getItem('fh-motion-paused')).toBe('1')
+    fireEvent.click(screen.getByRole('button', { name: 'Play motion' }))
+    expect(screen.getByRole('button', { name: 'Pause motion' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('offers no pause with reduced motion', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
+    renderPage()
+    await screen.findByText('Stanley Jean-Louis')
+
+    expect(screen.queryByRole('button', { name: /motion/ })).not.toBeInTheDocument()
+  })
+
   it('leaves out relations for a login linked to nobody', async () => {
     renderPage(null)
 
