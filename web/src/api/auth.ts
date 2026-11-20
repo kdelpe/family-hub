@@ -1,6 +1,6 @@
 import type { Query, QueryClient } from '@tanstack/react-query'
 
-import { api } from './client'
+import { api, ApiError } from './client'
 
 export type User = {
   id: string
@@ -33,13 +33,27 @@ const fetchedAsSomeone = (query: Query) => query.queryKey[0] !== previewKey[0] |
 // Everything fetched as whoever was signed in before (birth years, shared phone numbers) goes, so the next person on a
 // shared computer never sees it, not even briefly.
 export function startSession(queryClient: QueryClient, user: User) {
-  queryClient.removeQueries({ predicate: fetchedAsSomeone })
+  dropSessionData(queryClient)
   queryClient.setQueryData(authKeys.me, user)
+}
+
+// Signed out here, so this tab and every other one drops what it fetched as this person.
+export const endSession = (queryClient: QueryClient) => dropSessionData(queryClient)
+
+function dropSessionData(queryClient: QueryClient) {
+  queryClient.removeQueries({ predicate: fetchedAsSomeone })
   try {
-    // The new cookie is every tab's now; writing this fires a storage event in the others (followSessionChanges).
+    // The cookie changed for every tab; writing this fires a storage event in the others (followSessionChanges).
     localStorage.setItem(sessionChangedKey, String(Date.now()))
   } catch {
     // Storage can be blocked; the other tabs then catch up on their next fetch.
+  }
+}
+
+// A save answered 401: the session ended elsewhere, so the shell, rechecking, sends them to sign in.
+export const onSessionEnded = (queryClient: QueryClient) => (error: Error) => {
+  if (error instanceof ApiError && error.status === 401) {
+    void queryClient.invalidateQueries({ queryKey: authKeys.me })
   }
 }
 
@@ -70,3 +84,9 @@ export const previewLink = (token: string, { signal }: { signal?: AbortSignal } 
 
 export const setPassword = (token: string, password: string) =>
   api<User>('POST', '/auth/password/reset', { body: { token, password } })
+
+export const logout = () => api<void>('POST', '/auth/logout')
+
+// Signs out every other session too; this one gets a new cookie.
+export const changePassword = (currentPassword: string, newPassword: string) =>
+  api<void>('POST', '/auth/password/change', { body: { current_password: currentPassword, new_password: newPassword } })

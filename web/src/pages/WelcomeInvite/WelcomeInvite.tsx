@@ -7,7 +7,7 @@ import { ApiError } from '../../api/client'
 import { PasswordInput } from '../../components/PasswordInput/PasswordInput'
 import { PasswordStrength } from '../../components/PasswordStrength/PasswordStrength'
 import { errorMessage } from '../../lib/errorMessage'
-import { maxPasswordLength, minPasswordLength, passwordLength } from '../../lib/passwordStrength'
+import { lengthRefusal, passwordRule } from '../../lib/passwordStrength'
 import page from '../../styles/signInForm.module.css'
 import styles from './WelcomeInvite.module.css'
 
@@ -103,9 +103,9 @@ function SetPassword({ token, link }: { token: string; link: LinkPreview }) {
     if (save.isPending) {
       return
     }
-    const length = passwordLength(password)
-    if (length < minPasswordLength || length > maxPasswordLength) {
-      setRefusedHere({ code: length < minPasswordLength ? 'password_too_short' : 'password_too_long', attempt: (refusedHere?.attempt ?? 0) + 1 })
+    const refused = lengthRefusal(password)
+    if (refused) {
+      setRefusedHere({ code: refused, attempt: (refusedHere?.attempt ?? 0) + 1 })
       return
     }
     save.mutate()
@@ -226,20 +226,6 @@ function BrokenLink({ focusHeading = false, tokenMissing = false }: { focusHeadi
       </span>
     </div>
   )
-}
-
-// The plain-language rule a refused password broke (design-notes §3.3), or null for any other failure.
-function passwordRule(code: string | null): string | null {
-  switch (code) {
-    case 'password_too_short':
-      return `Use at least ${minPasswordLength} characters.`
-    case 'password_too_long':
-      return `Use at most ${maxPasswordLength} characters.`
-    case 'password_too_common':
-      return 'That password is too common — try a short phrase.'
-    default:
-      return null
-  }
 }
 
 function initials(name: string): string {

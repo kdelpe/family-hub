@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Person } from '../api/persons'
-import { birthday, lifespan } from './dates'
+import { birthday, bornOn, lifespan } from './dates'
 
 describe('birthday', () => {
   it.each([
@@ -39,5 +39,18 @@ describe('lifespan', () => {
     { name: 'nothing known', over: {}, want: null },
   ])('$name: $want', ({ over, want }) => {
     expect(lifespan(person(over))).toBe(want)
+  })
+})
+
+describe('bornOn', () => {
+  it.each([
+    { date: '1968-06-06', precision: 'day' as const, want: 'June 6, 1968' },
+    { date: '1968-06-01', precision: 'month' as const, want: 'June 1968' },
+    { date: '1968-01-01', precision: 'year' as const, want: '1968' },
+    { date: '1968-01-01', precision: 'circa' as const, want: 'c. 1968' },
+    { date: '--06-06', precision: 'day' as const, want: 'June 6' },
+    { date: null, precision: null, want: null },
+  ])('$date ($precision): $want', ({ date, precision, want }) => {
+    expect(bornOn(date, precision)).toBe(want)
   })
 })

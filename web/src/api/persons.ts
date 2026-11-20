@@ -40,3 +40,9 @@ export const getPersons = async (ids: string[], { signal }: { signal?: AbortSign
   )
   return answers.flatMap((answer) => answer.persons)
 }
+
+// A member may change only their own name, birthday and bio (architecture §4); null clears one.
+export const updateOwnProfile = (
+  id: string,
+  fields: Partial<Pick<Person, 'first_name' | 'last_name' | 'birth_date' | 'birth_date_precision' | 'bio'>>,
+) => api<Person>('PATCH', `/persons/${encodeURIComponent(id)}`, { body: fields })

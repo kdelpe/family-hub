@@ -32,6 +32,7 @@ export const kindOf = (c: ContactMethod): RequestKind | null =>
 
 export const contactKeys = {
   of: (personId: string) => ['contacts', personId] as const,
+  mine: ['contacts', 'mine'] as const,
 }
 
 export const directoryKeys = {
@@ -82,3 +83,18 @@ const platformLabels: Record<string, string> = {
 }
 
 export const platformLabel = (platform: string | null) => (platform && platformLabels[platform]) || 'Other'
+
+export const myContactsQuery = {
+  queryKey: contactKeys.mine,
+  queryFn: async ({ signal }: { signal?: AbortSignal }) =>
+    (await api<{ contacts: ContactMethod[] }>('GET', '/me/contacts', { signal })).contacts,
+}
+
+export type NewContact = Pick<ContactMethod, 'kind' | 'platform' | 'label' | 'value' | 'visibility'>
+
+export const addMyContact = (c: NewContact) => api<ContactMethod>('POST', '/me/contacts', { body: c })
+
+export const updateMyContact = (id: string, patch: Partial<Pick<ContactMethod, 'label' | 'value' | 'visibility'>>) =>
+  api<ContactMethod>('PATCH', `/me/contacts/${encodeURIComponent(id)}`, { body: patch })
+
+export const removeMyContact = (id: string) => api<void>('DELETE', `/me/contacts/${encodeURIComponent(id)}`)
