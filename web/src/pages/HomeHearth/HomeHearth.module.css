@@ -123,6 +123,8 @@
 }
 
 .row {
+  position: relative;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -142,6 +144,13 @@
 
 .rowTitle:hover {
   text-decoration: underline;
+}
+
+/* The whole row is the link's tap target, at least 44px tall (design-notes §1.3). */
+.rowTitle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
 }
 
 .muted {
@@ -194,7 +203,16 @@
 }
 
 .seeAll {
+  position: relative;
+  align-self: flex-start;
   margin-top: auto;
   font-weight: 600;
   font-size: 15px;
+}
+
+/* A 44px tap target around the one line of text, without moving it. */
+.seeAll::after {
+  content: '';
+  position: absolute;
+  inset: -12px -8px;
 }
