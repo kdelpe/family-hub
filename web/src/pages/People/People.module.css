@@ -334,3 +334,7 @@
     translate: none;
   }
 }
+
+.more {
+  align-self: center;
+}
