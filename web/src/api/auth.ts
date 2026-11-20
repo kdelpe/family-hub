@@ -22,11 +22,31 @@ export const authKeys = {
   preview: (token: string) => ['auth', 'preview', token] as const,
 }
 
+const sessionChangedKey = 'fh-session-changed'
+
 // Everything else cached was fetched as whoever was signed in before (birth years, shared phone numbers), so a new
 // session keeps only the sign-in answers: the next person on a shared computer must never see it, not even briefly.
 export function startSession(queryClient: QueryClient, user: User) {
   queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== authKeys.me[0] })
   queryClient.setQueryData(authKeys.me, user)
+  try {
+    // The new cookie is every tab's now; writing this fires a storage event in the others (followSessionChanges).
+    localStorage.setItem(sessionChangedKey, String(Date.now()))
+  } catch {
+    // Storage can be blocked; the other tabs then catch up on their next fetch.
+  }
+}
+
+// Another tab signed someone in, so this tab's cookie is theirs now: drop everything it fetched for the last person
+// (a reset also stops any answer still on its way) and fetch again as the new one.
+export function followSessionChanges(queryClient: QueryClient): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === sessionChangedKey) {
+      void queryClient.resetQueries()
+    }
+  }
+  window.addEventListener('storage', onStorage)
+  return () => window.removeEventListener('storage', onStorage)
 }
 
 export const me = ({ signal }: { signal?: AbortSignal } = {}) => api<User>('GET', '/auth/me', { signal })

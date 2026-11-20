@@ -1,10 +1,16 @@
 import { QueryClient } from '@tanstack/react-query'
-import { expect, it } from 'vitest'
+import { waitFor } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
 
-import { authKeys, startSession, type User } from './auth'
+import { authKeys, followSessionChanges, startSession, type User } from './auth'
 
 const before: User = { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: 'maya' }
 const after: User = { id: 'u2', email: 'fritz.pluviose@example.com', role: 'member', person_id: 'fritz' }
+
+afterEach(() => {
+  localStorage.clear()
+  vi.restoreAllMocks()
+})
 
 it.each([
   { name: 'a person as the last viewer saw them', key: ['persons', 'nadege'], kept: false },
@@ -19,5 +25,36 @@ it.each([
   startSession(client, after)
 
   expect(client.getQueryData(key)).toEqual(kept ? { cached: true } : undefined)
+  expect(client.getQueryData(authKeys.me)).toEqual(after)
+})
+
+it('makes another tab drop what it fetched for the last person, even an answer still on its way', async () => {
+  const otherTab = new QueryClient()
+  const stop = followSessionChanges(otherTab)
+  otherTab.setQueryData(authKeys.me, before)
+  otherTab.setQueryData(['contacts', 'nadege'], [{ value: '+1 718 555 0123' }])
+  let answer: (value: unknown) => void = () => {}
+  void otherTab.prefetchQuery({ queryKey: ['persons', 'nadege'], queryFn: () => new Promise((resolve) => (answer = resolve)) })
+
+  startSession(new QueryClient(), after)
+  // A browser passes the signing-in tab's storage write on to every other tab as this event.
+  window.dispatchEvent(new StorageEvent('storage', { key: 'fh-session-changed', newValue: localStorage.getItem('fh-session-changed') }))
+
+  await waitFor(() => expect(otherTab.getQueryData(['contacts', 'nadege'])).toBeUndefined())
+  answer({ id: 'nadege', birth_date: '1950-03-14' })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(otherTab.getQueryData(['persons', 'nadege'])).toBeUndefined()
+  expect(otherTab.getQueryData(authKeys.me)).toBeUndefined()
+  stop()
+})
+
+it('signs in even when the browser blocks storage', () => {
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('blocked', 'SecurityError')
+  })
+  const client = new QueryClient()
+
+  startSession(client, after)
+
   expect(client.getQueryData(authKeys.me)).toEqual(after)
 })
