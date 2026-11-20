@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 
 import { familyKeys, type FamilySummary, getFamilySummary } from '../../api/family'
-import { getTree, type TreePerson, treeKeys } from '../../api/tree'
+import { type TreePerson, treeQuery } from '../../api/tree'
 import { errorMessage } from '../../lib/errorMessage'
 import { familyLines, sideLabel, sideTags } from '../../lib/familySides'
 import { useMotionPaused, useReducedMotion } from '../../lib/motion'
@@ -37,7 +37,7 @@ const keep: Record<Filter, (p: TreePerson) => boolean> = {
 export function People() {
   const { user } = useSignedIn()
   const viewerId = user?.person_id ?? null
-  const tree = useQuery({ queryKey: treeKeys.all, queryFn: ({ signal }) => getTree({ signal }) })
+  const tree = useQuery(treeQuery)
   const summary = useQuery({ queryKey: familyKeys.summary, queryFn: ({ signal }) => getFamilySummary({ signal }) })
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('everyone')

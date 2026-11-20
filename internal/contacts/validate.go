@@ -3,7 +3,6 @@ package contacts
 import (
 	"fmt"
 	"net/mail"
-	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -18,27 +17,18 @@ const (
 )
 
 var (
-	phonePattern  = regexp.MustCompile(`^\+?[0-9 ().-]+$`)
-	handlePattern = regexp.MustCompile(`^@?[A-Za-z0-9._-]{1,100}$`)
-	// Links are only ever built on these hosts, so a stored URL can't point anywhere else (§5.2).
-	platformHosts = map[string][]string{
-		"instagram": {"instagram.com"},
-		"facebook":  {"facebook.com"},
-		"tiktok":    {"tiktok.com"},
-		"linkedin":  {"linkedin.com"},
-		"x":         {"x.com", "twitter.com"},
-		"youtube":   {"youtube.com", "youtu.be"},
-	}
+	phonePattern = regexp.MustCompile(`^\+?[0-9 ().-]+$`)
 )
 
-func (c *Contact) normalize() error {
+// normalize checks a row before it's saved; checkLink is false for an edit that keeps an older row as it was.
+func (c *Contact) normalize(checkLink bool) error {
 	if !slices.Contains([]string{"email", "phone", "address", "social", "other"}, c.Kind) {
 		return invalid("kind must be email, phone, address, social or other")
 	}
 	if (c.Kind == "social") != (c.Platform != nil) {
 		return invalid("a platform goes with kind social, and only with it")
 	}
-	if c.Platform != nil && *c.Platform != "whatsapp" && *c.Platform != "other" && platformHosts[*c.Platform] == nil {
+	if c.Platform != nil && *c.Platform != "whatsapp" && *c.Platform != "other" && !isLinked(*c.Platform) {
 		return invalid("platform must be whatsapp, instagram, facebook, tiktok, linkedin, x, youtube or other")
 	}
 	if want := visibilities(c); !slices.Contains(want, c.Visibility) {
@@ -54,8 +44,8 @@ func (c *Contact) normalize() error {
 	if c.Label != nil && (!utf8.ValidString(*c.Label) || hasControl(*c.Label, false) || utf8.RuneCountInString(*c.Label) > maxLabelLength) {
 		return invalid(fmt.Sprintf("the label must be one line of at most %d characters", maxLabelLength))
 	}
-	c.Value = strings.TrimSpace(strings.ReplaceAll(c.Value, "\r\n", "\n"))
-	return c.checkValue()
+	c.Value = cleanValue(c.Value)
+	return c.checkValue(checkLink)
 }
 
 // visibilities are the two a kind allows: phones, WhatsApp and addresses are asked for, never listed (§5.2).
@@ -66,7 +56,7 @@ func visibilities(c *Contact) []string {
 	return []string{"hidden", "family"}
 }
 
-func (c *Contact) checkValue() error {
+func (c *Contact) checkValue(checkLink bool) error {
 	address := c.Kind == "address"
 	limit := maxValueLength
 	if address {
@@ -89,26 +79,12 @@ func (c *Contact) checkValue() error {
 		if !phonePattern.MatchString(c.Value) || countDigits(c.Value) < 5 || countDigits(c.Value) > 15 {
 			return invalid("the value must be a phone number, like +1 555 010 0000")
 		}
-	case c.Platform != nil && platformHosts[*c.Platform] != nil:
-		if !handlePattern.MatchString(c.Value) && !onPlatform(c.Value, platformHosts[*c.Platform]) {
-			return invalid("the value must be a handle or an https link on that platform")
+	case checkLink && c.Platform != nil && isLinked(*c.Platform):
+		if ProfileLink(c.Platform, c.Value) == nil {
+			return invalid("the value must be a handle or an https link to a profile on that platform")
 		}
 	}
 	return nil
-}
-
-func onPlatform(raw string, hosts []string) bool {
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" {
-		return false
-	}
-	host := strings.ToLower(u.Hostname())
-	for _, h := range hosts {
-		if host == h || strings.HasSuffix(host, "."+h) {
-			return true
-		}
-	}
-	return false
 }
 
 // hasControl refuses control characters and NUL; an address may span lines.
@@ -128,4 +104,13 @@ func countDigits(s string) int {
 
 func invalid(msg string) error {
 	return fmt.Errorf("%w: %s", ErrInvalidContact, msg)
+}
+
+func cleanValue(v string) string {
+	return strings.TrimSpace(strings.ReplaceAll(v, "\r\n", "\n"))
+}
+
+func isLinked(platform string) bool {
+	_, ok := platforms[platform]
+	return ok
 }

@@ -31,12 +31,14 @@ var (
 
 const (
 	testContactBody = `{"id":"01890000-0000-7000-8000-0000000000dd","kind":"phone","platform":null,"label":"Mobile",
-		"value":"+1 555 010 0000","visibility":"on_request"}`
+		"value":"+1 555 010 0000","visibility":"on_request","href":null,"shared_with_you":false}`
 	contactNotFoundBody = `{"error":{"code":"not_found","message":"contact method not found"}}`
 )
 
 func TestListContacts(t *testing.T) {
-	listing := contacts.Listing{Contacts: []contacts.Contact{testContact}, Requestable: []contacts.Requestable{{Kind: "address", MyRequestStatus: "requested"}}}
+	listing := contacts.Listing{
+		Contacts: []contacts.Contact{testContact}, Requestable: []contacts.Requestable{{Kind: "address", MyRequestStatus: "requested"}}, Full: true,
+	}
 	tests := []struct {
 		name       string
 		mine       bool
@@ -244,7 +246,7 @@ func TestContactRequests(t *testing.T) {
 
 func TestDirectory(t *testing.T) {
 	entry := contacts.DirectoryEntry{ID: testPersonID, FirstName: "Maya", LastName: new("Pluviose"), Side: new("paternal"),
-		Listing: contacts.Listing{Contacts: []contacts.Contact{testContact}, Requestable: []contacts.Requestable{{Kind: "phone", MyRequestStatus: "none"}}}}
+		Listing: contacts.Listing{Contacts: []contacts.Contact{testContact}, Requestable: []contacts.Requestable{{Kind: "phone", MyRequestStatus: "none"}}, Full: true}}
 	tests := []struct {
 		name       string
 		query      string
@@ -273,4 +275,20 @@ func TestDirectory(t *testing.T) {
 			assertBody(t, rec, tt.wantStatus, tt.wantBody)
 		})
 	}
+}
+
+func TestListContactsMarksSharesAndLinks(t *testing.T) {
+	instagram := contacts.Contact{ID: testContactID, Kind: "social", Platform: new("instagram"), Value: "@rosa.m", Visibility: "family"}
+	listing := contacts.Listing{Contacts: []contacts.Contact{instagram, testContact}}
+	svc := mocks.NewContactsService(t)
+	svc.EXPECT().List(mock.Anything, memberViewer, testPersonID).Return(listing, nil)
+	req := withURLParam(httptest.NewRequest(http.MethodGet, "/api/contacts", nil), "id", testPersonID.String())
+
+	rec := serveWith(t, memberSession, handler.NewContacts(svc).ListFor, req)
+
+	assertBody(t, rec, http.StatusOK, `{"contacts":[`+
+		`{"id":"01890000-0000-7000-8000-0000000000dd","kind":"social","platform":"instagram","label":null,"value":"@rosa.m",`+
+		`"visibility":"family","href":"https://www.instagram.com/rosa.m","shared_with_you":false},`+
+		`{"id":"01890000-0000-7000-8000-0000000000dd","kind":"phone","platform":null,"label":"Mobile","value":"+1 555 010 0000",`+
+		`"visibility":"on_request","href":null,"shared_with_you":true}]}`)
 }

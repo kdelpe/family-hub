@@ -21,3 +21,8 @@ export const treeKeys = {
 }
 
 export const getTree = ({ signal }: { signal?: AbortSignal } = {}) => api<Tree>('GET', '/tree', { signal })
+
+export const treeQuery = {
+  queryKey: treeKeys.all,
+  queryFn: ({ signal }: { signal?: AbortSignal }) => getTree({ signal }),
+}

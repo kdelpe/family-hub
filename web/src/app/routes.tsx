@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { RouteObject } from 'react-router'
 
 import { SignInLayout } from '../components/SignInLayout/SignInLayout'
+import { Directory } from '../pages/Directory/Directory'
 import { FirstSetup } from '../pages/FirstSetup/FirstSetup'
 import { ForgotPassword } from '../pages/ForgotPassword/ForgotPassword'
 import { HomeHearth } from '../pages/HomeHearth/HomeHearth'
@@ -15,7 +16,12 @@ import { AppShell } from './AppShell'
 import { NotBuiltYet } from './NotBuiltYet'
 import { adminPages, menuPages } from './signedInPages'
 
-const built: Record<string, ReactNode> = { '/': <HomeHearth />, '/people': <People />, '/admin/members': <ManageAccess /> }
+const built: Record<string, ReactNode> = {
+  '/': <HomeHearth />,
+  '/people': <People />,
+  '/directory': <Directory />,
+  '/admin/members': <ManageAccess />,
+}
 
 // The only place routes are wired.
 export const routes: RouteObject[] = [

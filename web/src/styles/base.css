@@ -28,6 +28,17 @@ a:hover {
   color: var(--accent-hover);
 }
 
+/* A 36px pill still takes a 44px tap (design-notes §1.3), without looking bigger. */
+.tap {
+  position: relative;
+}
+
+.tap::after {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
+
 /* Every pill button and link drawn as one lifts on hover and keyboard focus (design-notes §2.5). */
 .pill {
   transition:

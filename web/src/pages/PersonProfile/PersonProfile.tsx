@@ -1,11 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { ApiError } from '../../api/client'
-import { askFor, type Contact, contactKeys, type ContactMethod, contactsQuery, isRequestable, type RequestKind } from '../../api/contacts'
+import { type Contact, type ContactMethod, contactsQuery, isRequestable, requestKinds } from '../../api/contacts'
 import { getPerson, getPersons, type Person, personKeys } from '../../api/persons'
-import { getTree, type Tree, treeKeys } from '../../api/tree'
+import { type Tree, treeQuery } from '../../api/tree'
+import { AskButton, SharedValue } from '../../components/AskButton/AskButton'
 import { birthday, lifespan, year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
 import { familyGroups } from '../../lib/familyGroups'
@@ -14,21 +15,13 @@ import { gendered, relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
 import styles from './PersonProfile.module.css'
 
-const kinds: RequestKind[] = ['phone', 'whatsapp', 'address']
-
-const askWords: Record<RequestKind, { ask: string; asked: string }> = {
-  phone: { ask: 'Request phone number', asked: '✓ Phone number requested' },
-  whatsapp: { ask: 'Request WhatsApp', asked: '✓ WhatsApp requested' },
-  address: { ask: 'Request address', asked: '✓ Address requested' },
-}
-
 // A full profile (design-notes §4.9). Photos and moments join it with media and events (Phase 5).
 export function PersonProfile() {
   const { id = '' } = useParams()
   const { user } = useSignedIn()
   const viewerId = user?.person_id ?? null
   const person = useQuery({ queryKey: personKeys.one(id), queryFn: ({ signal }) => getPerson(id, { signal }) })
-  const tree = useQuery({ queryKey: treeKeys.all, queryFn: ({ signal }) => getTree({ signal }) })
+  const tree = useQuery(treeQuery)
   const contacts = useQuery(contactsQuery(id))
   const relations = useMemo(
     () => (tree.data && viewerId ? relationsTo(tree.data, viewerId) : new Map<string, string>()),
@@ -91,9 +84,8 @@ export function PersonProfile() {
                 key={p.id}
                 personId={p.id}
                 contacts={contacts.data}
-                // Admins and the person themself get every value; only what was shared with you shows here, and not
-                // while a refresh (or its retries) runs, since the share may have been taken back.
-                showShared={user?.role !== 'admin' && viewerId !== p.id && !contacts.isFetching}
+                // Not while a refresh (or its retries) runs, since the share may have been taken back.
+                showShared={!contacts.isFetching}
               />
             )}
           </div>
@@ -109,61 +101,25 @@ export function PersonProfile() {
 
 // The dashed request buttons, and any phone, WhatsApp or address shared with you (never asked-for values).
 function Reach({ personId, contacts, showShared }: { personId: string; contacts: Contact[]; showShared: boolean }) {
-  const shared = showShared
-    ? contacts.filter((c): c is ContactMethod => !isRequestable(c) && c.visibility === 'on_request')
-    : []
+  const shared = showShared ? contacts.filter((c): c is ContactMethod => !isRequestable(c) && c.shared_with_you) : []
   return (
     <>
       {contacts
         .filter(isRequestable)
-        .sort((a, b) => kinds.indexOf(a.kind) - kinds.indexOf(b.kind))
+        .sort((a, b) => requestKinds.indexOf(a.kind) - requestKinds.indexOf(b.kind))
         .map((c) => (
-          <AskButton key={c.kind} personId={personId} kind={c.kind} asked={c.my_request_status === 'requested'} />
+          <AskButton
+            key={c.kind}
+            personId={personId}
+            kind={c.kind}
+            asked={c.my_request_status === 'requested'}
+            size="large"
+          />
         ))}
       {shared.map((c) => (
-        <span key={c.id} className={styles.shared}>
-          {c.label ?? (c.platform === 'whatsapp' ? 'WhatsApp' : c.kind === 'address' ? 'Address' : 'Phone')}: {c.value}
-        </span>
+        <SharedValue key={c.id} contact={c} />
       ))}
     </>
-  )
-}
-
-function AskButton({ personId, kind, asked }: { personId: string; kind: RequestKind; asked: boolean }) {
-  const queryClient = useQueryClient()
-  const ask = useMutation({
-    mutationFn: () => askFor(personId, kind),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: contactKeys.of(personId) }),
-  })
-  if (ask.data?.my_request_status === 'shared') {
-    // Already shared: the refetched contacts show the value instead.
-    return null
-  }
-  if (asked || ask.isSuccess) {
-    return <span className={styles.asked}>{askWords[kind].asked}</span>
-  }
-  return (
-    <span className={styles.ask}>
-      <button
-        type="button"
-        className={`pill ${styles.askButton}`}
-        aria-disabled={ask.isPending}
-        onClick={() => {
-          if (!ask.isPending) {
-            ask.mutate()
-          }
-        }}
-      >
-        {askWords[kind].ask}
-      </button>
-      {ask.error && (
-        <span role="alert" className={styles.askError}>
-          {ask.error instanceof ApiError && ask.error.status === 403
-            ? 'Your login isn’t linked to you in the tree yet, so you can’t ask. An admin can link it.'
-            : errorMessage(ask.error)}
-        </span>
-      )}
-    </span>
   )
 }
 
