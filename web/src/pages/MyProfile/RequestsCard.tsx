@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import { onSessionEnded, sameSession, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
@@ -30,6 +30,13 @@ export function RequestsCard({ personId }: { personId: string }) {
   // Answered on this visit: each stays where it was, saying what happened.
   const [answered, setAnswered] = useState<{ request: ContactRequest; answer: Answer }[]>([])
   const [stopped, setStopped] = useState<ContactRequest | null>(null)
+  // The shared line it was on is gone, so keyboard focus lands on what happened.
+  const stoppedRef = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (stopped) {
+      stoppedRef.current?.focus()
+    }
+  }, [stopped])
 
   // Rows kept from before a relink are someone else's: none are shown, so none can be answered.
   const rows = requests.error instanceof RelinkedError ? [] : (requests.data ?? [])
@@ -68,7 +75,7 @@ export function RequestsCard({ personId }: { personId: string }) {
           </ul>
         </div>
       )}
-      <span role="status" className={styles.answer}>
+      <span ref={stoppedRef} tabIndex={-1} role="status" className={styles.answer}>
         {stopped && `Stopped sharing your ${yourDetail[stopped.kind]} with ${firstName(stopped.from.name)}.`}
       </span>
       <span className={styles.small}>
@@ -128,6 +135,9 @@ function Confirm({
   onNo: () => void
 }) {
   const id = useId()
+  const yesRef = useRef<HTMLButtonElement>(null)
+  // Focus moves in, so the group's question and note are read out and the keyboard isn't left on a removed button.
+  useEffect(() => yesRef.current?.focus(), [])
   return (
     <div
       role="group"
@@ -144,7 +154,7 @@ function Confirm({
         </span>
       )}
       <div className={styles.choices}>
-        <button type="button" onClick={() => !busy && onYes()} aria-disabled={busy || undefined} className={`pill ${styles.save}`}>
+        <button ref={yesRef} type="button" onClick={() => !busy && onYes()} aria-disabled={busy || undefined} className={`pill ${styles.save}`}>
           {yes}
         </button>
         <button type="button" onClick={() => !busy && onNo()} aria-disabled={busy || undefined} className={`pill ${styles.cancel}`}>
@@ -168,6 +178,21 @@ function RequestRow({
 }) {
   // Both ask first: a decline can't be taken back, and a share shows the detail at once (owner's call).
   const [confirming, setConfirming] = useState<'share' | 'decline' | null>(null)
+  // After Cancel, back to the button that opened the question; after an answer, to the line saying what happened.
+  const [returnTo, setReturnTo] = useState<'share' | 'decline' | null>(null)
+  const shareRef = useRef<HTMLButtonElement>(null)
+  const declineRef = useRef<HTMLButtonElement>(null)
+  const answerRef = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (returnTo) {
+      ;(returnTo === 'share' ? shareRef : declineRef).current?.focus()
+    }
+  }, [returnTo])
+  useEffect(() => {
+    if (answer) {
+      answerRef.current?.focus()
+    }
+  }, [answer])
   const decide = useDecision(personId, request, (d) => onAnswered(d === 'share' ? 'shared' : 'declined'))
   const first = firstName(request.from.name)
   const detail = yourDetail[request.kind]
@@ -192,22 +217,39 @@ function RequestRow({
             busy={decide.isPending}
             onYes={() => decide.mutate(confirming)}
             onNo={() => {
+              setReturnTo(confirming)
               setConfirming(null)
               decide.reset()
             }}
           />
         ) : (
           <div className={styles.choices}>
-            <button type="button" onClick={() => setConfirming('share')} className={`pill ${styles.save}`}>
+            <button
+              ref={shareRef}
+              type="button"
+              onClick={() => {
+                setReturnTo(null)
+                setConfirming('share')
+              }}
+              className={`pill ${styles.save}`}
+            >
               Share
             </button>
-            <button type="button" onClick={() => setConfirming('decline')} className={`pill ${styles.cancel}`}>
+            <button
+              ref={declineRef}
+              type="button"
+              onClick={() => {
+                setReturnTo(null)
+                setConfirming('decline')
+              }}
+              className={`pill ${styles.cancel}`}
+            >
               Don’t share
             </button>
           </div>
         ))}
       {/* Mounted before the answer, so screen readers announce it. */}
-      <span role="status" className={styles.answer}>
+      <span ref={answerRef} tabIndex={-1} role="status" className={styles.answer}>
         {answer === 'shared' ? `Shared with ${first}.` : answer === 'declined' ? `Not shared. ${first} won’t be told.` : ''}
       </span>
       {decide.isError && (
@@ -222,6 +264,13 @@ function RequestRow({
 function SharedLine({ personId, request, onStopped }: { personId: string; request: ContactRequest; onStopped: () => void }) {
   // A second step: once taken back, a share can't be given again, and they can't ask twice.
   const [confirming, setConfirming] = useState(false)
+  const [kept, setKept] = useState(false)
+  const stopRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (kept) {
+      stopRef.current?.focus()
+    }
+  }, [kept])
   const stop = useDecision(personId, request, onStopped)
   const detail = yourDetail[request.kind]
 
@@ -238,12 +287,21 @@ function SharedLine({ personId, request, onStopped }: { personId: string; reques
           busy={stop.isPending}
           onYes={() => stop.mutate('revoke')}
           onNo={() => {
+            setKept(true)
             setConfirming(false)
             stop.reset()
           }}
         />
       ) : (
-        <button type="button" onClick={() => setConfirming(true)} className={styles.remove}>
+        <button
+          ref={stopRef}
+          type="button"
+          onClick={() => {
+            setKept(false)
+            setConfirming(true)
+          }}
+          className={styles.remove}
+        >
           Stop sharing
         </button>
       )}

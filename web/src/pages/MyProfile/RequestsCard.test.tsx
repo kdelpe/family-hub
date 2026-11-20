@@ -154,6 +154,42 @@ describe('RequestsCard', () => {
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
   })
 
+  it('keeps keyboard focus in place through the question, Cancel and an answer', async () => {
+    const answers = {
+      'GET /api/me/contact-requests': listed([darline]),
+      'POST /api/me/contact-requests/r1/decline': { status: 204 },
+    }
+    renderCard(answers)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Don’t share' }))
+    expect(screen.getByRole('button', { name: 'Yes, don’t share' })).toHaveFocus()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('button', { name: 'Don’t share' })).toHaveFocus()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Don’t share' }))
+    answers['GET /api/me/contact-requests'] = listed([])
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, don’t share' }))
+    expect(await screen.findByText('Not shared. Darline won’t be told.')).toHaveFocus()
+  })
+
+  it('keeps keyboard focus in place when you stop sharing or keep sharing', async () => {
+    const answers = {
+      'GET /api/me/contact-requests': listed([naika]),
+      'POST /api/me/contact-requests/r3/revoke': { status: 204 },
+    }
+    renderCard(answers)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop sharing' }))
+    expect(screen.getByRole('button', { name: 'Yes, stop' })).toHaveFocus()
+    fireEvent.click(screen.getByRole('button', { name: 'Keep sharing' }))
+    expect(screen.getByRole('button', { name: 'Stop sharing' })).toHaveFocus()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }))
+    answers['GET /api/me/contact-requests'] = listed([])
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, stop' }))
+    expect(await screen.findByText('Stopped sharing your WhatsApp number with Naïka.')).toHaveFocus()
+  })
+
   it('asks before it stops sharing, then takes the share back', async () => {
     const answers = {
       'GET /api/me/contact-requests': listed([naika]),
