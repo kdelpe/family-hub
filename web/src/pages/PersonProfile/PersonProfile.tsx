@@ -85,7 +85,8 @@ export function PersonProfile() {
             <Link to={`/tree?person=${encodeURIComponent(p.id)}`} className={`pill ${styles.center}`}>
               Center the tree on {p.first_name}
             </Link>
-            {contacts.data && (
+            {/* Only after a fetch that worked: a failed refresh mustn't keep showing a share taken back since. */}
+            {contacts.isSuccess && (
               <Reach
                 // A fresh button per person, so an ask on one profile doesn't show on the next.
                 key={p.id}

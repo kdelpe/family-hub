@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -112,6 +112,7 @@ function renderPage({
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  focusManager.setFocused(undefined)
 })
 
 describe('PersonProfile', () => {
@@ -239,6 +240,27 @@ describe('PersonProfile', () => {
     await screen.findByRole('link', { name: 'Center the tree on Nadège' })
     expect(Boolean(screen.queryByText('Mobile: (555) 010-4121'))).toBe(shown)
     expect(screen.queryByText(/nadege\.p@example\.com/)).not.toBeInTheDocument()
+  })
+
+  it('hides a shared phone number once a later refresh fails', async () => {
+    renderPage({
+      answers: {
+        'GET /api/persons/nadege/contacts': [
+          { status: 200, body: { contacts: shared } },
+          { status: 500, body: { error: { code: 'internal', message: 'x' } } },
+        ],
+      },
+    })
+    expect(await screen.findByText('Mobile: (555) 010-4121')).toBeInTheDocument()
+
+    // Coming back to the window refreshes the contacts; this time the server fails.
+    act(() => {
+      focusManager.setFocused(false)
+      focusManager.setFocused(true)
+    })
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.queryByText('Mobile: (555) 010-4121')).not.toBeInTheDocument()
   })
 
   it('says when there’s no such person', async () => {
