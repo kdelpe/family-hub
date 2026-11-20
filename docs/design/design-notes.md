@@ -6,6 +6,8 @@ All names, dates, stories, phone numbers and addresses in the mockups are **made
 
 **Continue with Google is dropped** (owner's decision, November 2026): leave out every Google button, divider and line of Google copy the mockups still show (Sign in, Welcome, Forgot password, the invite email in Members & invites, the sign-in line in My profile).
 
+**Relations drop "Your"** (owner's decision, November 2026): since you're signed in, a relation is just its title, "Mother", "Half-sister", "Cousin once removed", and "You" on your own card, wherever the mockups still say "Your mother".
+
 ## Scope for the MVP
 
 `docs/architecture-v3.md` §16 defers a few things this design shows. Until each one lands, build the page as drawn without it:
@@ -101,7 +103,7 @@ Placeholder until a real logo exists: circle `#E6EEE9` with a `#2F5D50` outline,
 
 ### 2.3 Person cards
 
-Initials avatar (circle, Fraunces), name (600), one line underneath with the relation **from the viewer's point of view** ("Your mother", "Your half-sister").
+Initials avatar (circle, Fraunces), name (600), one line underneath with the relation **from the viewer's point of view** ("Mother", "Half-sister").
 
 **No birthdays or dates in the family tree**: not on cards, chips or the quick look. Dates appear only on profiles and the birthday lists (People cards show none either, §4.3), following the masking rules (living people month/day only, deceased full years, "c. 1935" for approximate dates).
 
@@ -178,7 +180,7 @@ One **focus person**; shows:
 - **Parents** household.
 - **Focus row:** siblings split left and right · the focus person's **household** box (`--accent-tint`, 2px accent border) with current partners, and former partners with a dashed border labelled "Former partner".
 - **Children**, then **grandchildren**, each grandchild card with **▼ more** when they have children.
-- Half-siblings labelled from the viewer's point of view ("Your half-sister", or "… · half-sibling").
+- Half-siblings labelled from the viewer's point of view ("Half-sister", or "… · half-sibling").
 
 Interaction:
 - **Hover or keyboard focus** on a card: the card lifts (`translateY(-3px) scale(1.04)`, soft shadow) and a **quick look** (250px card) appears just below it: relation, 2-line story, shared email or social account (never phone or address), **View profile ›**, and a quiet **Center here** link. (No dates.) No backdrop, nothing else covered.

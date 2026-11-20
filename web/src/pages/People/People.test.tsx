@@ -73,8 +73,8 @@ describe('People', () => {
     expect(anne).toHaveTextContent('In memory')
     expect(maya).toHaveTextContent('You')
     expect(maya).toHaveTextContent('Both sides')
-    expect(nadege).toHaveTextContent('Your mother')
-    expect(stanley).toHaveTextContent('Your husband')
+    expect(within(nadege!).getByText('Mother')).toBeInTheDocument()
+    expect(within(stanley!).getByText('Husband')).toBeInTheDocument()
     expect(stanley).toHaveTextContent('Married in')
     expect(nadege).toHaveAttribute('href', '/people/nadege')
   })
@@ -145,6 +145,8 @@ describe('People', () => {
     renderPage(null)
 
     await screen.findByText('Stanley Jean-Louis')
-    expect(screen.queryByText(/^You$|^Your /)).not.toBeInTheDocument()
+    for (const relation of ['You', 'Mother', 'Husband']) {
+      expect(screen.queryByText(relation)).not.toBeInTheDocument()
+    }
   })
 })

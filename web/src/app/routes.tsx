@@ -8,6 +8,7 @@ import { HomeHearth } from '../pages/HomeHearth/HomeHearth'
 import { Login } from '../pages/Login/Login'
 import { ManageAccess } from '../pages/ManageAccess/ManageAccess'
 import { People } from '../pages/People/People'
+import { PersonProfile } from '../pages/PersonProfile/PersonProfile'
 import { RequestAccess } from '../pages/RequestAccess/RequestAccess'
 import { WelcomeInvite } from '../pages/WelcomeInvite/WelcomeInvite'
 import { AppShell } from './AppShell'
@@ -32,7 +33,7 @@ export const routes: RouteObject[] = [
     element: <AppShell />,
     children: [
       ...[...menuPages, ...adminPages].map(({ path }) => ({ path, element: built[path] ?? <NotBuiltYet /> })),
-      { path: '/people/:id', element: <NotBuiltYet /> },
+      { path: '/people/:id', element: <PersonProfile /> },
     ],
   },
   { path: '*', element: <NotBuiltYet /> },

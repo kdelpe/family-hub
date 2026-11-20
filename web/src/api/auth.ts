@@ -1,3 +1,5 @@
+import type { Query, QueryClient } from '@tanstack/react-query'
+
 import { api } from './client'
 
 export type User = {
@@ -15,9 +17,42 @@ export type LinkPreview = {
   from_name: string | null
 }
 
+const previewKey = ['auth', 'preview'] as const
+
 export const authKeys = {
   me: ['auth', 'me'] as const,
-  preview: (token: string) => ['auth', 'preview', token] as const,
+  preview: (token: string) => [...previewKey, token] as const,
+}
+
+const sessionChangedKey = 'fh-session-changed'
+
+// A link preview depends on its token, not on who's signed in, and a tab may be mid-way through setting a password
+// with it; everything else was fetched as someone.
+const fetchedAsSomeone = (query: Query) => query.queryKey[0] !== previewKey[0] || query.queryKey[1] !== previewKey[1]
+
+// Everything fetched as whoever was signed in before (birth years, shared phone numbers) goes, so the next person on a
+// shared computer never sees it, not even briefly.
+export function startSession(queryClient: QueryClient, user: User) {
+  queryClient.removeQueries({ predicate: fetchedAsSomeone })
+  queryClient.setQueryData(authKeys.me, user)
+  try {
+    // The new cookie is every tab's now; writing this fires a storage event in the others (followSessionChanges).
+    localStorage.setItem(sessionChangedKey, String(Date.now()))
+  } catch {
+    // Storage can be blocked; the other tabs then catch up on their next fetch.
+  }
+}
+
+// Another tab signed someone in, so this tab's cookie is theirs now: drop everything it fetched for the last person
+// (a reset also stops any answer still on its way) and fetch again as the new one.
+export function followSessionChanges(queryClient: QueryClient): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === sessionChangedKey) {
+      void queryClient.resetQueries({ predicate: fetchedAsSomeone })
+    }
+  }
+  window.addEventListener('storage', onStorage)
+  return () => window.removeEventListener('storage', onStorage)
 }
 
 export const me = ({ signal }: { signal?: AbortSignal } = {}) => api<User>('GET', '/auth/me', { signal })

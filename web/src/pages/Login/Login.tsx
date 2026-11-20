@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 
-import { authKeys, login } from '../../api/auth'
+import { login, startSession } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { PasswordInput } from '../../components/PasswordInput/PasswordInput'
 import { errorMessage } from '../../lib/errorMessage'
@@ -19,7 +19,7 @@ export function Login() {
     mutationFn: () => login(email, password),
     // The answer is who's signed in, so the shell needn't ask again.
     onSuccess: (user) => {
-      queryClient.setQueryData(authKeys.me, user)
+      startSession(queryClient, user)
       void navigate(from, { replace: true })
     },
   })

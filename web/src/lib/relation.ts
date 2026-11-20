@@ -39,7 +39,7 @@ const add = <T,>(map: Map<string, T[]>, key: string, value: T) => {
   }
 }
 
-// Each person's relation to the viewer ("You", "Your half-sister"), from parent links and couples by §3.4;
+// Each person's relation to the viewer ("You", "Half-sister"), from parent links and couples by §3.4;
 // someone the tree doesn't connect to the viewer has no entry.
 export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
   const gender = new Map(tree.persons.map((p) => [p.id, p.gender]))
@@ -253,7 +253,7 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
     }
     const w = word(p.id)
     if (w !== null) {
-      labels.set(p.id, `Your ${w}`)
+      labels.set(p.id, w.charAt(0).toUpperCase() + w.slice(1))
     }
   }
   return labels

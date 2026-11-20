@@ -4,7 +4,7 @@ import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { LinkPreview } from '../../api/auth'
+import { authKeys, followSessionChanges, type LinkPreview } from '../../api/auth'
 import { createQueryClient } from '../../api/queryClient'
 import { WelcomeInvite } from './WelcomeInvite'
 
@@ -30,6 +30,7 @@ function renderPage(answers: Answers, url = '/auth/set-password#t=link-token') {
     }
   })
   vi.stubGlobal('fetch', fetch)
+  const client = createQueryClient()
   const router = createMemoryRouter(
     [
       { path: '/auth/set-password', element: <WelcomeInvite /> },
@@ -39,11 +40,11 @@ function renderPage(answers: Answers, url = '/auth/set-password#t=link-token') {
     { initialEntries: [url] },
   )
   render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
-  return { fetch, router }
+  return { fetch, router, client }
 }
 
 function choose(password: string) {
@@ -168,8 +169,10 @@ describe('WelcomeInvite', () => {
     { name: 'an invitee goes on to setup', preview: invite, button: 'Set password and continue', next: 'Setup page' },
     { name: 'a reset goes home', preview: reset, button: 'Set password and sign in', next: 'Home page' },
   ])('$name', async ({ preview, button, next }) => {
-    const { fetch } = renderPage({ preview: Response.json(preview) })
+    const { fetch, client } = renderPage({ preview: Response.json(preview) })
     await screen.findByLabelText('New password')
+    // Left by whoever used this browser before.
+    client.setQueryData(['persons', 'nadege'], { cached: true })
 
     choose('mango tree on rue sainte-anne')
     fireEvent.click(screen.getByRole('button', { name: button }))
@@ -180,6 +183,8 @@ describe('WelcomeInvite', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: 'link-token', password: 'mango tree on rue sainte-anne' }),
     })
+    expect(client.getQueryData(['persons', 'nadege'])).toBeUndefined()
+    expect(client.getQueryData(authKeys.me)).toEqual(user)
   })
 
   it('explains a link that stopped working while the page was open', async () => {
@@ -191,5 +196,22 @@ describe('WelcomeInvite', () => {
 
     expect(await screen.findByRole('heading', { name: 'This link doesn’t work anymore' })).toHaveFocus()
     expect(document.title).toBe('This link doesn’t work anymore — Pluviose-Monestime Family Hub')
+  })
+
+  it('keeps a half-typed password when someone signs in from another tab', async () => {
+    const { fetch, client } = renderPage({})
+    const stop = followSessionChanges(client)
+    await screen.findByLabelText('New password')
+    choose('mango tree on rue sainte-anne')
+
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: 'fh-session-changed', newValue: '1' }))
+    })
+
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    expect(screen.getByLabelText('New password')).toHaveValue('mango tree on rue sainte-anne')
+    // The preview endpoint is rate-limited, so the link isn't checked a second time either.
+    expect(fetch.mock.calls.filter(([path]) => path === '/api/auth/invite/preview')).toHaveLength(1)
+    stop()
   })
 })
