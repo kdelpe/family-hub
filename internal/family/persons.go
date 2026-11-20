@@ -201,14 +201,18 @@ func (s *Service) CreatePerson(ctx context.Context, createdBy uuid.UUID, in Pers
 	return person, nil
 }
 
-// UpdatePerson lets an admin change anything, and a member only their own linked person's bio (§4).
+// UpdatePerson lets an admin change anything, and a member only their own name, birthday and bio (§4).
 func (s *Service) UpdatePerson(ctx context.Context, viewer Viewer, id uuid.UUID, patch PersonPatch) (Person, error) {
 	if !viewer.IsAdmin {
 		if viewer.PersonID == nil || *viewer.PersonID != id {
 			return Person{}, fmt.Errorf("%w: you can change only your own profile", ErrNotYourProfile)
 		}
-		if patch != (PersonPatch{Bio: patch.Bio}) {
-			return Person{}, fmt.Errorf("%w: members can change only their bio", ErrNotYourProfile)
+		own := PersonPatch{
+			FirstName: patch.FirstName, LastName: patch.LastName,
+			BirthDate: patch.BirthDate, BirthDatePrecision: patch.BirthDatePrecision, Bio: patch.Bio,
+		}
+		if patch != own {
+			return Person{}, fmt.Errorf("%w: members can change only their name, birthday and bio", ErrNotYourProfile)
 		}
 	}
 	var person Person
@@ -402,7 +406,12 @@ func parseDate(what string, value, precision *string) (*time.Time, error) {
 	if err != nil || len(*value) != len(layout) {
 		return nil, fmt.Errorf("%w: the %s date must look like %s for precision %s", ErrInvalidPerson, what, layout, *precision)
 	}
-	if date.After(time.Now()) {
+	// A birthday gets a day of grace: a member enters their own, and it's already tomorrow in Asia.
+	latest := time.Now()
+	if what == "birth" {
+		latest = latest.AddDate(0, 0, 1)
+	}
+	if date.After(latest) {
 		return nil, fmt.Errorf("%w: the %s date is in the future", ErrInvalidPerson, what)
 	}
 	return &date, nil

@@ -265,8 +265,8 @@ func TestUpdatePerson(t *testing.T) {
 			wantStatus: http.StatusOK, wantBody: testPersonBody},
 		{name: "a member refused by the service is forbidden", member: true, body: `{"first_name":"Rose"}`,
 			wantPatch: &family.PersonPatch{FirstName: family.Opt[string]{Set: true, Value: "Rose"}},
-			updateErr: fmt.Errorf("%w: members can change only their bio", family.ErrNotYourProfile), wantStatus: http.StatusForbidden,
-			wantBody: `{"error":{"code":"forbidden","message":"not allowed: members can change only their bio"}}`},
+			updateErr: fmt.Errorf("%w: members can change only their name, birthday and bio", family.ErrNotYourProfile), wantStatus: http.StatusForbidden,
+			wantBody: `{"error":{"code":"forbidden","message":"not allowed: members can change only their name, birthday and bio"}}`},
 		{name: "only the fields sent change; null clears", body: `{"bio":"Tells the best stories.","middle_name":null}`,
 			wantPatch: &family.PersonPatch{
 				Bio:        family.Opt[*string]{Set: true, Value: new("Tells the best stories.")},
