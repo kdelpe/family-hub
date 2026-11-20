@@ -81,7 +81,18 @@ function useContactSaved(personId: string) {
 export function ContactDetails({ personId }: { personId: string }) {
   const contacts = useQuery(myContactsQuery)
   const [adding, setAdding] = useState(false)
-  const [editing, setEditing] = useState<string | null>(null)
+  // Each open editor stands alone, so opening another never closes one mid-save.
+  const [editing, setEditing] = useState<ReadonlySet<string>>(new Set())
+  const edit = (id: string, open: boolean) =>
+    setEditing((ids) => {
+      const next = new Set(ids)
+      if (open) {
+        next.add(id)
+      } else {
+        next.delete(id)
+      }
+      return next
+    })
 
   return (
     <section aria-labelledby="mp-contact" className={styles.card}>
@@ -94,10 +105,10 @@ export function ContactDetails({ personId }: { personId: string }) {
       {contacts.isPending && <p className={styles.muted}>Loading…</p>}
       {contacts.isError && <p role="alert">{errorMessage(contacts.error)}</p>}
       {(contacts.data ? [...contacts.data].sort(byType) : []).map((c) =>
-        editing === c.id ? (
-          <ContactForm key={c.id} personId={personId} contact={c} onDone={() => setEditing(null)} />
+        editing.has(c.id) ? (
+          <ContactForm key={c.id} personId={personId} contact={c} onDone={() => edit(c.id, false)} />
         ) : (
-          <ContactRow key={c.id} personId={personId} contact={c} onEdit={() => setEditing(c.id)} />
+          <ContactRow key={c.id} personId={personId} contact={c} onEdit={() => edit(c.id, true)} />
         ),
       )}
       {adding ? (
@@ -132,7 +143,14 @@ function ContactRow({ personId, contact, onEdit }: { personId: string; contact: 
           <span id={`${id}-label`} className={styles.contactLabel}>
             {contact.label ?? typeName(contact)}
           </span>
-          <button type="button" onClick={onEdit} aria-label={`Edit ${contact.label ?? typeName(contact)}`} className={styles.edit}>
+          {/* Not while the switch saves: the two answers would race to update this row. */}
+          <button
+            type="button"
+            onClick={() => !toggle.isPending && onEdit()}
+            aria-disabled={toggle.isPending || undefined}
+            aria-label={`Edit ${contact.label ?? typeName(contact)}`}
+            className={styles.edit}
+          >
             Edit
           </button>
         </span>

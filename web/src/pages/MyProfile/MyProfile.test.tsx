@@ -365,4 +365,14 @@ describe('MyProfile', () => {
     expect(screen.getByText('Enter your current password.')).toBeInTheDocument()
     expect(sent(fetch, 'POST', '/api/auth/password/change')).toBeUndefined()
   })
+
+  it('keeps one contact’s editor open when another is opened', async () => {
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Mobile' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Email' }))
+
+    expect(screen.getByRole('form', { name: 'Edit Phone' })).toBeInTheDocument()
+    expect(screen.getByRole('form', { name: 'Edit Email' })).toBeInTheDocument()
+  })
 })

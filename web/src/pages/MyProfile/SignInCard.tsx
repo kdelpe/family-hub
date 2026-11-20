@@ -2,7 +2,7 @@ import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-quer
 import { type FormEvent, useState } from 'react'
 import { useNavigate } from 'react-router'
 
-import { changePassword, endSession, logout, onSessionEnded } from '../../api/auth'
+import { changePassword, endSession, logout, onSessionEnded, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { PasswordInput } from '../../components/PasswordInput/PasswordInput'
 import { PasswordStrength } from '../../components/PasswordStrength/PasswordStrength'
@@ -93,6 +93,7 @@ function PasswordForm({ email, onDone }: { email: string; onDone: (changed: bool
   const save = useMutation({
     mutationKey: signInKey,
     mutationFn: () => changePassword(current, next),
+    onMutate: sessionGeneration,
     onSuccess: () => onDone(true),
     onError: onSessionEnded(queryClient),
   })

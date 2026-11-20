@@ -2,7 +2,8 @@ import { QueryClient } from '@tanstack/react-query'
 import { waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { authKeys, endSession, followSessionChanges, sameSession, sessionGeneration, startSession, type User } from './auth'
+import { authKeys, endSession, followSessionChanges, onSessionEnded, sameSession, sessionGeneration, startSession, type User } from './auth'
+import { ApiError } from './client'
 
 const before: User = { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: 'maya' }
 const after: User = { id: 'u2', email: 'fritz.pluviose@example.com', role: 'member', person_id: 'fritz' }
@@ -72,5 +73,28 @@ describe('sameSession', () => {
 
     expect(sameSession(since)).toBe(false)
     expect(sameSession(sessionGeneration())).toBe(true)
+  })
+})
+
+describe('onSessionEnded', () => {
+  it('ignores a 401 from a save started in an earlier session', () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(['persons', 'fritz'], { id: 'fritz' })
+    const since = sessionGeneration()
+    endSession(queryClient)
+    queryClient.setQueryData(['persons', 'fritz'], { id: 'fritz' })
+
+    onSessionEnded(queryClient)(new ApiError(401, 'unauthorized', 'x'), undefined, since)
+
+    expect(queryClient.getQueryData(['persons', 'fritz'])).toEqual({ id: 'fritz' })
+  })
+
+  it('clears what was fetched when this session’s save gets a 401', () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(['persons', 'fritz'], { id: 'fritz' })
+
+    onSessionEnded(queryClient)(new ApiError(401, 'unauthorized', 'x'), undefined, sessionGeneration())
+
+    expect(queryClient.getQueryData(['persons', 'fritz'])).toBeUndefined()
   })
 })

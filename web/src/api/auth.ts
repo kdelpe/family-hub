@@ -58,17 +58,19 @@ function dropSessionData(queryClient: QueryClient) {
   }
 }
 
-// A save answered 401: the session ended elsewhere. Everything fetched as them goes, as at sign-out, and the
-// shell, rechecking who's signed in, sends them to sign in.
-export const onSessionEnded = (queryClient: QueryClient) => (error: Error) => {
-  if (error instanceof ApiError && error.status === 401) {
-    // Kept, then refetched: the shell is watching it, and a removed query wouldn't be fetched again.
-    const isMe = (query: Query) => query.queryKey[0] === authKeys.me[0] && query.queryKey[1] === authKeys.me[1]
+// A save answered 401: the session ended elsewhere. What was fetched as them is cleared and read again: into a
+// 401 and sign-in if it really ended, or as before if they're still signed in. A 401 from a save started in an
+// earlier session says nothing about this one, so it's ignored.
+export const onSessionEnded =
+  (queryClient: QueryClient) =>
+  (error: Error, _variables: unknown, since: number | undefined) => {
+    if (!(error instanceof ApiError) || error.status !== 401 || !sameSession(since)) {
+      return
+    }
     generation++
-    queryClient.removeQueries({ predicate: (query) => fetchedAsSomeone(query) && !isMe(query) })
-    void queryClient.invalidateQueries({ queryKey: authKeys.me })
+    // A reset, not a removal: queries a page is watching are fetched again instead of left empty.
+    void queryClient.resetQueries({ predicate: fetchedAsSomeone })
   }
-}
 
 // Another tab signed someone in or out, so this tab's cookie changed: drop everything it fetched for the last person
 // (a reset also stops any answer still on its way) and fetch again, as the new one or into a 401 and sign-in.
