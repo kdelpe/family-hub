@@ -1,4 +1,4 @@
-import type { QueryClient } from '@tanstack/react-query'
+import type { Query, QueryClient } from '@tanstack/react-query'
 
 import { api } from './client'
 
@@ -17,17 +17,23 @@ export type LinkPreview = {
   from_name: string | null
 }
 
+const previewKey = ['auth', 'preview'] as const
+
 export const authKeys = {
   me: ['auth', 'me'] as const,
-  preview: (token: string) => ['auth', 'preview', token] as const,
+  preview: (token: string) => [...previewKey, token] as const,
 }
 
 const sessionChangedKey = 'fh-session-changed'
 
-// Everything else cached was fetched as whoever was signed in before (birth years, shared phone numbers), so a new
-// session keeps only the sign-in answers: the next person on a shared computer must never see it, not even briefly.
+// A link preview depends on its token, not on who's signed in, and a tab may be mid-way through setting a password
+// with it; everything else was fetched as someone.
+const fetchedAsSomeone = (query: Query) => query.queryKey[0] !== previewKey[0] || query.queryKey[1] !== previewKey[1]
+
+// Everything fetched as whoever was signed in before (birth years, shared phone numbers) goes, so the next person on a
+// shared computer never sees it, not even briefly.
 export function startSession(queryClient: QueryClient, user: User) {
-  queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== authKeys.me[0] })
+  queryClient.removeQueries({ predicate: fetchedAsSomeone })
   queryClient.setQueryData(authKeys.me, user)
   try {
     // The new cookie is every tab's now; writing this fires a storage event in the others (followSessionChanges).
@@ -42,7 +48,7 @@ export function startSession(queryClient: QueryClient, user: User) {
 export function followSessionChanges(queryClient: QueryClient): () => void {
   const onStorage = (event: StorageEvent) => {
     if (event.key === sessionChangedKey) {
-      void queryClient.resetQueries()
+      void queryClient.resetQueries({ predicate: fetchedAsSomeone })
     }
   }
   window.addEventListener('storage', onStorage)

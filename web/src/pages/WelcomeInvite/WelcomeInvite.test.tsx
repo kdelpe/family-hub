@@ -4,7 +4,7 @@ import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { authKeys, type LinkPreview } from '../../api/auth'
+import { authKeys, followSessionChanges, type LinkPreview } from '../../api/auth'
 import { createQueryClient } from '../../api/queryClient'
 import { WelcomeInvite } from './WelcomeInvite'
 
@@ -196,5 +196,22 @@ describe('WelcomeInvite', () => {
 
     expect(await screen.findByRole('heading', { name: 'This link doesn’t work anymore' })).toHaveFocus()
     expect(document.title).toBe('This link doesn’t work anymore — Pluviose-Monestime Family Hub')
+  })
+
+  it('keeps a half-typed password when someone signs in from another tab', async () => {
+    const { fetch, client } = renderPage({})
+    const stop = followSessionChanges(client)
+    await screen.findByLabelText('New password')
+    choose('mango tree on rue sainte-anne')
+
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: 'fh-session-changed', newValue: '1' }))
+    })
+
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    expect(screen.getByLabelText('New password')).toHaveValue('mango tree on rue sainte-anne')
+    // The preview endpoint is rate-limited, so the link isn't checked a second time either.
+    expect(fetch.mock.calls.filter(([path]) => path === '/api/auth/invite/preview')).toHaveLength(1)
+    stop()
   })
 })

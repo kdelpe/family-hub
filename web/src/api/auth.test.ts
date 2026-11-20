@@ -33,6 +33,7 @@ it('makes another tab drop what it fetched for the last person, even an answer s
   const stop = followSessionChanges(otherTab)
   otherTab.setQueryData(authKeys.me, before)
   otherTab.setQueryData(['contacts', 'nadege'], [{ value: '+1 718 555 0123' }])
+  otherTab.setQueryData(authKeys.preview('link-token'), { purpose: 'invite' })
   let answer: (value: unknown) => void = () => {}
   void otherTab.prefetchQuery({ queryKey: ['persons', 'nadege'], queryFn: () => new Promise((resolve) => (answer = resolve)) })
 
@@ -45,6 +46,8 @@ it('makes another tab drop what it fetched for the last person, even an answer s
   await new Promise((resolve) => setTimeout(resolve, 0))
   expect(otherTab.getQueryData(['persons', 'nadege'])).toBeUndefined()
   expect(otherTab.getQueryData(authKeys.me)).toBeUndefined()
+  // A link preview isn't anyone's data, and that tab may be halfway through setting a password with it.
+  expect(otherTab.getQueryData(authKeys.preview('link-token'))).toEqual({ purpose: 'invite' })
   stop()
 })
 
