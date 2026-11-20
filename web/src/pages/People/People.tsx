@@ -5,7 +5,7 @@ import { Link } from 'react-router'
 import { familyKeys, type FamilySummary, getFamilySummary } from '../../api/family'
 import { getTree, type TreePerson, treeKeys } from '../../api/tree'
 import { errorMessage } from '../../lib/errorMessage'
-import { familyLines, sideLabel } from '../../lib/familySides'
+import { familyLines, sideLabel, sideTags } from '../../lib/familySides'
 import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, initials, nameMatches } from '../../lib/names'
 import { relationsTo } from '../../lib/relation'
@@ -22,12 +22,7 @@ const filters: { id: Filter; label: string }[] = [
   { id: 'second', label: sideLabel('second') },
 ]
 
-const sides = {
-  first: { label: sideLabel('first'), band: styles.bandFirst },
-  second: { label: sideLabel('second'), band: styles.bandSecond },
-  both: { label: 'Both sides', band: styles.bandBoth },
-  married_in: { label: 'Married in', band: styles.bandMarriedIn },
-}
+const bands = { first: styles.bandFirst, second: styles.bandSecond, both: styles.bandBoth, married_in: styles.bandMarriedIn }
 
 // Someone on both sides belongs to either side's filter.
 const keep: Record<Filter, (p: TreePerson) => boolean> = {
@@ -53,9 +48,15 @@ export function People() {
     () => (tree.data && viewerId ? relationsTo(tree.data, viewerId) : new Map<string, string>()),
     [tree.data, viewerId],
   )
-  const people = (tree.data?.persons ?? [])
-    .filter((p) => keep[filter](p) && nameMatches(fullName(p), query))
-    .sort((a, b) => fullName(a).localeCompare(fullName(b)))
+  const people = useMemo(
+    () =>
+      (tree.data?.persons ?? [])
+        .map((p) => ({ p, name: fullName(p) }))
+        .filter(({ p, name }) => keep[filter](p) && nameMatches(name, query))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(({ p }) => p),
+    [tree.data, filter, query],
+  )
 
   return (
     <main className={styles.page}>
@@ -92,7 +93,7 @@ export function People() {
         ))}
         {/* The portraits' fade runs on; with reduced motion there's none to pause (design-notes §6.4). */}
         {!reducedMotion && (
-          <button type="button" aria-pressed={paused} className={styles.pause} onClick={() => setPaused(!paused)}>
+          <button type="button" className={styles.pause} onClick={() => setPaused(!paused)}>
             {paused ? 'Play motion' : 'Pause motion'}
           </button>
         )}
@@ -145,7 +146,7 @@ function fade(name: string) {
 }
 
 function Card({ person, relation, you }: { person: TreePerson; relation: string | null; you: boolean }) {
-  const side = person.side ? sides[person.side] : null
+  const side = person.side ? { label: sideTags[person.side], band: bands[person.side] } : null
   const { tone, delay } = fade(fullName(person))
   return (
     <Link to={`/people/${person.id}`} className={you ? `${styles.card} ${styles.cardYou}` : styles.card}>

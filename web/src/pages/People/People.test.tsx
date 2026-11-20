@@ -111,10 +111,10 @@ describe('People', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Pause motion' }))
 
-    expect(screen.getByRole('button', { name: 'Play motion' })).toHaveAttribute('aria-pressed', 'true')
     expect(sessionStorage.getItem('fh-motion-paused')).toBe('1')
     fireEvent.click(screen.getByRole('button', { name: 'Play motion' }))
-    expect(screen.getByRole('button', { name: 'Pause motion' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Pause motion' })).toBeInTheDocument()
+    expect(sessionStorage.getItem('fh-motion-paused')).toBe('0')
   })
 
   it('offers no pause with reduced motion', async () => {

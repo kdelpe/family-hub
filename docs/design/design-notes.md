@@ -287,7 +287,7 @@ Generated once (seeded, deterministic) and embedded as inline SVG:
 - No looping motion anywhere else.
 
 ### 6.4 Pausing the motion
-The swaying, the leaf colour cycle, the Home photo/caption cycle and the People portrait fade run longer than 5 seconds beside other content, so each tree and the People grid get a **Pause motion / Play motion** text button (a real `<button>` with `aria-pressed`, 13px `--muted` under the tree or its caption, and on People at the end of the filter row, 44px tall hit area). Pausing freezes everything as it is (portraits stay on their initials) and stops the photo cycle; it's one choice for the whole site, remembered for the session. With reduced motion there is nothing to pause, so the button is hidden. (WCAG 2.2.2.) **Exception, owner's choice (2026-11-14):** the sign-in tree on the five pre-login pages has no pause button, as in their mockups.
+The swaying, the leaf colour cycle, the Home photo/caption cycle and the People portrait fade run longer than 5 seconds beside other content, so each tree and the People grid get a **Pause motion / Play motion** text button (a real `<button>` whose text says what it will do, so no `aria-pressed`, 13px `--muted` under the tree or its caption, and on People at the end of the filter row, 44px tall hit area). Pausing freezes everything as it is (portraits stay on their initials) and stops the photo cycle; it's one choice for the whole site, remembered for the session. With reduced motion there is nothing to pause, so the button is hidden. (WCAG 2.2.2.) **Exception, owner's choice (2026-11-14):** the sign-in tree on the five pre-login pages has no pause button, as in their mockups.
 
 ---
 
