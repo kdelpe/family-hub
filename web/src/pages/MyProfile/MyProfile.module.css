@@ -203,7 +203,6 @@ form.who {
 }
 
 .input:focus-visible,
-.switch:focus-visible,
 .edit:focus-visible,
 .signOut:focus-visible,
 .remove:focus-visible {
@@ -249,17 +248,12 @@ form.who {
   color: var(--text);
 }
 
-.formError,
-.rowError {
+.formError {
   margin: 0;
   padding: 10px 14px;
   border-radius: 12px;
   background: var(--warning-tint);
   font-size: 15px;
-}
-
-.rowError {
-  flex-basis: 100%;
 }
 
 .fieldError {
@@ -342,57 +336,6 @@ form.who {
   min-height: 44px;
   margin-left: auto;
   padding: 0 6px;
-}
-
-.switch {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 44px;
-  padding: 0 6px;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.switch[aria-disabled='true'] {
-  cursor: progress;
-}
-
-.track {
-  width: 52px;
-  height: 30px;
-  flex: none;
-  border-radius: 15px;
-  background: var(--switch-off);
-  position: relative;
-}
-
-.knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--on-accent);
-  transition: left 0.15s ease;
-}
-
-.switch[aria-checked='true'] .track {
-  background: var(--accent);
-}
-
-.switch[aria-checked='true'] .knob {
-  left: 25px;
-}
-
-.status {
-  min-width: 150px;
-  font-weight: 600;
-  text-align: left;
 }
 
 .contactForm {
@@ -629,11 +572,5 @@ form.who {
 
   .card {
     padding: 18px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .knob {
-    transition: none;
   }
 }

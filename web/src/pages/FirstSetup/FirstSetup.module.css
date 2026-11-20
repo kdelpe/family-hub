@@ -123,53 +123,6 @@
   color: var(--muted);
 }
 
-.switch {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 0 4px;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.track {
-  width: 52px;
-  height: 30px;
-  flex: none;
-  border-radius: 15px;
-  background: var(--switch-off);
-  position: relative;
-}
-
-.knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--on-accent);
-}
-
-.switch[aria-checked='true'] .track {
-  background: var(--accent);
-}
-
-.switch[aria-checked='true'] .knob {
-  left: 25px;
-}
-
-.status {
-  min-width: 136px;
-  font-size: 15px;
-  font-weight: 600;
-  text-align: left;
-}
-
 .tree {
   padding: 20px;
   border-radius: 16px;
@@ -188,6 +141,8 @@
 
 .people {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
 }
 
@@ -240,6 +195,12 @@
 
 .next {
   flex: 1;
+  /* Room for "Go to my home page" to take two lines on the narrowest phones. */
+  height: auto;
+  min-height: 52px;
+  padding: 6px 16px;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .skip {
@@ -254,7 +215,6 @@
 }
 
 .photoButton:focus-visible,
-.switch:focus-visible,
 .back:focus-visible,
 .skip:focus-visible {
   outline: 2px solid var(--accent);

@@ -1,86 +1,23 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsMutating, useMutation, useQuery } from '@tanstack/react-query'
 import { type FormEvent, useId, useState } from 'react'
 
 import {
   addMyContact,
-  contactKeys,
   type ContactMethod,
-  directoryKeys,
-  kindOf,
   myContactsQuery,
   type NewContact,
   NotYoursError,
-  platformLabel,
   RelinkedError,
   removeMyContact,
   updateMyContact,
 } from '../../api/contacts'
-import { onSessionEnded, sameSession, sessionGeneration } from '../../api/auth'
+import { sameSession, sessionGeneration } from '../../api/auth'
+import { ContactSwitch, contactSwitchKey } from '../../components/ContactSwitch/ContactSwitch'
 import { errorMessage, refusedMessage } from '../../lib/errorMessage'
+import { byType, contactTypes as types, typeName, typeOf } from '../../lib/contactTypes'
 import { formatPhone } from '../../lib/phone'
+import { useContactSaved } from '../../lib/useContactSaved'
 import styles from './MyProfile.module.css'
-
-type ContactType = {
-  id: string
-  name: string
-  kind: ContactMethod['kind']
-  platform: string | null
-  hint: string
-  // Kind "other" rows come only from an admin; members add an "Other account" instead.
-  addable?: false
-}
-
-const social = (id: string, name = platformLabel(id)): ContactType => ({
-  id,
-  name,
-  kind: 'social',
-  platform: id,
-  hint: '@handle or a link to your profile',
-})
-
-const types: ContactType[] = [
-  { id: 'phone', name: 'Phone', kind: 'phone', platform: null, hint: '555-010-0000' },
-  { id: 'email', name: 'Email', kind: 'email', platform: null, hint: 'name@example.com' },
-  { id: 'address', name: 'Address', kind: 'address', platform: null, hint: '' },
-  { ...social('whatsapp'), hint: '555-010-0000' },
-  social('instagram'),
-  social('facebook'),
-  social('tiktok'),
-  social('linkedin'),
-  social('x'),
-  social('youtube'),
-  { ...social('other', 'Other account'), hint: 'Your handle, or a link' },
-  { id: 'other-kind', name: 'Other', kind: 'other', platform: null, hint: '', addable: false },
-]
-
-const typeOf = (c: Pick<ContactMethod, 'kind' | 'platform'>) =>
-  types.find((t) => t.kind === c.kind && t.platform === c.platform)
-
-// The mockup's order, whatever order they were added in.
-const rank = (c: ContactMethod) => {
-  const type = typeOf(c)
-  return type ? types.indexOf(type) : types.length
-}
-const byType = (a: ContactMethod, b: ContactMethod) => rank(a) - rank(b)
-
-const typeName = (c: ContactMethod) =>
-  c.kind === 'social' ? platformLabel(c.platform) : (typeOf(c)?.name ?? 'Other')
-
-const askedFor = (c: ContactMethod) => kindOf(c) !== null
-
-function useContactSaved(personId: string) {
-  const queryClient = useQueryClient()
-  return {
-    saved: (update: (rows: ContactMethod[]) => ContactMethod[]) => {
-      queryClient.setQueryData<ContactMethod[]>(contactKeys.mine(personId), (rows) => rows && update(rows))
-      // Your own rows too: a refresh that read them before this save mustn't land after it.
-      for (const queryKey of [contactKeys.mine(personId), contactKeys.of(personId), directoryKeys.all]) {
-        void queryClient.invalidateQueries({ queryKey })
-      }
-    },
-    onError: onSessionEnded(queryClient),
-  }
-}
 
 export function ContactDetails({ personId }: { personId: string }) {
   const contacts = useQuery(myContactsQuery(personId))
@@ -130,15 +67,8 @@ export function ContactDetails({ personId }: { personId: string }) {
 
 function ContactRow({ personId, contact, onEdit }: { personId: string; contact: ContactMethod; onEdit: () => void }) {
   const id = useId()
-  const { saved, onError } = useContactSaved(personId)
-  const on = contact.visibility !== 'hidden'
-  const status = { hidden: 'Only me', on_request: 'Family can ask', family: 'Visible to family' }[contact.visibility]
-  const toggle = useMutation({
-    mutationFn: () => updateMyContact(contact.id, { visibility: on ? 'hidden' : askedFor(contact) ? 'on_request' : 'family' }),
-    onMutate: sessionGeneration,
-    onSuccess: (row, _, since) => sameSession(since) && saved((rows) => rows.map((r) => (r.id === row.id ? row : r))),
-    onError,
-  })
+  // Not while the switch saves: the two answers would race to update this row.
+  const switching = useIsMutating({ mutationKey: contactSwitchKey(contact.id) }) > 0
 
   return (
     <div className={styles.contact}>
@@ -147,11 +77,10 @@ function ContactRow({ personId, contact, onEdit }: { personId: string; contact: 
           <span id={`${id}-label`} className={styles.contactLabel}>
             {contact.label ?? typeName(contact)}
           </span>
-          {/* Not while the switch saves: the two answers would race to update this row. */}
           <button
             type="button"
-            onClick={() => !toggle.isPending && onEdit()}
-            aria-disabled={toggle.isPending || undefined}
+            onClick={() => !switching && onEdit()}
+            aria-disabled={switching || undefined}
             aria-label={`Edit ${contact.label ?? typeName(contact)}`}
             className={styles.edit}
           >
@@ -160,28 +89,7 @@ function ContactRow({ personId, contact, onEdit }: { personId: string; contact: 
         </span>
         <span className={styles.contactValue}>{contact.value}</span>
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        aria-labelledby={`${id}-label`}
-        aria-describedby={`${id}-status`}
-        aria-disabled={toggle.isPending || undefined}
-        onClick={() => !toggle.isPending && toggle.mutate()}
-        className={styles.switch}
-      >
-        <span aria-hidden="true" className={styles.track}>
-          <span className={styles.knob} />
-        </span>
-        <span id={`${id}-status`} className={styles.status}>
-          {status}
-        </span>
-      </button>
-      {toggle.isError && (
-        <p role="alert" className={styles.rowError}>
-          {refusedMessage(toggle.error)}
-        </p>
-      )}
+      <ContactSwitch personId={personId} contact={contact} labelledBy={`${id}-label`} />
     </div>
   )
 }
