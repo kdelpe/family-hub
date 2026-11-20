@@ -43,8 +43,8 @@ const tree = {
     { id: 'p-joseph', first_name: 'Joseph', last_name: 'Pluviose', gender: 'male', is_deceased: true },
   ],
   relationships: [
-    { id: 'r1', type: 'parent_child', parent_id: 'p-fritz', child_id: 'p-kervens' },
-    { id: 'r2', type: 'parent_child', parent_id: 'p-fabienne', child_id: 'p-kervens' },
+    { id: 'r1', type: 'parent_child', subtype: 'biological', parent_id: 'p-fritz', child_id: 'p-kervens' },
+    { id: 'r2', type: 'parent_child', subtype: 'biological', parent_id: 'p-fabienne', child_id: 'p-kervens' },
   ],
 }
 
@@ -67,10 +67,12 @@ const listAnswers = {
   'GET /api/tree': { status: 200, body: tree },
 }
 
-function renderPage(role: 'admin' | 'member' = 'admin') {
+function renderPage(role: 'admin' | 'member' = 'admin', { personLoaded = true } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   client.setQueryData(authKeys.me, { id: 'u-maya', email: 'maya.pluviose@example.com', role, person_id: 'p-maya' })
-  client.setQueryData(personKeys.one('p-maya'), { id: 'p-maya', first_name: 'Maya', last_name: 'Pluviose' })
+  if (personLoaded) {
+    client.setQueryData(personKeys.one('p-maya'), { id: 'p-maya', first_name: 'Maya', last_name: 'Pluviose' })
+  }
   const router = createMemoryRouter(
     [
       { path: '/admin/members', element: <ManageAccess /> },
@@ -160,14 +162,16 @@ describe('ManageAccess', () => {
     expect(await screen.findByText(want)).toBeInTheDocument()
   })
 
-  it('rereads the list after a resend, so the new expiry shows', async () => {
-    const fetch = stubApi({ ...listAnswers, 'POST /api/admin/users/u-sabine/send-reset': { status: 204 } })
+  it.each([
+    { name: 'sent', answer: { status: 204 } },
+    { name: 'mail failed', answer: { status: 502, body: { error: { code: 'mail_failed', message: 'x' } } } },
+  ])('rereads the list after a resend ($name), so the new expiry shows', async ({ answer }) => {
+    const fetch = stubApi({ ...listAnswers, 'POST /api/admin/users/u-sabine/send-reset': answer })
     renderPage()
     fireEvent.click(await screen.findByRole('tab', { name: 'Everyone (4)' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Resend invitation to Sabine Pluviose' }))
 
-    await screen.findByText('Email sent')
     await vi.waitFor(() =>
       expect(fetch.mock.calls.filter(([url]) => url === '/api/admin/users?limit=100')).toHaveLength(2),
     )
@@ -214,6 +218,39 @@ describe('ManageAccess', () => {
       body: JSON.stringify({ email: 'kervens.p@example.com', role: 'admin', person_id: 'p-kervens', from_person_id: 'p-nadege' }),
       signal: undefined,
     })
+  })
+
+  it('still sends in your name when your own person couldn’t be read', async () => {
+    stubApi(listAnswers)
+    renderPage('admin', { personLoaded: false })
+    await screen.findByRole('tab', { name: 'Everyone (4)' })
+
+    expect(screen.getByRole('button', { name: /Maya Pluviose.*You/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('complementary', { name: 'Invitation preview' })).toHaveTextContent(
+      'Subject: Maya invited you to the family hub',
+    )
+  })
+
+  it('keeps an invite that’s still sending across a tab switch', async () => {
+    let answer!: (r: Response) => void
+    const fetch = stubApi(listAnswers)
+    const listed = fetch.getMockImplementation()!
+    fetch.mockImplementation((url: string, init?: RequestInit) =>
+      url === '/api/admin/users' && init?.method === 'POST' ? new Promise<Response>((r) => (answer = r)) : listed(url, init),
+    )
+    renderPage()
+    await screen.findByRole('tab', { name: 'Everyone (4)' })
+    type('Find a person in the tree', 'kerv')
+    fireEvent.click(await screen.findByRole('button', { name: /Kervens Pluviose/ }))
+    type('Email', 'kervens.p@example.com')
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Everyone (4)' }))
+    await vi.waitFor(() => expect(answer).toBeDefined())
+    answer(new Response(JSON.stringify({ id: 'u-kervens' }), { status: 201 }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Invite someone' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Invitation sent to Kervens, from Maya Pluviose')
   })
 
   it('asks for the person before sending', async () => {

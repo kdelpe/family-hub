@@ -22,7 +22,9 @@ const roles: { id: Role; label: string; hint: string }[] = [
 const maxMatches = 6
 
 export function InviteForm({ members }: { members: UseQueryResult<Member[]> }) {
-  const { person: me } = useSignedIn()
+  const { user, person } = useSignedIn()
+  // The members list names you too, for when your own person couldn't be read.
+  const me = person ?? members.data?.find((m) => m.id === user?.id)?.person ?? undefined
   const queryClient = useQueryClient()
   const tree = useQuery({ queryKey: treeKeys.all, queryFn: ({ signal }) => getTree({ signal }) })
   const [query, setQuery] = useState('')
@@ -97,7 +99,9 @@ export function InviteForm({ members }: { members: UseQueryResult<Member[]> }) {
             onChange={(event) => {
               setQuery(event.target.value)
               setPersonId(null)
-              send.reset()
+              if (!send.isPending) {
+                send.reset()
+              }
             }}
             className={styles.input}
           />

@@ -61,10 +61,10 @@ export function Everyone({ members, now = new Date() }: { members: UseQueryResul
 
 function Row({ member, now }: { member: Member; now: Date }) {
   const queryClient = useQueryClient()
-  // Reread after, so a resent invite's status shows its new expiry.
+  // Reread after, even on a failed mail: the server renews the invite before sending, so the expiry moves either way.
   const send = useMutation({
     mutationFn: () => sendLink(member.id),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: adminKeys.members }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: adminKeys.members }),
   })
   const action = member.status === 'active' ? 'Send password reset' : member.status === 'invited' ? 'Resend invitation' : null
   const name = member.person ? fullName(member.person) : 'Not linked to anyone yet'

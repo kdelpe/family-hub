@@ -9,7 +9,7 @@ export type TreePerson = {
 }
 
 export type TreeRelationship =
-  | { id: string; type: 'parent_child'; parent_id: string; child_id: string }
+  | { id: string; type: 'parent_child'; subtype: 'biological' | 'adoptive' | 'foster'; parent_id: string; child_id: string }
   | { id: string; type: 'couple'; ended: boolean; person_ids: [string, string] }
 
 export type Tree = { persons: TreePerson[]; relationships: TreeRelationship[] }

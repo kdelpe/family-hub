@@ -45,7 +45,7 @@ export function ManageAccess() {
             role="tab"
             id={`ma-tab-${id}`}
             aria-selected={tab === id}
-            aria-controls={tab === id ? `ma-panel-${id}` : undefined}
+            aria-controls={`ma-panel-${id}`}
             tabIndex={tab === id ? 0 : -1}
             onKeyDown={(event) => {
               const next = { ArrowRight: 1, ArrowLeft: -1 }[event.key]
@@ -63,8 +63,12 @@ export function ManageAccess() {
         ))}
       </div>
 
-      <div role="tabpanel" id={`ma-panel-${tab}`} aria-labelledby={`ma-tab-${tab}`}>
-        {tab === 'invite' ? <InviteForm members={members} /> : <Everyone members={members} />}
+      {/* Both stay mounted, so an invite or resend still sending isn't lost by switching tabs. */}
+      <div role="tabpanel" id="ma-panel-invite" aria-labelledby="ma-tab-invite" hidden={tab !== 'invite'}>
+        <InviteForm members={members} />
+      </div>
+      <div role="tabpanel" id="ma-panel-everyone" aria-labelledby="ma-tab-everyone" hidden={tab !== 'everyone'}>
+        <Everyone members={members} />
       </div>
     </main>
   )
