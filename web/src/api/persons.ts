@@ -1,5 +1,6 @@
 import { api } from './client'
 
+// The fields the pages use so far; the API also sends middle_name, side and gender (architecture §4).
 // A birth date masked by the server (§5.2): "1960-11-19", "1960-11", "1960", or "--11-19" / "--11" without the year.
 export type Person = {
   id: string

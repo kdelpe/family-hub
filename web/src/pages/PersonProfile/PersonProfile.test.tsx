@@ -1,12 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { authKeys } from '../../api/auth'
-import type { Contact } from '../../api/contacts'
-import type { Person } from '../../api/persons'
+import { type Contact, contactKeys } from '../../api/contacts'
+import { type Person, personKeys } from '../../api/persons'
 import type { Tree, TreePerson } from '../../api/tree'
 import { PersonProfile } from './PersonProfile'
 
@@ -70,7 +70,13 @@ function renderPage({
   role = 'member',
   contacts = [{ kind: 'phone', requestable: true, my_request_status: 'none' }],
   answers = {},
-}: { role?: 'member' | 'admin'; contacts?: Contact[]; answers?: Record<string, Answer> } = {}) {
+  cached = {},
+}: {
+  role?: 'member' | 'admin'
+  contacts?: Contact[]
+  answers?: Record<string, Answer>
+  cached?: Record<string, { person: Person; contacts: Contact[] }>
+} = {}) {
   const all: Record<string, Answer> = {
     'GET /api/persons/nadege': { status: 200, body: nadege },
     'GET /api/tree': { status: 200, body: tree },
@@ -87,6 +93,10 @@ function renderPage({
   vi.stubGlobal('fetch', fetch)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   client.setQueryData(authKeys.me, { id: 'u', email: 'maya.pluviose@example.com', role, person_id: 'maya' })
+  for (const [id, seen] of Object.entries(cached)) {
+    client.setQueryData(personKeys.one(id), seen.person)
+    client.setQueryData(contactKeys.of(id), seen.contacts)
+  }
   const router = createMemoryRouter([{ path: '/people/:id', element: <PersonProfile /> }], {
     initialEntries: ['/people/nadege'],
   })
@@ -136,6 +146,47 @@ describe('PersonProfile', () => {
     )
   })
 
+  it('starts fresh on the next profile after asking on this one', async () => {
+    const phone: Contact[] = [{ kind: 'phone', requestable: true, my_request_status: 'none' }]
+    renderPage({
+      // Seen before, so the next profile's buttons render at once instead of after a load.
+      cached: { jeanrobert: { person: full('jeanrobert'), contacts: phone } },
+      answers: {
+        'POST /api/persons/nadege/contact-requests': { status: 200, body: { kind: 'phone', my_request_status: 'requested' } },
+        'GET /api/persons/jeanrobert': { status: 200, body: full('jeanrobert') },
+        'GET /api/persons/jeanrobert/contacts': { status: 200, body: { contacts: phone } },
+      },
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Request phone number' }))
+    await screen.findByText('✓ Phone number requested')
+    fireEvent.click(screen.getByRole('link', { name: /Jean-Robert Pluviose/ }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Jean-Robert Pluviose' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Request phone number' })).toBeInTheDocument()
+    expect(screen.queryByText('✓ Phone number requested')).not.toBeInTheDocument()
+  })
+
+  it('drops the button when the number was already shared', async () => {
+    renderPage({
+      answers: { 'POST /api/persons/nadege/contact-requests': { status: 200, body: { kind: 'phone', my_request_status: 'shared' } } },
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Request phone number' }))
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Request phone number' })).not.toBeInTheDocument())
+    expect(screen.queryByText('✓ Phone number requested')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    { name: 'the tree', key: 'GET /api/tree' },
+    { name: 'the contacts', key: 'GET /api/persons/nadege/contacts' },
+  ])('says when $name can’t load', async ({ key }) => {
+    renderPage({ answers: { [key]: { status: 500, body: { error: { code: 'internal', message: 'x' } } } } })
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+  })
+
   it('says why a login linked to nobody can’t ask', async () => {
     renderPage({
       answers: { 'POST /api/persons/nadege/contact-requests': { status: 403, body: { error: { code: 'forbidden', message: 'x' } } } },
@@ -167,6 +218,7 @@ describe('PersonProfile', () => {
     renderPage({ answers: { 'GET /api/persons/nadege': { status: 404, body: { error: { code: 'not_found', message: 'x' } } } } })
 
     expect(await screen.findByText(/We couldn’t find that person/)).toBeInTheDocument()
+    expect(document.title).toBe('Not found — Pluviose-Monestime Family Hub')
     expect(screen.getByRole('link', { name: 'See everyone in People' })).toHaveAttribute('href', '/people')
   })
 })

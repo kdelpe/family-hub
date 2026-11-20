@@ -25,6 +25,8 @@ const tree: Tree = {
     parent('paul', 'lise'),
     parent('maya', 'naika'),
     parent('nadege', 'lucie', 'foster'),
+    parent('jeanrobert', 'lucie'),
+    { id: 'c3', type: 'couple', subtype: 'married', ended: true, person_ids: ['nadege', 'jeanrobert'] },
   ],
 }
 
@@ -36,7 +38,7 @@ it('groups parents, partners, children, step-children and grandchildren', () => 
       { id: 'paul', married: false, ended: true },
     ],
     children: ['maya'],
-    // Only a current partner's children, and never foster ones.
+    // Only a current partner's children, never Nadège's own or foster ones; the earlier split doesn't list him twice.
     stepChildren: [{ id: 'sabine', via: 'jeanrobert' }],
     grandchildren: ['naika'],
   })

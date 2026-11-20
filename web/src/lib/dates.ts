@@ -13,7 +13,7 @@ export function birthday(masked: string | null, style: 'long' | 'short' = 'long'
   return m[2] ? `${name} ${Number(m[2])}` : name
 }
 
-const year = (date: string | null, precision: Person['birth_date_precision']) => {
+export const year = (date: string | null, precision: Person['birth_date_precision']) => {
   const y = date?.match(/^\d{4}/)?.[0]
   return y ? `${precision === 'circa' ? 'c. ' : ''}${y}` : null
 }

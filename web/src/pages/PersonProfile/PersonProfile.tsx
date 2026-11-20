@@ -3,10 +3,10 @@ import { useMemo } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { ApiError } from '../../api/client'
-import { askFor, type Contact, contactKeys, getContacts, isRequestable, type RequestKind } from '../../api/contacts'
+import { askFor, type Contact, contactKeys, type ContactMethod, getContacts, isRequestable, type RequestKind } from '../../api/contacts'
 import { getPerson, listPersons, type Person, personKeys } from '../../api/persons'
 import { getTree, type Tree, treeKeys } from '../../api/tree'
-import { birthday, lifespan } from '../../lib/dates'
+import { birthday, lifespan, year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
 import { familyGroups } from '../../lib/familyGroups'
 import { fullName, initials } from '../../lib/names'
@@ -36,11 +36,12 @@ export function PersonProfile() {
     [tree.data, viewerId],
   )
 
+  const notFound = person.error instanceof ApiError && person.error.status === 404
   if (person.error) {
     return (
       <main className={styles.page}>
-        <title>Not found — Pluviose-Monestime Family Hub</title>
-        {person.error instanceof ApiError && person.error.status === 404 ? (
+        <title>{`${notFound ? 'Not found' : 'Profile'} — Pluviose-Monestime Family Hub`}</title>
+        {notFound ? (
           <p>
             We couldn’t find that person. <Link to="/people">See everyone in People</Link>
           </p>
@@ -86,6 +87,8 @@ export function PersonProfile() {
             </Link>
             {contacts.data && (
               <Reach
+                // A fresh button per person, so an ask on one profile doesn't show on the next.
+                key={p.id}
                 personId={p.id}
                 contacts={contacts.data}
                 // Admins and the person themself get every value; only what was shared with you shows here.
@@ -93,9 +96,11 @@ export function PersonProfile() {
               />
             )}
           </div>
+          {contacts.error && <p role="alert">{errorMessage(contacts.error)}</p>}
         </div>
       </section>
 
+      {tree.error && <p role="alert">{errorMessage(tree.error)}</p>}
       {tree.data && <Family tree={tree.data} person={p} relations={relations} everyone={everyone.data} />}
     </main>
   )
@@ -103,7 +108,9 @@ export function PersonProfile() {
 
 // The dashed request buttons, and any phone, WhatsApp or address shared with you (never asked-for values).
 function Reach({ personId, contacts, showShared }: { personId: string; contacts: Contact[]; showShared: boolean }) {
-  const shared = showShared ? contacts.filter((c) => !isRequestable(c) && c.visibility === 'on_request') : []
+  const shared = showShared
+    ? contacts.filter((c): c is ContactMethod => !isRequestable(c) && c.visibility === 'on_request')
+    : []
   return (
     <>
       {contacts
@@ -112,14 +119,11 @@ function Reach({ personId, contacts, showShared }: { personId: string; contacts:
         .map((c) => (
           <AskButton key={c.kind} personId={personId} kind={c.kind} asked={c.my_request_status === 'requested'} />
         ))}
-      {shared.map(
-        (c) =>
-          !isRequestable(c) && (
-            <span key={c.id} className={styles.shared}>
-              {c.label ?? (c.platform === 'whatsapp' ? 'WhatsApp' : c.kind === 'address' ? 'Address' : 'Phone')}: {c.value}
-            </span>
-          ),
-      )}
+      {shared.map((c) => (
+        <span key={c.id} className={styles.shared}>
+          {c.label ?? (c.platform === 'whatsapp' ? 'WhatsApp' : c.kind === 'address' ? 'Address' : 'Phone')}: {c.value}
+        </span>
+      ))}
     </>
   )
 }
@@ -130,6 +134,10 @@ function AskButton({ personId, kind, asked }: { personId: string; kind: RequestK
     mutationFn: () => askFor(personId, kind),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: contactKeys.of(personId) }),
   })
+  if (ask.data?.my_request_status === 'shared') {
+    // Already shared: the refetched contacts show the value instead.
+    return null
+  }
   if (asked || ask.isSuccess) {
     return <span className={styles.asked}>{askWords[kind].asked}</span>
   }
@@ -172,10 +180,11 @@ function Family({
   const byId = new Map(tree.persons.map((t) => [t.id, t]))
   const details = new Map(everyone?.map((e) => [e.id, e]))
   const g = familyGroups(tree, person.id)
-  const year = (id: string) => details.get(id)?.birth_date?.match(/^\d{4}/)?.[0] ?? '9999'
+  const via = new Map(g.stepChildren.map((s) => [s.id, s.via]))
+  const born = (id: string) => year(details.get(id)?.birth_date ?? null, null) ?? '9999'
   const name = (id: string) => (byId.get(id) ? fullName(byId.get(id)!) : '')
   // Oldest first where years are known (they're masked for members), else by name; fathers before mothers.
-  const byAge = (ids: string[]) => [...ids].sort((a, b) => year(a).localeCompare(year(b)) || name(a).localeCompare(name(b)))
+  const byAge = (ids: string[]) => [...ids].sort((a, b) => born(a).localeCompare(born(b)) || name(a).localeCompare(name(b)))
   const parents = [...g.parents].sort((a, b) => Number(byId.get(b)?.gender === 'male') - Number(byId.get(a)?.gender === 'male'))
 
   // Who they are to you; for someone who has passed, their years; else their birthday.
@@ -206,10 +215,7 @@ function Family({
     { title: 'Children', people: byAge(g.children).map((id) => ({ id, note: note(id) })) },
     {
       title: 'Step-children',
-      people: byAge(g.stepChildren.map((s) => s.id)).map((id) => ({
-        id,
-        note: stepNote(id, g.stepChildren.find((s) => s.id === id)!.via),
-      })),
+      people: byAge([...via.keys()]).map((id) => ({ id, note: stepNote(id, via.get(id)!) })),
     },
     { title: 'Grandchildren', people: byAge(g.grandchildren).map((id) => ({ id, note: note(id) })) },
   ].filter((group) => group.people.some((x) => byId.has(x.id)))
