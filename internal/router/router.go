@@ -24,6 +24,7 @@ type Handlers struct {
 	Family   *handler.Family
 	Contacts *handler.Contacts
 	Access   *handler.Access
+	Home     *handler.Home
 }
 
 type Middleware struct {
@@ -81,6 +82,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 			r.Get("/persons/{id}/descendants", h.Family.Descendants)
 			r.Get("/tree", h.Family.Tree)
 			r.Get("/family/summary", h.Family.Summary)
+			r.Get("/home", h.Home.Show)
 			// Members may change their own bio; the service checks (§4).
 			r.Patch("/persons/{id}", h.Family.UpdatePerson)
 			r.Get("/persons/{id}/contacts", h.Contacts.ListFor)

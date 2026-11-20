@@ -12,6 +12,53 @@ import (
 	"github.com/google/uuid"
 )
 
+const addedSince = `-- name: AddedSince :many
+SELECT id, first_name, last_name, created_at
+FROM persons
+WHERE deleted_at IS NULL AND created_at >= $1 AND id IS DISTINCT FROM $2::uuid
+ORDER BY created_at DESC, id DESC
+LIMIT $3
+`
+
+type AddedSinceParams struct {
+	Since          time.Time
+	ViewerPersonID *uuid.UUID
+	MaxPeople      int32
+}
+
+type AddedSinceRow struct {
+	ID        uuid.UUID
+	FirstName string
+	LastName  *string
+	CreatedAt time.Time
+}
+
+// Not the viewer: their own arrival isn't news to them.
+func (q *Queries) AddedSince(ctx context.Context, arg AddedSinceParams) ([]AddedSinceRow, error) {
+	rows, err := q.db.Query(ctx, addedSince, arg.Since, arg.ViewerPersonID, arg.MaxPeople)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AddedSinceRow
+	for rows.Next() {
+		var i AddedSinceRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const ancestors = `-- name: Ancestors :many
 WITH RECURSIVE anc(id, depth) AS (
   SELECT r.person_a, 1
@@ -74,6 +121,47 @@ func (q *Queries) Ancestors(ctx context.Context, arg AncestorsParams) ([]Ancesto
 			&i.BirthDate,
 			&i.BirthDatePrecision,
 			&i.Depth,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const birthdaysOn = `-- name: BirthdaysOn :many
+SELECT id, first_name, last_name, to_char(birth_date, 'MM-DD')::text AS month_day
+FROM persons
+WHERE deleted_at IS NULL AND NOT is_deceased AND birth_date_precision = 'day'
+  AND to_char(birth_date, 'MM-DD') = ANY($1::text[])
+`
+
+type BirthdaysOnRow struct {
+	ID        uuid.UUID
+	FirstName string
+	LastName  *string
+	MonthDay  string
+}
+
+// Living people whose birthday ("MM-DD") is one of the given days. Only the month and day leave the database,
+// never the year (§5.3).
+func (q *Queries) BirthdaysOn(ctx context.Context, monthDays []string) ([]BirthdaysOnRow, error) {
+	rows, err := q.db.Query(ctx, birthdaysOn, monthDays)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BirthdaysOnRow
+	for rows.Next() {
+		var i BirthdaysOnRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.MonthDay,
 		); err != nil {
 			return nil, err
 		}

@@ -10,12 +10,14 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kdelpe/family-hub/internal/mail"
 )
 
 const (
 	defaultMailFrom = "Family Hub <noreply@family.example.com>"
+	defaultTimezone = "America/New_York"
 	implicitTLSPort = "465"
 	maxHostLen      = 253
 	maxLabelLen     = 63
@@ -35,6 +37,8 @@ type Config struct {
 	// Only serve loads these (LoadSMTP, LoadBaseURL), so a mistake in them never blocks migrate up or admin create.
 	SMTP    mail.SMTPConfig
 	BaseURL string
+	// Timezone is the family's (APP_TIMEZONE): it sets "today" for upcoming birthdays (§5.3).
+	Timezone *time.Location
 }
 
 // Load reads settings through getenv (os.Getenv outside tests) and reports every problem at once.
@@ -176,6 +180,20 @@ func LoadBaseURL(getenv func(string) string) (string, error) {
 		origin += ":" + port
 	}
 	return origin, nil
+}
+
+// LoadTimezone reads APP_TIMEZONE, an IANA name like America/New_York (the default).
+func LoadTimezone(getenv func(string) string) (*time.Location, error) {
+	name := strings.TrimSpace(getenv("APP_TIMEZONE"))
+	if name == "" {
+		name = defaultTimezone
+	}
+	// LoadLocation also takes "Local" and "", which would follow the server's own setting.
+	loc, err := time.LoadLocation(name)
+	if err != nil || strings.EqualFold(name, "Local") {
+		return nil, fmt.Errorf("APP_TIMEZONE must be an IANA timezone like America/New_York, got %q", name)
+	}
+	return loc, nil
 }
 
 func endsInNumber(host string) bool {

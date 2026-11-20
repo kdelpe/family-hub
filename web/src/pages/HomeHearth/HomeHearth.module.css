@@ -80,3 +80,139 @@
     transform: none;
   }
 }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+/* translate, not transform, so the lift doesn't fight the rise-in animation. */
+.card {
+  padding: 22px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition:
+    translate 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.card:hover,
+.card:focus-within {
+  translate: 0 -4px;
+  box-shadow: 0 12px 26px var(--shadow-press);
+}
+
+.first {
+  animation: rise 0.6s ease-out 0.3s both;
+}
+
+.second {
+  animation: rise 0.6s ease-out 0.6s both;
+}
+
+.cardTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.row {
+  position: relative;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rowWords {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rowTitle {
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.rowTitle:hover {
+  text-decoration: underline;
+}
+
+/* The whole row is the link's tap target, at least 44px tall (design-notes §1.3). */
+.rowTitle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.muted {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.tile {
+  width: 52px;
+  flex: none;
+  padding: 6px 0;
+  border-radius: 10px;
+  background: var(--chip);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tileMonth {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tileDay {
+  font-family: var(--font-serif);
+  font-size: 22px;
+}
+
+.soonest {
+  background: var(--accent-tint);
+}
+
+.soonest .tileMonth {
+  color: var(--accent);
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--avatar-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+}
+
+.seeAll {
+  position: relative;
+  align-self: flex-start;
+  margin-top: auto;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* A 44px tap target around the one line of text, without moving it. */
+.seeAll::after {
+  content: '';
+  position: absolute;
+  inset: -12px -8px;
+}

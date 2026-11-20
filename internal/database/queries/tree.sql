@@ -74,3 +74,19 @@ FROM persons
 WHERE deleted_at IS NULL AND is_deceased AND birth_date IS NOT NULL
 ORDER BY birth_date, id
 LIMIT 1;
+
+-- name: BirthdaysOn :many
+-- Living people whose birthday ("MM-DD") is one of the given days. Only the month and day leave the database,
+-- never the year (§5.3).
+SELECT id, first_name, last_name, to_char(birth_date, 'MM-DD')::text AS month_day
+FROM persons
+WHERE deleted_at IS NULL AND NOT is_deceased AND birth_date_precision = 'day'
+  AND to_char(birth_date, 'MM-DD') = ANY(@month_days::text[]);
+
+-- name: AddedSince :many
+-- Not the viewer: their own arrival isn't news to them.
+SELECT id, first_name, last_name, created_at
+FROM persons
+WHERE deleted_at IS NULL AND created_at >= @since AND id IS DISTINCT FROM sqlc.narg(viewer_person_id)::uuid
+ORDER BY created_at DESC, id DESC
+LIMIT @max_people;

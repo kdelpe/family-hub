@@ -428,3 +428,32 @@ func TestLoadBaseURL(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadTimezone(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    string
+		wantErr bool
+	}{
+		{name: "the default", raw: "", want: "America/New_York"},
+		{name: "another zone", raw: " Europe/Paris ", want: "Europe/Paris"},
+		{name: "UTC", raw: "UTC", want: "UTC"},
+		{name: "an unknown name", raw: "Mars/Olympus", wantErr: true},
+		{name: "the server's own setting", raw: "Local", wantErr: true},
+		{name: "the server's own setting in any case", raw: "local", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			loc, err := LoadTimezone(func(string) string { return tt.raw })
+
+			if tt.wantErr {
+				require.ErrorContains(t, err, "APP_TIMEZONE must be an IANA timezone")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, loc.String())
+		})
+	}
+}

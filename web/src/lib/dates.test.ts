@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Person } from '../api/persons'
-import { birthday, bornOn, lifespan } from './dates'
+import { addedOn, birthday, bornOn, inDays, lifespan, monthAndDay } from './dates'
 
 describe('birthday', () => {
   it.each([
@@ -52,5 +52,34 @@ describe('bornOn', () => {
     { date: null, precision: null, want: null },
   ])('$date ($precision): $want', ({ date, precision, want }) => {
     expect(bornOn(date, precision)).toBe(want)
+  })
+})
+
+describe('inDays', () => {
+  it.each([
+    { days: 0, want: 'Today' },
+    { days: 1, want: 'Tomorrow' },
+    { days: 6, want: 'In 6 days' },
+  ])('$days → $want', ({ days, want }) => {
+    expect(inDays(days)).toBe(want)
+  })
+})
+
+describe('monthAndDay', () => {
+  it('reads a tile’s month and day', () => {
+    expect(monthAndDay('2026-11-09')).toEqual({ month: 'Nov', day: 9 })
+  })
+})
+
+describe('addedOn', () => {
+  // Friday, November 20, 2026, 9am on the viewer's clock.
+  const now = new Date(2026, 10, 20, 9)
+  it.each([
+    { name: 'earlier today', added: new Date(2026, 10, 20, 1), want: 'today' },
+    { name: 'late yesterday', added: new Date(2026, 10, 19, 23), want: 'yesterday' },
+    { name: 'this week', added: new Date(2026, 10, 17, 12), want: 'Tuesday' },
+    { name: 'a week ago or more', added: new Date(2026, 10, 13, 12), want: 'Nov 13' },
+  ])('$name → $want', ({ added, want }) => {
+    expect(addedOn(added.toISOString(), now)).toBe(want)
   })
 })

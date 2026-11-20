@@ -55,6 +55,7 @@ func TestRoutes(t *testing.T) {
 		{name: "ancestors need a session", method: http.MethodGet, path: "/api/persons/" + testID + "/ancestors", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "descendants need a session", method: http.MethodGet, path: "/api/persons/" + testID + "/descendants", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "the tree needs a session", method: http.MethodGet, path: "/api/tree", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
+		{name: "home needs a session", method: http.MethodGet, path: "/api/home", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "the family summary needs a session", method: http.MethodGet, path: "/api/family/summary", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "contacts need a session", method: http.MethodGet, path: "/api/persons/" + testID + "/contacts", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "the directory needs a session", method: http.MethodGet, path: "/api/directory", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
@@ -218,6 +219,7 @@ func newRoutesWith(t *testing.T, sessions handler.SessionAuthenticator, perHour 
 			Family:   handler.NewFamily(mocks.NewFamilyService(t)),
 			Contacts: handler.NewContacts(mocks.NewContactsService(t)),
 			Access:   handler.NewAccess(mocks.NewAccessService(t)),
+			Home:     handler.NewHome(mocks.NewHomeService(t), time.UTC),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(sessions, cookie).Require,
