@@ -73,7 +73,7 @@ describe('RequestsCard', () => {
       'Darline Monestime asked for your phone number.',
       'Peterson Pluviose asked for your address.',
     ])
-    expect(screen.getAllByRole('button', { name: 'Not now' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Don’t share' })).toHaveLength(2)
     expect(screen.getByRole('heading', { name: 'Shared with' })).toBeInTheDocument()
     expect(screen.getByRole('listitem')).toHaveTextContent('Naïka Jean-Louis · WhatsApp number')
     expect(
@@ -102,8 +102,8 @@ describe('RequestsCard', () => {
     },
     {
       name: 'quietly declines',
-      button: 'Not now',
-      question: 'Not share your phone number with Darline?',
+      button: 'Don’t share',
+      question: 'Don’t share your phone number with Darline?',
       yes: 'Yes, don’t share',
       decision: 'decline',
       after: [],
@@ -140,7 +140,7 @@ describe('RequestsCard', () => {
       question: 'Share your phone number with Darline?',
       note: 'Darline will see every phone number you’ve set to “Family can ask”, including ones you add later.',
     },
-    { button: 'Not now', question: 'Not share your phone number with Darline?', note: 'You can’t change your mind later.' },
+    { button: 'Don’t share', question: 'Don’t share your phone number with Darline?', note: 'You can’t change your mind later.' },
   ])('asks before it answers “$button”, and Cancel sends nothing', async ({ button, question, note }) => {
     const { fetch } = renderCard({ 'GET /api/me/contact-requests': listed([darline]) })
 
@@ -150,7 +150,7 @@ describe('RequestsCard', () => {
     fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
 
     expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Don’t share' })).toBeInTheDocument()
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
   })
 

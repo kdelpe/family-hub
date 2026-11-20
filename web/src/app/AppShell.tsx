@@ -17,8 +17,9 @@ export function AppShell() {
   const { user, person, personSettled, error } = useSignedIn()
   const location = useLocation()
   // My profile's badge: requests for your details waiting for an answer (§5.2). Only a linked login gets any.
+  // Reread each minute, so a new request shows without a reload; not while the tab is hidden.
   const personId = user?.person_id ?? null
-  const requests = useQuery({ ...myRequestsQuery(personId ?? ''), enabled: personId !== null })
+  const requests = useQuery({ ...myRequestsQuery(personId ?? ''), enabled: personId !== null, refetchInterval: 60_000 })
   const waiting = requests.data?.filter((r) => r.status === 'pending').length ?? 0
 
   if (error instanceof ApiError && error.status === 401) {

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -109,6 +109,32 @@ describe('AppShell', () => {
     renderShell()
 
     expect(await screen.findByRole('link', { name: link })).toHaveAttribute('href', '/profile')
+  })
+
+  it('shows a new request on the badge within a minute, without a reload', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const asked = (id: string) => ({
+      id,
+      kind: 'phone',
+      status: 'pending',
+      created_at: '2026-11-01T10:00:00Z',
+      decided_at: null,
+      from: { person_id: 'p2', name: 'Darline Monestime' },
+    })
+    const answers: Record<string, Answer> = {
+      '/api/auth/me': { status: 200, body: maya },
+      '/api/persons/p1': { status: 200, body: mayaPerson },
+      '/api/me/contact-requests': { status: 200, body: { person_id: 'p1', requests: [asked('r1')] } },
+    }
+    stubApi(answers)
+    renderShell()
+    await screen.findByRole('link', { name: 'My profile, 1 request for your details' })
+
+    answers['/api/me/contact-requests'] = { status: 200, body: { person_id: 'p1', requests: [asked('r1'), asked('r2')] } }
+    await act(() => vi.advanceTimersByTimeAsync(60_000))
+
+    expect(await screen.findByRole('link', { name: 'My profile, 2 requests for your details' })).toBeInTheDocument()
+    vi.useRealTimers()
   })
 
   it('asks for no requests for a login linked to nobody', async () => {
