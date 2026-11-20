@@ -365,10 +365,11 @@ func normalize(in PersonInput) (fields, error) {
 		return fields{}, fmt.Errorf("%w: gender must be one of %s", ErrInvalidPerson, strings.Join(genders, ", "))
 	}
 	var err error
-	if f.birthDate, err = parseDate("birth", f.BirthDate, f.BirthDatePrecision); err != nil {
+	// A birthday gets a day of grace: a member enters their own, and it's already tomorrow in Asia.
+	if f.birthDate, err = parseDate("birth", f.BirthDate, f.BirthDatePrecision, 1); err != nil {
 		return fields{}, err
 	}
-	if f.deathDate, err = parseDate("death", f.DeathDate, f.DeathDatePrecision); err != nil {
+	if f.deathDate, err = parseDate("death", f.DeathDate, f.DeathDatePrecision, 0); err != nil {
 		return fields{}, err
 	}
 	if f.deathDate != nil && !f.IsDeceased {
@@ -391,7 +392,7 @@ func lastDay(date time.Time, precision string) time.Time {
 	return date
 }
 
-func parseDate(what string, value, precision *string) (*time.Time, error) {
+func parseDate(what string, value, precision *string, graceDays int) (*time.Time, error) {
 	if (value == nil) != (precision == nil) {
 		return nil, fmt.Errorf("%w: give the %s date and its precision together", ErrInvalidPerson, what)
 	}
@@ -406,12 +407,7 @@ func parseDate(what string, value, precision *string) (*time.Time, error) {
 	if err != nil || len(*value) != len(layout) {
 		return nil, fmt.Errorf("%w: the %s date must look like %s for precision %s", ErrInvalidPerson, what, layout, *precision)
 	}
-	// A birthday gets a day of grace: a member enters their own, and it's already tomorrow in Asia.
-	latest := time.Now()
-	if what == "birth" {
-		latest = latest.AddDate(0, 0, 1)
-	}
-	if date.After(latest) {
+	if date.After(time.Now().AddDate(0, 0, graceDays)) {
 		return nil, fmt.Errorf("%w: the %s date is in the future", ErrInvalidPerson, what)
 	}
 	return &date, nil

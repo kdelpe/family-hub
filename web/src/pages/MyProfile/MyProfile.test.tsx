@@ -336,6 +336,19 @@ describe('MyProfile', () => {
     }
   })
 
+  it('never fills the field with a masked date, so saving can’t clear it', async () => {
+    const masked = { ...maya, birth_date: '--06-06' }
+    const { fetch } = renderPage({ 'PATCH /api/persons/maya': { status: 200, body: { ...masked, first_name: 'May' } } }, {}, masked)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit your name, birthday and photo' }))
+    const form = within(screen.getByRole('form', { name: 'Your details' }))
+    fireEvent.change(form.getByLabelText('First name'), { target: { value: 'May' } })
+    fireEvent.click(form.getByRole('button', { name: 'Save' }))
+
+    await screen.findByText('May Pluviose')
+    expect(sent(fetch, 'PATCH', '/api/persons/maya')?.body).toBe(JSON.stringify({ first_name: 'May' }))
+  })
+
   it('says when there’s no birthday yet', () => {
     renderPage({}, {}, { ...maya, birth_date: null, birth_date_precision: null })
 

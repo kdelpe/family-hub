@@ -2,8 +2,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
 import { Link } from 'react-router'
 
+import { adminKeys } from '../../api/admin'
 import { onSessionEnded } from '../../api/auth'
+import { directoryKeys } from '../../api/contacts'
+import { familyKeys } from '../../api/family'
 import { type Person, personKeys, updateOwnProfile } from '../../api/persons'
+import { treeKeys } from '../../api/tree'
 import { bornOn } from '../../lib/dates'
 import { refusedMessage } from '../../lib/errorMessage'
 import { fullName, initials } from '../../lib/names'
@@ -153,7 +157,9 @@ function Details({ person }: { person: Person }) {
   const [date, setDate] = useState('')
   const [noFirst, setNoFirst] = useState(false)
   const [future, setFuture] = useState(false)
-  const exactDate = person.birth_date_precision === 'day' ? (person.birth_date ?? '') : ''
+  // Only a full date fills the field: a masked one ("--06-06") would show empty, and saving would then clear it.
+  const fullDate = /^\d{4}-\d{2}-\d{2}$/.test(person.birth_date ?? '')
+  const exactDate = person.birth_date_precision === 'day' && fullDate ? person.birth_date! : ''
   const born = bornOn(person.birth_date, person.birth_date_precision)
 
   // Only what changed: a partial date on file ("1978") stays unless a full one is picked.
@@ -170,10 +176,10 @@ function Details({ person }: { person: Person }) {
     mutationFn: () => updateOwnProfile(person.id, changes),
     onSuccess: (updated) => {
       queryClient.setQueryData(personKeys.one(person.id), updated)
-      // A name or birthday shows across the site (tree, People, Home), so the rest is read again.
-      void queryClient.invalidateQueries({
-        predicate: ({ queryKey }) => queryKey[0] !== 'auth' && !(queryKey[0] === 'persons' && queryKey[1] === person.id),
-      })
+      // Where else a name or birthday shows.
+      for (const queryKey of [personKeys.some([]), treeKeys.all, directoryKeys.all, familyKeys.summary, adminKeys.members]) {
+        void queryClient.invalidateQueries({ queryKey })
+      }
       setEditing(false)
     },
     onError: onSessionEnded(queryClient),

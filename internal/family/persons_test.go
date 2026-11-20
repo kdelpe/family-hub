@@ -63,6 +63,15 @@ func TestCreateRefusesAnInvalidPerson(t *testing.T) {
 	}
 }
 
+func TestABirthdayMayBeTomorrowSomewhereElse(t *testing.T) {
+	// UTC's tomorrow: the earliest date that is already today east of UTC.
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1).Format(time.DateOnly)
+
+	_, err := normalize(PersonInput{FirstName: "Rosa", BirthDate: &tomorrow, BirthDatePrecision: new("day")})
+
+	require.NoError(t, err)
+}
+
 func TestPartialDatesAreComparedAsRanges(t *testing.T) {
 	tests := []struct {
 		name                  string

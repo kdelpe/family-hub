@@ -57,8 +57,8 @@ export const onSessionEnded = (queryClient: QueryClient) => (error: Error) => {
   }
 }
 
-// Another tab signed someone in, so this tab's cookie is theirs now: drop everything it fetched for the last person
-// (a reset also stops any answer still on its way) and fetch again as the new one.
+// Another tab signed someone in or out, so this tab's cookie changed: drop everything it fetched for the last person
+// (a reset also stops any answer still on its way) and fetch again, as the new one or into a 401 and sign-in.
 export function followSessionChanges(queryClient: QueryClient): () => void {
   const onStorage = (event: StorageEvent) => {
     if (event.key === sessionChangedKey) {
