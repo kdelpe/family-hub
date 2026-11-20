@@ -14,11 +14,13 @@ import { fullName, initials } from '../../lib/names'
 import { useSignedIn } from '../../lib/useSignedIn'
 import { ContactDetails } from './ContactDetails'
 import styles from './MyProfile.module.css'
+import { RequestsCard } from './RequestsCard'
 import { SignInCard } from './SignInCard'
+import { SuggestCard } from './SuggestCard'
 
-// design-notes §4.8. The requests card and Suggest a relative come next; photo uploads arrive in Phase 5.
+// design-notes §4.8. Photo uploads arrive in Phase 5.
 export function MyProfile() {
-  const { user, person } = useSignedIn()
+  const { user, person, personSettled } = useSignedIn()
   if (!user) {
     return null
   }
@@ -33,6 +35,9 @@ export function MyProfile() {
             <StoryCard person={person} />
             <ContactDetails personId={person.id} />
           </Fragment>
+        ) : !personSettled ? (
+          // Briefly, after an admin relinks the login: who it's linked to now is still loading.
+          <p className={styles.card}>Loading…</p>
         ) : user.person_id ? (
           <p role="alert" className={styles.card}>
             Your profile didn’t load. Refresh the page to try again.
@@ -44,11 +49,16 @@ export function MyProfile() {
         )}
       </div>
       <aside className={styles.aside}>
+        {/* Keyed by person too: answers given and names typed for one person never stay for another. */}
+        {person && <RequestsCard key={person.id} personId={person.id} />}
         <SignInCard email={user.email} />
         {person && (
-          <Link to="/tree" className={`pill ${styles.seeMe}`}>
-            See me in the tree
-          </Link>
+          <>
+            <SuggestCard key={person.id} personId={person.id} yourName={fullName(person)} />
+            <Link to="/tree" className={`pill ${styles.seeMe}`}>
+              See me in the tree
+            </Link>
+          </>
         )}
       </aside>
     </main>

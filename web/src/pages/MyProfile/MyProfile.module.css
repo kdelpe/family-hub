@@ -150,8 +150,16 @@ form.who {
   color: var(--muted);
 }
 
-.small:empty {
-  display: none;
+/* Empty status lines stay in the accessibility tree, only out of sight, so the message that fills one is read out. */
+.small:empty,
+.sideText:empty,
+.answer:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .story,
@@ -452,6 +460,133 @@ form.who {
 
 .signOut {
   height: 44px;
+}
+
+.sideText {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.requests {
+  border: 2px solid var(--accent);
+}
+
+.request {
+  padding-top: 10px;
+  border-top: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Equal widths while both fit on one line; stacked when one wouldn't. */
+.choices > .save,
+.choices > .cancel {
+  flex: 1 1 0;
+  min-width: fit-content;
+  padding: 0 16px;
+  white-space: nowrap;
+}
+
+.answer {
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.sharedWith {
+  padding-top: 10px;
+  border-top: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sharedTitle {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.sharedList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sharedLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+  line-height: 1.4;
+}
+
+.confirming {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.confirmNote {
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.sharedLine > .confirming {
+  flex-basis: 100%;
+  padding: 6px 0 8px;
+}
+
+.suggest {
+  height: 44px;
+  border: 1px solid var(--accent);
+  border-radius: 22px;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.suggestForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.related {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.related legend {
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* In the narrow column it wraps as "They're the [list]" then "of [name]". */
+.relation,
+.relatedTo {
+  flex: 1 1 110px;
+  width: auto;
+  min-width: 0;
 }
 
 .date {

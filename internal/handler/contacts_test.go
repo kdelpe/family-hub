@@ -50,8 +50,8 @@ func TestListContacts(t *testing.T) {
 	}{
 		{name: "rows, then the kinds the viewer could ask for", session: memberSession, wantPerson: &testPersonID, wantStatus: http.StatusOK,
 			wantBody: `{"contacts":[` + testContactBody + `,{"kind":"address","requestable":true,"my_request_status":"requested"}]}`},
-		{name: "mine", mine: true, session: memberSession, wantPerson: &testPersonID, wantStatus: http.StatusOK,
-			wantBody: `{"contacts":[` + testContactBody + `,{"kind":"address","requestable":true,"my_request_status":"requested"}]}`},
+		{name: "mine, saying whose they are", mine: true, session: memberSession, wantPerson: &testPersonID, wantStatus: http.StatusOK,
+			wantBody: `{"person_id":"` + testPersonID.String() + `","contacts":[` + testContactBody + `,{"kind":"address","requestable":true,"my_request_status":"requested"}]}`},
 		{name: "mine, linked to nobody", mine: true, session: auth.Session{UserID: testUser.ID, Role: auth.RoleMember}, wantStatus: http.StatusForbidden,
 			wantBody: `{"error":{"code":"forbidden","message":"your login isn't linked to anyone in the tree yet"}}`},
 		{name: "unknown person", session: memberSession, wantPerson: &testPersonID, listErr: family.ErrPersonNotFound,
@@ -196,14 +196,14 @@ func TestContactRequests(t *testing.T) {
 				svc.EXPECT().Ask(mock.Anything, memberViewer, testPersonID, "phone").Return("", &auth.RateLimitedError{RetryAfter: time.Hour})
 			}, wantStatus: http.StatusTooManyRequests, wantRetry: "3600",
 			wantBody: `{"error":{"code":"rate_limited","message":"too many attempts, try again later"}}`},
-		{name: "requests for my details", serve: func(h *handler.Contacts) http.HandlerFunc { return h.ListRequests }, method: http.MethodGet,
+		{name: "requests for my details, saying whose they are", serve: func(h *handler.Contacts) http.HandlerFunc { return h.ListRequests }, method: http.MethodGet,
 			expect: func(svc *mocks.ContactsService) {
 				svc.EXPECT().Requests(mock.Anything, memberViewer).Return([]contacts.Request{{
 					ID: requestID, Kind: "phone", Status: "pending", CreatedAt: asked,
 					From: contacts.Requester{PersonID: otherPersonID, Name: "Darline Monestime"},
 				}}, nil)
 			}, wantStatus: http.StatusOK,
-			wantBody: `{"requests":[{"id":"01890000-0000-7000-8000-0000000000ee","kind":"phone","status":"pending",
+			wantBody: `{"person_id":"` + testPersonID.String() + `","requests":[{"id":"01890000-0000-7000-8000-0000000000ee","kind":"phone","status":"pending",
 				"created_at":"2026-11-15T09:30:00Z","decided_at":null,
 				"from":{"person_id":"01890000-0000-7000-8000-0000000000cc","name":"Darline Monestime"}}]}`},
 		{name: "share", serve: func(h *handler.Contacts) http.HandlerFunc { return h.Share }, method: http.MethodPost, rid: requestID.String(),

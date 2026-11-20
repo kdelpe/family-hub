@@ -1,4 +1,7 @@
-import { api } from './client'
+import type { QueryClient } from '@tanstack/react-query'
+
+import { authKeys } from './auth'
+import { api, ApiError } from './client'
 import type { TreePerson } from './tree'
 
 export type RequestKind = 'phone' | 'whatsapp' | 'address'
@@ -73,6 +76,33 @@ export const askFor = (personId: string, kind: RequestKind) =>
     { body: { kind } },
   )
 
+// Someone asking for one of my details: waiting for my answer, or shared with them.
+export type ContactRequest = {
+  id: string
+  kind: RequestKind
+  status: 'pending' | 'shared'
+  created_at: string
+  decided_at: string | null
+  from: { person_id: string; name: string }
+}
+
+export const contactRequestKeys = {
+  // Whose, as for contactKeys.mine: a relinked login answers for the new person.
+  mine: (personId: string) => ['contact-requests', personId] as const,
+}
+
+// Pending ones first, then those shared, each oldest first.
+export const myRequestsQuery = (personId: string) => ({
+  queryKey: contactRequestKeys.mine(personId),
+  queryFn: async ({ signal, client }: MineContext) => {
+    const answer = await readMine<{ person_id: string; requests: ContactRequest[] }>(client, personId, '/me/contact-requests', signal)
+    return answer.requests
+  },
+})
+
+export const decideRequest = (id: string, decision: 'share' | 'decline' | 'revoke') =>
+  api<void>('POST', `/me/contact-requests/${encodeURIComponent(id)}/${decision}`)
+
 const platformLabels: Record<string, string> = {
   instagram: 'Instagram',
   facebook: 'Facebook',
@@ -85,11 +115,61 @@ const platformLabels: Record<string, string> = {
 
 export const platformLabel = (platform: string | null) => (platform && platformLabels[platform]) || 'Other'
 
+// A /me read that answered for someone other than the person shown: rows kept from before are no longer theirs,
+// so pages hide them and offer nothing to act on.
+export class NotYoursError extends Error {
+  constructor(message = 'your profile didn’t load') {
+    super(message)
+  }
+}
+
+// Not a failure to show: the page is about to reload as whoever the login is linked to now.
+export class RelinkedError extends NotYoursError {
+  constructor() {
+    super('your login is linked to someone else now')
+  }
+}
+
+type MineContext = { signal?: AbortSignal; client: QueryClient }
+
+// An admin can relink or unlink a login at any time (§5.1), so rows for someone else never go under this
+// person's key: who you are is read again first, and the page moves on.
+async function readMine<T extends { person_id: string }>(client: QueryClient, personId: string, path: string, signal?: AbortSignal) {
+  const read = async () => {
+    try {
+      return await api<T>('GET', path, { signal })
+    } catch (error) {
+      // Unlinked: the server no longer has anyone to answer for.
+      if (error instanceof ApiError && error.status === 403) {
+        return null
+      }
+      throw error
+    }
+  }
+  const answer = await read()
+  if (answer?.person_id === personId) {
+    return answer
+  }
+  await client.refetchQueries({ queryKey: authKeys.me })
+  const now = client.getQueryData<{ person_id: string | null }>(authKeys.me)
+  if (now && now.person_id !== personId) {
+    throw new RelinkedError()
+  }
+  // Still them as far as we know (relinked and back, say): read once more before calling it a failure.
+  const again = await read()
+  if (again?.person_id === personId) {
+    return again
+  }
+  throw new NotYoursError()
+}
+
 // Never kept once My profile is left, like everyone else's contacts (§5.2).
 export const myContactsQuery = (personId: string) => ({
   queryKey: contactKeys.mine(personId),
-  queryFn: async ({ signal }: { signal?: AbortSignal }) =>
-    (await api<{ contacts: ContactMethod[] }>('GET', '/me/contacts', { signal })).contacts,
+  queryFn: async ({ signal, client }: MineContext) => {
+    const answer = await readMine<{ person_id: string; contacts: ContactMethod[] }>(client, personId, '/me/contacts', signal)
+    return answer.contacts
+  },
   gcTime: 0,
 })
 

@@ -64,6 +64,12 @@ type contactsResponse struct {
 	Contacts []any `json:"contacts"`
 }
 
+// myContactsResponse says whose rows they are: an admin can relink the login between two reads (§5.1).
+type myContactsResponse struct {
+	PersonID uuid.UUID `json:"person_id"`
+	contactsResponse
+}
+
 type directoryResponse struct {
 	People []directoryEntryResponse `json:"people"`
 }
@@ -86,6 +92,8 @@ type askResponse struct {
 }
 
 type requestsResponse struct {
+	// Whose details were asked for, as in myContactsResponse.
+	PersonID uuid.UUID         `json:"person_id"`
 	Requests []requestResponse `json:"requests"`
 }
 
@@ -146,7 +154,7 @@ func (c *Contacts) Ask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Contacts) ListRequests(w http.ResponseWriter, r *http.Request) {
-	viewer, ok := currentViewer(w, r)
+	viewer, personID, ok := c.target(w, r, true)
 	if !ok {
 		return
 	}
@@ -155,7 +163,7 @@ func (c *Contacts) ListRequests(w http.ResponseWriter, r *http.Request) {
 		c.fail(w, r, err, "list contact requests")
 		return
 	}
-	resp := requestsResponse{Requests: make([]requestResponse, 0, len(requests))}
+	resp := requestsResponse{PersonID: personID, Requests: make([]requestResponse, 0, len(requests))}
 	for _, req := range requests {
 		resp.Requests = append(resp.Requests, requestResponse{
 			ID: req.ID, Kind: req.Kind, Status: req.Status, CreatedAt: req.CreatedAt, DecidedAt: req.DecidedAt,
@@ -213,6 +221,10 @@ func (c *Contacts) list(w http.ResponseWriter, r *http.Request, mine bool) {
 	listing, err := c.svc.List(r.Context(), viewer, personID)
 	if err != nil {
 		c.fail(w, r, err, "list contacts")
+		return
+	}
+	if mine {
+		httpx.JSON(w, http.StatusOK, myContactsResponse{PersonID: personID, contactsResponse: toContactsResponse(listing)})
 		return
 	}
 	httpx.JSON(w, http.StatusOK, toContactsResponse(listing))

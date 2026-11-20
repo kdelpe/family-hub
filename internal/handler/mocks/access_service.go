@@ -288,16 +288,16 @@ func (_c *AccessService_Submit_Call) RunAndReturn(run func(ctx context.Context, 
 }
 
 // Suggest provides a mock function for the type AccessService
-func (_mock *AccessService) Suggest(ctx context.Context, userID uuid.UUID, in admin.AccessRequestInput) error {
-	ret := _mock.Called(ctx, userID, in)
+func (_mock *AccessService) Suggest(ctx context.Context, userID uuid.UUID, asPerson uuid.UUID, in admin.AccessRequestInput) error {
+	ret := _mock.Called(ctx, userID, asPerson, in)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Suggest")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, admin.AccessRequestInput) error); ok {
-		r0 = returnFunc(ctx, userID, in)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID, admin.AccessRequestInput) error); ok {
+		r0 = returnFunc(ctx, userID, asPerson, in)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -312,12 +312,13 @@ type AccessService_Suggest_Call struct {
 // Suggest is a helper method to define mock.On call
 //   - ctx context.Context
 //   - userID uuid.UUID
+//   - asPerson uuid.UUID
 //   - in admin.AccessRequestInput
-func (_e *AccessService_Expecter) Suggest(ctx any, userID any, in any) *AccessService_Suggest_Call {
-	return &AccessService_Suggest_Call{Call: _e.mock.On("Suggest", ctx, userID, in)}
+func (_e *AccessService_Expecter) Suggest(ctx any, userID any, asPerson any, in any) *AccessService_Suggest_Call {
+	return &AccessService_Suggest_Call{Call: _e.mock.On("Suggest", ctx, userID, asPerson, in)}
 }
 
-func (_c *AccessService_Suggest_Call) Run(run func(ctx context.Context, userID uuid.UUID, in admin.AccessRequestInput)) *AccessService_Suggest_Call {
+func (_c *AccessService_Suggest_Call) Run(run func(ctx context.Context, userID uuid.UUID, asPerson uuid.UUID, in admin.AccessRequestInput)) *AccessService_Suggest_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -327,14 +328,19 @@ func (_c *AccessService_Suggest_Call) Run(run func(ctx context.Context, userID u
 		if args[1] != nil {
 			arg1 = args[1].(uuid.UUID)
 		}
-		var arg2 admin.AccessRequestInput
+		var arg2 uuid.UUID
 		if args[2] != nil {
-			arg2 = args[2].(admin.AccessRequestInput)
+			arg2 = args[2].(uuid.UUID)
+		}
+		var arg3 admin.AccessRequestInput
+		if args[3] != nil {
+			arg3 = args[3].(admin.AccessRequestInput)
 		}
 		run(
 			arg0,
 			arg1,
 			arg2,
+			arg3,
 		)
 	})
 	return _c
@@ -345,7 +351,7 @@ func (_c *AccessService_Suggest_Call) Return(err error) *AccessService_Suggest_C
 	return _c
 }
 
-func (_c *AccessService_Suggest_Call) RunAndReturn(run func(ctx context.Context, userID uuid.UUID, in admin.AccessRequestInput) error) *AccessService_Suggest_Call {
+func (_c *AccessService_Suggest_Call) RunAndReturn(run func(ctx context.Context, userID uuid.UUID, asPerson uuid.UUID, in admin.AccessRequestInput) error) *AccessService_Suggest_Call {
 	_c.Call.Return(run)
 	return _c
 }
