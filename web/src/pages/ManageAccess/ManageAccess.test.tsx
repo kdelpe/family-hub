@@ -71,10 +71,10 @@ const requests: AccessRequestItem[] = [
 
 const tree = {
   persons: [
-    { id: 'p-fritz', first_name: 'Fritz', last_name: 'Pluviose', gender: 'male', is_deceased: false },
-    { id: 'p-fabienne', first_name: 'Fabienne', last_name: 'Pluviose', gender: 'female', is_deceased: false },
-    { id: 'p-kervens', first_name: 'Kervens', last_name: 'Pluviose', gender: 'male', is_deceased: false },
-    { id: 'p-joseph', first_name: 'Joseph', last_name: 'Pluviose', gender: 'male', is_deceased: true },
+    { id: 'p-fritz', first_name: 'Fritz', last_name: 'Pluviose', side: 'first', gender: 'male', is_deceased: false },
+    { id: 'p-fabienne', first_name: 'Fabienne', last_name: 'Pluviose', side: 'first', gender: 'female', is_deceased: false },
+    { id: 'p-kervens', first_name: 'Kervens', last_name: 'Pluviose', side: 'first', gender: 'male', is_deceased: false },
+    { id: 'p-joseph', first_name: 'Joseph', last_name: 'Pluviose', side: 'first', gender: 'male', is_deceased: true },
   ],
   relationships: [
     { id: 'r1', type: 'parent_child', subtype: 'biological', parent_id: 'p-fritz', child_id: 'p-kervens' },
