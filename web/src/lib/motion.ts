@@ -39,14 +39,13 @@ export function useMotionPaused(): [boolean, (paused: boolean) => void] {
 const reducedQuery = '(prefers-reduced-motion: reduce)'
 const media = () => (typeof window.matchMedia === 'function' ? window.matchMedia(reducedQuery) : null)
 
+const subscribeReduced = (listener: () => void) => {
+  const m = media()
+  m?.addEventListener('change', listener)
+  return () => m?.removeEventListener('change', listener)
+}
+const readReduced = () => media()?.matches ?? false
+
 export function useReducedMotion(): boolean {
-  return useSyncExternalStore(
-    (listener) => {
-      const m = media()
-      m?.addEventListener('change', listener)
-      return () => m?.removeEventListener('change', listener)
-    },
-    () => media()?.matches ?? false,
-    () => false,
-  )
+  return useSyncExternalStore(subscribeReduced, readReduced, () => false)
 }

@@ -79,18 +79,20 @@ export function People() {
 
       {summary.data && <Strip summary={summary.data} />}
 
-      <div role="group" aria-label="Filter people" className={styles.filters}>
-        {filters.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            aria-pressed={filter === f.id}
-            className={filter === f.id ? `pill ${styles.filter} ${styles.filterOn}` : `pill ${styles.filter}`}
-            onClick={() => setFilter(f.id)}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className={styles.filters}>
+        <div role="group" aria-label="Filter people" className={styles.filters}>
+          {filters.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              aria-pressed={filter === f.id}
+              className={filter === f.id ? `pill ${styles.filter} ${styles.filterOn}` : `pill ${styles.filter}`}
+              onClick={() => setFilter(f.id)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
         {/* The portraits' fade runs on; with reduced motion there's none to pause (design-notes §6.4). */}
         {!reducedMotion && (
           <button type="button" className={styles.pause} onClick={() => setPaused(!paused)}>
@@ -101,13 +103,15 @@ export function People() {
 
       {tree.error && <p role="alert">{errorMessage(tree.error)}</p>}
       {tree.data && people.length === 0 && <p className={styles.none}>Nobody here matches.</p>}
-      <ul className={paused ? `${styles.grid} ${styles.paused}` : styles.grid}>
-        {people.map((p) => (
-          <li key={p.id}>
-            <Card person={p} relation={relations.get(p.id) ?? null} you={p.id === viewerId} />
-          </li>
-        ))}
-      </ul>
+      {people.length > 0 && (
+        <ul className={paused ? `${styles.grid} ${styles.paused}` : styles.grid}>
+          {people.map((p) => (
+            <li key={p.id}>
+              <Card person={p} relation={relations.get(p.id) ?? null} you={p.id === viewerId} />
+            </li>
+          ))}
+        </ul>
+      )}
     </main>
   )
 }

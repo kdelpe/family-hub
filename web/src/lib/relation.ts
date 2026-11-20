@@ -8,6 +8,17 @@ export const gendered = (gender: Gender, male: string, female: string, other: st
   gender === 'male' ? male : gender === 'female' ? female : other
 
 const greats = (n: number) => 'great-'.repeat(Math.max(0, n))
+
+const ordinals = ['', 'second ', 'third ', 'fourth ', 'fifth ']
+const removals = ['', ' once removed', ' twice removed']
+
+// "Cousin", "second cousin", "cousin once removed": the degree from the nearer generation, removed by the gap.
+const cousinWord = (up: number, down: number) => {
+  const degree = Math.min(up, down) - 1
+  const gap = Math.abs(up - down)
+  const ordinal = ordinals[degree - 1] ?? `${degree}th `
+  return `${ordinal}cousin${removals[gap] ?? ` ${gap} times removed`}`
+}
 const former = (ended: boolean, word: string) => (ended ? `former ${word}` : word)
 
 const add = <T,>(map: Map<string, T[]>, key: string, value: T) => {
@@ -19,9 +30,8 @@ const add = <T,>(map: Map<string, T[]>, key: string, value: T) => {
   }
 }
 
-// How each person in the tree is related to the viewer, as their card says it: "You", "Your half-sister",
-// "Your great-aunt". Derived only from parent links and couples, by the rules of architecture §3.4. Null for
-// someone the tree doesn't connect to the viewer.
+// Each person's relation to the viewer ("You", "Your half-sister"), from parent links and couples by §3.4;
+// someone the tree doesn't connect to the viewer has no entry.
 export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
   const gender = new Map(tree.persons.map((p) => [p.id, p.gender]))
   const parentLists = new Map<string, string[]>()
@@ -129,7 +139,7 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
     if (up === 1) {
       return `${greats(down - 2)}${gendered(g, 'nephew', 'niece', 'niece or nephew')}`
     }
-    return 'cousin'
+    return cousinWord(up, down)
   }
 
   // A family parent's partner who isn't the child's parent by any link (§3.4).
@@ -196,7 +206,7 @@ export function relationsTo(tree: Tree, viewerId: string): Map<string, string> {
         if (k.up === 1 && k.down >= 2) {
           return former(ended, w)
         }
-        return former(ended, k.up === 0 ? `step${k.down === 1 ? '' : '-'}${w}` : `${w}-in-law`)
+        return former(ended, k.up === 0 ? `step-${w}` : `${w}-in-law`)
       }
     }
     // …then your relatives' partners.

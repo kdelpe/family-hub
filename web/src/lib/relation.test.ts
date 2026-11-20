@@ -35,7 +35,9 @@ const tree: Tree = {
     ...['jeanbaptiste', 'joseph', 'jeanrobert', 'fritz', 'kervens', 'tim', 'mackenson', 'lucien', 'frantz', 'stanley', 'wesner', 'ralph', 'henri', 'pierre', 'paul', 'xavier'].map((id) => person(id, 'male')),
     ...['annemarie', 'marieclaire', 'marietherese', 'nadege', 'maya', 'sabine', 'guerline', 'fabienne', 'naika', 'naomie', 'rose', 'mirlande', 'darline', 'odette', 'lise', 'lucie'].map((id) => person(id, 'female')),
     person('alex', null),
-    ...['ginette', 'carline', 'yves', 'yvette', 'colette', 'ana', 'bea'].map((id) => person(id, id === 'yves' ? 'male' : 'female')),
+    ...['ginette', 'carline', 'yves', 'yvette', 'colette', 'ana', 'bea', 'dina', 'eva', 'flore', 'gina'].map((id) =>
+      person(id, id === 'yves' ? 'male' : 'female'),
+    ),
   ],
   relationships: [
     couple('jeanbaptiste', 'annemarie'),
@@ -76,6 +78,10 @@ const tree: Tree = {
     couple('joseph', 'colette'),
     parent('wesner', 'ana'),
     parent('wesner', 'bea'),
+    parent('darline', 'dina'),
+    parent('jeanbaptiste', 'eva'),
+    parent('eva', 'flore'),
+    parent('flore', 'gina'),
   ],
 }
 
@@ -114,6 +120,9 @@ describe('relationsTo, as Maya', () => {
     { id: 'yves', want: 'Your cousin-in-law' },
     { id: 'yvette', want: 'Your former mother-in-law' },
     { id: 'colette', want: 'Your step-grandmother' },
+    { id: 'dina', want: 'Your cousin once removed' },
+    { id: 'gina', want: 'Your second cousin' },
+    { id: 'flore', want: 'Your cousin once removed' },
     { id: 'xavier', want: null },
   ])('$id: $want', ({ id, want }) => {
     expect(labels.get(id) ?? null).toBe(want)
