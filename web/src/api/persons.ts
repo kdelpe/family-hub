@@ -17,13 +17,26 @@ export type Person = {
 }
 
 export const personKeys = {
-  all: ['persons'] as const,
   one: (id: string) => ['persons', id] as const,
+  some: (ids: string[]) => ['persons', 'ids', ...ids] as const,
 }
 
 export const getPerson = (id: string, { signal }: { signal?: AbortSignal } = {}) =>
   api<Person>('GET', `/persons/${encodeURIComponent(id)}`, { signal })
 
-// Everyone, A–Z, with masked dates: for the notes under each relative's name.
-export const listPersons = async ({ signal }: { signal?: AbortSignal } = {}) =>
-  (await api<{ persons: Person[] }>('GET', '/persons', { signal })).persons
+// The server answers at most this many ids at a time.
+const idsPerRequest = 100
+
+// Just these people, with masked dates: the family is too big to fetch everyone for a few names.
+export const getPersons = async (ids: string[], { signal }: { signal?: AbortSignal } = {}) => {
+  const batches: string[][] = []
+  for (let i = 0; i < ids.length; i += idsPerRequest) {
+    batches.push(ids.slice(i, i + idsPerRequest))
+  }
+  const answers = await Promise.all(
+    batches.map((batch) =>
+      api<{ persons: Person[] }>('GET', `/persons?ids=${batch.map(encodeURIComponent).join(',')}`, { signal }),
+    ),
+  )
+  return answers.flatMap((answer) => answer.persons)
+}
