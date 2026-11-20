@@ -153,6 +153,12 @@ All five pages share a two-column layout: **left brand panel** (`--brand-panel`)
 2. *"How can family reach you?"*: phone, email, address and **social accounts** (WhatsApp, Instagram, …), each with a switch, **all start as "Only me"**; label flips to "Visible to family" (email, social) or "Family can ask" (phone, WhatsApp, address). Footer: admins can see everything.
 3. *"Here's your place in the family"*: grandparents → parents → **You** highlighted; *"Something look wrong? Let an admin know and they'll fix it."* → **Go to my home page**.
 
+Not drawn in the mockup, proposed with the real data (November 2026):
+- It shows the signed-in person's own data. **Continue** on step 1 saves a changed story (an error keeps them on the step); **Skip for now** leaves it as it was. The switches save as soon as they're flipped, the same switch as My profile's.
+- Step 2 lists the rows already on file (an admin may have added some), in My profile's order. With none: *"Nothing here yet. You can add a phone, email or address on My profile."*
+- Step 3 leaves out a generation the tree doesn't have, and foster parents (architecture §3.4); with no parents it says *"Your parents aren't in the tree yet."* The family line names up to three living first cousins, as in the mockup: *"Your cousins Maya, Fritz and Sabine are on the Pluviose side."*, *"…and 4 more"* past three, *"are here too"* when they're on different sides, and nothing with no cousins.
+- Signed out, it goes to sign in; a login linked to nobody goes straight to Home.
+
 ### 3.5 Forgot password (side path from Sign in)
 - *"Forgot your password?"* + email + **Send me a reset link** → *"Check your email. If that email is on our family list, a reset link is on its way. It works for 30 minutes."* + spam/ask-an-admin hint.
 

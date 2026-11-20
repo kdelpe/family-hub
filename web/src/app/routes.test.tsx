@@ -55,12 +55,25 @@ it.each([
   { path: '/auth/request-access', heading: 'Request access' },
   { path: '/auth/forgot', heading: 'Forgot your password?' },
   { path: '/auth/set-password', heading: 'This link doesn’t work anymore' },
-  { path: '/setup', heading: 'Let the family see who you are' },
   { path: '/no-such-page', heading: 'Pluviose-Monestime Family Hub' },
 ])('$path shows the page with heading "$heading"', async ({ path, heading }) => {
   renderAt(path)
 
   expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument()
+})
+
+it('/setup walks the signed-in person through getting started', async () => {
+  stubApi().signIn()
+  renderAt('/setup')
+
+  expect(await screen.findByRole('heading', { name: 'Let the family see who you are' })).toBeInTheDocument()
+})
+
+it('/setup sends someone signed out to sign in', async () => {
+  stubApi()
+  renderAt('/setup')
+
+  expect(await screen.findByRole('heading', { name: 'Lakay se lakay' })).toBeInTheDocument()
 })
 
 it.each([...menuPages, ...adminPages])('$path ($label) opens inside the menu', async ({ path, label }) => {
