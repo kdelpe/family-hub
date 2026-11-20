@@ -8,6 +8,7 @@ import { ForgotPassword } from '../pages/ForgotPassword/ForgotPassword'
 import { HomeHearth } from '../pages/HomeHearth/HomeHearth'
 import { Login } from '../pages/Login/Login'
 import { ManageAccess } from '../pages/ManageAccess/ManageAccess'
+import { MyProfile } from '../pages/MyProfile/MyProfile'
 import { People } from '../pages/People/People'
 import { PersonProfile } from '../pages/PersonProfile/PersonProfile'
 import { RequestAccess } from '../pages/RequestAccess/RequestAccess'
@@ -20,6 +21,7 @@ const built: Record<string, ReactNode> = {
   '/': <HomeHearth />,
   '/people': <People />,
   '/directory': <Directory />,
+  '/profile': <MyProfile />,
   '/admin/members': <ManageAccess />,
 }
 
