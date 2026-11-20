@@ -66,7 +66,7 @@ export function RequestsCard({ personId }: { personId: string }) {
           </ul>
         </div>
       )}
-      <span role="status" className={styles.small}>
+      <span role="status" className={styles.answer}>
         {stopped && `Stopped sharing your ${yourDetail[stopped.kind]} with ${firstName(stopped.from.name)}.`}
       </span>
       <span className={styles.small}>Sharing shows it to that one person only. You can stop sharing any time.</span>
@@ -173,26 +173,28 @@ function SharedLine({ personId, request, onStopped }: { personId: string; reques
         {request.from.name} · {detail}
       </span>
       {confirming ? (
-        <div role="group" aria-label="Stop sharing?" className={styles.actions}>
+        <div role="group" aria-label="Stop sharing?" className={styles.stopping}>
           <span className={styles.confirm}>
             Stop sharing your {detail} with {firstName(request.from.name)}?
           </span>
-          <button
-            type="button"
-            onClick={() => !stop.isPending && stop.mutate('revoke')}
-            aria-disabled={stop.isPending || undefined}
-            className={`pill ${styles.save}`}
-          >
-            Yes, stop
-          </button>
-          <button
-            type="button"
-            onClick={() => !stop.isPending && setConfirming(false)}
-            aria-disabled={stop.isPending || undefined}
-            className={`pill ${styles.cancel}`}
-          >
-            Keep sharing
-          </button>
+          <div className={styles.choices}>
+            <button
+              type="button"
+              onClick={() => !stop.isPending && stop.mutate('revoke')}
+              aria-disabled={stop.isPending || undefined}
+              className={`pill ${styles.save}`}
+            >
+              Yes, stop
+            </button>
+            <button
+              type="button"
+              onClick={() => !stop.isPending && setConfirming(false)}
+              aria-disabled={stop.isPending || undefined}
+              className={`pill ${styles.cancel}`}
+            >
+              Keep sharing
+            </button>
+          </div>
         </div>
       ) : (
         <button type="button" onClick={() => setConfirming(true)} className={styles.remove}>

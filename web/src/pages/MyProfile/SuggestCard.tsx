@@ -164,7 +164,7 @@ function SuggestForm({ yourName, onDone }: { yourName: string; onDone: (sentTo: 
             readOnly={send.isPending}
             value={relatedTo}
             onChange={(e) => setRelatedTo(e.target.value)}
-            className={styles.input}
+            className={`${styles.input} ${styles.relatedTo}`}
           />
         </div>
       </fieldset>

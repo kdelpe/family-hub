@@ -479,13 +479,17 @@ form.who {
 
 .choices {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
+/* Equal widths while both fit on one line; stacked when one wouldn't. */
 .choices > .save,
 .choices > .cancel {
-  flex: 1;
-  padding: 0 12px;
+  flex: 1 1 0;
+  min-width: fit-content;
+  padding: 0 16px;
+  white-space: nowrap;
 }
 
 .answer {
@@ -525,8 +529,12 @@ form.who {
   line-height: 1.4;
 }
 
-.sharedLine > .actions {
-  padding-bottom: 8px;
+.stopping {
+  flex-basis: 100%;
+  padding: 6px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .suggest {
@@ -565,9 +573,12 @@ form.who {
   gap: 8px;
 }
 
-.relation {
-  flex: 1 1 140px;
+/* In the narrow column it wraps as "They're the [list]" then "of [name]". */
+.relation,
+.relatedTo {
+  flex: 1 1 110px;
   width: auto;
+  min-width: 0;
 }
 
 .date {
