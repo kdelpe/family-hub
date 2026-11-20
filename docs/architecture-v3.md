@@ -457,9 +457,9 @@ Only parent links and couples are stored. Everything else is computed from them,
 | **Half-siblings** | They share at least one family parent, and **each** has a family parent the other lacks. |
 | **Siblings (unspecified)** | They share at least one family parent, but neither rule above holds (typically one person's second parent simply isn't recorded yet). Shown as "sibling" rather than guessing full or half. |
 | **Step-parent** | A family parent's couple partner who isn't your parent by any link. Labelled "former step-parent" if that couple is `ended`. |
-| **Step-siblings** | Children (via family-parent links) of your step-parent who share no family parent with you. |
-| **Grandparents, aunts/uncles, cousins** | Walks over family-parent links only (lowest common ancestor). |
-| **In-laws** | One couple hop from the above. |
+| **Step-siblings** | Children (via family-parent links) of your step-parent who share no family parent with you. Only through a current couple: a former step-parent's children get no label. |
+| **Grandparents, aunts/uncles, cousins** | Walks over family-parent links only (lowest common ancestor). Cousins by degree and removal: "cousin", "second cousin", "cousin once removed". |
+| **In-laws** | One couple hop from the above, "former" when that couple is `ended`: your partner's relatives ("mother-in-law", "grandmother-in-law") and your relatives' partners ("son-in-law", "cousin-in-law"). Brother/sister-in-law whether the sibling is full or half. Two exceptions read as family: an aunt's or uncle's partner is your aunt or uncle, and your partner's niece or nephew is yours; a grandparent's partner who isn't your grandparent is a step-grandparent. |
 | **Foster parent / foster child** | A `foster` link, labelled as such; never counted as a parent for any rule above. |
 | **Foster siblings** | Share a foster parent, or one is a foster child of the other's family parent, and they aren't already siblings by the rules above. |
 

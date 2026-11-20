@@ -1,6 +1,5 @@
 import type { Tree } from '../api/tree'
-
-const childWord = { male: 'son', female: 'daughter' } as Record<string, string>
+import { gendered } from './relation'
 
 // "In the tree as Fritz and Fabienne’s son": where someone sits, by their parents' first names, father first
 // as the mockup writes it. Foster links aren't family parents (§3.4), so they're left out.
@@ -14,5 +13,5 @@ export function placeInTree(tree: Tree, personId: string): string {
   if (!person || parents.length === 0) {
     return 'In the tree'
   }
-  return `In the tree as ${parents.join(' and ')}’s ${childWord[person.gender ?? ''] ?? 'child'}`
+  return `In the tree as ${parents.join(' and ')}’s ${gendered(person.gender, 'son', 'daughter', 'child')}`
 }

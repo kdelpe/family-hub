@@ -7,6 +7,7 @@ const person = (id: string, first_name: string, gender: TreePerson['gender']): T
   id,
   first_name,
   last_name: 'Pluviose',
+  side: 'first',
   gender,
   is_deceased: false,
 })
@@ -30,7 +31,7 @@ const tree: Tree = {
     { id: '6', type: 'parent_child', subtype: 'adoptive', parent_id: 'rose', child_id: 'wesner' },
     { id: '7', type: 'parent_child', subtype: 'foster', parent_id: 'fritz', child_id: 'wesner' },
     { id: '8', type: 'parent_child', subtype: 'foster', parent_id: 'fabienne', child_id: 'peterson' },
-    { id: '5', type: 'couple', ended: false, person_ids: ['fabienne', 'fritz'] },
+    { id: '5', type: 'couple', subtype: 'married', ended: false, person_ids: ['fabienne', 'fritz'] },
   ],
 }
 

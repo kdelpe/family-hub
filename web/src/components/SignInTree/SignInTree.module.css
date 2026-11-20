@@ -78,6 +78,12 @@
   animation: swap-color 3s ease-in-out infinite;
 }
 
+/* Paused, the looping sway and leaf colours stop where they are; the growth still plays once. */
+.paused .sway,
+.paused .cycle {
+  animation-play-state: paused;
+}
+
 /* base.css turns the animations off; show the tree fully grown instead of undrawn. */
 @media (prefers-reduced-motion: reduce) {
   .draw {

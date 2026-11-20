@@ -23,6 +23,12 @@
   --warning-tint: #f6e3d4;
   --shadow-lift: rgba(43, 38, 32, 0.16);
   --shadow-press: rgba(43, 38, 32, 0.12);
+  /* People cards' top band, by family side (design-notes §4.3). */
+  --side-first: #edf2ee;
+  --side-second: #f3ece0;
+  --side-both: #f1ede3;
+  --side-married-in: #f2efe8;
+  --portrait-umber: #a89478;
 
   /* Illustration colors: the trees and the logo. Repeats point at the one color the mockups share. */
   --tree-branch: #8c7b5e;
