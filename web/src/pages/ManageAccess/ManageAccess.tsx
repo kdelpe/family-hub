@@ -48,8 +48,8 @@ export function ManageAccess() {
             aria-controls={`ma-panel-${id}`}
             tabIndex={tab === id ? 0 : -1}
             onKeyDown={(event) => {
-              const next = { ArrowRight: 1, ArrowLeft: -1 }[event.key]
-              if (next !== undefined) {
+              const next = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+              if (next !== 0) {
                 const to = tabs[(tabs.findIndex((t) => t.id === tab) + next + tabs.length) % tabs.length]!.id
                 setTab(to)
                 document.getElementById(`ma-tab-${to}`)?.focus()
