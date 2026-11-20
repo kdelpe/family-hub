@@ -89,6 +89,36 @@ describe('AppShell', () => {
     }
   })
 
+  it.each([
+    { name: 'counts only the requests waiting for an answer', statuses: ['pending', 'shared', 'pending'], link: 'My profile, 2 requests for your details' },
+    { name: 'says one in the singular', statuses: ['pending'], link: 'My profile, 1 request for your details' },
+  ])('badge on My profile: $name', async ({ statuses, link }) => {
+    const requests = statuses.map((status, i) => ({
+      id: `r${i}`,
+      kind: 'phone',
+      status,
+      created_at: '2026-11-01T10:00:00Z',
+      decided_at: null,
+      from: { person_id: 'p2', name: 'Darline Monestime' },
+    }))
+    stubApi({
+      '/api/auth/me': { status: 200, body: maya },
+      '/api/persons/p1': { status: 200, body: mayaPerson },
+      '/api/me/contact-requests': { status: 200, body: { requests } },
+    })
+    renderShell()
+
+    expect(await screen.findByRole('link', { name: link })).toHaveAttribute('href', '/profile')
+  })
+
+  it('asks for no requests for a login linked to nobody', async () => {
+    stubApi({ '/api/auth/me': { status: 200, body: { ...maya, person_id: null } } })
+    renderShell()
+
+    expect(await screen.findByText('Signed in as maya.pluviose@example.com')).toBeInTheDocument()
+    expect(fetch).not.toHaveBeenCalledWith('/api/me/contact-requests', expect.anything())
+  })
+
   it('names the login by its email when the person can’t be read', async () => {
     stubApi({ '/api/auth/me': { status: 200, body: maya }, '/api/persons/p1': { status: 500 } })
     renderShell()
