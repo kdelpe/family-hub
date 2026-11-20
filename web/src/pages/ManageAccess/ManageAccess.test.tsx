@@ -4,11 +4,12 @@ import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { Member } from '../../api/admin'
+import type { AccessRequestItem, Member } from '../../api/admin'
 import { authKeys } from '../../api/auth'
 import { personKeys } from '../../api/persons'
 import { memberStatus } from './Everyone'
 import { ManageAccess } from './ManageAccess'
+import { relatedLine, requestedWhen } from './Requests'
 
 const now = new Date('2026-11-20T12:00:00Z')
 
@@ -33,6 +34,39 @@ const members: Member[] = [
     status: 'invited',
     invite_expires_at: '2026-11-25T12:00:00Z',
   }),
+]
+
+const accessRequest = (over: Partial<AccessRequestItem>): AccessRequestItem => ({
+  id: 'ar-kervens',
+  full_name: 'Kervens Pluviose',
+  email: 'kervens.p@example.com',
+  side: 'first',
+  relationship: 'son',
+  related_names: [
+    { name: 'Fritz Pluviose', match: { person_id: 'p-fritz', name: 'Fritz Pluviose' } },
+    { name: 'Fabiene Pluvios', match: null },
+  ],
+  note: 'Fritz told me about the site.',
+  source: 'self',
+  suggested_by: null,
+  status: 'pending',
+  reviewed_at: null,
+  created_at: '2026-11-18T15:00:00Z',
+  ...over,
+})
+
+const requests: AccessRequestItem[] = [
+  accessRequest({}),
+  accessRequest({
+    id: 'ar-wesner',
+    full_name: 'Wesner Jean-Louis',
+    email: 'wesner.jl@example.com',
+    source: 'member_suggestion',
+    suggested_by: { person_id: 'p-fritz', name: 'Fritz Pluviose' },
+    note: null,
+    related_names: [],
+  }),
+  accessRequest({ id: 'ar-rose', full_name: 'Rose Monestime', email: 'rose.m@example.com', status: 'declined', note: null }),
 ]
 
 const tree = {
@@ -65,6 +99,7 @@ function stubApi(answers: Record<string, Answer>) {
 const listAnswers = {
   'GET /api/admin/users?limit=100': { status: 200, body: { users: members, next_cursor: null } },
   'GET /api/tree': { status: 200, body: tree },
+  'GET /api/admin/access-requests': { status: 200, body: { requests } },
 }
 
 function renderPage(role: 'admin' | 'member' = 'admin', { personLoaded = true } = {}) {
@@ -87,6 +122,11 @@ function renderPage(role: 'admin' | 'member' = 'admin', { personLoaded = true } 
   )
 }
 
+async function openInvite() {
+  await screen.findByRole('tab', { name: 'Everyone (4)' })
+  fireEvent.click(screen.getByRole('tab', { name: 'Invite someone' }))
+}
+
 const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } })
 
 afterEach(() => {
@@ -106,6 +146,26 @@ describe('memberStatus', () => {
   })
 })
 
+describe('requestedWhen', () => {
+  it.each([
+    { name: 'same day', created_at: '2026-11-20T08:00:00', source: 'self' as const, want: 'Requested today' },
+    { name: 'the day before', created_at: '2026-11-19T23:00:00', source: 'member_suggestion' as const, want: 'Suggested yesterday' },
+    { name: 'days before', created_at: '2026-11-18T01:00:00', source: 'self' as const, want: 'Requested 2 days ago' },
+  ])('$name: $want', ({ created_at, source, want }) => {
+    expect(requestedWhen(accessRequest({ created_at, source }), new Date('2026-11-20T12:00:00'))).toBe(want)
+  })
+})
+
+describe('relatedLine', () => {
+  it.each([
+    { relationship: 'daughter', want: 'Daughter of Frantz Monestime' },
+    { relationship: 'niece or nephew', want: 'Niece or nephew of Frantz Monestime' },
+    { relationship: null, want: 'Frantz Monestime' },
+  ])('$relationship: $want', ({ relationship, want }) => {
+    expect(relatedLine(relationship, 'Frantz Monestime')).toBe(want)
+  })
+})
+
 describe('ManageAccess', () => {
   it('sends a member home', async () => {
     stubApi(listAnswers)
@@ -117,15 +177,128 @@ describe('ManageAccess', () => {
   it('moves between tabs with the arrow keys', async () => {
     stubApi(listAnswers)
     renderPage()
-    const invite = await screen.findByRole('tab', { name: 'Invite someone' })
+    const first = await screen.findByRole('tab', { name: 'Requests (2)' })
 
-    fireEvent.keyDown(invite, { key: 'ArrowRight' })
+    fireEvent.keyDown(first, { key: 'ArrowLeft' })
 
     const everyone = screen.getByRole('tab', { name: 'Everyone (4)' })
     expect(everyone).toHaveAttribute('aria-selected', 'true')
     expect(everyone).toHaveFocus()
-    expect(invite).toHaveAttribute('tabindex', '-1')
+    expect(first).toHaveAttribute('tabindex', '-1')
     expect(screen.getByRole('table')).toBeInTheDocument()
+  })
+
+  it('shows each request, with what the tree knows of the names', async () => {
+    stubApi(listAnswers)
+    renderPage()
+
+    const first = await screen.findByRole('article', { name: 'Kervens Pluviose' })
+    expect(screen.getByRole('tab', { name: 'Requests (2)' })).toHaveAttribute('aria-selected', 'true')
+    expect(first).toHaveTextContent('Pluviose side')
+    expect(first).toHaveTextContent('Asked on the sign-in page')
+    expect(first).toHaveTextContent('Son of Fritz Pluviose✓ In the tree')
+    expect(first).toHaveTextContent('Son of Fabiene PluviosNot found — check spelling')
+    expect(first).toHaveTextContent('“Fritz told me about the site.”')
+    const [, suggested, declined] = screen.getAllByRole('article')
+    expect(suggested).toHaveTextContent('Suggested by Fritz Pluviose')
+    expect(suggested).toHaveTextContent(/Suggested (today|yesterday|\d+ days ago)/)
+    expect(within(declined!).getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+    expect(declined).toHaveTextContent('Set aside')
+  })
+
+  it.each([
+    { name: 'sets a request aside', article: 'Kervens Pluviose', button: 'Not now', path: '/api/admin/access-requests/ar-kervens/decline' },
+    { name: 'undoes a set-aside', article: 'Rose Monestime', button: 'Undo', path: '/api/admin/access-requests/ar-rose/reopen' },
+  ])('$name, then rereads the queue', async ({ article, button, path }) => {
+    const fetch = stubApi({ ...listAnswers, [`POST ${path}`]: { status: 204 } })
+    renderPage()
+
+    fireEvent.click(within(await screen.findByRole('article', { name: article })).getByRole('button', { name: button }))
+
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith(path, expect.objectContaining({ method: 'POST' })))
+    await vi.waitFor(() =>
+      expect(fetch.mock.calls.filter(([url]) => url === '/api/admin/access-requests')).toHaveLength(2),
+    )
+  })
+
+  it('says when another request from that email is already waiting', async () => {
+    stubApi({
+      ...listAnswers,
+      'POST /api/admin/access-requests/ar-rose/reopen': { status: 409, body: { error: { code: 'conflict', message: 'x' } } },
+    })
+    renderPage()
+
+    fireEvent.click(within(await screen.findByRole('article', { name: 'Rose Monestime' })).getByRole('button', { name: 'Undo' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Another request from this email is already waiting.')
+  })
+
+  it('approves a request through the invite form, filled in for them', async () => {
+    const fetch = stubApi({ ...listAnswers, 'POST /api/admin/users': { status: 201, body: { id: 'u-kervens' } } })
+    renderPage()
+    await screen.findByRole('tab', { name: 'Everyone (4)' })
+
+    fireEvent.click(
+      within(screen.getByRole('article', { name: 'Kervens Pluviose' })).getByRole('button', { name: 'Approve & invite' }),
+    )
+
+    expect(screen.getByRole('tab', { name: 'Invite someone' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('Selected')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveValue('kervens.p@example.com')
+    expect(screen.getByRole('button', { name: /Maya Pluviose.*You/ })).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Invitation sent to Kervens, from Maya Pluviose')
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/admin/users',
+      expect.objectContaining({
+        body: JSON.stringify({
+          email: 'kervens.p@example.com',
+          role: 'member',
+          person_id: 'p-kervens',
+          from_person_id: 'p-maya',
+          access_request_id: 'ar-kervens',
+        }),
+      }),
+    )
+    await vi.waitFor(() =>
+      expect(fetch.mock.calls.filter(([url]) => url === '/api/admin/access-requests')).toHaveLength(2),
+    )
+  })
+
+  it('offers the member who suggested them as the sender, first and picked', async () => {
+    stubApi(listAnswers)
+    renderPage()
+    await screen.findByRole('tab', { name: 'Everyone (4)' })
+
+    fireEvent.click(within(screen.getAllByRole('article')[1]!).getByRole('button', { name: 'Approve & invite' }))
+
+    const senders = within(screen.getByRole('group', { name: 'Invitation from' })).getAllByRole('button')
+    expect(senders.map((b) => b.textContent)).toEqual([
+      'FPFritz PluvioseSuggested Wesner',
+      'MPMaya PluvioseYou',
+      'NPNadège PluvioseAdmin',
+    ])
+    expect(senders[0]).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('stops approving the request once the email is changed', async () => {
+    const fetch = stubApi({ ...listAnswers, 'POST /api/admin/users': { status: 201, body: { id: 'u-kervens' } } })
+    renderPage()
+    await screen.findByRole('tab', { name: 'Everyone (4)' })
+    fireEvent.click(
+      within(screen.getByRole('article', { name: 'Kervens Pluviose' })).getByRole('button', { name: 'Approve & invite' }),
+    )
+
+    type('Email', 'someone.else@example.com')
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
+
+    await screen.findByRole('status')
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/admin/users',
+      expect.objectContaining({ body: expect.not.stringContaining('access_request_id') }),
+    )
   })
 
   it('lists everyone with one action each', async () => {
@@ -180,7 +353,7 @@ describe('ManageAccess', () => {
   it('finds a living person in the tree and marks who already has a login', async () => {
     stubApi(listAnswers)
     renderPage()
-    await screen.findByRole('tab', { name: 'Everyone (4)' })
+    await openInvite()
 
     type('Find a person in the tree', 'plu')
 
@@ -196,7 +369,7 @@ describe('ManageAccess', () => {
   it('invites them from whoever is picked, then says so', async () => {
     const fetch = stubApi({ ...listAnswers, 'POST /api/admin/users': { status: 201, body: member({ id: 'u-kervens' }) } })
     renderPage()
-    await screen.findByRole('tab', { name: 'Everyone (4)' })
+    await openInvite()
 
     type('Find a person in the tree', 'kerv')
     fireEvent.click(await screen.findByRole('button', { name: /Kervens Pluviose/ }))
@@ -223,7 +396,7 @@ describe('ManageAccess', () => {
   it('still sends in your name when your own person couldn’t be read', async () => {
     stubApi(listAnswers)
     renderPage('admin', { personLoaded: false })
-    await screen.findByRole('tab', { name: 'Everyone (4)' })
+    await openInvite()
 
     expect(screen.getByRole('button', { name: /Maya Pluviose.*You/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('complementary', { name: 'Invitation preview' })).toHaveTextContent(
@@ -239,7 +412,7 @@ describe('ManageAccess', () => {
       url === '/api/admin/users' && init?.method === 'POST' ? new Promise<Response>((r) => (answer = r)) : listed(url, init),
     )
     renderPage()
-    await screen.findByRole('tab', { name: 'Everyone (4)' })
+    await openInvite()
     type('Find a person in the tree', 'kerv')
     fireEvent.click(await screen.findByRole('button', { name: /Kervens Pluviose/ }))
     type('Email', 'kervens.p@example.com')
@@ -256,7 +429,7 @@ describe('ManageAccess', () => {
   it('asks for the person before sending', async () => {
     const fetch = stubApi(listAnswers)
     renderPage()
-    await screen.findByRole('tab', { name: 'Everyone (4)' })
+    await openInvite()
     type('Email', 'kervens.p@example.com')
 
     fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
@@ -269,10 +442,11 @@ describe('ManageAccess', () => {
     { code: 'email_taken', status: 409, want: 'That email already has a login.' },
     { code: 'person_taken', status: 409, want: 'Kervens already has a login.' },
     { code: 'mail_failed', status: 502, want: 'The email couldn’t be sent, so nothing was saved. Try again.' },
+    { code: 'conflict', status: 409, want: 'Another admin already handled this request. Reload the page.' },
   ])('explains $code', async ({ code, status, want }) => {
     stubApi({ ...listAnswers, 'POST /api/admin/users': { status, body: { error: { code, message: 'x' } } } })
     renderPage()
-    await screen.findByRole('tab', { name: 'Everyone (4)' })
+    await openInvite()
     type('Find a person in the tree', 'kerv')
     fireEvent.click(await screen.findByRole('button', { name: /Kervens Pluviose/ }))
     type('Email', 'kervens.p@example.com')

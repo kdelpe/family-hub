@@ -2,11 +2,11 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import { type FormEvent, useState } from 'react'
 import { Link } from 'react-router'
 
-import { adminKeys, invite, type InviteInput, type Member } from '../../api/admin'
+import { type AccessRequestItem, adminKeys, invite, type InviteInput, type Member } from '../../api/admin'
 import { ApiError } from '../../api/client'
 import { getTree, type TreePerson, treeKeys } from '../../api/tree'
 import { errorMessage } from '../../lib/errorMessage'
-import { fullName, initials, nameMatches } from '../../lib/names'
+import { foldName, fullName, initials, nameMatches } from '../../lib/names'
 import { placeInTree } from '../../lib/placeInTree'
 import { useSignedIn } from '../../lib/useSignedIn'
 import styles from './ManageAccess.module.css'
@@ -21,7 +21,10 @@ const roles: { id: Role; label: string; hint: string }[] = [
 
 const maxMatches = 6
 
-export function InviteForm({ members }: { members: UseQueryResult<Member[]> }) {
+// A request being approved; n changes on every click, so approving the same one again fills the form again.
+export type Approval = { request: AccessRequestItem; n: number }
+
+export function InviteForm({ members, approval }: { members: UseQueryResult<Member[]>; approval: Approval | null }) {
   const { user, person } = useSignedIn()
   // The members list names you too, for when your own person couldn't be read.
   const me = person ?? members.data?.find((m) => m.id === user?.id)?.person ?? undefined
@@ -34,12 +37,34 @@ export function InviteForm({ members }: { members: UseQueryResult<Member[]> }) {
   // null until picked: the default is you, when you're in the tree.
   const [pickedFrom, setPickedFrom] = useState<string | null>(null)
   const [missingPerson, setMissingPerson] = useState(false)
+  const [request, setRequest] = useState<AccessRequestItem | null>(null)
+  const [seenApproval, setSeenApproval] = useState(approval)
 
-  const senders = sendersFor(me, members.data)
+  const withLogin = new Set(members.data?.flatMap((m) => (m.person ? [m.person.id] : [])))
+  if (approval !== seenApproval) {
+    setSeenApproval(approval)
+    if (approval) {
+      const r = approval.request
+      // Picked straight away when exactly one living person without a login has that name.
+      const same = (tree.data?.persons ?? []).filter(
+        (p) => !p.is_deceased && !withLogin.has(p.id) && foldName(fullName(p)) === foldName(r.full_name),
+      )
+      setRequest(r)
+      setQuery(r.full_name)
+      setPersonId(same.length === 1 ? same[0]!.id : null)
+      setEmail(r.email)
+      setRole('member')
+      setPickedFrom(r.suggested_by?.person_id ?? null)
+      setMissingPerson(false)
+    }
+  }
+  // The request is approved only while the email is still theirs, so an unrelated invite can't approve it.
+  const approving = request && email.trim().toLowerCase() === request.email.toLowerCase() ? request : null
+
+  const senders = sendersFor(me, members.data, approving)
   // A pick that is no longer a sender (disabled meanwhile) falls back to you, so what's pressed is what's sent.
   const from = senders.find((s) => s.personId === pickedFrom) ?? senders.find((s) => s.personId === me?.id) ?? null
   const invitee = tree.data?.persons.find((p) => p.id === personId) ?? null
-  const withLogin = new Set(members.data?.flatMap((m) => (m.person ? [m.person.id] : [])))
 
   const send = useMutation({
     // The names ride along, so the note after sending says who it was for and from as they were when sent.
@@ -50,7 +75,9 @@ export function InviteForm({ members }: { members: UseQueryResult<Member[]> }) {
       setEmail('')
       setRole('member')
       setPickedFrom(null)
+      setRequest(null)
       void queryClient.invalidateQueries({ queryKey: adminKeys.members })
+      void queryClient.invalidateQueries({ queryKey: adminKeys.requests })
     },
   })
   const sent = send.isSuccess ? send.variables : undefined
@@ -65,7 +92,13 @@ export function InviteForm({ members }: { members: UseQueryResult<Member[]> }) {
       return
     }
     send.mutate({
-      input: { email, role, person_id: personId, ...(from ? { from_person_id: from.personId } : {}) },
+      input: {
+        email,
+        role,
+        person_id: personId,
+        ...(from ? { from_person_id: from.personId } : {}),
+        ...(approving ? { access_request_id: approving.id } : {}),
+      },
       inviteeFirst: invitee?.first_name ?? '',
       fromName: from?.name ?? null,
     })
@@ -292,16 +325,24 @@ function Avatar({ person }: { person: { first_name: string; last_name: string | 
   return <span className={styles.avatar}>{initials(person)}</span>
 }
 
-// You first, then the other admins who can send one: linked to someone, signed up and not disabled.
+// Whoever suggested the person being approved, then you, then the other admins: each linked to someone, signed
+// up and not disabled, as the server requires of a sender.
 function sendersFor(
   me: { id: string; first_name: string; last_name: string | null } | undefined,
   members: Member[] | undefined,
+  approving: AccessRequestItem | null,
 ): Sender[] {
   const senders: Sender[] = []
   const add = (p: { id: string; first_name: string; last_name: string | null }, hint: string) => {
     if (!senders.some((s) => s.personId === p.id)) {
       senders.push({ personId: p.id, name: fullName(p), first: p.first_name, initials: initials(p), hint })
     }
+  }
+  const suggester = members?.find(
+    (m) => m.status === 'active' && m.person && m.person.id === approving?.suggested_by?.person_id,
+  )?.person
+  if (suggester && approving) {
+    add(suggester, `Suggested ${approving.full_name.split(' ')[0]}`)
   }
   if (me) {
     add(me, 'You')
@@ -323,6 +364,8 @@ function inviteErrorMessage(error: Error, invitee: TreePerson | null): string {
         return `${invitee?.first_name ?? 'They'} already has a login.`
       case 'mail_failed':
         return 'The email couldn’t be sent, so nothing was saved. Try again.'
+      case 'conflict':
+        return 'Another admin already handled this request. Reload the page.'
       case 'validation_error':
         // Besides a bad email, the person or the sender may have changed since the page loaded.
         return 'Check the email address. If it looks right, reload the page: who you picked may have changed.'
