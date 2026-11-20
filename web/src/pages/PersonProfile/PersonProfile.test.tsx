@@ -263,6 +263,25 @@ describe('PersonProfile', () => {
     expect(screen.queryByText('Mobile: (555) 010-4121')).not.toBeInTheDocument()
   })
 
+  it('hides a shared phone number while a refresh is on its way', async () => {
+    const fetch = renderPage({ contacts: shared })
+    expect(await screen.findByText('Mobile: (555) 010-4121')).toBeInTheDocument()
+    const answer = fetch.getMockImplementation()!
+    let respond: (value: Response) => void = () => {}
+    fetch.mockImplementation((url, init) =>
+      url === '/api/persons/nadege/contacts' ? new Promise((resolve) => (respond = resolve)) : answer(url, init),
+    )
+
+    act(() => {
+      focusManager.setFocused(false)
+      focusManager.setFocused(true)
+    })
+
+    await waitFor(() => expect(screen.queryByText('Mobile: (555) 010-4121')).not.toBeInTheDocument())
+    act(() => respond(Response.json({ contacts: shared })))
+    expect(await screen.findByText('Mobile: (555) 010-4121')).toBeInTheDocument()
+  })
+
   it('says when there’s no such person', async () => {
     renderPage({ answers: { 'GET /api/persons/nadege': { status: 404, body: { error: { code: 'not_found', message: 'x' } } } } })
 

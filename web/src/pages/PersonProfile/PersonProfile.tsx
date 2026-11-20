@@ -92,8 +92,9 @@ export function PersonProfile() {
                 key={p.id}
                 personId={p.id}
                 contacts={contacts.data}
-                // Admins and the person themself get every value; only what was shared with you shows here.
-                showShared={user?.role !== 'admin' && viewerId !== p.id}
+                // Admins and the person themself get every value; only what was shared with you shows here, and not
+                // while a refresh (or its retries) runs, since the share may have been taken back.
+                showShared={user?.role !== 'admin' && viewerId !== p.id && !contacts.isFetching}
               />
             )}
           </div>
