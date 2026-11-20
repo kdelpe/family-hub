@@ -47,7 +47,7 @@ var (
 			hosts: []string{"x.com", "twitter.com"}, base: "https://x.com",
 			profile: regexp.MustCompile(`^/[A-Za-z0-9_]{1,100}/?$`), handle: func(h string) string { return "/" + h },
 			notProfiles: set("home", "search", "explore", "i", "intent", "settings", "messages", "notifications", "share",
-				"login", "compose"),
+				"login", "signup", "compose"),
 		},
 		"youtube": {
 			hosts: []string{"youtube.com"}, base: "https://www.youtube.com",

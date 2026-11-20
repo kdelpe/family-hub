@@ -45,6 +45,8 @@ func TestProfileLink(t *testing.T) {
 		{name: "a handle that's a site page", platform: new("x"), value: "home"},
 		{name: "a name that's a site page on another platform", platform: new("instagram"), value: "events", want: new("https://www.instagram.com/events")},
 		{name: "a YouTube handle named like a page", platform: new("youtube"), value: "@watch", want: new("https://www.youtube.com/@watch")},
+		{name: "X's sign-up page as a handle", platform: new("x"), value: "signup"},
+		{name: "X's sign-up page as a link", platform: new("x"), value: "https://x.com/signup"},
 		{name: "the bare site as a handle", platform: new("instagram"), value: "www.instagram.com"},
 		{name: "Facebook's friends page", platform: new("facebook"), value: "https://www.facebook.com/friends"},
 		{name: "a numbered profile on another platform", platform: new("x"), value: "https://x.com/profile.php?id=1"},
