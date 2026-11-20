@@ -96,44 +96,6 @@
   color: var(--on-accent);
 }
 
-.ask {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.askButton {
-  height: 48px;
-  padding: 0 22px;
-  border: 1px dashed var(--line);
-  border-radius: 24px;
-  background: transparent;
-  font: inherit;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.asked {
-  min-height: 48px;
-  padding: 0 4px;
-  display: flex;
-  align-items: center;
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.askError {
-  max-width: 320px;
-  font-size: 14px;
-}
-
-.shared {
-  padding: 6px 14px;
-  border-radius: 16px;
-  background: var(--chip);
-  font-size: 15px;
-}
-
 .family {
   padding: 24px;
   border-radius: 16px;

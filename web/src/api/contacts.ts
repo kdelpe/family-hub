@@ -1,14 +1,18 @@
 import { api } from './client'
+import type { TreePerson } from './tree'
 
 export type RequestKind = 'phone' | 'whatsapp' | 'address'
 
 export type ContactMethod = {
   id: string
-  kind: 'email' | 'phone' | 'address' | 'social'
+  kind: 'email' | 'phone' | 'address' | 'social' | 'other'
   platform: string | null
   label: string | null
   value: string
   visibility: 'family' | 'on_request' | 'hidden'
+  // The only link a page may make of a social account (§5.2), built by the server; null for anything else.
+  href: string | null
+  shared_with_you: boolean
 }
 
 // An on_request kind the viewer can't see yet, never its value (§5.2).
@@ -18,8 +22,36 @@ export type Contact = ContactMethod | Requestable
 
 export const isRequestable = (c: Contact): c is Requestable => 'requestable' in c
 
+export const requestKinds: RequestKind[] = ['phone', 'whatsapp', 'address']
+
+export const kindWords: Record<RequestKind, string> = { phone: 'Phone number', whatsapp: 'WhatsApp', address: 'Address' }
+
+// Which kind of request a phone, WhatsApp or address row answers; null for anything else.
+export const kindOf = (c: ContactMethod): RequestKind | null =>
+  c.platform === 'whatsapp' ? 'whatsapp' : c.kind === 'phone' || c.kind === 'address' ? c.kind : null
+
 export const contactKeys = {
   of: (personId: string) => ['contacts', personId] as const,
+}
+
+export const directoryKeys = {
+  all: ['directory'] as const,
+}
+
+export type DirectoryEntry = {
+  id: string
+  first_name: string
+  last_name: string | null
+  side: TreePerson['side']
+  contacts: Contact[]
+}
+
+// Never kept once the page is left, like a person's contacts.
+export const directoryQuery = {
+  queryKey: directoryKeys.all,
+  queryFn: async ({ signal }: { signal?: AbortSignal }) =>
+    (await api<{ people: DirectoryEntry[] }>('GET', '/directory', { signal })).people,
+  gcTime: 0,
 }
 
 // Never kept once no page shows them (§5.2): each visit asks afresh, so a share taken back is gone at once.
@@ -38,3 +70,15 @@ export const askFor = (personId: string, kind: RequestKind) =>
     `/persons/${encodeURIComponent(personId)}/contact-requests`,
     { body: { kind } },
   )
+
+const platformLabels: Record<string, string> = {
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  tiktok: 'TikTok',
+  linkedin: 'LinkedIn',
+  x: 'X',
+  youtube: 'YouTube',
+  whatsapp: 'WhatsApp',
+}
+
+export const platformLabel = (platform: string | null) => (platform && platformLabels[platform]) || 'Other'

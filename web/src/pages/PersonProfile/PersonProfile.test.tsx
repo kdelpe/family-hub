@@ -155,7 +155,7 @@ describe('PersonProfile', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Request phone number' }))
 
-    expect(await screen.findByText('✓ Phone number requested')).toBeInTheDocument()
+    expect(await screen.findByText('Phone number requested', { selector: '[role=status]' })).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(
       '/api/persons/nadege/contact-requests',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ kind: 'phone' }) }),
@@ -175,16 +175,25 @@ describe('PersonProfile', () => {
     })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Request phone number' }))
-    await screen.findByText('✓ Phone number requested')
+    await screen.findByText('Phone number requested', { selector: '[role=status]' })
     fireEvent.click(screen.getByRole('link', { name: /Jean-Robert Pluviose/ }))
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Jean-Robert Pluviose' })).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: 'Request phone number' })).toBeInTheDocument()
-    expect(screen.queryByText('✓ Phone number requested')).not.toBeInTheDocument()
+    expect(screen.queryByText('Phone number requested')).not.toBeInTheDocument()
   })
 
   it('asks for contacts afresh on each visit, never showing what an earlier one saw', async () => {
-    const sharedPhone: Contact = { id: 'c1', kind: 'phone', platform: null, label: null, value: '+1 718 555 0123', visibility: 'on_request' }
+    const sharedPhone: Contact = {
+      id: 'c1',
+      kind: 'phone',
+      platform: null,
+      label: null,
+      value: '+1 718 555 0123',
+      visibility: 'on_request',
+      href: null,
+      shared_with_you: true,
+    }
     renderPage({
       answers: {
         'GET /api/persons/nadege/contacts': [
@@ -204,7 +213,7 @@ describe('PersonProfile', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Nadège Pluviose' })).toBeInTheDocument()
     expect(screen.queryByText('Phone: +1 718 555 0123')).not.toBeInTheDocument()
-    expect(await screen.findByText('✓ Phone number requested')).toBeInTheDocument()
+    expect(await screen.findByText('Phone number requested', { selector: ':not([role=status])' })).toBeInTheDocument()
     expect(screen.queryByText('Phone: +1 718 555 0123')).not.toBeInTheDocument()
   })
 
@@ -216,7 +225,7 @@ describe('PersonProfile', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Request phone number' }))
 
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Request phone number' })).not.toBeInTheDocument())
-    expect(screen.queryByText('✓ Phone number requested')).not.toBeInTheDocument()
+    expect(screen.queryByText('Phone number requested')).not.toBeInTheDocument()
   })
 
   it.each([
@@ -239,16 +248,35 @@ describe('PersonProfile', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Your login isn’t linked to you in the tree yet')
   })
 
-  const shared: Contact[] = [
-    { id: 'c1', kind: 'phone', platform: null, label: 'Mobile', value: '(555) 010-4121', visibility: 'on_request' },
-    { id: 'c2', kind: 'email', platform: null, label: null, value: 'nadege.p@example.com', visibility: 'family' },
+  const contactsWith = (sharedWithYou: boolean): Contact[] => [
+    {
+      id: 'c1',
+      kind: 'phone',
+      platform: null,
+      label: 'Mobile',
+      value: '(555) 010-4121',
+      visibility: 'on_request',
+      href: null,
+      shared_with_you: sharedWithYou,
+    },
+    {
+      id: 'c2',
+      kind: 'email',
+      platform: null,
+      label: null,
+      value: 'nadege.p@example.com',
+      visibility: 'family',
+      href: null,
+      shared_with_you: false,
+    },
   ]
 
+  // An admin gets every row, none marked shared with them.
   it.each([
-    { role: 'member' as const, shown: true },
-    { role: 'admin' as const, shown: false },
-  ])('shows a shared phone number to a $role: $shown', async ({ role, shown }) => {
-    renderPage({ role, contacts: shared })
+    { name: 'shared with you', sharedWithYou: true, shown: true },
+    { name: 'an admin’s view', sharedWithYou: false, shown: false },
+  ])('shows a phone number only when $name', async ({ sharedWithYou, shown }) => {
+    renderPage({ role: sharedWithYou ? 'member' : 'admin', contacts: contactsWith(sharedWithYou) })
 
     await screen.findByRole('heading', { level: 1, name: 'Nadège Pluviose' })
     await screen.findByRole('link', { name: 'Center the tree on Nadège' })
@@ -260,7 +288,7 @@ describe('PersonProfile', () => {
     renderPage({
       answers: {
         'GET /api/persons/nadege/contacts': [
-          { status: 200, body: { contacts: shared } },
+          { status: 200, body: { contacts: contactsWith(true) } },
           { status: 500, body: { error: { code: 'internal', message: 'x' } } },
         ],
       },
@@ -278,7 +306,7 @@ describe('PersonProfile', () => {
   })
 
   it('hides a shared phone number while a refresh is on its way', async () => {
-    const fetch = renderPage({ contacts: shared })
+    const fetch = renderPage({ contacts: contactsWith(true) })
     expect(await screen.findByText('Mobile: (555) 010-4121')).toBeInTheDocument()
     const answer = fetch.getMockImplementation()!
     let respond: (value: Response) => void = () => {}
@@ -292,7 +320,7 @@ describe('PersonProfile', () => {
     })
 
     await waitFor(() => expect(screen.queryByText('Mobile: (555) 010-4121')).not.toBeInTheDocument())
-    act(() => respond(Response.json({ contacts: shared })))
+    act(() => respond(Response.json({ contacts: contactsWith(true) })))
     expect(await screen.findByText('Mobile: (555) 010-4121')).toBeInTheDocument()
   })
 

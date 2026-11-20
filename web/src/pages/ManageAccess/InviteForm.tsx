@@ -4,7 +4,7 @@ import { Link } from 'react-router'
 
 import { type AccessRequestItem, adminKeys, invite, type InviteInput, type Member } from '../../api/admin'
 import { ApiError } from '../../api/client'
-import { getTree, type TreePerson, treeKeys } from '../../api/tree'
+import { type TreePerson, treeQuery } from '../../api/tree'
 import { errorMessage } from '../../lib/errorMessage'
 import { foldName, fullName, initials, nameMatches } from '../../lib/names'
 import { placeInTree } from '../../lib/placeInTree'
@@ -29,7 +29,7 @@ export function InviteForm({ members, approval }: { members: UseQueryResult<Memb
   // The members list names you too, for when your own person couldn't be read.
   const me = person ?? members.data?.find((m) => m.id === user?.id)?.person ?? undefined
   const queryClient = useQueryClient()
-  const tree = useQuery({ queryKey: treeKeys.all, queryFn: ({ signal }) => getTree({ signal }) })
+  const tree = useQuery(treeQuery)
   const [query, setQuery] = useState('')
   const [personId, setPersonId] = useState<string | null>(null)
   const [email, setEmail] = useState('')
