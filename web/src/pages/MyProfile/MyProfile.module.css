@@ -454,6 +454,16 @@ form.who {
   height: 44px;
 }
 
+.sideText {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.sideText:empty {
+  display: none;
+}
+
 .requests {
   border: 2px solid var(--accent);
 }
@@ -517,6 +527,47 @@ form.who {
 
 .sharedLine > .actions {
   padding-bottom: 8px;
+}
+
+.suggest {
+  height: 44px;
+  border: 1px solid var(--accent);
+  border-radius: 22px;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.suggestForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.related {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.related legend {
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.relation {
+  flex: 1 1 140px;
+  width: auto;
 }
 
 .date {

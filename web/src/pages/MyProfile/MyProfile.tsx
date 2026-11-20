@@ -16,8 +16,9 @@ import { ContactDetails } from './ContactDetails'
 import styles from './MyProfile.module.css'
 import { RequestsCard } from './RequestsCard'
 import { SignInCard } from './SignInCard'
+import { SuggestCard } from './SuggestCard'
 
-// design-notes §4.8. Suggest a relative comes next; photo uploads arrive in Phase 5.
+// design-notes §4.8. Photo uploads arrive in Phase 5.
 export function MyProfile() {
   const { user, person } = useSignedIn()
   if (!user) {
@@ -45,13 +46,16 @@ export function MyProfile() {
         )}
       </div>
       <aside className={styles.aside}>
-        {/* Keyed by person too: answers given for one person never stay for another. */}
+        {/* Keyed by person too: answers given and names typed for one person never stay for another. */}
         {person && <RequestsCard key={person.id} personId={person.id} />}
         <SignInCard email={user.email} />
         {person && (
-          <Link to="/tree" className={`pill ${styles.seeMe}`}>
-            See me in the tree
-          </Link>
+          <>
+            <SuggestCard key={person.id} yourName={fullName(person)} />
+            <Link to="/tree" className={`pill ${styles.seeMe}`}>
+              See me in the tree
+            </Link>
+          </>
         )}
       </aside>
     </main>

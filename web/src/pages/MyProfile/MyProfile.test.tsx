@@ -142,6 +142,19 @@ describe('MyProfile', () => {
     expect(screen.getByRole('switch', { name: 'Instagram' })).toBeInTheDocument()
   })
 
+  it('puts the side column in the mockup’s order', async () => {
+    renderPage()
+
+    const aside = within(screen.getByRole('complementary'))
+    expect(aside.getAllByRole('heading').map((h) => h.textContent)).toEqual([
+      'Requests for your details',
+      'Sign-in',
+      'Know someone who should be here?',
+    ])
+    expect(aside.getByRole('link', { name: 'See me in the tree' })).toBeInTheDocument()
+    expect(await aside.findByText('No requests right now.')).toBeInTheDocument()
+  })
+
   it('saves the story only once it changed', async () => {
     const { fetch } = renderPage({
       'PATCH /api/persons/maya': { status: 200, body: { ...maya, bio: 'Nurse in Boston.' } },
@@ -272,6 +285,7 @@ describe('MyProfile', () => {
     expect(screen.queryByRole('link', { name: 'See me in the tree' })).not.toBeInTheDocument()
     // Both answer a login linked to nobody with a 403.
     expect(screen.queryByRole('heading', { name: 'Requests for your details' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Suggest a relative' })).not.toBeInTheDocument()
     expect(fetch).not.toHaveBeenCalledWith('/api/me/contacts', expect.anything())
     expect(fetch).not.toHaveBeenCalledWith('/api/me/contact-requests', expect.anything())
   })
@@ -481,6 +495,29 @@ describe('MyProfile', () => {
     // It was filled in with Maya's name and birthday.
     expect(screen.queryByRole('form', { name: 'Your details' })).not.toBeInTheDocument()
     expect(screen.queryByRole('form', { name: 'Add a contact' })).not.toBeInTheDocument()
+  })
+
+  it('drops answers given and a suggestion begun for you when an admin relinks your login', async () => {
+    const asked = { id: 'r1', kind: 'phone', status: 'pending', created_at: '2026-11-01T10:00:00Z', decided_at: null, from: { person_id: 'darline', name: 'Darline Monestime' } }
+    const answers: Record<string, Answer> = {
+      'GET /api/me/contact-requests': { status: 200, body: { requests: [asked] } },
+      'POST /api/me/contact-requests/r1/decline': { status: 204 },
+    }
+    const { client } = renderPage(answers)
+    fireEvent.click(await screen.findByRole('button', { name: 'Not now' }))
+    answers['GET /api/me/contact-requests'] = { status: 200, body: { requests: [] } }
+    await screen.findByText('Not shared. Darline won’t be told.')
+    fireEvent.click(screen.getByRole('button', { name: 'Suggest a relative' }))
+    fireEvent.change(screen.getByLabelText('Their full name'), { target: { value: 'Darline Monestime' } })
+    client.setQueryData(personKeys.one('fritz'), { ...maya, id: 'fritz', first_name: 'Fritz' })
+
+    act(() => client.setQueryData(authKeys.me, { id: 'u', email: 'maya@example.com', role: 'member', person_id: 'fritz' }))
+
+    expect(await screen.findByText('No requests right now.')).toBeInTheDocument()
+    expect(screen.queryByText('Not shared. Darline won’t be told.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('form', { name: 'Suggest a relative' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Suggest a relative' }))
+    expect(screen.getByLabelText('Related to')).toHaveValue('Fritz Pluviose')
   })
 
   it.each([

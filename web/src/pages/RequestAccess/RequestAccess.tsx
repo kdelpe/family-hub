@@ -2,24 +2,11 @@ import { useMutation } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
-import { type FamilySide, requestAccess } from '../../api/accessRequests'
+import { type FamilySide, relationships, requestAccess } from '../../api/accessRequests'
 import { errorMessage } from '../../lib/errorMessage'
 import { familySides } from '../../lib/familySides'
 import page from '../../styles/signInForm.module.css'
 import styles from './RequestAccess.module.css'
-
-const relationships = [
-  'daughter',
-  'son',
-  'grandchild',
-  'sister',
-  'brother',
-  'niece or nephew',
-  'cousin',
-  'wife, husband or partner',
-  'mother or father',
-  'other relative',
-]
 
 const maxNames = 4
 
