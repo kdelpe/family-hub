@@ -113,6 +113,73 @@ func (q *Queries) GetPerson(ctx context.Context, arg GetPersonParams) (GetPerson
 	return i, err
 }
 
+const getPersons = `-- name: GetPersons :many
+SELECT p.id, p.first_name, p.middle_name, p.last_name, p.maiden_name, p.side, p.birth_place, p.gender,
+  coalesce(masked_birth_date(p, $1::boolean, $2::uuid), '')::text AS birth_date,
+  p.birth_date_precision, p.death_date, p.death_date_precision, p.is_deceased, p.bio
+FROM persons p
+WHERE p.id = ANY($3::uuid[]) AND p.deleted_at IS NULL
+ORDER BY lower(p.search_name), p.id
+`
+
+type GetPersonsParams struct {
+	ViewerIsAdmin  bool
+	ViewerPersonID *uuid.UUID
+	Ids            []uuid.UUID
+}
+
+type GetPersonsRow struct {
+	ID                 uuid.UUID
+	FirstName          string
+	MiddleName         *string
+	LastName           *string
+	MaidenName         *string
+	Side               *string
+	BirthPlace         *string
+	Gender             *string
+	BirthDate          string
+	BirthDatePrecision *string
+	DeathDate          *time.Time
+	DeathDatePrecision *string
+	IsDeceased         bool
+	Bio                *string
+}
+
+func (q *Queries) GetPersons(ctx context.Context, arg GetPersonsParams) ([]GetPersonsRow, error) {
+	rows, err := q.db.Query(ctx, getPersons, arg.ViewerIsAdmin, arg.ViewerPersonID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPersonsRow
+	for rows.Next() {
+		var i GetPersonsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.MiddleName,
+			&i.LastName,
+			&i.MaidenName,
+			&i.Side,
+			&i.BirthPlace,
+			&i.Gender,
+			&i.BirthDate,
+			&i.BirthDatePrecision,
+			&i.DeathDate,
+			&i.DeathDatePrecision,
+			&i.IsDeceased,
+			&i.Bio,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPersons = `-- name: ListPersons :many
 
 SELECT p.id, p.first_name, p.middle_name, p.last_name, p.maiden_name, p.side, p.birth_place, p.gender,
