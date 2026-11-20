@@ -106,6 +106,27 @@ describe('People', () => {
     expect(names()).toEqual(want)
   })
 
+  it('shows 60 cards at a time, starting over on a new search', async () => {
+    const extra = Array.from({ length: 70 }, (_, i) => person(`p${i}`, `Zed${String(i).padStart(2, '0')}`))
+    tree.persons.push(...extra)
+    try {
+      renderPage()
+      await screen.findByText('Maya Pluviose')
+      expect(cards()).toHaveLength(60)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show more' }), { detail: 0 })
+
+      expect(cards()).toHaveLength(74)
+      expect(cards()[60]).toHaveFocus()
+      expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument()
+
+      fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'zed' } })
+      expect(cards()).toHaveLength(60)
+    } finally {
+      tree.persons.splice(-70)
+    }
+  })
+
   it('searches by name, accents or not', async () => {
     renderPage()
     await screen.findByText('Stanley Jean-Louis')

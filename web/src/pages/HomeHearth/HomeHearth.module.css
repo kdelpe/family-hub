@@ -202,17 +202,27 @@
   font-family: var(--font-serif);
 }
 
-.seeAll {
-  position: relative;
-  align-self: flex-start;
-  margin-top: auto;
-  font-weight: 600;
-  font-size: 15px;
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-/* A 44px tap target around the one line of text, without moving it. */
-.seeAll::after {
-  content: '';
-  position: absolute;
-  inset: -12px -8px;
+.more {
+  align-self: center;
+  margin-top: auto;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.more:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
 }

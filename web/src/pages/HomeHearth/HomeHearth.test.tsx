@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { describe, expect, it } from 'vitest'
@@ -72,6 +72,22 @@ describe('HomeHearth', () => {
     expect(within(screen.getByRole('region', { name: 'New in the family' })).getByText('Nobody new in the last month.')).toBeInTheDocument()
   })
 
+  it('shows three birthdays, then the rest on See more', () => {
+    const names = ['Ana', 'Bruno', 'Carla', 'Didier', 'Elise']
+    renderHome('p1', {
+      newcomers: [],
+      birthdays: names.map((first_name, i) => ({ id: first_name, first_name, last_name: null, on: `2026-11-2${i}`, in_days: i })),
+    })
+    const card = within(screen.getByRole('region', { name: 'Coming up' }))
+    expect(card.getAllByRole('link').map((a) => a.textContent)).toEqual(['Ana’s birthday', 'Bruno’s birthday', 'Carla’s birthday'])
+
+    fireEvent.click(card.getByRole('button', { name: 'See more' }), { detail: 0 })
+
+    expect(card.getAllByRole('link')).toHaveLength(5)
+    expect(card.getByRole('link', { name: 'Didier’s birthday' })).toHaveFocus()
+    expect(card.queryByRole('button', { name: 'See more' })).not.toBeInTheDocument()
+  })
+
   it('says so when no birthday is coming up', () => {
     renderHome('p1')
 
@@ -91,6 +107,5 @@ describe('HomeHearth', () => {
     expect(card.getByRole('link', { name: 'Naomie Désir' })).toHaveAttribute('href', '/people/naomie')
     expect(await card.findByText('Cousin · added Tuesday')).toBeInTheDocument()
     expect(card.getByText('Added today')).toBeInTheDocument()
-    expect(card.getByRole('link', { name: 'See everyone' })).toHaveAttribute('href', '/people')
   })
 })

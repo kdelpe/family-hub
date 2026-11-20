@@ -16,7 +16,7 @@ const (
 	// birthdayWindow is how many days ahead Coming up looks, from today (§5.3).
 	birthdayWindow = 14
 	newcomerWindow = 30 * 24 * time.Hour
-	maxNewcomers   = 5
+	maxNewcomers   = 20
 )
 
 // Home is what the home page's cards show (design-notes §4.1).

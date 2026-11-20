@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import { familyKeys, type FamilySummary, getFamilySummary } from '../../api/family'
@@ -22,6 +22,9 @@ const filters: { id: Filter; label: string }[] = [
   { id: 'second', label: sideLabel('second') },
 ]
 
+// Drawing thousands of cards at once stalls a phone, so the grid grows a page at a time.
+const pageSize = 60
+
 const bands = { first: styles.bandFirst, second: styles.bandSecond, both: styles.bandBoth, married_in: styles.bandMarriedIn }
 
 // Someone on both sides belongs to either side's filter.
@@ -41,6 +44,16 @@ export function People() {
   const summary = useQuery({ queryKey: familyKeys.summary, queryFn: ({ signal }) => getFamilySummary({ signal }) })
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('everyone')
+  const [shown, setShown] = useState(pageSize)
+  const grid = useRef<HTMLUListElement>(null)
+  const firstNew = useRef<number | null>(null)
+  // After a keyboard press, focus moves to the first card it brought in.
+  useEffect(() => {
+    if (firstNew.current !== null) {
+      grid.current?.children[firstNew.current]?.querySelector('a')?.focus()
+      firstNew.current = null
+    }
+  }, [shown])
 
   const [paused, setPaused] = useMotionPaused()
   const reducedMotion = useReducedMotion()
@@ -73,7 +86,10 @@ export function People() {
           placeholder="Search by name…"
           autoComplete="off"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setShown(pageSize)
+          }}
           className={styles.search}
         />
       </div>
@@ -88,7 +104,10 @@ export function People() {
               type="button"
               aria-pressed={filter === f.id}
               className={filter === f.id ? `pill ${styles.filter} ${styles.filterOn}` : `pill ${styles.filter}`}
-              onClick={() => setFilter(f.id)}
+              onClick={() => {
+                setFilter(f.id)
+                setShown(pageSize)
+              }}
             >
               {f.label}
             </button>
@@ -109,13 +128,26 @@ export function People() {
         </p>
       )}
       {people.length > 0 && (
-        <ul className={paused ? `${styles.grid} ${styles.paused}` : styles.grid}>
-          {people.map((p) => (
+        <ul ref={grid} className={paused ? `${styles.grid} ${styles.paused}` : styles.grid}>
+          {people.slice(0, shown).map((p) => (
             <li key={p.id}>
               <Card person={p} relation={relations.get(p.id) ?? null} you={p.id === viewerId} />
             </li>
           ))}
         </ul>
+      )}
+      {people.length > shown && (
+        <button
+          type="button"
+          onClick={(event) => {
+            // detail is 0 for a keyboard press; a mouse click keeps focus, and the page, where they are.
+            firstNew.current = event.detail === 0 ? shown : null
+            setShown((n) => n + pageSize)
+          }}
+          className={`pill ${styles.filter} ${styles.more}`}
+        >
+          Show more
+        </button>
       )}
     </main>
   )

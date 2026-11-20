@@ -1,6 +1,7 @@
 package family
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -101,14 +102,18 @@ func TestHome(t *testing.T) {
 		"added in the last 30 days, newest first, other than the viewer")
 }
 
-func TestHomeShowsAtMostFiveNewcomers(t *testing.T) {
+func TestHomeShowsAtMostTwentyNewcomers(t *testing.T) {
 	pool := testdb.MigratedPool(t, database.MigrateUp)
 	svc, admin := NewService(pool), insertAdmin(t, pool)
-	addPeople(t, svc, admin, "A", "B", "C", "D", "E", "F")
+	names := make([]string, maxNewcomers+1)
+	for i := range names {
+		names[i] = fmt.Sprintf("Person %02d", i)
+	}
+	addPeople(t, svc, admin, names...)
 
 	home, err := svc.Home(t.Context(), Viewer{}, time.Now(), time.UTC)
 
 	require.NoError(t, err)
 	assert.Len(t, home.Newcomers, maxNewcomers)
-	assert.Equal(t, "F", home.Newcomers[0].FirstName)
+	assert.Equal(t, names[maxNewcomers], home.Newcomers[0].FirstName)
 }
