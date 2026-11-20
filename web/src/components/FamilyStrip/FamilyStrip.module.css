@@ -1,0 +1,16 @@
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stat {
+  padding: 6px 14px;
+  border-radius: 16px;
+  background: var(--chip);
+  font-size: 15px;
+}
+
+.statFirst {
+  background: var(--accent-tint);
+}

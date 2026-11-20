@@ -2,10 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
-import { familyKeys, type FamilySummary, getFamilySummary } from '../../api/family'
+import { familySummaryQuery } from '../../api/family'
 import { type TreePerson, treeQuery } from '../../api/tree'
+import { FamilyStrip } from '../../components/FamilyStrip/FamilyStrip'
+import { PhotoFade } from '../../components/PhotoFade/PhotoFade'
 import { errorMessage } from '../../lib/errorMessage'
-import { familyLines, sideLabel, sideTags } from '../../lib/familySides'
+import { sideLabel, sideTags } from '../../lib/familySides'
 import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, initials, nameMatches } from '../../lib/names'
 import { relationsTo } from '../../lib/relation'
@@ -41,7 +43,7 @@ export function People() {
   const { user } = useSignedIn()
   const viewerId = user?.person_id ?? null
   const tree = useQuery(treeQuery)
-  const summary = useQuery({ queryKey: familyKeys.summary, queryFn: ({ signal }) => getFamilySummary({ signal }) })
+  const summary = useQuery(familySummaryQuery)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('everyone')
   const [shown, setShown] = useState(pageSize)
@@ -94,7 +96,7 @@ export function People() {
         />
       </div>
 
-      {summary.data && <Strip summary={summary.data} />}
+      {summary.data && <FamilyStrip summary={summary.data} />}
 
       <div className={styles.filterRow}>
         <div role="group" aria-label="Filter people" className={styles.filters}>
@@ -128,10 +130,10 @@ export function People() {
         </p>
       )}
       {people.length > 0 && (
-        <ul ref={grid} className={paused ? `${styles.grid} ${styles.paused}` : styles.grid}>
+        <ul ref={grid} className={styles.grid}>
           {people.slice(0, shown).map((p) => (
             <li key={p.id}>
-              <Card person={p} relation={relations.get(p.id) ?? null} you={p.id === viewerId} />
+              <Card person={p} relation={relations.get(p.id) ?? null} you={p.id === viewerId} paused={paused} />
             </li>
           ))}
         </ul>
@@ -153,42 +155,8 @@ export function People() {
   )
 }
 
-function Strip({ summary }: { summary: FamilySummary }) {
-  const earliest = summary.earliest_record
-  return (
-    <div className={styles.strip}>
-      <span className={`${styles.stat} ${styles.statFirst}`}>
-        <strong>{summary.people}</strong> {summary.people === 1 ? 'person' : 'people'}
-      </span>
-      <span className={styles.stat}>
-        <strong>{summary.generations}</strong> {summary.generations === 1 ? 'generation' : 'generations'}
-      </span>
-      <span className={styles.stat}>
-        {familyLines.first} &amp; {familyLines.second} lines
-      </span>
-      {earliest && (
-        <span className={styles.stat}>
-          Earliest record: {earliest.circa ? 'c. ' : ''}
-          {earliest.year}
-          {earliest.place ? `, ${earliest.place}` : ''}
-        </span>
-      )}
-    </div>
-  )
-}
-
-const tones = [styles.tone0, styles.tone1, styles.tone2, styles.tone3, styles.tone4, styles.tone5]
-
-// Until photos arrive, each portrait fades now and then to a placeholder silhouette, at its own pace, as in
-// the mockup.
-function fade(name: string) {
-  const h = [...name].reduce((sum, c) => sum + c.charCodeAt(0), 0)
-  return { tone: tones[h % tones.length], delay: `${((h % 11) * 0.6 + 0.8).toFixed(1)}s` }
-}
-
-function Card({ person, relation, you }: { person: TreePerson; relation: string | null; you: boolean }) {
+function Card({ person, relation, you, paused }: { person: TreePerson; relation: string | null; you: boolean; paused: boolean }) {
   const side = person.side ? { label: sideTags[person.side], band: bands[person.side] } : null
-  const { tone, delay } = fade(fullName(person))
   return (
     <Link to={`/people/${person.id}`} className={you ? `${styles.card} ${styles.cardYou}` : styles.card}>
       <span aria-hidden="true" className={`${styles.band} ${you ? styles.bandYou : (side?.band ?? '')}`}>
@@ -198,10 +166,7 @@ function Card({ person, relation, you }: { person: TreePerson; relation: string 
       </span>
       <span aria-hidden="true" className={you ? `${styles.portrait} ${styles.portraitYou}` : styles.portrait}>
         {initials(person)}
-        <span className={`${styles.photo} ${tone}`} style={{ animationDelay: delay }}>
-          <span className={styles.head} />
-          <span className={styles.shoulders} />
-        </span>
+        <PhotoFade person={person} paused={paused} />
       </span>
       <span className={styles.words}>
         <span className={styles.name}>{fullName(person)}</span>
