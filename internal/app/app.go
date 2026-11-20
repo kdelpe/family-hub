@@ -95,14 +95,16 @@ func newServer(pool *pgxpool.Pool, cfg config.Config) (*http.Server, *auth.Reset
 	svc := auth.NewService(pool, auth.NewHasher())
 	mailer := mail.NewSMTP(cfg.SMTP)
 	resets := auth.NewResets(svc, mailer, cfg.BaseURL)
+	familySvc := family.NewService(pool)
 	routes := router.New(
 		router.Handlers{
 			Health:   handler.NewHealth(pool),
 			Auth:     handler.NewAuth(svc, resets, cookie),
 			Admin:    handler.NewAdmin(admin.NewUsers(pool, mailer, cfg.BaseURL)),
-			Family:   handler.NewFamily(family.NewService(pool)),
+			Family:   handler.NewFamily(familySvc),
 			Contacts: handler.NewContacts(contacts.NewService(pool)),
 			Access:   handler.NewAccess(admin.NewAccessRequests(pool)),
+			Home:     handler.NewHome(familySvc, cfg.Timezone),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(auth.NewSessions(pool), cookie).Require,

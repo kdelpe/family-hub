@@ -502,6 +502,7 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/api/tree` | session | All non-deleted people + relationships (flat; see §10): `{persons: [{id, first_name, last_name, side, gender, is_deceased, bio_excerpt}], relationships: [{id, type, subtype, ended, parent_id, child_id \| person_ids}]}`. No dates, no contacts and no relationship notes; `bio_excerpt` is `bio` cut to at most 140 characters (ending in `…` when cut) for the quick look |
 | GET | `/api/persons` | session | `?q=` trigram search for autocomplete; without `q`, A–Z with `?side=&living=` filters, stopping at 5,000 (a backstop: pages read the tree or ask by id). `?ids=a,b,…` (up to 100, not combined with the other filters) returns just those people, masked the same way, so a page showing a known set, such as a profile's relatives, never needs everyone |
 | GET | `/api/family/summary` | session | The People family strip: `{people, generations, earliest_record: {year, circa, place} \| null}`. `generations` counts the people in the longest biological or adoptive parent-to-child line; the earliest record is the birth year and place of the earliest-born **deceased** person, so no living person's year leaks |
+| GET | `/api/home` | session | Home's cards: `{birthdays: [{id, first_name, last_name, on, in_days}], newcomers: [{id, first_name, last_name, added_at}]}`. `birthdays` are living people with a full birth date whose birthday falls from today through 14 days out in `APP_TIMEZONE` (§5.3), soonest first; `on` is that coming date, never the birth year. `newcomers` are up to 5 people added in the last 30 days, other than the viewer, newest first |
 | POST | `/api/persons` | admin | Create |
 | GET | `/api/persons/{id}` | session | Profile, direct relations and tagged media; its contact methods come from `/api/persons/{id}/contacts`, so they're fetched fresh (§5.2) |
 | PATCH | `/api/persons/{id}` | admin, or the linked user for their own profile fields | Update → `200` with the person. Only the fields sent change; `null` clears one. A member may send only `first_name`, `last_name`, `birth_date`, `birth_date_precision` and `bio` (and `avatar_media_id` once media arrives, Phase 5), and only for the person their login is linked to: they know their own details best; anything else is a `403 forbidden`. `404 not_found`, `503 busy` |
@@ -643,8 +644,8 @@ Changes take effect immediately because the client never caches contacts: each p
 Birthdays are shown in the app; **no birthday emails are sent** (decided; see §16). The only emails the app sends are invites and password resets.
 
 - **Panel:** the home page shows living, non-deleted people with `birth_date_precision = 'day'` whose birthday falls in the next ~14 days, relative to "today" in `APP_TIMEZONE`. Feb 29 birthdays show on Feb 28 in non-leap years.
-- **Masking:** same rules as everywhere (`masked_birth_date`, §3.1), so members see "Rosa, Friday" and never her age.
-- **Where it lives:** one query in the `family` package; no scheduled job, no extra tables.
+- **Masking:** the query reads only each birthday's month and day, so the year never leaves the database and members see "Rosa, Friday", never her age.
+- **Where it lives:** one query in the `family` package, served by `GET /api/home`; no scheduled job, no extra tables.
 - **Mail deliverability (for invites and password resets):** sending from a domain you control needs SPF, DKIM and DMARC records with your mail provider; set that up in Phase 4c and send a test to Gmail and Outlook before relying on it. Volume is tiny, so any provider's free tier works.
 
 ### 5.4 People without logins (curated profiles)
