@@ -51,6 +51,10 @@ export function AskButton({
         return
       }
       // The directory holds the whole family, so only this one entry changes rather than all of it being fetched again.
+      // A directory whose last fetch failed stays as it is: writing to it would mark it fetched and show it again.
+      if (queryClient.getQueryState(directoryKeys.all)?.status !== 'success') {
+        return
+      }
       queryClient.setQueryData<DirectoryEntry[]>(directoryKeys.all, (people) =>
         people?.map((p) =>
           p.id !== personId
