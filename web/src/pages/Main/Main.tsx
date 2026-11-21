@@ -91,7 +91,7 @@ export function Main() {
     }
   }
 
-  // Paused from the People page or Home, which keep the button (design-notes §6.4).
+  // Paused from Home, which keeps the button (design-notes §6.4).
   const [paused] = useMotionPaused()
   const [zoom, setZoom] = useState(1)
 

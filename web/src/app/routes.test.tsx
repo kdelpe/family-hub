@@ -96,12 +96,22 @@ it('Home stays up, greeting without a name, when the person can’t be read', as
 
 it('signing in from a page you were sent away from brings you back to it', async () => {
   stubApi()
-  renderAt('/people')
+  renderAt('/members')
 
   fireEvent.change(await screen.findByLabelText('Email'), { target: { value: maya.email } })
   fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'sample-family-dev' } })
   fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
   const menu = await screen.findByRole('navigation', { name: 'Main' })
-  expect(within(menu).getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page')
+  expect(within(menu).getByRole('link', { name: 'Members' })).toHaveAttribute('aria-current', 'page')
+})
+
+it.each(['/people', '/directory'])('%s, which Members replaced, lands on Members', async (path) => {
+  const { signIn } = stubApi()
+  signIn()
+  renderAt(path)
+
+  const menu = await screen.findByRole('navigation', { name: 'Main' })
+  expect(await within(menu).findByRole('link', { name: 'Members' })).toHaveAttribute('aria-current', 'page')
+  expect(screen.getByRole('heading', { level: 1, name: 'Members' })).toBeInTheDocument()
 })

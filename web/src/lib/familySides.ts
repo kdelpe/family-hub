@@ -11,7 +11,7 @@ export const familySides: { value: FamilySide; label: string }[] = [
 
 export const sideLabel = (side: FamilySide) => familySides.find((s) => s.value === side)?.label ?? side
 
-// A People card's side tag: someone can also be on both sides, and "Married in" is the card's shorter wording.
+// A Members page's side chip: someone can also be on both sides, and "Married in" is the chip's shorter wording.
 export const sideTags: Record<FamilySide | 'both', string> = {
   first: sideLabel('first'),
   second: sideLabel('second'),

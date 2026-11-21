@@ -65,7 +65,7 @@ export function PersonProfile() {
         <title>{`${notFound ? 'Not found' : 'Profile'} — Pluviose-Monestime Family Hub`}</title>
         {notFound ? (
           <p>
-            We couldn’t find that person. <Link to="/people">See everyone in People</Link>
+            We couldn’t find that person. <Link to="/members">See everyone in Members</Link>
           </p>
         ) : (
           <p role="alert">{errorMessage(person.error)}</p>

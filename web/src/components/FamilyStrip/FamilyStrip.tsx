@@ -2,7 +2,7 @@ import type { FamilySummary } from '../../api/family'
 import { familyLines } from '../../lib/familySides'
 import styles from './FamilyStrip.module.css'
 
-// The family at a glance, above People and the tree (design-notes §4.2, §4.3).
+// The family at a glance, above the tree (design-notes §4.2).
 export function FamilyStrip({ summary }: { summary: FamilySummary }) {
   const earliest = summary.earliest_record
   return (
