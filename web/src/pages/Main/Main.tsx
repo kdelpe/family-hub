@@ -20,8 +20,10 @@ const trailLength = 8
 const maxMatches = 6
 // A click waits this long so a double-click can cancel it (design-notes §4.2).
 const clickDelay = 230
-// Each generation arrives this many ms after the one above (design-notes §4.2).
+// Each generation arrives this many ms after the one above and has landed after rowLanded (the 0.4s in
+// Main.module.css); a line draws once the generation it reaches has landed (design-notes §4.2).
 const rowStagger = 80
+const rowLanded = 400
 
 type Direction = 'up' | 'down' | 'side'
 
@@ -397,7 +399,7 @@ function FocusTree({
       <div aria-hidden="true" className={styles.lines}>
         <svg width={lines.width} height={lines.height}>
           {lines.paths.map((l) => (
-            <path key={l.key} d={l.d} />
+            <path key={l.key} data-line={l.key} d={l.d} pathLength={100} style={{ animationDelay: `${l.delay}ms` }} />
           ))}
         </svg>
       </div>
@@ -631,7 +633,7 @@ function SharedContact({ personId }: { personId: string }) {
   )
 }
 
-type Line = { key: string; d: string }
+type Line = { key: string; d: string; delay: number }
 
 // Where an element rests inside the panel: offsets, not screen boxes, so the slide-in doesn't skew it.
 function offsetBox(el: HTMLElement, panel: HTMLElement) {
@@ -662,6 +664,7 @@ function measure(panel: HTMLElement, rows: HTMLElement, view: FocusView, focus: 
     ...view.grandchildren.map((g) => ({ key: `down:${g.of}`, from: card(g.of), to: unit(`down-${g.of}`) })),
   ]
   const drawn = links.filter((l): l is { key: string; from: HTMLElement; to: HTMLElement } => !!l.from && !!l.to)
+  const delay = (to: HTMLElement) => Number(to.closest<HTMLElement>('[data-row]')?.dataset.row ?? 0) * rowStagger + rowLanded
   // The joining line runs just above the cards it feeds, so lines from the same parents share it; on a row
   // that wraps, the second line of cards gets its own, in the gap between the two.
   return drawn.map((l) => {
@@ -670,13 +673,14 @@ function measure(panel: HTMLElement, rows: HTMLElement, view: FocusView, focus: 
     const m = t.top - 12
     const dx = t.x - f.x
     if (Math.abs(dx) < 1) {
-      return { key: l.key, d: `M${f.x} ${f.bottom} V${t.top}` }
+      return { key: l.key, d: `M${f.x} ${f.bottom} V${t.top}`, delay: delay(l.to) }
     }
     const r = Math.max(0, Math.min(10, Math.abs(dx) / 2, m - f.bottom, t.top - m))
     const s = Math.sign(dx)
     return {
       key: l.key,
       d: `M${f.x} ${f.bottom} V${m - r} Q${f.x} ${m} ${f.x + s * r} ${m} H${t.x - s * r} Q${t.x} ${m} ${t.x} ${m + r} V${t.top}`,
+      delay: delay(l.to),
     }
   })
 }

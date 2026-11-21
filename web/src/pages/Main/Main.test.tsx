@@ -340,4 +340,14 @@ describe('Main', () => {
 
     expect(screen.getByText(name).parentElement!.style.animationDelay).toBe(delay)
   })
+
+  it.each([
+    { line: 'up:jr', into: 'the parents', delay: '480ms' },
+    { line: 'sib:maya', into: 'a sibling', delay: '560ms' },
+    { line: 'kids:0', into: 'the children', delay: '640ms' },
+  ])('draws the line into $into once their generation has landed, at $delay', ({ line, delay }) => {
+    renderTree('fritz')
+
+    expect(document.querySelector<SVGElement>(`[data-line="${line}"]`)!.style.animationDelay).toBe(delay)
+  })
 })
