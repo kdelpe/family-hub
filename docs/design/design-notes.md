@@ -106,7 +106,7 @@ Placeholder until a real logo exists: circle `#E6EEE9` with a `#2F5D50` outline,
 
 Initials avatar (circle, Fraunces), name (600), one line underneath with the relation **from the viewer's point of view** ("Mother", "Half-sister").
 
-**No birthdays or dates in the family tree**: not on cards, chips or the quick look. Dates appear only on profiles and the birthday lists (People cards show none either, §4.3), following the masking rules (living people month/day only, deceased full years, "c. 1935" for approximate dates).
+**No birthdays or dates in the family tree**: not on cards or chips. Dates appear only on profiles and the birthday lists (People cards show none either, §4.3), following the masking rules (living people month/day only, deceased full years, "c. 1935" for approximate dates).
 
 ### 2.4 Card hover (everywhere)
 Every card-style item lifts on hover **and** on keyboard focus inside it: `translate: 0 -4px` plus `box-shadow: 0 12px 26px rgba(43,38,32,.12)`, 200ms. Use the `translate` property (not `transform`) so it never fights a card's entrance animation. Applies to: Home cards and Story of the week, tree cards (which also scale slightly), People cards, Directory rows, Events timeline cards and Media tiles, Stories cards/storytellers/featured story, profile family cards, admin request cards. Off with reduced motion.
@@ -176,34 +176,36 @@ Not drawn in the mockup, proposed with the real data (November 2026):
 Built client-side from `/api/tree`.
 
 Look:
-- A **family strip** under the title: *38 people · 5 generations · Pluviose & Monestime lines · Earliest record: c. 1900, Jacmel* (pill chips).
+- A **family strip** on the left of the search's row: *38 people · 5 generations · Pluviose & Monestime lines · Earliest record: c. 1900, Jacmel* (pill chips).
 - The tree sits on a `--surface-soft` panel (radius 22px). The mockup's pale watermark tree behind the rows is left out (owner's call, 2026-11-20, after trying it in a prototype): names didn't sit on its branches.
-- **Even proportions:** every person, grandparents and grandchildren included, uses **the same card**: 150 × 118, radius 14, a 50px framed portrait (cream + sand double ring) that fades between initials and a photo placeholder (6s, each person offset), name 15px/600, relation 13px. Same gap (14px) between cards in every row and the same spacing between generations.
+- **Even proportions:** every person, grandparents and grandchildren included, uses **the same card**: 190 wide (owner's call, 2026-11-21, so the tree fills its panel; 150 on phones), radius 14, a 50px framed portrait (cream + sand double ring) that fades between initials and a photo placeholder (6s, each person offset), name 15px/600 on one line (wrapping only on phones), relation 13px. Same gap (14px) between cards in every row and the same spacing between generations.
 - Each generation has a small uppercase label above it (*Grandparents · Your parents · Your household & siblings · Your children · Grandchildren*). Couples and parent groups sit in a soft rounded group (`rgba(255,253,248,.75)`, 1px border); your household uses `--accent-tint` with a 2px accent border.
-- Grandparents / grandchildren with more family beyond them get a small **▲ more / ▼ more** pill under their card. Its accessible name starts with the word it shows, *"More: center the tree on Joseph Pluviose"*, so voice control finds it by saying "more" (owner's call, 2026-11-20; the mockup's label leaves the word out).
+- **Plain ▲ more / ▼ more arrows sit on the panel's top and bottom edges** (owner's call, 2026-11-21, replacing the pill under each grandparent or grandchild card): they say there's more family that way, and show until the tree is moved by hand (a drag, a pinch, Ctrl + scroll); **Recenter** brings them back. ▲ goes one generation up along the line that continues (to the parent whose parents have family above), ▼ one down (to the child whose children have children); after an arrow, the other one walks back along the same people, even where nothing lies beyond, until a card, the search or Back to me starts afresh. Other branches are a click on their card away. The accessible name starts with the word shown, *"more: center the tree on Jean-Robert Pluviose"*, so voice control finds it. The generations make room for them at rest.
 - **Connector lines** (`--line`, 2px, rounded corners) join each set of parents to their children: grandparents to the parent they raised, parents to you and each sibling, your household to each children group, a child to their own children. Lines from the same parents share one joining line just above the row they feed. `aria-hidden`; the generation labels say the same in words.
 - Your children are grouped by their other parent (*"With Nadège"*, *"With Guerline"*), so each marriage reads as its own household; the label shows only when there's more than one group or partner.
 - Adoptive and foster links get a small word after the relation: *"Son · adopted"*, *"Mother · adoptive"*, *"Daughter · foster"*, on every row, grandparents and grandchildren too. It's left out only when the relation already says it (*"Foster mother"*); a closer tie keeps it (*"Grandmother · foster"*). With no relation to the viewer, the card says *"Foster parent"* or *"Foster child"*, and a sibling only by fostering *"… · foster sibling"*.
 - **Lines draw in** once both their ends have landed (0.4s each), from the parents down to the children, with the sign-in tree's drawing trick (§6.1).
-- **The chain turns green:** while a card's quick look is open (hover, keyboard focus or a click), the lines between that card and the focus person turn `--accent` and 2.5px, fading in over 150ms: a grandparent through their child, a sibling through the parents, a grandchild through their parent. A partner shares the household, so nothing lights. (Owner's call, 2026-11-20.)
+- **The chain turns green:** while a card is lifted (hover or keyboard focus), the lines between that card and the focus person turn `--accent` and 2.5px, fading in over 150ms: a grandparent through their child, a sibling through the parents, a grandchild through their parent. A partner shares the household, so nothing lights. (Owner's call, 2026-11-20.)
 
 One **focus person**; shows:
-- **Grandparents** (two generations up), grouped per parent, each card with **▲ more** when there's more family above.
+- **Grandparents** (two generations up), grouped per parent, with **▲ more** at the panel's top when there's more family above.
 - **Parents** household.
 - **Focus row:** siblings split left and right · the focus person's **household** box (`--accent-tint`, 2px accent border) with current partners, and former partners with a dashed border, labelled with your relation to them ("Former stepmother", "Mother"), or "Former partner" when there is none.
-- **Children**, then **grandchildren**, each grandchild card with **▼ more** when they have children.
+- **Children**, then **grandchildren**, with **▼ more** at the panel's bottom when any of them has children.
 - Half-siblings labelled from the viewer's point of view ("Half-sister", or "… · half-sibling").
 
 Interaction:
-- **Hover or keyboard focus** on a card: the card lifts (`translateY(-3px) scale(1.04)`, soft shadow) and a **quick look** (250px card) appears just below it: relation, 2-line story, shared email or social account (never phone or address), **View profile ›**, and a quiet **Center here** link. (No dates.) No backdrop, nothing else covered. A quick look that keyboard focus has moved into stays open, whatever the mouse does, until focus leaves it or Escape closes it. A long email or handle wraps inside it.
-- **Click** keeps the quick look open (that's how phones and tablets get it); click again to close. The click waits **230ms** before acting so a double-click can cancel it.
-- **Double-click** centers the tree on that person (no quick-look flash).
+- **Every card has a View profile › link** under the relation (13px, 600), so there's no pop-up to open first (owner's call, 2026-11-21, replacing the mockup's quick look with its story lines, shared contact and Center here). Its accessible name adds the person's name, *"View profile of Joseph Pluviose ›"*. The card grows to 150px tall to hold it.
+- **Hover or keyboard focus** on a card lifts it (`translateY(-5px) scale(1.07)`, soft shadow).
+- **A click or tap anywhere else on the card** centers the tree on that person (owner's call, 2026-11-21: with no quick look, it no longer needs a double-click).
 - Centering animates, and so does opening the page: the generations arrive one after another, top to bottom, 80ms apart and 0.4s each. They slide **down** into place when moving to a descendant, **up** when moving to an ancestor, and fade/scale slightly sideways otherwise, as on opening (owner's call, 2026-11-20). With reduced motion everything is simply there, the green chain included.
-- Trail above the tree: *Me › Naïka › Naomie* (last 8 steps; earlier steps clickable). **Back** (disabled at start) and **Back to me**.
+- No visible page title, trail of names or **Back** (owner's call, 2026-11-21: more room for the tree; a visually hidden `h1` stays for screen readers). The family strip sits on the left of one row; the search and **Back to me** on the right.
+- **Zoom** (owner's call, 2026-11-21): only the tree zooms, inside its panel, which keeps its size so the rest of the page never moves. A − / 100% / + / **Recenter** control floats in the panel's top-right corner (50–150%, steps of 10%; the percentage resets the zoom and position, Recenter only the position, and is disabled until the tree is moved); a two-finger pinch on the tree (the page itself doesn't zoom there) and Ctrl + scroll or a trackpad pinch on computers zoom too, keeping the point they're made at in place. The cards and lines scale together.
+- **The tree moves within its panel** at any zoom (owner's call, 2026-11-21): drag it with a mouse from anywhere, cards included (past 5px it's a drag, so the card isn't also centered on); on touch, a sideways swipe moves it and an up-and-down one still scrolls the page, and two fingers move and pinch it. At least 60px of it always stays in the panel. Resetting the zoom, or centering on someone, brings it back to the middle; the zoom itself holds while centering on others, until the page is left.
 - Search box suggests up to 6 matching names as you type; picking one centers the tree.
-- Tip text: *"Hover or tap a name for a quick look · double-click to center the tree on them"*.
+- Tip text in the panel's top-left corner, opposite the zoom control (on phones, just above the panel, since the corner is the zoom control's), in `--text-2` (owner's call, 2026-11-21): *"Click or tap a name to center the tree on them · drag to move it"*.
 - An `aria-live` region announces "Family tree centered on …".
-- The tree opens centered on you, or on the person a profile's **Center the tree on …** asked for (`/tree?person=<id>`), if they're in the tree.
+- The tree opens centered on you, or on the person a profile's **Center the tree on …** asked for (`/tree?person=<id>`), if they're in the tree. The page scrolls so that person's card sits mid-screen (owner's call, 2026-11-21; on a phone the tree starts well below the fold), and after centering on someone whose card is off screen, it scrolls there smoothly (at once with reduced motion).
 - Later: keyboard arrows and phone swipes to move a generation; URL per focus (`/tree/<person>`) so browser Back works and links can be shared.
 
 ### 4.3 People
@@ -316,12 +318,12 @@ Generated once (seeded, deterministic) and embedded as inline SVG:
 
 ### 6.3 Other motion
 - Page content fades up 14px (0.6–0.8s).
-- Tree page: generations cascade in (80ms apart, 0.4s each), lines draw in after them (0.4s), the chain to the focus person fades green (150ms), and the quick look pops (0.16s).
+- Tree page: generations cascade in (80ms apart, 0.4s each), lines draw in after them (0.4s), and the chain to the focus person fades green (150ms).
 - Menu hover 150ms.
 - No looping motion anywhere else.
 
 ### 6.4 Pausing the motion
-The swaying, the leaf colour cycle, the Home photo/caption cycle and the People portrait fade run longer than 5 seconds beside other content, so each tree and the People grid get a **Pause motion / Play motion** text button (a real `<button>` whose text says what it will do, so no `aria-pressed`, 13px `--muted` under the tree or its caption, and on People at the end of the filter row, 44px tall hit area). Pausing freezes everything as it is (portraits stay on their initials) and stops the photo cycle; it's one choice for the whole site, remembered for the session. With reduced motion there is nothing to pause, so the button is hidden. (WCAG 2.2.2.) **Exception, owner's choice (2026-11-14):** the sign-in tree on the five pre-login pages has no pause button, as in their mockups.
+The swaying, the leaf colour cycle, the Home photo/caption cycle and the People portrait fade run longer than 5 seconds beside other content, so each tree and the People grid get a **Pause motion / Play motion** text button (a real `<button>` whose text says what it will do, so no `aria-pressed`, 13px `--muted` under the tree or its caption, and on People at the end of the filter row, 44px tall hit area). Pausing freezes everything as it is (portraits stay on their initials) and stops the photo cycle; it's one choice for the whole site, remembered for the session. With reduced motion there is nothing to pause, so the button is hidden. (WCAG 2.2.2.) **Exception, owner's choice (2026-11-14):** the sign-in tree on the five pre-login pages has no pause button, as in their mockups. **Owner's choice (2026-11-21):** neither has the family tree page, for more room; its portraits follow the choice made on People or Home, and reduced motion still stops them.
 
 ---
 
