@@ -393,6 +393,8 @@
   font-size: 14px;
   color: var(--text);
   text-align: left;
+  /* A long email or handle wraps instead of pushing the page sideways. */
+  overflow-wrap: anywhere;
   animation: pop 0.16s ease-out both;
 }
 

@@ -194,7 +194,7 @@ One **focus person**; shows:
 - Half-siblings labelled from the viewer's point of view ("Half-sister", or "… · half-sibling").
 
 Interaction:
-- **Hover or keyboard focus** on a card: the card lifts (`translateY(-3px) scale(1.04)`, soft shadow) and a **quick look** (250px card) appears just below it: relation, 2-line story, shared email or social account (never phone or address), **View profile ›**, and a quiet **Center here** link. (No dates.) No backdrop, nothing else covered.
+- **Hover or keyboard focus** on a card: the card lifts (`translateY(-3px) scale(1.04)`, soft shadow) and a **quick look** (250px card) appears just below it: relation, 2-line story, shared email or social account (never phone or address), **View profile ›**, and a quiet **Center here** link. (No dates.) No backdrop, nothing else covered. A long email or handle wraps inside it.
 - **Click** keeps the quick look open (that's how phones and tablets get it); click again to close. The click waits **230ms** before acting so a double-click can cancel it.
 - **Double-click** centers the tree on that person (no quick-look flash).
 - Centering animates: the tree slides **down** into place when moving to a descendant, **up** when moving to an ancestor, and fades/scales slightly sideways otherwise (0.5s).
