@@ -85,12 +85,21 @@ type Props = {
   goTo: (index: number) => void
 }
 
+// The book's paper pages, as opposed to its covers and endpapers.
+const paper = new Set<BookPage['kind']>(['welcome', 'contents', 'person', 'divider', 'memorial', 'notes'])
+
 export function PageContent({ book, index, outer, viewerId, paused, goTo }: Props) {
   const page = book.pages[index]!
   const number = pageNumber(book, index)
   const person = nameOf(page)
   return (
     <>
+      {paper.has(page.kind) && (
+        <span
+          aria-hidden="true"
+          className={`${styles.sheet} ${page.kind === 'memorial' ? styles.sheetMemorial : page.kind === 'divider' ? styles.sheetDivider : ''}`}
+        />
+      )}
       {person && (
         <span aria-hidden="true" className={`${styles.cornerLetter} ${outer === 'left' ? styles.atLeft : styles.atRight}`}>
           {letterOf(person.first_name)}

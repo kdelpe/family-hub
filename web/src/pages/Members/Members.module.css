@@ -18,7 +18,6 @@
   --ink-32: color-mix(in srgb, var(--text) 32%, transparent);
   --ink-34: color-mix(in srgb, var(--text) 34%, transparent);
   --paper: var(--surface);
-  --paper-lines: repeating-linear-gradient(to bottom, transparent 0, transparent 31px, var(--paper-rule) 31px, var(--paper-rule) 32px);
   /* The page height: the book and its buttons fill the window without scrolling. */
   --page-h: clamp(440px, calc(100dvh - 160px), 820px);
   min-width: 0;
@@ -158,8 +157,9 @@
   bottom: 0;
   width: 50%;
   background-color: var(--paper);
-  background-image: var(--paper-lines);
   overflow: hidden;
+  /* So a page's sheet (below) sits over the paper but under the words. */
+  isolation: isolate;
 }
 
 .left {
@@ -345,7 +345,46 @@
   top: 0;
   bottom: 0;
   background-color: var(--paper);
-  background-image: var(--paper-lines);
+  isolation: isolate;
+}
+
+/* Each paper page's tint and its thin double border, inset from the edge like a printed address book. */
+.sheet {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--surface-soft);
+}
+
+.sheet::before,
+.sheet::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+
+.sheet::before {
+  inset: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.sheet::after {
+  inset: 18px;
+  border: 1px solid var(--divider);
+  border-radius: 2px;
+}
+
+.sheetMemorial {
+  background: var(--brand-panel);
+}
+
+.sheetMemorial::before {
+  border-color: var(--line);
+}
+
+.sheetDivider {
+  background: var(--endpaper);
 }
 
 .innerRight {
@@ -680,7 +719,7 @@
 
 .cornerLetter {
   position: absolute;
-  top: 18px;
+  top: 28px;
   font-family: var(--font-serif);
   font-size: 40px;
   color: var(--border);
@@ -688,16 +727,16 @@
 }
 
 .atLeft {
-  left: 22px;
+  left: 32px;
 }
 
 .atRight {
-  right: 22px;
+  right: 32px;
 }
 
 .pageNumber {
   position: absolute;
-  bottom: 16px;
+  bottom: 26px;
   left: 0;
   right: 0;
   text-align: center;
@@ -917,7 +956,6 @@
   align-items: center;
   gap: 22px;
   text-align: center;
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--nav-active) 35%, transparent), transparent 50%);
 }
 
 .inMemory {
@@ -1369,7 +1407,6 @@
   justify-content: center;
   gap: 20px;
   text-align: center;
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--nav-active) 50%, transparent), color-mix(in srgb, var(--nav-active) 10%, transparent));
 }
 
 .branch g {
@@ -1416,6 +1453,15 @@
 .notesTitle {
   font-family: var(--font-serif);
   font-size: 18px;
+}
+
+/* Tall windows leave room once the book stops growing: it sits in the middle, not at the top. Not on phones, where
+   the menu sits above the book. */
+@media (min-width: 601px) {
+  .main {
+    min-height: 100dvh;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 600px) {
