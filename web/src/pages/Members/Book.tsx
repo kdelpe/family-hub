@@ -21,10 +21,12 @@ type Drag = {
   hist: [number, number][]
   stops: number[][]
 }
-type TabDrag = { nav: HTMLElement; id: number; start: number; cur: number; y0: number; moved: boolean }
+type TabDrag = { nav: HTMLElement; id: number; start: number; cur: number; y0: number; moved: boolean; book: BookData }
 
 // A turn takes 0.9 s (Members.module.css), plus a frame.
 const turnMs = 920
+// A flick is measured over this last stretch of the drag, so a page held still before letting go isn't flicked.
+const flickMs = 100
 // The page edges grow as pages pile up, up to this: a big family has thousands of pages.
 const maxStack = 18
 
@@ -49,7 +51,9 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   // A turn or drag belongs to the stops it was made for: a refetch, or a phone turned on its side, cancels one under way.
   const [made, setTurn] = useState<Turn | null>(null)
   const turn = made?.stops === stops ? made : null
-  const [scrub, setScrub] = useState<{ tab: number; top: number } | null>(null)
+  // Like a turn, a scrub belongs to the tabs it started on: a refetch can take letters away.
+  const [scrubbed, setScrub] = useState<{ tab: number; top: number; book: BookData } | null>(null)
+  const scrub = scrubbed?.book === book ? scrubbed : null
   const pagesRef = useRef<HTMLDivElement>(null)
   const timer = useRef<number | undefined>(undefined)
   const drag = useRef<Drag | null>(null)
@@ -206,14 +210,19 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
       return
     }
     justDragged.current = event.timeStamp
-    const first = d.hist[0]!
-    const lastMove = d.hist.at(-1)!
+    const recent = [...d.hist, [event.timeStamp, event.clientX] as [number, number]].filter(([t]) => t >= event.timeStamp - flickMs)
+    const first = recent[0]!
+    const lastMove = recent.at(-1)!
     const speed = lastMove[0] > first[0] ? (lastMove[1] - first[1]) / (lastMove[0] - first[0]) : 0
     const toward = d.dir === 'next' ? -speed : speed
     // Past halfway, or flicked toward the spine: it finishes; otherwise it falls back.
     const done = !canceled && (d.p > 0.5 ? toward > -0.3 : toward > 0.35 && d.p > 0.03)
     const land = done ? stops[d.to]![0]! : null
     if (reduced) {
+      // Reduced motion may have come on mid-drag, with the leaf already out.
+      d.el.style.transition = 'none'
+      d.el.style.removeProperty('--fa')
+      setTurn(null)
       if (land !== null) {
         onAt(land)
       }
@@ -272,7 +281,8 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
 
   const page = (index: number, place: 'left' | 'right' | 'whole', extra = '') => (
     <div
-      key={`${place}-${index}`}
+      // By who's on it, not where: a page's request buttons mustn't pass to whoever lands there after a refetch.
+      key={`${place}-${book.keys[index]}`}
       data-page
       className={`${styles.page} ${styles[place]} ${extra} ${book.pages[index]!.kind === 'empty' ? styles.hidden : ''}`}
     >
@@ -440,20 +450,24 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
               if (!t) {
                 return
               }
-              tabDrag.current = { nav: event.currentTarget, id: event.pointerId, start: t.i, cur: t.i, y0: event.clientY, moved: false }
+              tabDrag.current = { nav: event.currentTarget, id: event.pointerId, start: t.i, cur: t.i, y0: event.clientY, moved: false, book }
               event.currentTarget.setPointerCapture?.(event.pointerId)
               event.preventDefault()
             }}
             onPointerMove={(event) => {
               const d = tabDrag.current
-              if (!d || event.pointerId !== d.id || (!d.moved && Math.abs(event.clientY - d.y0) < 6)) {
+              if (d?.book !== book) {
+                tabDrag.current = null
+                return
+              }
+              if (event.pointerId !== d.id || (!d.moved && Math.abs(event.clientY - d.y0) < 6)) {
                 return
               }
               const t = tabAt(d.nav, event.clientY)
               if (t && (!d.moved || t.i !== d.cur)) {
                 d.moved = true
                 d.cur = t.i
-                setScrub({ tab: t.i, top: t.top })
+                setScrub({ tab: t.i, top: t.top, book })
                 onAt(tabTargets[t.i]!)
               }
             }}
@@ -464,7 +478,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
               }
               tabDrag.current = null
               tabHandled.current = event.timeStamp
-              if (d.moved) {
+              if (d.moved || d.book !== book) {
                 setScrub(null)
               } else {
                 goTo(tabTargets[d.start]!)

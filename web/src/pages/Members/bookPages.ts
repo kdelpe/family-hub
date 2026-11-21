@@ -29,7 +29,9 @@ export type Book = {
 
 export const letterOf = (firstName: string) => foldName(firstName).charAt(0).toUpperCase() || '#'
 
+// By first name, as the letters go ("Anna" before "Anna Maria"), then by last name.
 const byName = (a: { first_name: string; last_name: string | null }, b: { first_name: string; last_name: string | null }) =>
+  a.first_name.localeCompare(b.first_name, undefined, { sensitivity: 'base' }) ||
   fullName(a).localeCompare(fullName(b), undefined, { sensitivity: 'base' })
 
 // The book page by page (design-notes §4.3), laid out as spreads: index 0 is the empty space left of the closed

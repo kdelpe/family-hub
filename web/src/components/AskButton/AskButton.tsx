@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
+import { sameSession, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import {
   askFor,
@@ -26,7 +27,7 @@ const askLabels: Record<RequestKind, string> = {
 export function AskButton({
   personId,
   kind,
-  asked,
+  asked: wasAsked,
   size,
 }: {
   personId: string
@@ -37,8 +38,13 @@ export function AskButton({
   const queryClient = useQueryClient()
   const ask = useMutation({
     mutationFn: () => askFor(personId, kind),
+    onMutate: sessionGeneration,
     // Not awaited: the ask is done, and a failed reload mustn't hold or undo it.
-    onSuccess: ({ my_request_status }) => {
+    onSuccess: ({ my_request_status }, _, since) => {
+      // Asked as whoever was signed in before: the person signed in now hasn't asked.
+      if (!sameSession(since)) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: contactKeys.of(personId) })
       if (my_request_status === 'shared') {
         void queryClient.invalidateQueries({ queryKey: directoryKeys.all })
@@ -54,7 +60,8 @@ export function AskButton({
       )
     },
   })
-  if (ask.data?.my_request_status === 'shared') {
+  const asked = ask.isSuccess && sameSession(ask.context)
+  if (asked && ask.data.my_request_status === 'shared') {
     // Already shared: the refetched contacts show it instead.
     return null
   }
@@ -63,9 +70,9 @@ export function AskButton({
     <>
       {/* Mounted before the ask, so screen readers announce the change. */}
       <span role="status" className="visually-hidden">
-        {ask.isSuccess ? done : ''}
+        {asked ? done : ''}
       </span>
-      {asked || ask.isSuccess ? (
+      {wasAsked || asked ? (
         <CheckPill size={size}>{done}</CheckPill>
       ) : (
         <span className={styles.ask}>

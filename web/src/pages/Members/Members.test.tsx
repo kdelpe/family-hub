@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -73,14 +73,22 @@ const people: DirectoryEntry[] = [
   { id: 'naomie', first_name: 'Naomie', last_name: 'Désir', side: 'married_in', has_account: false, contacts: [] },
 ]
 
-// Reduced motion turns pages at once, so the tests needn't wait out the animation.
+// Reduced motion turns pages at once, so the tests needn't wait out the animation. Returns a switch for it.
 function stubMedia({ narrow = false, reduced = true } = {}) {
+  const state = { reduced }
+  const listeners = new Set<() => void>()
   vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: query.includes('reduce') ? reduced : query.includes('max-width') ? narrow : false,
+    get matches() {
+      return query.includes('reduce') ? state.reduced : query.includes('max-width') ? narrow : false
+    },
     media: query,
-    addEventListener: () => {},
-    removeEventListener: () => {},
+    addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+    removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
   }))
+  return (on: boolean) => {
+    state.reduced = on
+    listeners.forEach((listener) => listener())
+  }
 }
 
 async function renderPage(directory: () => DirectoryEntry[] = () => people) {
@@ -119,10 +127,18 @@ const sizeBook = () =>
   vi.spyOn(book(), 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, toJSON: () => ({}) })
 const newcomer = (id: string, first: string): DirectoryEntry => ({ id, first_name: first, last_name: 'Désir', side: 'both', has_account: false, contacts: [] })
 
+// A pointer event at a set time: the flick rule reads timeStamp, which fireEvent can't set (and React reads 0 as now).
+const pointerAt = (type: 'pointerDown' | 'pointerMove' | 'pointerUp', clientX: number, timeStamp: number) => {
+  const event = createEvent[type](book(), { pointerId: 1, button: 0, clientX, clientY: 300 })
+  Object.defineProperty(event, 'timeStamp', { value: timeStamp })
+  fireEvent(book(), event)
+}
+
 beforeEach(() => stubMedia())
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('Members', () => {
@@ -268,7 +284,6 @@ describe('Members', () => {
     press('Jump to N')
     expect(position()).toBe('Pages 4–5 · Maya & Nadège')
 
-    const newcomer = (id: string, first: string): DirectoryEntry => ({ id, first_name: first, last_name: 'Désir', side: 'both', has_account: false, contacts: [] })
     everyone = [...people, newcomer('alain', 'Alain'), newcomer('bea', 'Béa')]
     await act(() => client.refetchQueries({ queryKey: ['directory'] }))
 
@@ -378,6 +393,91 @@ describe('Members', () => {
     }
 
     expect(position()).toBe('Welcome')
+  })
+
+  it('still turns after reduced motion comes on in the middle of a drag', async () => {
+    const setReduced = stubMedia({ reduced: false })
+    await renderPage()
+    vi.useFakeTimers()
+    try {
+      press('Open ▶')
+      act(() => {
+        vi.advanceTimersByTime(920)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+    sizeBook()
+    const pointer = { pointerId: 1, button: 0, clientY: 300 }
+    fireEvent.pointerDown(book(), { ...pointer, clientX: 350 })
+    fireEvent.pointerMove(book(), { ...pointer, clientX: 100 })
+    expect(book().querySelector('[inert]')).not.toBeNull()
+
+    act(() => setReduced(true))
+    fireEvent.pointerUp(book(), { ...pointer, clientX: 100 })
+    expect(position()).toBe('Pages 2–3 · Fritz')
+    expect(book().querySelector('[inert]')).toBeNull()
+
+    press('Next ▶')
+    expect(position()).toBe('Pages 4–5 · Maya & Nadège')
+  })
+
+  // Dragged a quarter of the way, quickly: let go at once it's a flick; held still first, it falls back.
+  it.each([
+    { name: 'turns when flicked', upAt: 30, shows: 'Pages 2–3 · Fritz' },
+    { name: 'falls back when held still before letting go', upAt: 2030, shows: 'Welcome' },
+  ])('a page dragged a quarter of the way $name', async ({ upAt, shows }) => {
+    await renderPage()
+    press('Open ▶')
+    sizeBook()
+
+    pointerAt('pointerDown', 350, 1000)
+    pointerAt('pointerMove', 340, 1010)
+    pointerAt('pointerMove', 259, 1020)
+    pointerAt('pointerUp', 259, 1000 + upAt)
+
+    expect(position()).toBe(shows)
+  })
+
+  it('doesn’t pass a request made of one person to whoever takes their page after a refresh', async () => {
+    let everyone = people
+    const client = await renderPage(() => everyone)
+    press('Open ▶')
+    press('Jump to N')
+    fireEvent.click(within(book()).getByRole('button', { name: 'Request address' }))
+    await waitFor(() => expect(within(book()).getAllByText('Address requested')).not.toEqual([]))
+
+    const nadia: DirectoryEntry = { ...newcomer('nadia', 'Nadia'), has_account: true, contacts: [{ kind: 'address', requestable: true, my_request_status: 'none' }] }
+    everyone = [...people.filter((p) => p.id !== 'nadege'), nadia]
+    await act(() => client.refetchQueries({ queryKey: ['directory'] }))
+
+    await waitFor(() => expect(position()).toBe('Pages 4–5 · Maya & Nadia'))
+    expect(within(book()).getByRole('button', { name: 'Request address' })).toBeInTheDocument()
+    expect(within(book()).queryAllByText('Address requested')).toEqual([])
+  })
+
+  it('drops a scrub along the tabs when a refresh takes letters away', async () => {
+    let everyone = people
+    const client = await renderPage(() => everyone)
+    press('Open ▶')
+    // Each tab 100px below the last.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const top = 100 * Number(this.dataset.tab ?? 0)
+      return { x: 0, y: top, left: 0, top, right: 20, bottom: top + 20, width: 20, height: 20, toJSON: () => ({}) }
+    })
+    const tabs = () => screen.getByRole('navigation', { name: 'Jump to a letter' })
+    fireEvent.pointerDown(tabs(), { pointerId: 2, clientY: 10 })
+    fireEvent.pointerMove(tabs(), { pointerId: 2, clientY: 310 })
+    expect(position()).toBe('Pages 6–7 · Naomie')
+
+    everyone = people.filter((p) => p.id === 'fritz')
+    await act(() => client.refetchQueries({ queryKey: ['directory'] }))
+    await waitFor(() => expect(position()).toBe('Pages 4–5 · Joseph'))
+    fireEvent.pointerMove(tabs(), { pointerId: 2, clientY: 10 })
+    fireEvent.pointerUp(tabs(), { pointerId: 2, clientY: 10 })
+
+    expect(position()).toBe('Pages 4–5 · Joseph')
+    expect(within(tabs()).getAllByRole('button').map((b) => b.textContent)).toEqual(['F', '♡'])
   })
 
   it.each([
