@@ -11,9 +11,15 @@ TEST_MAILPIT_URL  ?= http://localhost:8025
 SMTP_HOST         ?= localhost
 SMTP_PORT         ?= 1025
 BASE_URL          ?= http://localhost:5173
+# The smoke test's own database, made afresh each run from the maintenance one. Its psql runs on the host
+# (CI's runner has one); set PSQL to run it another way.
+E2E_DB            := familyhub_e2e
+E2E_DATABASE_URL  := postgres://app:app@localhost:5432/$(E2E_DB)?sslmode=disable
+E2E_ADMIN_URL     := postgres://app:app@localhost:5432/postgres?sslmode=disable
+PSQL              ?= psql
 export DATABASE_URL TEST_DATABASE_URL TEST_MAILPIT_URL SMTP_HOST SMTP_PORT BASE_URL
 
-.PHONY: up down ui-stub dev-api dev-ui generate build ui build-go run test lint web-check vuln migrate-up seed
+.PHONY: up down ui-stub dev-api dev-ui generate build ui build-go run test lint web-check e2e vuln migrate-up seed
 
 up:
 	docker compose up -d --wait
@@ -68,6 +74,14 @@ lint: ui-stub
 
 web-check:
 	cd web && npm run lint && npm run typecheck && npm test
+
+# The Playwright smoke test: the built app on a fresh database with the seed's made-up family, in the Chrome
+# already installed. Needs Postgres up (`make up` locally) and `cd web && npm ci` once.
+e2e: build
+	$(PSQL) -q -v ON_ERROR_STOP=1 '$(E2E_ADMIN_URL)' -c 'DROP DATABASE IF EXISTS $(E2E_DB) WITH (FORCE)' -c 'CREATE DATABASE $(E2E_DB)'
+	DATABASE_URL='$(E2E_DATABASE_URL)' $(BIN) migrate up
+	$(PSQL) -q -v ON_ERROR_STOP=1 '$(E2E_DATABASE_URL)' -f internal/database/seed.sql
+	cd web && DATABASE_URL='$(E2E_DATABASE_URL)' npx playwright test
 
 vuln: ui-stub
 	go tool govulncheck ./...
