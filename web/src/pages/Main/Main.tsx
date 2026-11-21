@@ -528,7 +528,12 @@ function FocusTree({
   const glideBack = (toZoom: number) => {
     const to = resting(toZoom)
     const { at: from, zoom: fromZoom } = live.current
-    if (reduced || (Math.abs(to.x - from.x) < 0.5 && Math.abs(to.y - from.y) < 0.5 && toZoom === fromZoom)) {
+    const there = Math.abs(to.x - from.x) < 0.5 && Math.abs(to.y - from.y) < 0.5 && toZoom === fromZoom
+    // Mid-glide, what's stored is already where it's going: a glide on its way there carries on.
+    if (there && glidingNow.current) {
+      return
+    }
+    if (reduced || there) {
       endGlide()
       return
     }

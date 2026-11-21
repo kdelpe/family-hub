@@ -485,6 +485,9 @@ describe('Main', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
       fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
       expect(stage()).toHaveClass(/glide/)
+      // A second reset mid-glide lets it carry on rather than jump to the end.
+      fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
+      expect(stage()).toHaveClass(/glide/)
       fireEvent.wheel(panel, { deltaY: 50 })
       expect(stage()).not.toHaveClass(/glide/)
     } finally {
