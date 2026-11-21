@@ -53,15 +53,10 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   const justDragged = useRef(-Infinity)
   const tabDrag = useRef<TabDrag | null>(null)
   const tabHandled = useRef(-Infinity)
-  const atNow = useRef(at)
-  useEffect(() => {
-    atNow.current = at
-  }, [at])
   useEffect(() => () => window.clearTimeout(timer.current), [])
 
   const goStop = (s: number) => onAt(stops[s]![0]!)
   const finish = (to: number | null, ms: number) => {
-    const from = at
     window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => {
       const el = pagesRef.current
@@ -69,8 +64,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
         el.style.transition = 'none'
         el.style.removeProperty('--fa')
       }
-      // A search or list pick made mid-turn wins over the turn.
-      if (to !== null && atNow.current === from) {
+      if (to !== null) {
         goStop(to)
       }
       setTurn(null)

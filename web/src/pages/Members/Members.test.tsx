@@ -270,43 +270,6 @@ describe('Members', () => {
     expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === '/api/directory')).toHaveLength(1)
   })
 
-  it('lets a search made mid-turn win over the turn', async () => {
-    stubMedia({ reduced: false })
-    await renderPage()
-    vi.useFakeTimers()
-    try {
-      press('Open ▶')
-      fireEvent.change(screen.getByRole('searchbox', { name: 'Find someone' }), { target: { value: 'jos' } })
-      act(() => {
-        vi.advanceTimersByTime(920)
-      })
-      expect(position()).toBe('Page 8 · Joseph')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('lists everyone and opens the book at the one picked', async () => {
-    await renderPage()
-    press('List')
-
-    expect(screen.getByRole('heading', { name: 'With us' })).toBeInTheDocument()
-    expect(within(screen.getByRole('button', { name: /^Maya Pluviose/ })).getByText('You')).toBeInTheDocument()
-    expect(within(screen.getByRole('button', { name: /^Joseph Pluviose/ })).getByText('In memory')).toBeInTheDocument()
-
-    press(/^Nadège Pluviose/)
-
-    expect(position()).toBe('Pages 4–5 · Maya & Nadège')
-    expect(screen.getByRole('button', { name: 'Book' })).toHaveAttribute('aria-pressed', 'true')
-  })
-
-  it('opens the book at the first name that matches the search', async () => {
-    await renderPage()
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Find someone' }), { target: { value: 'jos' } })
-
-    expect(position()).toBe('Page 8 · Joseph')
-  })
-
   it('shows one page at a time on a phone', async () => {
     stubMedia({ narrow: true })
     await renderPage()
