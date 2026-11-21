@@ -99,6 +99,34 @@ func (q *Queries) DeleteRelationship(ctx context.Context, id uuid.UUID) (int64, 
 	return result.RowsAffected(), nil
 }
 
+const familyParentsOf = `-- name: FamilyParentsOf :many
+SELECT r.person_a FROM relationships r
+JOIN persons p ON p.id = r.person_a AND p.deleted_at IS NULL
+WHERE r.type = 'parent_child' AND r.subtype IN ('biological', 'adoptive') AND r.person_b = $1
+ORDER BY r.person_a
+`
+
+// The parents a sibling is linked through: biological or adoptive, and still in the tree.
+func (q *Queries) FamilyParentsOf(ctx context.Context, childID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, familyParentsOf, childID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var person_a uuid.UUID
+		if err := rows.Scan(&person_a); err != nil {
+			return nil, err
+		}
+		items = append(items, person_a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const isAncestor = `-- name: IsAncestor :one
 WITH RECURSIVE anc(id) AS (
   SELECT person_a FROM relationships

@@ -364,6 +364,10 @@ func TestRelationshipWritesAreBusyWhileAnotherHoldsTheLock(t *testing.T) {
 		{name: "delete", write: func(ctx context.Context, s *Service, _ map[string]uuid.UUID, link Relationship) error {
 			return s.DeleteRelationship(ctx, link.ID)
 		}},
+		{name: "add a relative", write: func(ctx context.Context, s *Service, ids map[string]uuid.UUID, _ Relationship) error {
+			_, err := s.AddRelative(ctx, uuid.Nil, ids["Marie"], RelativeInput{Relation: RelationParent, PersonID: ids["Jean"]})
+			return err
+		}},
 	}
 
 	for _, tt := range tests {
