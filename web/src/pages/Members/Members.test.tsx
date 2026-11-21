@@ -228,6 +228,48 @@ describe('Members', () => {
     }
   })
 
+  it.each([
+    { name: '◀ Previous to the front cover', steps: [], close: () => press('◀ Previous'), says: 'Click the cover, or drag it, to open the book' },
+    {
+      name: 'a drag to the front cover, let go to finish',
+      steps: [],
+      close: () => {
+        sizeBook()
+        const pointer = { pointerId: 1, button: 0, clientY: 300 }
+        fireEvent.pointerDown(book(), { ...pointer, clientX: 50 })
+        fireEvent.pointerMove(book(), { ...pointer, clientX: 350 })
+        fireEvent.pointerUp(book(), { ...pointer, clientX: 350 })
+      },
+      says: 'Click the cover, or drag it, to open the book',
+    },
+    { name: 'Next ▶ to the back cover', steps: ['Jump to In Memory', 'Next ▶'], close: () => press('Next ▶'), says: 'The end · click the back cover to go back' },
+  ])('takes the buttons and page box away as the book starts to close, with $name', async ({ steps, close, says }) => {
+    stubMedia({ reduced: false })
+    await renderPage()
+    vi.useFakeTimers()
+    try {
+      const wait = () =>
+        act(() => {
+          vi.advanceTimersByTime(920)
+        })
+      openBook()
+      wait()
+      for (const step of steps) {
+        press(step)
+        wait()
+      }
+
+      close()
+
+      expect(book().querySelector('[inert]')).not.toBeNull()
+      expect(screen.queryByRole('button', { name: /^(◀ Previous|Next ▶)$/ })).toBeNull()
+      expect(screen.queryByRole('textbox', { name: 'Page' })).toBeNull()
+      expect(screen.getByText(says)).toBeVisible()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('lists what’s inside, with page numbers and letters, and no family sides', async () => {
     await renderPage()
     openBook()

@@ -236,7 +236,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     const ms = Math.round(200 + 460 * (done ? 1 - d.p : d.p))
     d.el.style.transition = `--fa ${ms}ms cubic-bezier(.25,.8,.35,1)`
     d.el.style.setProperty('--fa', String(end))
-    setTurn((t) => t && { ...t, mode: 'settle' })
+    setTurn((t) => t && { ...t, mode: 'settle', ...(land !== null && { land }) })
     finish(land, ms + 30)
   }
 
@@ -273,7 +273,10 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   })
   const numbers = cur.flatMap((i) => pageNumber(book, i) ?? [])
   const total = Math.max(...book.pages.map((_, i) => Number(pageNumber(book, i) ?? 0)))
-  const closed = stop === 0 || stop === last
+  // Where the book is going, once that's known (a click, a button, a drag let go to finish): closing, the buttons and page
+  // box go as the cover starts to swing, not when it lands.
+  const heading = turn?.land !== undefined ? turn.to : stop
+  const closed = heading === 0 || heading === last
   // The box shows the page asked for (a typed page, a person jumped to), from the moment the turn starts; turned to
   // by Previous or Next, the spread's first numbered page.
   const boxAt = turn?.land ?? at
@@ -291,9 +294,9 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   let position = numbers.length
     ? `Page${numbers.length > 1 ? `s ${numbers[0]}–${numbers[1]}` : ` ${numbers[0]}`}${names.length ? ` · ${names.join(' & ')}` : ''}`
     : ''
-  if (stop === 0) {
+  if (heading === 0) {
     position = 'Click the cover, or drag it, to open the book'
-  } else if (stop === last) {
+  } else if (heading === last) {
     position = 'The end · click the back cover to go back'
   } else if (shown.some((p) => p.kind === 'endpaperFront')) {
     position = 'Welcome'
