@@ -71,9 +71,17 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   const justDragged = useRef(-Infinity)
   const tabDrag = useRef<TabDrag | null>(null)
   const tabHandled = useRef(-Infinity)
+  // Turns queued by clicks during a turn (- back, + on), and while Start again rewinds, its turns' speed.
+  const queued = useRef(0)
+  const rewindMs = useRef<number | null>(null)
+  // A press on the page mid-turn: it queues a turn once let go, unless it moved (a scroll) or was canceled.
+  const tapDuringTurn = useRef<{ id: number; x0: number; y0: number; dir: 1 | -1 } | null>(null)
   useEffect(() => () => window.clearTimeout(timer.current), [])
   useEffect(() => {
     window.clearTimeout(timer.current)
+    // What was queued was for the old pages.
+    queued.current = 0
+    rewindMs.current = null
     const el = pagesRef.current
     if (el) {
       el.style.transition = 'none'
@@ -123,9 +131,6 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
 
   // One page on or back (buttons, corners, keys, a click on the page). Clicked again mid-turn, the turns queue up
   // rather than being dropped; a click the other way takes one back.
-  const queued = useRef(0)
-  // Set while Start again rewinds the book: its turns' speed, and clicks don't add to it.
-  const rewindMs = useRef<number | null>(null)
   const step = (dir: 1 | -1) => {
     if (rewindMs.current !== null) {
       return
@@ -146,22 +151,23 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
       } else {
         queued.current = 0
       }
-      if (queued.current === 0) {
-        rewindMs.current = null
-      }
     }
   })
-  // Once a turn has landed and rendered, so the next turn's animation starts afresh.
+  // Once a turn has landed and rendered, so the next turn's animation starts afresh. On the stop too: with reduced
+  // motion a turn lands at once, with no turn to wait for.
   useEffect(() => {
-    if (turn || queued.current === 0) {
+    if (turn) {
+      return
+    }
+    if (queued.current === 0) {
+      // Start again is done only once its last turn has landed.
+      rewindMs.current = null
       return
     }
     const wait = window.setTimeout(() => nextQueued.current(), 30)
     return () => window.clearTimeout(wait)
-  }, [turn])
+  }, [turn, stop])
 
-  // Arriving on the page, the book opens itself to the first pages, so it's clear what it is and how it turns
-  // (owner's call). Not with reduced motion, and not once the book's been touched.
   // Arriving, the closed book is picked up off the table before it opens (owner's call).
   const [pickUp, setPickUp] = useState(!reduced && stop === 0)
   // Until it opens itself, the line saying how to open it is kept out of sight (owner's call); it's there for a cover
@@ -171,13 +177,15 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   if (arriving && turn) {
     setArriving(false)
   }
+  // Then it opens itself to the first pages, so it's clear what it is and how it turns (owner's call). Not with reduced
+  // motion, and not once the book's been touched, even by a drag let go back onto the cover.
   const openOnArrival = useRef(() => {})
   useLayoutEffect(() => {
     openOnArrival.current = () => {
-      setArriving(false)
-      if (stop === 0 && !turn) {
+      if (arriving && stop === 0 && !turn) {
         flipTo(1)
       }
+      setArriving(false)
     }
   })
   useEffect(() => {
@@ -195,10 +203,14 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     if (turn) {
       return
     }
-    const turns = stop - 1
+    // The button goes as the cover opens: the book takes focus, so the arrow keys still turn.
+    pagesRef.current?.focus({ preventScroll: true })
+    // On a phone the bookplate has a stop of its own, before Welcome.
+    const welcome = stopOf(stops, book.welcome)
+    const turns = stop - welcome
     // One turn away (a very small book) is an ordinary turn: there's nothing to rewind.
     if (reduced || turns <= 1) {
-      flipTo(1)
+      goTo(book.welcome)
       return
     }
     rewindMs.current = Math.max(rewindMinMs, Math.min(fastMs, rewindTotalMs / turns))
@@ -212,10 +224,10 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
       return
     }
     if (turn) {
-      // Mid-turn, a click on the page queues the next turn; the corners queue by their own click.
+      // Mid-turn, a click on the page queues the next turn once let go; the corners queue by their own click.
       if (!target.closest('[data-corner]')) {
         const box = event.currentTarget.getBoundingClientRect()
-        step(event.clientX >= box.left + box.width / 2 ? 1 : -1)
+        tapDuringTurn.current = { id: event.pointerId, x0: event.clientX, y0: event.clientY, dir: event.clientX >= box.left + box.width / 2 ? 1 : -1 }
       }
       return
     }
@@ -250,6 +262,10 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   }
 
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const tap = tapDuringTurn.current
+    if (tap?.id === event.pointerId && Math.hypot(event.clientX - tap.x0, event.clientY - tap.y0) >= 6) {
+      tapDuringTurn.current = null
+    }
     const d = drag.current
     if (!d || event.pointerId !== d.id) {
       return
@@ -297,6 +313,14 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
 
   // A canceled pointer is a touch the browser took over for a scroll: it turns nothing, and a page under way falls back.
   const release = (event: ReactPointerEvent<HTMLDivElement>, canceled: boolean) => {
+    const tap = tapDuringTurn.current
+    if (tap?.id === event.pointerId) {
+      tapDuringTurn.current = null
+      if (!canceled) {
+        step(tap.dir)
+      }
+      return
+    }
     const d = drag.current
     if (!d || event.pointerId !== d.id) {
       return
@@ -407,13 +431,12 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
       // By who's on it, not where: a page's request buttons mustn't pass to whoever lands there after a refetch.
       key={`${place}-${book.keys[index]}`}
       data-page
-      className={`${styles.page} ${styles[place]} ${extra} ${book.pages[index]!.kind === 'empty' ? styles.hidden : ''} ${place !== 'whole' && boardSized(index) ? styles.boardSized : ''}`}
+      className={`${styles.page} ${styles[place]} ${extra} ${book.pages[index]!.kind === 'empty' ? styles.hidden : ''} ${place !== 'whole' && isCover(index) ? styles.boardSized : ''}`}
     >
       <PageContent book={book} index={index} outer={place === 'right' ? 'right' : 'left'} viewerId={viewerId} paused={paused} goTo={goTo} />
     </div>
   )
   const isCover = (index: number | null) => index !== null && (book.pages[index]!.kind === 'cover' || book.pages[index]!.kind === 'back')
-  const boardSized = (index: number) => isCover(index)
   // A turning cover is one stiff board, as big as the green board it lies on; its inside shows the endpaper within a
   // green rim, as it will once it lands.
   const board = (index: number | null, outer: 'left' | 'right', back = false) => (
@@ -701,7 +724,15 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
         )}
         {/* At the back cover: back a page, or start again from the front. */}
         {heading === last && (
-          <button type="button" className={`pill ${styles.prevButton}`} onClick={() => step(-1)}>
+          <button
+            type="button"
+            className={`pill ${styles.prevButton}`}
+            onClick={() => {
+              // The button goes as the cover opens: the book takes focus, so the arrow keys still turn.
+              pagesRef.current?.focus({ preventScroll: true })
+              step(-1)
+            }}
+          >
             ◀ <span className={styles.word}>Previous</span>
           </button>
         )}

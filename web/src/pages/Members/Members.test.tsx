@@ -298,6 +298,54 @@ describe('Members', () => {
     expect(position()).toBe('Welcome')
   })
 
+  it('starts again at Welcome on a phone, past the bookplate’s own page', async () => {
+    stubMedia({ narrow: true })
+    await renderPage()
+    openBook()
+    press('Jump to In Memory')
+    while (!screen.queryByRole('button', { name: '↺ Start again' })) {
+      press('Next ▶')
+    }
+
+    press('↺ Start again')
+
+    expect(within(book()).getByRole('heading', { name: 'Everyone in our family, in one book' })).toBeInTheDocument()
+    expect(within(book()).queryByText('The Pluviose Family')).toBeNull()
+    expect(book()).toHaveFocus()
+  })
+
+  it.each([
+    { name: 'queues a turn for a tap on the page during a turn', scroll: false, lands: 'Pages 4–5 · Maya & Nadège' },
+    { name: 'queues nothing for a scroll started during a turn', scroll: true, lands: 'Pages 2–3 · Fritz' },
+  ])('$name', async ({ scroll, lands }) => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const run = async (ms: number) => {
+      for (let t = 0; t < ms; t += 100) {
+        await act(() => vi.advanceTimersByTimeAsync(100))
+      }
+    }
+    try {
+      await renderPage()
+      await run(1150 + 1000)
+      sizeBook()
+
+      press('Next ▶')
+      fireEvent.pointerDown(book(), { pointerId: 1, button: 0, clientX: 300, clientY: 300 })
+      if (scroll) {
+        fireEvent.pointerMove(book(), { pointerId: 1, button: 0, clientX: 300, clientY: 340 })
+        fireEvent.pointerCancel(book(), { pointerId: 1, button: 0, clientX: 300, clientY: 340 })
+      } else {
+        fireEvent.pointerUp(book(), { pointerId: 1, button: 0, clientX: 300, clientY: 300 })
+      }
+      await run(3000)
+
+      expect(position()).toBe(lands)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rewinds every page back to Welcome, one quick turn after another, with Start again', async () => {
     stubMedia({ reduced: false })
     vi.useFakeTimers({ shouldAdvanceTime: true })
