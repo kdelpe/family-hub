@@ -1454,6 +1454,24 @@
   .nextButton {
     padding: 0 14px;
   }
+
+  .pageBox {
+    min-width: 0;
+    flex: 1;
+    gap: 6px;
+    font-size: 15px;
+  }
+
+  /* Previous, Next and the box's label don't fit beside each other on a phone: just the arrows show, and the words stay
+     for screen readers. */
+  .word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

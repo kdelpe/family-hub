@@ -270,6 +270,21 @@ describe('Members', () => {
     }
   })
 
+  // Three people and one memorial leave a Notes page at the end: two pages to a spread show it; a phone leaves it out.
+  it.each([
+    { name: 'counts the Notes page with two pages to a spread', narrow: false, total: 'of 8', typed8: 'Page 8' },
+    { name: 'leaves out the Notes page a phone doesn’t show', narrow: true, total: 'of 7', typed8: 'Welcome' },
+  ])('the page box $name', async ({ narrow, total, typed8 }) => {
+    stubMedia({ narrow })
+    await renderPage(() => people.slice(0, 3))
+    openBook()
+
+    expect(screen.getByText(total)).toBeInTheDocument()
+    fireEvent.change(pageBox(), { target: { value: '8' } })
+    fireEvent.submit(pageBox().closest('form')!)
+    expect(position()).toBe(typed8)
+  })
+
   it('lists what’s inside, with page numbers and letters, and no family sides', async () => {
     await renderPage()
     openBook()

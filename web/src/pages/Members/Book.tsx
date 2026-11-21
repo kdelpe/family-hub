@@ -272,7 +272,8 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     return who ? [who.first_name] : []
   })
   const numbers = cur.flatMap((i) => pageNumber(book, i) ?? [])
-  const total = Math.max(...book.pages.map((_, i) => Number(pageNumber(book, i) ?? 0)))
+  // Only pages the book can show: a phone leaves out the Notes page.
+  const total = Math.max(...stops.flat().map((i) => Number(pageNumber(book, i) ?? 0)))
   // Where the book is going, once that's known (a click, a button, a drag let go to finish): closing, the buttons and page
   // box go as the cover starts to swing, not when it lands.
   const heading = turn?.land !== undefined ? turn.to : stop
@@ -539,7 +540,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
         {!closed && (
           <>
             <button type="button" className={`pill ${styles.prevButton}`} onClick={() => flipTo(stop - 1)}>
-              ◀ Previous
+              ◀ <span className={styles.word}>Previous</span>
             </button>
             <form
               className={styles.pageBox}
@@ -548,7 +549,9 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
                 goToPage()
               }}
             >
-              <label htmlFor={pageField}>Page</label>
+              <label htmlFor={pageField} className={styles.word}>
+                Page
+              </label>
               <input
                 id={pageField}
                 className={styles.pageField}
@@ -571,7 +574,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
         </span>
         {!closed && (
           <button type="button" className={`pill ${styles.nextButton}`} onClick={() => flipTo(stop + 1)}>
-            Next ▶
+            <span className={styles.word}>Next</span> ▶
           </button>
         )}
       </div>
