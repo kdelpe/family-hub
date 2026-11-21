@@ -176,7 +176,8 @@
   top: 18px;
   left: 20px;
   z-index: 3;
-  max-width: calc(50% - 80px);
+  /* Clear of the ▲ arrow's label, centered and up to 260px wide. */
+  max-width: calc(50% - 150px);
   margin: 0;
   font-size: 14px;
   line-height: 1.35;
@@ -199,6 +200,8 @@
 
 .frame {
   position: relative;
+  /* The ▲ arrow's place depends on the panel's width, not the window's (below). */
+  container-type: inline-size;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -528,6 +531,10 @@
   right: 0;
   z-index: 3;
   width: fit-content;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   /* Centered with margins: the pill's hover lift uses translate. */
   margin-inline: auto;
 }
@@ -656,8 +663,11 @@
   .tipAbove {
     display: block;
   }
+}
 
-  /* Under the zoom control too. */
+/* Too narrow for the ▲ arrow (its label up to 260px, centered) beside the 240px zoom control in the top-right corner:
+   it goes under the control, and the line down to the parents makes room for it, ending 94px down. */
+@container (max-width: 780px) {
   .edgeTop {
     top: 64px;
   }
@@ -666,7 +676,6 @@
     padding-top: 104px;
   }
 
-  /* The arrow sits under the zoom control here, ending 94px down. */
   .spaced {
     margin-top: 72px;
   }

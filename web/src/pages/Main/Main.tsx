@@ -29,9 +29,13 @@ const rowStagger = 80
 const glideMs = 300
 // How far an arrow key moves the tree.
 const keyStep = 60
-// On a window too short or narrow for the page to fit (Main.module.css), it scrolls: then a plain wheel and an up-and-
-// down swipe are left to the page, as the way back to the controls above the tree.
-const pageScrolls = () => document.documentElement.scrollHeight > window.innerHeight
+// On a window too short or narrow for the page to fit, it scrolls: then a plain wheel and an up-and-down swipe are left
+// to the page, as the way back to the controls above the tree. The same query as Main.module.css's, so the gestures
+// and touch-action always agree.
+const scrollingPage = '(max-width: 800px), (max-height: 519.98px)'
+const pageScrolls = () => window.matchMedia?.(scrollingPage).matches ?? false
+// The room kept around the focus person's card when the tree has to move to show it.
+const cardRoom = 16
 const rowLanded = 400
 const rowsStyle = { '--row-landed': `${rowLanded}ms` } as CSSProperties
 
@@ -427,8 +431,8 @@ function FocusTree({
   // Where the cards are on the stage, so dragging can keep some of them, not just the empty stage, in sight.
   const [cards, setCards] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null)
   // Down the stage, where the grandparents' cards end (0 with no grandparents shown): the panel's top edge starts
-  // there, so the lines run down from it to the parents and the household.
-  const [treeTop, setTreeTop] = useState(0)
+  // there, so the lines run down from it to the parents and the household. And where the focus person's card is.
+  const [anchor, setAnchor] = useState<{ treeTop: number; card: { top: number; bottom: number } | null }>({ treeTop: 0, card: null })
   useLayoutEffect(() => {
     const p = panel.current
     const st = stage.current
@@ -441,7 +445,8 @@ function FocusTree({
       setLines({ width: st.offsetWidth, height: st.offsetHeight, paths: measure(st, r, view, focus) })
       setCards(cardBounds(st, r))
       const grandparents = [...r.querySelectorAll<HTMLElement>('[data-unit^="up-"]')].map((g) => offsetBox(g, st).bottom)
-      setTreeTop(grandparents.length ? Math.max(...grandparents) : 0)
+      const card = focusCard.current?.closest<HTMLElement>('[data-card]')
+      setAnchor({ treeTop: grandparents.length ? Math.max(...grandparents) : 0, card: card ? offsetBox(card, st) : null })
     }
     draw()
     // Cards move without the panel resizing when the web fonts land or a row rewraps.
@@ -464,7 +469,13 @@ function FocusTree({
   const { width, height } = panelSize
   // Across, the tree is centered. Down, it starts at the bottom of the grandparents' cards, so nothing shows cut
   // off at the panel's top: the lines come down from its edge to the parents, then the household (owner's call).
-  const resting = (z: number) => ({ x: (width * (1 - z)) / 2, y: -treeTop * z })
+  // Zoomed in on a short window, that can leave the focus person's card below the panel: then it moves up to show it.
+  const resting = (z: number) => {
+    const edge = -anchor.treeTop * z
+    const { card } = anchor
+    const showCard = card ? Math.max(height - cardRoom - card.bottom * z, cardRoom - card.top * z) : edge
+    return { x: (width * (1 - z)) / 2, y: Math.min(edge, showCard) }
+  }
 
   // At least 60px of the cards always stays in the panel, at every zoom and after the panel resizes.
   const keepInSight = (x: number, y: number, z: number) => {
@@ -481,23 +492,48 @@ function FocusTree({
     live.current = { at, zoom }
   })
   const [gliding, setGliding] = useState(false)
+  // As the state, but current within one event, which can move the tree several times.
+  const glidingNow = useRef(false)
   const glideTimer = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(glideTimer.current), [])
+  const endGlide = () => {
+    window.clearTimeout(glideTimer.current)
+    glidingNow.current = false
+    setGliding(false)
+  }
   const glideBack = () => {
     window.clearTimeout(glideTimer.current)
+    glidingNow.current = true
     setGliding(true)
-    glideTimer.current = window.setTimeout(() => setGliding(false), glideMs)
+    glideTimer.current = window.setTimeout(endGlide, glideMs)
+  }
+  // A move by hand takes over at once from a glide under way, from where the tree is shown, part way: the position and
+  // zoom it's gliding to are already set.
+  const takeOverGlide = () => {
+    const st = stage.current
+    if (!glidingNow.current || !st || typeof DOMMatrixReadOnly === 'undefined') {
+      return
+    }
+    const shown = getComputedStyle(st).transform
+    const m = new DOMMatrixReadOnly(shown === 'none' ? undefined : shown)
+    endGlide()
+    live.current = { at: { x: m.e, y: m.f }, zoom: m.a }
+    setMoved({ x: m.e, y: m.f })
+    onZoom(() => m.a)
   }
   const place = (x: number, y: number, z: number) => {
-    // A move by hand takes over at once from a glide under way.
-    setGliding(false)
+    endGlide()
     const to = keepInSight(x, y, z)
     live.current = { at: to, zoom: z }
     setMoved(to)
   }
-  const moveBy = (dx: number, dy: number) => place(live.current.at.x + dx, live.current.at.y + dy, live.current.zoom)
+  const moveBy = (dx: number, dy: number) => {
+    takeOverGlide()
+    place(live.current.at.x + dx, live.current.at.y + dy, live.current.zoom)
+  }
   // A zoom keeps the point it's made at in place: the pointer or the pinch; the buttons keep a centered tree centered.
   const zoomAround = (change: (z: number) => number, point?: { x: number; y: number }) => {
+    takeOverGlide()
     const { at, zoom } = live.current
     const next = clampZoom(change(zoom))
     if (point && next !== zoom) {
@@ -551,6 +587,7 @@ function FocusTree({
     if (event.pointerType === 'mouse' && event.button !== 0) {
       return
     }
+    takeOverGlide()
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
     start.current = { x: event.clientX, y: event.clientY }
     dragged.current = false

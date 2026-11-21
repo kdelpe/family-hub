@@ -87,15 +87,19 @@ afterEach(() => {
 })
 
 // A laid-out panel and tree: jsdom gives everything no size and puts it at 0. The panel is 600px square; the stage,
-// the cards and the groups of grandparents get the heights given, and the grandparents' groups their place.
-function layOut({ tree, card = 150, grandparentsTop = 0 }: { tree: number; card?: number; grandparentsTop?: number }) {
+// the cards (190px wide) and the groups of grandparents get the heights given, and the grandparents' groups and
+// Fritz's card their places.
+function layOut({ tree, card = 150, grandparentsTop = 0, focusTop = 0 }: { tree: number; card?: number; grandparentsTop?: number; focusTop?: number }) {
   vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(600)
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (this: HTMLElement) {
+    return this.matches('[data-card]') ? 190 : 0
+  })
   vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(600)
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
     return this.matches('[data-stage]') ? tree : this.matches('[data-card], [data-unit^="up-"]') ? card : 0
   })
   vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (this: HTMLElement) {
-    return this.matches('[data-unit^="up-"]') ? grandparentsTop : 0
+    return this.matches('[data-unit^="up-"]') ? grandparentsTop : this.matches('[data-person="fritz"] [data-card]') ? focusTop : 0
   })
 }
 
@@ -613,28 +617,72 @@ describe('Main', () => {
     expect(screen.getByRole('button', { name: 'Reset zoom, now 100%' })).toBeInTheDocument()
   })
 
-  // A window too short or narrow for the page to fit: the page scrolls, and up and down are left to it.
+  // A window too short or narrow for the page to fit scrolls the page, and up and down are left to it. Told by the same
+  // media query as the CSS's, not the page's height: a long menu beside the tree doesn't count.
+  const scrollingPage = (scrolls: boolean) =>
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: scrolls && query.includes('max-height: 519.98px'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
+  const swipe = (panel: HTMLElement) => {
+    const finger = (clientY: number) => ({ pointerId: 1, pointerType: 'touch', clientX: 100, clientY })
+    fireEvent.pointerDown(panel, finger(100))
+    fireEvent.pointerMove(panel, finger(110))
+    return fireEvent.pointerMove(panel, finger(160))
+  }
   it.each([
-    { name: 'a plain wheel', gesture: (panel: HTMLElement) => fireEvent.wheel(panel, { deltaY: 50 }) },
-    {
-      name: 'an up-and-down swipe',
-      gesture: (panel: HTMLElement) => {
-        const finger = (clientY: number) => ({ pointerId: 1, pointerType: 'touch', clientX: 100, clientY })
-        fireEvent.pointerDown(panel, finger(100))
-        fireEvent.pointerMove(panel, finger(110))
-        return fireEvent.pointerMove(panel, finger(160))
-      },
-    },
-  ])('leaves $name to a page that scrolls', ({ gesture }) => {
+    { name: 'leaves a plain wheel to a page that scrolls', scrolls: true, gesture: (panel: HTMLElement) => fireEvent.wheel(panel, { deltaY: 50 }), movesDown: false },
+    { name: 'leaves an up-and-down swipe to a page that scrolls', scrolls: true, gesture: swipe, movesDown: false },
+    { name: 'moves the tree with a plain wheel beside a menu longer than the window', scrolls: false, gesture: (panel: HTMLElement) => fireEvent.wheel(panel, { deltaY: -50 }), movesDown: true },
+  ])('$name', ({ scrolls, gesture, movesDown }) => {
     layOut({ tree: 600 })
+    scrollingPage(scrolls)
     vi.spyOn(document.documentElement, 'scrollHeight', 'get').mockReturnValue(window.innerHeight + 200)
     renderTree('jr')
 
     const handled = !gesture(screen.getByRole('region', { name: 'Family tree centered on you' }))
 
-    expect(handled).toBe(false)
-    // No move down or up: jsdom writes translate(x) alone when y is 0.
-    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).not.toMatch(/translate\([^,)]*, /)
+    expect(handled).toBe(movesDown)
+    // jsdom writes translate(x) alone when y is 0.
+    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform.includes(', 50px)')).toBe(movesDown)
+  })
+
+  it('moves up from the grandparents’ cards to show the focus person’s card, zoomed in on a short panel', () => {
+    // Grandparents end 350px down, Fritz's card 700–850px; at 150% the card would end 750px down a 600px panel.
+    layOut({ tree: 2000, grandparentsTop: 200, focusTop: 700 })
+    renderTree('fritz')
+    for (let i = 0; i < 5; i++) {
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    }
+
+    // Its bottom 16px above the panel's: 600 − 16 − 850 × 1.5.
+    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe('translate(-150px, -691px) scale(1.5)')
+  })
+
+  it('takes over a glide from where the tree is shown, part way, at the zoom shown', () => {
+    layOut({ tree: 2000 })
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    fireEvent.wheel(panel, { deltaY: 100 })
+    fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
+    // Part way back: jsdom has no transitions, so the stage reports what a browser would show then.
+    vi.stubGlobal(
+      'DOMMatrixReadOnly',
+      class {
+        a = 1.1
+        e = -30
+        f = -80
+      },
+    )
+
+    fireEvent.wheel(panel, { deltaY: 0 })
+
+    expect(screen.getByRole('button', { name: 'Reset zoom, now 110%' })).toBeInTheDocument()
+    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe('translate(-30px, -80px) scale(1.1)')
   })
 
   it('moves the tree up and down with one finger, too', () => {
