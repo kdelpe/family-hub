@@ -73,38 +73,43 @@ func (s *Service) CreateRelationship(ctx context.Context, in RelationshipInput) 
 		return Relationship{}, err
 	}
 	err = s.writeRelationships(ctx, "create relationship", func(q *gen.Queries) error {
-		n, err := q.CountPersonsInTree(ctx, []uuid.UUID{rel.PersonA, rel.PersonB})
-		if err != nil {
-			return fmt.Errorf("check people: %w", err)
-		}
-		if n != 2 {
-			return invalidRelationship("both people must be in the tree")
-		}
-		exists, err := q.RelationshipExists(ctx, gen.RelationshipExistsParams{Type: rel.Type, PersonA: rel.PersonA, PersonB: rel.PersonB})
-		if err != nil {
-			return fmt.Errorf("check duplicate: %w", err)
-		}
-		if exists {
-			return fmt.Errorf("%w: they're already linked this way; edit that link instead", ErrRelationshipConflict)
-		}
-		if rel.Type == ParentChild {
-			if err := checkNewParent(ctx, q, rel.PersonA, rel.PersonB, rel.Subtype); err != nil {
-				return err
-			}
-		}
-		row, err := q.CreateRelationship(ctx, gen.CreateRelationshipParams{
-			Type: rel.Type, Subtype: rel.Subtype, Ended: rel.Ended, PersonA: rel.PersonA, PersonB: rel.PersonB, Notes: rel.Notes,
-		})
-		if err != nil {
-			return fmt.Errorf("create relationship: %w", err)
-		}
-		rel = Relationship(row)
-		return nil
+		rel, err = createLink(ctx, q, rel)
+		return err
 	})
 	if err != nil {
 		return Relationship{}, err
 	}
 	return rel, nil
+}
+
+// createLink stores a checked link once it fits the stored ones; it runs under writeRelationships' lock.
+func createLink(ctx context.Context, q *gen.Queries, rel Relationship) (Relationship, error) {
+	n, err := q.CountPersonsInTree(ctx, []uuid.UUID{rel.PersonA, rel.PersonB})
+	if err != nil {
+		return Relationship{}, fmt.Errorf("check people: %w", err)
+	}
+	if n != 2 {
+		return Relationship{}, invalidRelationship("both people must be in the tree")
+	}
+	exists, err := q.RelationshipExists(ctx, gen.RelationshipExistsParams{Type: rel.Type, PersonA: rel.PersonA, PersonB: rel.PersonB})
+	if err != nil {
+		return Relationship{}, fmt.Errorf("check duplicate: %w", err)
+	}
+	if exists {
+		return Relationship{}, fmt.Errorf("%w: they're already linked this way; edit that link instead", ErrRelationshipConflict)
+	}
+	if rel.Type == ParentChild {
+		if err := checkNewParent(ctx, q, rel.PersonA, rel.PersonB, rel.Subtype); err != nil {
+			return Relationship{}, err
+		}
+	}
+	row, err := q.CreateRelationship(ctx, gen.CreateRelationshipParams{
+		Type: rel.Type, Subtype: rel.Subtype, Ended: rel.Ended, PersonA: rel.PersonA, PersonB: rel.PersonB, Notes: rel.Notes,
+	})
+	if err != nil {
+		return Relationship{}, fmt.Errorf("create relationship: %w", err)
+	}
+	return Relationship(row), nil
 }
 
 // UpdateRelationship is admin-only; the router checks the role.
