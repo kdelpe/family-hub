@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { type ReactNode, type Ref, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type ReactNode, type Ref, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
 import { type Contact, type ContactMethod, contactsQuery, isRequestable, kindOf, platformLabel } from '../../api/contacts'
@@ -20,10 +20,11 @@ const trailLength = 8
 const maxMatches = 6
 // A click waits this long so a double-click can cancel it (design-notes §4.2).
 const clickDelay = 230
-// Each generation arrives this many ms after the one above and has landed after rowLanded (the 0.4s in
-// Main.module.css); a line draws once the generation it reaches has landed (design-notes §4.2).
+// Each generation arrives this many ms after the one above and has landed after rowLanded (handed to
+// Main.module.css as --row-landed); a line draws once the generation it reaches has landed (design-notes §4.2).
 const rowStagger = 80
 const rowLanded = 400
+const rowsStyle = { '--row-landed': `${rowLanded}ms` } as CSSProperties
 
 type Direction = 'up' | 'down' | 'side'
 
@@ -361,16 +362,85 @@ function FocusTree({
     return card(id, { sub: word ? (rel ? `${rel} · ${word}` : word[0]!.toUpperCase() + word.slice(1)) : rel })
   })
   const split = Math.ceil(siblings.length / 2)
-  // Top to bottom, the order the generations arrive in.
-  const order = [
-    view.grandparents.length > 0 && 'grandparents',
-    view.parents.length > 0 && 'parents',
-    'household',
-    view.children.length > 0 && 'children',
-    view.grandchildren.length > 0 && 'grandchildren',
-  ].filter(Boolean)
-  const rowOf = (name: string) => order.indexOf(name)
   const chain = new Set(chainTo(view, focus, open))
+
+  // Top to bottom, the order the generations arrive in; a generation with nobody in it is left out.
+  const generations: { key: string; label: string; ids: string[]; body: ReactNode }[] = []
+  if (view.grandparents.length > 0) {
+    generations.push({
+      key: 'grandparents',
+      label: 'Grandparents',
+      ids: view.grandparents.flatMap((g) => g.ids),
+      body: view.grandparents.map((g) => (
+        <Group key={g.of} unit={`up-${g.of}`} label={`${first(g.of)}’s parents`}>
+          {g.ids.map((id) =>
+            card(id, {
+              sub: labelled(id, parentWords[family.linkOf(g.of, id) ?? 'biological']),
+              more: treeParentsOf(family, id).length > 0 ? 'up' : undefined,
+            }),
+          )}
+        </Group>
+      )),
+    })
+  }
+  if (view.parents.length > 0) {
+    generations.push({
+      key: 'parents',
+      label: whose('parents'),
+      ids: view.parents,
+      body: <Group unit="parents">{view.parents.map((id) => card(id, { sub: labelled(id, parentWords[family.linkOf(focus, id) ?? 'biological']) }))}</Group>,
+    })
+  }
+  generations.push({
+    key: 'household',
+    label: whose('household & siblings'),
+    ids: [focus, ...view.partners, ...view.formerPartners, ...view.siblings.map((x) => x.id)],
+    body: (
+      <>
+        {siblings.slice(0, split)}
+        <Group unit="household" household>
+          {card(focus)}
+          {view.partners.map((id) => card(id))}
+          {/* The dashed outline marks a former partner; the words stay the viewer's relation where there is one. */}
+          {view.formerPartners.map((id) => card(id, { former: true, sub: relations.get(id) ?? 'Former partner' }))}
+        </Group>
+        {siblings.slice(split)}
+      </>
+    ),
+  })
+  if (view.children.length > 0) {
+    generations.push({
+      key: 'children',
+      label: whose('children'),
+      ids: view.children.flatMap((g) => g.ids),
+      body: view.children.map((g, i) => (
+        <Group
+          key={g.with.join(' ') || 'none'}
+          unit={`children-${i}`}
+          label={g.with.length > 0 && (view.children.length > 1 || view.partners.length + view.formerPartners.length > 1) ? `With ${g.with.map(first).join(' & ')}` : undefined}
+        >
+          {g.ids.map((id) => card(id, { sub: labelled(id, childWords[family.linkOf(id, focus) ?? 'biological']) }))}
+        </Group>
+      )),
+    })
+  }
+  if (view.grandchildren.length > 0) {
+    generations.push({
+      key: 'grandchildren',
+      label: 'Grandchildren',
+      ids: view.grandchildren.flatMap((g) => g.ids),
+      body: view.grandchildren.map((g) => (
+        <Group key={g.of} unit={`down-${g.of}`} label={`${first(g.of)}’s children`}>
+          {g.ids.map((id) =>
+            card(id, {
+              sub: labelled(id, childWords[family.linkOf(id, g.of) ?? 'biological']),
+              more: treeChildrenOf(family, id).length > 0 ? 'down' : undefined,
+            }),
+          )}
+        </Group>
+      )),
+    })
+  }
 
   const rows = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLElement>(null)
@@ -417,71 +487,20 @@ function FocusTree({
         </svg>
       </div>
       {/* Opening the page, the generations arrive in turn too. */}
-      <div ref={rows} className={`${styles.rows} ${styles[direction ?? 'side']}`}>
-        {view.grandparents.length > 0 && (
-          <Generation label="Grandparents" row={rowOf('grandparents')}>
-            {view.grandparents.map((g) => (
-              <Group key={g.of} unit={`up-${g.of}`} label={`${first(g.of)}’s parents`}>
-                {g.ids.map((id) =>
-                  card(id, {
-                    sub: labelled(id, parentWords[family.linkOf(g.of, id) ?? 'biological']),
-                    more: treeParentsOf(family, id).length > 0 ? 'up' : undefined,
-                  }),
-                )}
-              </Group>
-            ))}
+      <div ref={rows} className={`${styles.rows} ${styles[direction ?? 'side']}`} style={rowsStyle}>
+        {generations.map((g, row) => (
+          <Generation key={g.key} label={g.label} row={row} raised={open !== null && g.ids.includes(open)}>
+            {g.body}
           </Generation>
-        )}
-        {view.parents.length > 0 && (
-          <Generation label={whose('parents')} row={rowOf('parents')}>
-            <Group unit="parents">{view.parents.map((id) => card(id, { sub: labelled(id, parentWords[family.linkOf(focus, id) ?? 'biological']) }))}</Group>
-          </Generation>
-        )}
-        <Generation label={whose('household & siblings')} row={rowOf('household')}>
-          {siblings.slice(0, split)}
-          <Group unit="household" household>
-            {card(focus)}
-            {view.partners.map((id) => card(id))}
-            {/* The dashed outline marks a former partner; the words stay the viewer's relation where there is one. */}
-            {view.formerPartners.map((id) => card(id, { former: true, sub: relations.get(id) ?? 'Former partner' }))}
-          </Group>
-          {siblings.slice(split)}
-        </Generation>
-        {view.children.length > 0 && (
-          <Generation label={whose('children')} row={rowOf('children')}>
-            {view.children.map((g, i) => (
-              <Group
-                key={g.with.join(' ') || 'none'}
-                unit={`children-${i}`}
-                label={g.with.length > 0 && (view.children.length > 1 || view.partners.length + view.formerPartners.length > 1) ? `With ${g.with.map(first).join(' & ')}` : undefined}
-              >
-                {g.ids.map((id) => card(id, { sub: labelled(id, childWords[family.linkOf(id, focus) ?? 'biological']) }))}
-              </Group>
-            ))}
-          </Generation>
-        )}
-        {view.grandchildren.length > 0 && (
-          <Generation label="Grandchildren" row={rowOf('grandchildren')}>
-            {view.grandchildren.map((g) => (
-              <Group key={g.of} unit={`down-${g.of}`} label={`${first(g.of)}’s children`}>
-                {g.ids.map((id) =>
-                  card(id, {
-                    sub: labelled(id, childWords[family.linkOf(id, g.of) ?? 'biological']),
-                    more: treeChildrenOf(family, id).length > 0 ? 'down' : undefined,
-                  }),
-                )}
-              </Group>
-            ))}
-          </Generation>
-        )}
+        ))}
       </div>
     </section>
   )
 }
 
-function Generation({ label, row, children }: { label: string; row: number; children: ReactNode }) {
+function Generation({ label, row, raised, children }: { label: string; row: number; raised: boolean; children: ReactNode }) {
   return (
-    <div data-row={row} className={styles.generation} style={{ animationDelay: `${row * rowStagger}ms` }}>
+    <div data-row={row} className={raised ? `${styles.generation} ${styles.raised}` : styles.generation} style={{ animationDelay: `${row * rowStagger}ms` }}>
       <span className={styles.generationLabel}>{label}</span>
       <div className={styles.row}>{children}</div>
     </div>

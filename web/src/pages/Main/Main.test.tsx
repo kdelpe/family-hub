@@ -292,6 +292,30 @@ describe('Main', () => {
     expect(screen.queryByRole('link', { name: 'View profile ›' })).not.toBeInTheDocument()
   })
 
+  it('raises only the generation whose quick look is open, for every card, so it can hang over the rows below', () => {
+    renderTree('fritz')
+    const people = [...document.querySelectorAll<HTMLElement>('[data-person]')]
+    expect(people.length).toBeGreaterThan(5)
+
+    for (const person of people) {
+      fireEvent.pointerEnter(person, { pointerType: 'mouse' })
+      const raised = [...document.querySelectorAll('[data-row]')].filter((r) => /raised/.test(r.className))
+      expect(raised, person.dataset.person).toEqual([person.closest('[data-row]')])
+      fireEvent.pointerLeave(person, { pointerType: 'mouse' })
+    }
+  })
+
+  it('numbers the generations as shown, from the top, when the ones above the focus are missing', () => {
+    renderTree('joseph')
+
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-row]')].map((r) => [r.dataset.row, r.firstElementChild!.textContent])
+    expect(rows).toEqual([
+      ['0', 'Your household & siblings'],
+      ['1', 'Your children'],
+      ['2', 'Grandchildren'],
+    ])
+  })
+
   it.each([
     { name: 'leaves its card', move: () => fireEvent.pointerLeave(personOf('Jean-Robert'), { pointerType: 'mouse' }) },
     { name: 'moves onto another card', move: () => fireEvent.pointerEnter(personOf('Nadège'), { pointerType: 'mouse' }) },
