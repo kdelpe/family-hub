@@ -1441,8 +1441,11 @@
    the menu sits above the book. */
 @media (min-width: 601px) {
   .main {
+    /* A little more room above the book than below it (owner's call): the page is 16px shorter to make it. */
+    --page-h: clamp(440px, calc(100dvh - 176px), 820px);
     min-height: 100dvh;
     justify-content: center;
+    padding-top: 44px;
   }
 }
 
