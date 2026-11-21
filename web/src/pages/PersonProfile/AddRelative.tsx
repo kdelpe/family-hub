@@ -12,7 +12,8 @@ import { gendered } from '../../lib/relation'
 import styles from './AddRelative.module.css'
 
 type Step = 'who' | 'kind' | 'other' | 'married' | 'ended' | 'shared' | 'check'
-type Who = { id: string } | { name: string }
+// The whole record, so a tree refetch that drops them can't turn the pick into a nameless new person.
+type Who = { person: TreePerson } | { name: string }
 type Named = { first_name: string; last_name: string | null }
 
 const relationWord: Record<Relation, string> = { parent: 'parent', child: 'child', partner: 'partner', sibling: 'brother or sister' }
@@ -91,6 +92,7 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
   const [married, setMarried] = useState(true)
   const [ended, setEnded] = useState(false)
   const [shared, setShared] = useState<string | null>(null)
+  const sheet = useRef<HTMLDivElement>(null)
   const question = useRef<HTMLHeadingElement>(null)
   const search = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
@@ -104,7 +106,7 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
     'check',
   ]
   const step = steps[at]
-  const relative = who && 'id' in who ? byId.get(who.id) : undefined
+  const relative = who && 'person' in who ? who.person : undefined
   const theirs: Named = relative ?? splitName(who && 'name' in who ? who.name : '')
   const theirName = fullName(theirs)
   const gender = relative?.gender ?? null
@@ -192,7 +194,9 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
     if (relation === 'parent' || relation === 'child') {
       body.subtype = kind
     }
-    if (relation === 'child' && other) {
+    // A child already linked to that parent would make the request a duplicate the server refuses.
+    const linked = (parent: string) => !!relative && (links.parentsOf(relative.id).has(parent) || links.fosterParentsOf(relative.id).has(parent))
+    if (relation === 'child' && other && !linked(other)) {
       body.other_parent_id = other
     }
     if (relation === 'partner') {
@@ -211,8 +215,19 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
       onClose()
     }
   }
-  // Escape in a filled search box clears it, as the browser's own clear would; otherwise it closes.
+  // Escape in a filled search box clears it, as the browser's own clear would; otherwise it closes. Tab wraps
+  // around inside the sheet: the page behind is inert, but Tab could still leave for the browser's own controls.
   const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Tab' && sheet.current) {
+      const focusable = [...sheet.current.querySelectorAll<HTMLElement>('button:not(:disabled):not([hidden]), input')]
+      const edge = e.shiftKey ? focusable[0] : focusable[focusable.length - 1]
+      if (document.activeElement === edge || (e.shiftKey && document.activeElement === question.current)) {
+        e.preventDefault()
+        const wrapTo = e.shiftKey ? focusable[focusable.length - 1] : focusable[0]
+        wrapTo?.focus()
+      }
+      return
+    }
     if (e.key !== 'Escape') {
       return
     }
@@ -279,7 +294,7 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
               : parentNames.length > 0
                 ? `Child of ${parentNames.join(' and ')}`
                 : null
-            return choice(p.id, answer(() => setWho({ id: p.id })), fullName(p), sub, avatar(p), taken)
+            return choice(p.id, answer(() => setWho({ person: p })), fullName(p), sub, avatar(p), taken)
           })}
           {typed && (
             <li>
@@ -403,7 +418,7 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
         }
       }}
     >
-      <div className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="add-relative-question" onKeyDown={onKeyDown}>
+      <div ref={sheet} className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="add-relative-question" onKeyDown={onKeyDown}>
         <div className={styles.bar}>
           <button type="button" className={styles.nav} onClick={() => go(-1)} hidden={at === 0} disabled={save.isPending}>
             ← Back

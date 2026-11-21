@@ -564,6 +564,36 @@ describe('PersonProfile adding a relative', () => {
     expect(screen.getByText(sentence)).toBeInTheDocument()
   })
 
+  it('leaves out an other parent the child already has', async () => {
+    // Sabine is Jean-Robert's daughter; Nadège adopts her, with Jean-Robert as the other parent.
+    const fetch = renderPage({ role: 'admin', answers: { 'POST /api/persons/nadege/relatives': added(full('sabine'), ['n1']) } })
+    await open('Add a child')
+    type('Sabine')
+    pick(/^Sabine Pluviose/)
+    pick('Adopted by Nadège')
+    pick(/^Jean-Robert Pluviose/)
+    pick('Add Sabine')
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    const body = { relation: 'child', person_id: 'sabine', subtype: 'adoptive' }
+    expect(fetch).toHaveBeenCalledWith('/api/persons/nadege/relatives', expect.objectContaining({ body: JSON.stringify(body) }))
+  })
+
+  it('keeps Tab inside the sheet', async () => {
+    renderPage({ role: 'admin' })
+    await open('Add a parent')
+    const dialog = screen.getByRole('dialog')
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' })
+    const search = within(dialog).getByRole('searchbox', { name: 'Name' })
+
+    // Cancel is the first stop on this screen (Back is hidden), and the search box the last.
+    search.focus()
+    fireEvent.keyDown(search, { key: 'Tab' })
+    expect(cancel).toHaveFocus()
+    fireEvent.keyDown(cancel, { key: 'Tab', shiftKey: true })
+    expect(search).toHaveFocus()
+  })
+
   it('clears a filled search box on Escape before closing', async () => {
     renderPage({ role: 'admin' })
     await open('Add a parent')

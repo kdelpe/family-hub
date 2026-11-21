@@ -43,6 +43,21 @@ export function PersonProfile() {
     [tree.data, links, viewerId],
   )
 
+  // On every state of the page: Undo may be wanted while a profile loads, or after it took off the person shown.
+  const toast = added && (
+    <div role="status" className={styles.toast}>
+      <span>{undo.error ? errorMessage(undo.error) : added.text}</span>
+      <span className={styles.toastActions}>
+        <button type="button" onClick={() => undo.mutate(added)} disabled={undo.isPending}>
+          {undo.isPending ? 'Undoing…' : 'Undo'}
+        </button>
+        <button type="button" onClick={() => setAdded(null)}>
+          Done
+        </button>
+      </span>
+    </div>
+  )
+
   const notFound = person.error instanceof ApiError && person.error.status === 404
   if (person.error) {
     return (
@@ -55,11 +70,12 @@ export function PersonProfile() {
         ) : (
           <p role="alert">{errorMessage(person.error)}</p>
         )}
+        {toast}
       </main>
     )
   }
   if (!person.data) {
-    return null
+    return toast || null
   }
   const p = person.data
   const name = fullName(p)
@@ -125,20 +141,7 @@ export function PersonProfile() {
           }}
         />
       )}
-      {added && (
-        // No time limit: Undo stays until it's used or put away.
-        <div role="status" className={styles.toast}>
-          <span>{undo.error ? errorMessage(undo.error) : added.text}</span>
-          <span className={styles.toastActions}>
-            <button type="button" onClick={() => undo.mutate(added)} disabled={undo.isPending}>
-              {undo.isPending ? 'Undoing…' : 'Undo'}
-            </button>
-            <button type="button" onClick={() => setAdded(null)}>
-              Done
-            </button>
-          </span>
-        </div>
-      )}
+      {toast}
     </main>
   )
 }
