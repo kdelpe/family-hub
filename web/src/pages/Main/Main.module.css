@@ -505,12 +505,13 @@
   bottom: 10px;
 }
 
-/* Room for the arrows, so at rest they don't sit on the first or last generation. */
-.roomAbove {
+/* Room for the arrows, so at rest they don't sit on the first or last generation. With .rows, so the phone
+   padding below doesn't undo it. */
+.rows.roomAbove {
   padding-top: 52px;
 }
 
-.roomBelow {
+.rows.roomBelow {
   padding-bottom: 52px;
 }
 
@@ -584,8 +585,9 @@
     overflow-wrap: anywhere;
   }
 
+  /* The first generation starts under the zoom control, which takes the top's width here. */
   .rows {
-    padding: 22px 8px 26px;
+    padding: 64px 8px 26px;
   }
 
   .group {
@@ -600,12 +602,12 @@
     display: block;
   }
 
-  /* Under the zoom control, which takes the top's width here. */
+  /* Under the zoom control too. */
   .edgeTop {
     top: 64px;
   }
 
-  .roomAbove {
+  .rows.roomAbove {
     padding-top: 104px;
   }
 }
