@@ -764,7 +764,10 @@
   background: var(--divider);
 }
 
+/* Someone can share up to 50 contacts: past the page's height they scroll here, under the name and above Open profile. */
 .reach {
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;

@@ -1,11 +1,11 @@
-import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react'
+import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import { type Book as BookData, nameOf, pageNumber, stopOf, stopsOf } from './bookPages'
 import { PageContent } from './PageContent'
 import styles from './Members.module.css'
 
 type Dir = 'next' | 'prev'
-type Turn = { dir: Dir; to: number; mode: 'anim' | 'drag' | 'settle' }
+type Turn = { dir: Dir; to: number; mode: 'anim' | 'drag' | 'settle'; stops: number[][] }
 type Drag = {
   id: number
   el: HTMLDivElement
@@ -19,6 +19,7 @@ type Drag = {
   to: number
   p: number
   hist: [number, number][]
+  stops: number[][]
 }
 type TabDrag = { nav: HTMLElement; id: number; start: number; cur: number; y0: number; moved: boolean }
 
@@ -42,10 +43,12 @@ type Props = {
 // The Members book (design-notes §4.3): one registered property, --fa, turns a page through calc(), sin() and cos()
 // in the CSS; a drag writes it straight to the element, with no render per pointer move.
 export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Props) {
-  const stops = stopsOf(book, single)
+  const stops = useMemo(() => stopsOf(book, single), [book, single])
   const last = stops.length - 1
   const stop = stopOf(stops, at)
-  const [turn, setTurn] = useState<Turn | null>(null)
+  // A turn or drag belongs to the stops it was made for: a refetch, or a phone turned on its side, cancels one under way.
+  const [made, setTurn] = useState<Turn | null>(null)
+  const turn = made?.stops === stops ? made : null
   const [scrub, setScrub] = useState<{ tab: number; top: number } | null>(null)
   const pagesRef = useRef<HTMLDivElement>(null)
   const timer = useRef<number | undefined>(undefined)
@@ -54,9 +57,16 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   const tabDrag = useRef<TabDrag | null>(null)
   const tabHandled = useRef(-Infinity)
   useEffect(() => () => window.clearTimeout(timer.current), [])
+  useEffect(() => {
+    window.clearTimeout(timer.current)
+    const el = pagesRef.current
+    if (el) {
+      el.style.transition = 'none'
+      el.style.removeProperty('--fa')
+    }
+  }, [stops])
 
-  const goStop = (s: number) => onAt(stops[s]![0]!)
-  const finish = (to: number | null, ms: number) => {
+  const finish = (page: number | null, ms: number) => {
     window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => {
       const el = pagesRef.current
@@ -64,33 +74,53 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
         el.style.transition = 'none'
         el.style.removeProperty('--fa')
       }
-      if (to !== null) {
-        goStop(to)
+      if (page !== null) {
+        onAt(page)
       }
       setTurn(null)
     }, ms)
   }
-  const flipTo = (to: number) => {
-    if (turn || to === stop || to < 0 || to > last) {
+  // Lands on the page asked for, not just its spread, so a refetch that moves the spreads keeps that person in view.
+  const flipTo = (to: number, page?: number) => {
+    if (turn || to < 0 || to > last) {
       return
     }
+    if (to === stop) {
+      if (page !== undefined) {
+        onAt(page)
+      }
+      return
+    }
+    // A control on a page turned away (or a corner, closing the book) goes with it: the book takes focus, so the
+    // arrow keys still turn.
+    const active = document.activeElement
+    if (active?.closest('[data-page]') || (active?.closest('[data-corner]') && (to === 0 || to === last))) {
+      pagesRef.current?.focus({ preventScroll: true })
+    }
+    const land = page ?? stops[to]![0]!
     if (reduced) {
-      goStop(to)
+      onAt(land)
       return
     }
-    setTurn({ dir: to > stop ? 'next' : 'prev', to, mode: 'anim' })
-    finish(to, turnMs)
+    setTurn({ dir: to > stop ? 'next' : 'prev', to, mode: 'anim', stops })
+    finish(land, turnMs)
   }
-  const goTo = (index: number) => flipTo(stopOf(stops, index))
+  const goTo = (index: number) => flipTo(stopOf(stops, index), index)
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     const target = event.target as Element
     if (turn || event.button > 0 || target.closest('a, input, select, textarea, button:not([data-corner])')) {
       return
     }
+    // A press on a scrollbar (a long list of contacts) scrolls; it doesn't turn the page.
+    if (target instanceof HTMLElement && target.scrollHeight > target.clientHeight && event.nativeEvent.offsetX > target.clientWidth) {
+      return
+    }
     const el = event.currentTarget
     const box = el.getBoundingClientRect()
-    const side: Dir = event.clientX >= box.left + box.width / 2 ? 'next' : 'prev'
+    const half: Dir = event.clientX >= box.left + box.width / 2 ? 'next' : 'prev'
+    // On a phone a cover turns one way only, wherever it's tapped.
+    const side: Dir = single && stop === 0 ? 'next' : single && stop === last ? 'prev' : half
     const to = stop + (side === 'next' ? 1 : -1)
     if (!single && (to < 0 || to > last)) {
       return
@@ -108,12 +138,17 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
       to,
       p: 0,
       hist: [[event.timeStamp, event.clientX]],
+      stops,
     }
   }
 
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const d = drag.current
     if (!d || event.pointerId !== d.id) {
+      return
+    }
+    if (d.stops !== stops) {
+      drag.current = null
       return
     }
     const dx = event.clientX - d.x0
@@ -131,32 +166,41 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
       }
       d.on = true
       d.el.setPointerCapture?.(d.id)
-      d.el.style.transition = 'none'
-      d.el.style.setProperty('--fa', single && d.dir === 'prev' ? '-180' : '0')
-      setTurn({ dir: d.dir, to: d.to, mode: 'drag' })
+      // With reduced motion the page doesn't follow the pointer: letting go turns it at once, or not.
+      if (!reduced) {
+        d.el.style.transition = 'none'
+        d.el.style.setProperty('--fa', single && d.dir === 'prev' ? '-180' : '0')
+        setTurn({ dir: d.dir, to: d.to, mode: 'drag', stops })
+      }
     }
     // Done when the pointer reaches the far edge: the left one turning forward, the right one turning back.
     const far = d.dir === 'next' ? d.left : d.right
     const p = Math.min(1, Math.max(0, dx / (far - d.x0)))
     d.p = p
-    const angle = (Math.acos(1 - 2 * p) * 180) / Math.PI
-    const fa = single && d.dir === 'prev' ? angle - 180 : d.dir === 'next' ? -angle : angle
-    d.el.style.setProperty('--fa', fa.toFixed(2))
+    if (!reduced) {
+      const angle = (Math.acos(1 - 2 * p) * 180) / Math.PI
+      const fa = single && d.dir === 'prev' ? angle - 180 : d.dir === 'next' ? -angle : angle
+      d.el.style.setProperty('--fa', fa.toFixed(2))
+    }
     d.hist.push([event.timeStamp, event.clientX])
     if (d.hist.length > 6) {
       d.hist.shift()
     }
   }
 
-  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+  // A canceled pointer is a touch the browser took over for a scroll: it turns nothing, and a page under way falls back.
+  const release = (event: ReactPointerEvent<HTMLDivElement>, canceled: boolean) => {
     const d = drag.current
     if (!d || event.pointerId !== d.id) {
       return
     }
     drag.current = null
+    if (d.stops !== stops) {
+      return
+    }
     if (!d.on) {
       // The corners turn by their own click.
-      if (!d.corner) {
+      if (!d.corner && !canceled) {
         flipTo(stop + (d.side === 'next' ? 1 : -1))
       }
       return
@@ -167,13 +211,20 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     const speed = lastMove[0] > first[0] ? (lastMove[1] - first[1]) / (lastMove[0] - first[0]) : 0
     const toward = d.dir === 'next' ? -speed : speed
     // Past halfway, or flicked toward the spine: it finishes; otherwise it falls back.
-    const done = d.p > 0.5 ? toward > -0.3 : toward > 0.35 && d.p > 0.03
+    const done = !canceled && (d.p > 0.5 ? toward > -0.3 : toward > 0.35 && d.p > 0.03)
+    const land = done ? stops[d.to]![0]! : null
+    if (reduced) {
+      if (land !== null) {
+        onAt(land)
+      }
+      return
+    }
     const end = single && d.dir === 'prev' ? (done ? 0 : -180) : done ? (d.dir === 'next' ? -180 : 180) : 0
     const ms = Math.round(200 + 460 * (done ? 1 - d.p : d.p))
     d.el.style.transition = `--fa ${ms}ms cubic-bezier(.25,.8,.35,1)`
     d.el.style.setProperty('--fa', String(end))
     setTurn((t) => t && { ...t, mode: 'settle' })
-    finish(done ? d.to : null, ms + 30)
+    finish(land, ms + 30)
   }
 
   // The letter tabs: a tap turns there; pressing and sliding scrubs straight to each letter as it's passed.
@@ -222,6 +273,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   const page = (index: number, place: 'left' | 'right' | 'whole', extra = '') => (
     <div
       key={`${place}-${index}`}
+      data-page
       className={`${styles.page} ${styles[place]} ${extra} ${book.pages[index]!.kind === 'empty' ? styles.hidden : ''}`}
     >
       <PageContent book={book} index={index} outer={place === 'right' ? 'right' : 'left'} viewerId={viewerId} paused={paused} goTo={goTo} />
@@ -295,15 +347,8 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
           aria-label="Members book. Click or drag a page, or use the left and right arrow keys, to turn."
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={(event) => {
-            // A touch that became a scroll is canceled: no click-turn, though a drag already under way settles.
-            if (drag.current?.on) {
-              onPointerUp(event)
-            } else {
-              drag.current = null
-            }
-          }}
+          onPointerUp={(event) => release(event, false)}
+          onPointerCancel={(event) => release(event, true)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
               event.preventDefault()

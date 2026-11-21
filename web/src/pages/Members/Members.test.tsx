@@ -114,6 +114,10 @@ const book = () => screen.getByRole('group', { name: /^Members book/ })
 // The line under the book saying where it's open.
 const position = () => document.querySelector('[aria-live]')!.textContent
 const press = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }))
+// jsdom lays nothing out, and a press on the book picks its direction from the half it lands on.
+const sizeBook = () =>
+  vi.spyOn(book(), 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, toJSON: () => ({}) })
+const newcomer = (id: string, first: string): DirectoryEntry => ({ id, first_name: first, last_name: 'Désir', side: 'both', has_account: false, contacts: [] })
 
 beforeEach(() => stubMedia())
 
@@ -269,6 +273,131 @@ describe('Members', () => {
     await act(() => client.refetchQueries({ queryKey: ['directory'] }))
 
     await waitFor(() => expect(position()).toBe('Pages 6–7 · Maya & Nadège'))
+  })
+
+  // One newcomer shifts every page after them to the other side of the spine; two wouldn't show the difference.
+  it.each([
+    { name: 'turned to', jumps: ['Jump to N'] },
+    { name: 'already in view', jumps: ['Jump to M', 'Jump to N'] },
+  ])('stays at the person jumped to, $name, when a refresh adds one person before them', async ({ jumps }) => {
+    let everyone = people
+    const client = await renderPage(() => everyone)
+    press('Open ▶')
+    jumps.forEach((jump) => press(jump))
+    expect(position()).toBe('Pages 4–5 · Maya & Nadège')
+
+    everyone = [...people, newcomer('alain', 'Alain')]
+    await act(() => client.refetchQueries({ queryKey: ['directory'] }))
+
+    await waitFor(() => expect(position()).toBe('Pages 6–7 · Nadège & Naomie'))
+  })
+
+  it('drops a turn under way when a refresh takes away the pages it was turning to', async () => {
+    stubMedia({ reduced: false })
+    let everyone = people
+    const client = await renderPage(() => everyone)
+    vi.useFakeTimers()
+    try {
+      press('Open ▶')
+      act(() => {
+        vi.advanceTimersByTime(920)
+      })
+      press('Jump to In Memory')
+      act(() => {
+        vi.advanceTimersByTime(920)
+      })
+      press('Next ▶')
+
+      everyone = []
+      await act(() => client.refetchQueries({ queryKey: ['directory'] }))
+      // The refetched book lands first, as in a browser, where it comes long before the turn's end.
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(within(book()).getByRole('heading', { name: 'In Memory' })).toBeInTheDocument()
+      expect(book()).not.toHaveClass(/animNext/)
+      act(() => {
+        vi.advanceTimersByTime(920)
+      })
+
+      expect(within(book()).getByRole('heading', { name: 'In Memory' })).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    { name: 'a letter on the Contents page', before: ['Open ▶', 'Next ▶'], control: () => within(book()).getByRole('button', { name: 'Go to N' }), keeps: false },
+    { name: 'an entry on the Contents page', before: ['Open ▶', 'Next ▶'], control: () => within(book()).getByRole('button', { name: 'In Memory, page 7' }), keeps: false },
+    { name: 'the corner that closes the book', before: ['Open ▶'], control: () => screen.getByRole('button', { name: 'Previous page' }), keeps: false },
+    { name: 'the Next button under the book', before: ['Open ▶'], control: () => screen.getByRole('button', { name: 'Next ▶' }), keeps: true },
+  ])('turns with $name and leaves focus where the arrow keys still work', async ({ before, control, keeps }) => {
+    await renderPage()
+    before.forEach((step) => press(step))
+    const button = control()
+    const from = position()
+    button.focus()
+
+    fireEvent.click(button)
+
+    expect(position()).not.toBe(from)
+    expect(keeps ? button : book()).toHaveFocus()
+  })
+
+  it('turns a dragged page at once on letting go, with reduced motion, without it following the pointer', async () => {
+    await renderPage()
+    press('Open ▶')
+    sizeBook()
+    const pointer = { pointerId: 1, button: 0, clientY: 300 }
+
+    fireEvent.pointerDown(book(), { ...pointer, clientX: 350 })
+    fireEvent.pointerMove(book(), { ...pointer, clientX: 300 })
+    fireEvent.pointerMove(book(), { ...pointer, clientX: 100 })
+    expect(book().querySelector('[inert]')).toBeNull()
+    fireEvent.pointerUp(book(), { ...pointer, clientX: 100 })
+
+    expect(position()).toBe('Pages 2–3 · Fritz')
+  })
+
+  it('lets a page fall back when a drag under way becomes a scroll', async () => {
+    await renderPage()
+    press('Open ▶')
+    sizeBook()
+    const pointer = { pointerId: 1, button: 0, clientY: 300 }
+
+    vi.useFakeTimers()
+    try {
+      fireEvent.pointerDown(book(), { ...pointer, clientX: 350 })
+      fireEvent.pointerMove(book(), { ...pointer, clientX: 100 })
+      fireEvent.pointerCancel(book(), { ...pointer, clientX: 100 })
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(position()).toBe('Welcome')
+  })
+
+  it.each([
+    { name: 'opens the front cover tapped on its left half', toEnd: false, clientX: 100, shows: 'the Pluviose family' },
+    { name: 'turns back from the back cover tapped on its right half', toEnd: true, clientX: 300, shows: 'Sa w plante, se li w rekòlte.' },
+  ])('on a phone, $name', async ({ toEnd, clientX, shows }) => {
+    stubMedia({ narrow: true })
+    await renderPage()
+    if (toEnd) {
+      for (const step of ['Open ▶', 'Jump to In Memory', 'Next ▶', 'Next ▶', 'Next ▶']) {
+        press(step)
+      }
+      expect(position()).toBe('The end · click the back cover to go back')
+    }
+    sizeBook()
+
+    fireEvent.pointerDown(book(), { pointerId: 1, button: 0, clientX, clientY: 300 })
+    fireEvent.pointerUp(book(), { pointerId: 1, button: 0, clientX, clientY: 300 })
+
+    expect(within(book()).getByText(shows)).toBeInTheDocument()
   })
 
   it('asks for a detail without fetching the whole family again', async () => {
