@@ -351,6 +351,8 @@ describe('Main', () => {
   })
 
   it('moves the tree to show a card tabbed to outside the panel', () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(1000)
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(600)
     renderTree('fritz')
     const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
     const card = cardOf('Sabine').closest('[data-card]')!
@@ -360,6 +362,22 @@ describe('Main', () => {
     act(() => cardOf('Sabine').focus())
 
     expect(screen.getByRole('button', { name: 'Recenter' })).toBeEnabled()
+    vi.restoreAllMocks()
+  })
+
+  it('doesn’t move the tree for the page’s own focus on the person just centered on', () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(1000)
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(600)
+    // Every card outside the panel, so any reaction to that focus would show.
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      return this.matches('section') ? DOMRect.fromRect({ width: 600, height: 800 }) : DOMRect.fromRect({ x: 700, width: 190, height: 156 })
+    })
+    renderTree('fritz')
+
+    fireEvent.click(cardOf('Jean-Robert'))
+
+    expect(document.activeElement).toBe(cardOf('Jean-Robert'))
+    expect(screen.getByRole('button', { name: 'Recenter' })).toBeDisabled()
     vi.restoreAllMocks()
   })
 

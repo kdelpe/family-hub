@@ -275,7 +275,6 @@ function FocusTree({
     }
   }, [direction])
 
-
   const card = (id: string, { sub, former }: { sub?: string; former?: boolean } = {}) => (
     <Person
       key={id}
@@ -586,8 +585,9 @@ function FocusTree({
         // card clicks it with no pointer (detail 0), and must still work after a drag the browser canceled.
         onFocus={(event) => {
           // A card tabbed to outside the panel is brought in by moving the tree, with a little room around it.
+          // Not the page's own focus on the new person's card, and not before the tree is measured.
           const card = (event.target as HTMLElement).closest('[data-card]')
-          if (!card) {
+          if (!card || quietFocus.current || width === 0 || height === 0) {
             return
           }
           const box = card.getBoundingClientRect()
