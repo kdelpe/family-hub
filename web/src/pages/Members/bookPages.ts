@@ -20,6 +20,11 @@ export type Book = {
   welcome: number
   membersStart: number
   memoryStart: number
+  // Each letter's first page, A to Z.
+  letterStarts: { letter: string; index: number }[]
+  // A name for each page that survives a refetch adding or removing people: a person's id, or the page's kind.
+  keys: string[]
+  indexOf: Map<string, number>
 }
 
 export const letterOf = (firstName: string) => foldName(firstName).charAt(0).toUpperCase() || '#'
@@ -42,7 +47,24 @@ export function makeBook(living: Living[], remembered: Remembered[]): Book {
     pages.push({ kind: 'notes' })
   }
   pages.push({ kind: 'endpaperBack' }, { kind: 'back' }, { kind: 'empty' })
-  return { pages, living: people, remembered: gone, welcome: 3, membersStart, memoryStart }
+  const letterStarts: Book['letterStarts'] = []
+  pages.forEach((p, index) => {
+    if (p.kind === 'person' && p.letter !== letterStarts.at(-1)?.letter) {
+      letterStarts.push({ letter: p.letter, index })
+    }
+  })
+  const keys = pages.map((p, i) => nameOf(p)?.id ?? (p.kind === 'empty' || p.kind === 'notes' ? `${p.kind}-${i === 0 ? 0 : pages.length - i}` : p.kind))
+  return {
+    pages,
+    living: people,
+    remembered: gone,
+    welcome: 3,
+    membersStart,
+    memoryStart,
+    letterStarts,
+    keys,
+    indexOf: new Map(keys.map((k, i) => [k, i])),
+  }
 }
 
 const numbered = new Set<BookPage['kind']>(['welcome', 'contents', 'person', 'divider', 'memorial', 'notes'])

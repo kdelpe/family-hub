@@ -1,6 +1,6 @@
 import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react'
 
-import { type Book as BookData, letterOf, nameOf, pageNumber, stopOf, stopsOf } from './bookPages'
+import { type Book as BookData, nameOf, pageNumber, stopOf, stopsOf } from './bookPages'
 import { PageContent } from './PageContent'
 import styles from './Members.module.css'
 
@@ -53,10 +53,15 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   const justDragged = useRef(-Infinity)
   const tabDrag = useRef<TabDrag | null>(null)
   const tabHandled = useRef(-Infinity)
+  const atNow = useRef(at)
+  useEffect(() => {
+    atNow.current = at
+  }, [at])
   useEffect(() => () => window.clearTimeout(timer.current), [])
 
   const goStop = (s: number) => onAt(stops[s]![0]!)
   const finish = (to: number | null, ms: number) => {
+    const from = at
     window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => {
       const el = pagesRef.current
@@ -64,7 +69,8 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
         el.style.transition = 'none'
         el.style.removeProperty('--fa')
       }
-      if (to !== null) {
+      // A search or list pick made mid-turn wins over the turn.
+      if (to !== null && atNow.current === from) {
         goStop(to)
       }
       setTurn(null)
@@ -191,16 +197,14 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     return best as { i: number; top: number } | null
   }
 
-  const letters = [...new Set(book.living.map((l) => letterOf(l.entry.first_name)))]
-  const firstOf = (letter: string) => book.pages.findIndex((p) => p.kind === 'person' && p.letter === letter)
-  const tabTargets = [...letters.map(firstOf), book.memoryStart]
+  const tabTargets = [...book.letterStarts.map((l) => l.index), book.memoryStart]
 
   const cur = stops[stop]!
   const tgtStop = turn ? turn.to : stop
   const tgt = stops[tgtStop]!
   const shown = cur.map((i) => book.pages[i]!)
   const tabs = [
-    ...letters.map((letter) => ({ label: letter, aria: `Jump to ${letter}`, on: shown.some((p) => p.kind === 'person' && p.letter === letter) })),
+    ...book.letterStarts.map(({ letter }) => ({ label: letter, aria: `Jump to ${letter}`, on: shown.some((p) => p.kind === 'person' && p.letter === letter) })),
     { label: '♡', aria: 'Jump to In Memory', on: shown.some((p) => p.kind === 'memorial' || p.kind === 'divider') },
   ]
 
@@ -231,11 +235,11 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
       <PageContent book={book} index={index} outer={place === 'right' ? 'right' : 'left'} viewerId={viewerId} paused={paused} goTo={goTo} />
     </div>
   )
-  const face = (index: number | null, className: string, inner: string, back = false) => (
+  const face = (index: number | null, className: string, outer: 'left' | 'right', inner: string, back = false) => (
     <div className={`${styles.face} ${back ? styles.back : ''} ${className}`}>
       <div className={`${styles.inner} ${inner}`}>
         {index !== null && (
-          <PageContent book={book} index={index} outer={inner.includes(styles.innerRight!) ? 'right' : 'left'} viewerId={viewerId} paused={paused} goTo={goTo} />
+          <PageContent book={book} index={index} outer={outer} viewerId={viewerId} paused={paused} goTo={goTo} />
         )}
       </div>
       <span className={styles.shade} />
@@ -319,11 +323,11 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
               <div className={`${styles.leaf} ${leafDir === 'next' ? styles.leafNext : styles.leafPrev}`}>
                 <div className={`${styles.seg} ${styles.sa}`}>
                   {leafDir === 'next'
-                    ? face(front, styles.square!, `${styles.innerRight} ${styles.saFrontNext}`)
-                    : face(front, styles.square!, `${styles.innerLeft} ${styles.saFrontPrev}`)}
+                    ? face(front, styles.square!, 'right', `${styles.innerRight} ${styles.saFrontNext}`)
+                    : face(front, styles.square!, 'left', `${styles.innerLeft} ${styles.saFrontPrev}`)}
                   {leafDir === 'next'
-                    ? face(backFace, styles.square!, `${styles.innerLeft} ${styles.saBackNext}`, true)
-                    : face(backFace, styles.square!, `${styles.innerRight} ${styles.saBackPrev}`, true)}
+                    ? face(backFace, styles.square!, 'left', `${styles.innerLeft} ${styles.saBackNext}`, true)
+                    : face(backFace, styles.square!, 'right', `${styles.innerRight} ${styles.saBackPrev}`, true)}
                   <div className={`${styles.seg} ${styles.sb}`}>
                     {leafDir === 'next' ? (
                       <>
@@ -334,7 +338,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
                           <span className={styles.shade} />
                           <span className={styles.gloss} />
                         </div>
-                        {face(backFace, styles.roundLeft!, `${styles.innerLeft} ${styles.sbBackNext}`, true)}
+                        {face(backFace, styles.roundLeft!, 'left', `${styles.innerLeft} ${styles.sbBackNext}`, true)}
                       </>
                     ) : (
                       <>
@@ -345,7 +349,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
                           <span className={styles.shade} />
                           <span className={styles.gloss} />
                         </div>
-                        {face(backFace, styles.roundRight!, `${styles.innerRight} ${styles.sbBackPrev}`, true)}
+                        {face(backFace, styles.roundRight!, 'right', `${styles.innerRight} ${styles.sbBackPrev}`, true)}
                       </>
                     )}
                   </div>

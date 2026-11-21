@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -83,11 +83,18 @@ function stubMedia({ narrow = false, reduced = true } = {}) {
   }))
 }
 
-async function renderPage() {
+async function renderPage(directory: () => DirectoryEntry[] = () => people) {
   vi.stubGlobal(
     'fetch',
-    vi.fn((url: string) => {
-      const body = url === '/api/directory' ? { people } : url === '/api/tree' ? tree : null
+    vi.fn((url: string, init?: RequestInit) => {
+      const body =
+        url === '/api/directory'
+          ? { people: directory() }
+          : url === '/api/tree'
+            ? tree
+            : init?.method === 'POST' && url === '/api/persons/nadege/contact-requests'
+              ? { kind: 'address', my_request_status: 'requested' }
+              : null
       return body ? Promise.resolve(new Response(JSON.stringify(body), { status: 200 })) : Promise.reject(new TypeError('Failed to fetch'))
     }),
   )
@@ -100,6 +107,7 @@ async function renderPage() {
     </QueryClientProvider>,
   )
   await screen.findByRole('group', { name: /^Members book/ })
+  return client
 }
 
 const book = () => screen.getByRole('group', { name: /^Members book/ })
@@ -233,6 +241,46 @@ describe('Members', () => {
       })
       expect(book()).not.toHaveClass(/animNext/)
       expect(position()).toBe('Welcome')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stays open at the same people when a refresh adds someone before them', async () => {
+    let everyone = people
+    const client = await renderPage(() => everyone)
+    press('Open ▶')
+    press('Jump to N')
+    expect(position()).toBe('Pages 4–5 · Maya & Nadège')
+
+    const newcomer = (id: string, first: string): DirectoryEntry => ({ id, first_name: first, last_name: 'Désir', side: 'both', has_account: false, contacts: [] })
+    everyone = [...people, newcomer('alain', 'Alain'), newcomer('bea', 'Béa')]
+    await act(() => client.refetchQueries({ queryKey: ['directory'] }))
+
+    await waitFor(() => expect(position()).toBe('Pages 6–7 · Maya & Nadège'))
+  })
+
+  it('asks for a detail without fetching the whole family again', async () => {
+    await renderPage()
+    press('Open ▶')
+    press('Jump to M')
+    press('Request address')
+
+    expect(await within(book()).findAllByText('Address requested')).toHaveLength(2)
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === '/api/directory')).toHaveLength(1)
+  })
+
+  it('lets a search made mid-turn win over the turn', async () => {
+    stubMedia({ reduced: false })
+    await renderPage()
+    vi.useFakeTimers()
+    try {
+      press('Open ▶')
+      fireEvent.change(screen.getByRole('searchbox', { name: 'Find someone' }), { target: { value: 'jos' } })
+      act(() => {
+        vi.advanceTimersByTime(920)
+      })
+      expect(position()).toBe('Page 8 · Joseph')
     } finally {
       vi.useRealTimers()
     }

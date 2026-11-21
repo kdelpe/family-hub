@@ -70,6 +70,9 @@ const linkIcon = (
 // The local part may hold "?" or "&", which would add recipients or headers; "@" stays as is for mail apps.
 const mailto = (email: string) => {
   const at = email.lastIndexOf('@')
+  if (at < 0) {
+    return undefined
+  }
   return `mailto:${encodeURIComponent(email.slice(0, at))}@${encodeURIComponent(email.slice(at + 1))}`
 }
 
@@ -205,8 +208,6 @@ function Body({ page, book, viewerId, paused, goTo }: { page: BookPage } & Omit<
         </div>
       )
     case 'contents': {
-      const letters = [...new Set(book.living.map((l) => letterOf(l.entry.first_name)))]
-      const firstOf = (letter: string) => book.pages.findIndex((p) => p.kind === 'person' && p.letter === letter)
       const everyone = [...book.living.map((l) => l.entry.side), ...book.remembered.map((r) => r.person.side)]
       return (
         <div className={styles.textPage}>
@@ -221,8 +222,8 @@ function Body({ page, book, viewerId, paused, goTo }: { page: BookPage } & Omit<
                 onGo={() => goTo(book.membersStart)}
               >
                 <div className={styles.letters}>
-                  {letters.map((letter) => (
-                    <button key={letter} type="button" className={`pill ${styles.letter}`} aria-label={`Go to ${letter}`} onClick={() => goTo(firstOf(letter))}>
+                  {book.letterStarts.map(({ letter, index }) => (
+                    <button key={letter} type="button" className={`pill ${styles.letter}`} aria-label={`Go to ${letter}`} onClick={() => goTo(index)}>
                       {letter}
                     </button>
                   ))}
@@ -381,13 +382,15 @@ function PersonPage({ entry, relation, self, paused }: { entry: DirectoryEntry; 
                 {emails.map((c) => (
                   <span key={c.id} className={styles.emailRow}>
                     <span className={styles.emailValue}>{c.value}</span>
-                    <a
-                      href={mailto(c.value)}
-                      className={`pill tap ${styles.emailButton}`}
-                      aria-label={emails.length > 1 ? `Email ${entry.first_name} at ${c.value}` : `Email ${entry.first_name}`}
-                    >
-                      Email
-                    </a>
+                    {mailto(c.value) && (
+                      <a
+                        href={mailto(c.value)}
+                        className={`pill tap ${styles.emailButton}`}
+                        aria-label={emails.length > 1 ? `Email ${entry.first_name} at ${c.value}` : `Email ${entry.first_name}`}
+                      >
+                        Email
+                      </a>
+                    )}
                   </span>
                 ))}
               </Section>

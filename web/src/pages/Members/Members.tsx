@@ -24,7 +24,8 @@ export function Members() {
   const reduced = useReducedMotion()
   const single = useNarrow()
   const [view, setView] = useState<'book' | 'list'>('book')
-  const [at, setAt] = useState(0)
+  // Kept by page key, not index, so a refetch adding or removing someone leaves the book open at the same person.
+  const [place, setPlace] = useState({ key: 'empty-0', index: 0 })
   const [query, setQuery] = useState('')
 
   const book = useMemo(() => {
@@ -40,11 +41,13 @@ export function Members() {
     return makeBook(living, remembered)
   }, [directory.isSuccess, directory.data, tree.data, viewerId])
 
+  const at = book ? (book.indexOf.get(place.key) ?? Math.min(place.index, book.pages.length - 1)) : 0
+  const setAt = (index: number) => book && setPlace({ key: book.keys[index]!, index })
   const openAt = (index: number) => {
     setView('book')
     setAt(index)
   }
-  const pageOf = (id: string) => book?.pages.findIndex((p) => nameOf(p) && (nameOf(p) as { id: string }).id === id) ?? -1
+  const pageOf = (id: string) => book?.indexOf.get(id) ?? 0
 
   const error = directory.error ?? tree.error
 
