@@ -171,18 +171,31 @@
   overflow: hidden;
   border-radius: 22px;
   pointer-events: none;
-  animation: fade 0.3s ease-out 0.45s both;
 }
 
 .lines svg {
   display: block;
 }
 
+/* With pathLength="100", each line draws in with the sign-in tree's trick (design-notes §6.1); its delay is
+   set inline. At rest it's whole, so with reduced motion it simply shows. */
 .lines path {
   fill: none;
   stroke: var(--line);
   stroke-width: 2;
   stroke-linecap: round;
+  stroke-dasharray: 100;
+  animation: draw 0.4s ease-out both;
+}
+
+.lines .over {
+  stroke: transparent;
+  stroke-width: 2.5;
+  transition: stroke 0.15s ease-out;
+}
+
+.lines .chain {
+  stroke: var(--accent);
 }
 
 .rows {
@@ -194,16 +207,17 @@
   gap: 26px;
 }
 
-.up {
-  animation: slide-up 0.5s ease-out both;
+/* The generations arrive one after another, top to bottom; each one's delay is set inline. */
+.up .generation {
+  animation: slide-up 0.4s ease-out both;
 }
 
-.down {
-  animation: slide-down 0.5s ease-out both;
+.down .generation {
+  animation: slide-down 0.4s ease-out both;
 }
 
-.side {
-  animation: side 0.5s ease-out both;
+.side .generation {
+  animation: side 0.4s ease-out both;
 }
 
 .generation {
@@ -212,6 +226,12 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
+}
+
+/* Each animated generation is its own stacking context, so the quick look's z-index only counts inside its row:
+   raise the row it opens in above the rows it hangs over. */
+.generation:has(.glance) {
+  z-index: 1;
 }
 
 /* The label's own background stops a line passing behind it instead of striking through it. */
@@ -490,6 +510,21 @@
     opacity: 0;
   }
   to {
+    opacity: 1;
+  }
+}
+
+/* Hidden until the stroke starts: a round cap would show as a dot first. */
+@keyframes draw {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+  3% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
     opacity: 1;
   }
 }

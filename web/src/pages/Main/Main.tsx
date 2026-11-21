@@ -20,6 +20,10 @@ const trailLength = 8
 const maxMatches = 6
 // A click waits this long so a double-click can cancel it (design-notes §4.2).
 const clickDelay = 230
+// Each generation arrives this many ms after the one above and has landed after rowLanded (the 0.4s in
+// Main.module.css); a line draws once the generation it reaches has landed (design-notes §4.2).
+const rowStagger = 80
+const rowLanded = 400
 
 type Direction = 'up' | 'down' | 'side'
 
@@ -357,6 +361,16 @@ function FocusTree({
     return card(id, { sub: word ? (rel ? `${rel} · ${word}` : word[0]!.toUpperCase() + word.slice(1)) : rel })
   })
   const split = Math.ceil(siblings.length / 2)
+  // Top to bottom, the order the generations arrive in.
+  const order = [
+    view.grandparents.length > 0 && 'grandparents',
+    view.parents.length > 0 && 'parents',
+    'household',
+    view.children.length > 0 && 'children',
+    view.grandchildren.length > 0 && 'grandchildren',
+  ].filter(Boolean)
+  const rowOf = (name: string) => order.indexOf(name)
+  const chain = new Set(chainTo(view, focus, open))
 
   const rows = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLElement>(null)
@@ -386,13 +400,26 @@ function FocusTree({
       <div aria-hidden="true" className={styles.lines}>
         <svg width={lines.width} height={lines.height}>
           {lines.paths.map((l) => (
-            <path key={l.key} d={l.d} />
+            <path key={l.key} data-line={l.key} d={l.d} pathLength={100} style={{ animationDelay: `${l.delay}ms` }} />
+          ))}
+          {/* Drawn again on top, so a line it shares a stretch with can't cover the green. Mounted with the rest, so
+              a line still drawing in turns green as it draws. */}
+          {lines.paths.map((l) => (
+            <path
+              key={`over:${l.key}`}
+              data-chain={chain.has(l.key) ? l.key : undefined}
+              d={l.d}
+              pathLength={100}
+              className={chain.has(l.key) ? `${styles.over} ${styles.chain}` : styles.over}
+              style={{ animationDelay: `${l.delay}ms` }}
+            />
           ))}
         </svg>
       </div>
-      <div ref={rows} className={direction ? `${styles.rows} ${styles[direction]}` : styles.rows}>
+      {/* Opening the page, the generations arrive in turn too. */}
+      <div ref={rows} className={`${styles.rows} ${styles[direction ?? 'side']}`}>
         {view.grandparents.length > 0 && (
-          <Generation label="Grandparents">
+          <Generation label="Grandparents" row={rowOf('grandparents')}>
             {view.grandparents.map((g) => (
               <Group key={g.of} unit={`up-${g.of}`} label={`${first(g.of)}’s parents`}>
                 {g.ids.map((id) =>
@@ -406,11 +433,11 @@ function FocusTree({
           </Generation>
         )}
         {view.parents.length > 0 && (
-          <Generation label={whose('parents')}>
+          <Generation label={whose('parents')} row={rowOf('parents')}>
             <Group unit="parents">{view.parents.map((id) => card(id, { sub: labelled(id, parentWords[family.linkOf(focus, id) ?? 'biological']) }))}</Group>
           </Generation>
         )}
-        <Generation label={whose('household & siblings')}>
+        <Generation label={whose('household & siblings')} row={rowOf('household')}>
           {siblings.slice(0, split)}
           <Group unit="household" household>
             {card(focus)}
@@ -421,7 +448,7 @@ function FocusTree({
           {siblings.slice(split)}
         </Generation>
         {view.children.length > 0 && (
-          <Generation label={whose('children')}>
+          <Generation label={whose('children')} row={rowOf('children')}>
             {view.children.map((g, i) => (
               <Group
                 key={g.with.join(' ') || 'none'}
@@ -434,7 +461,7 @@ function FocusTree({
           </Generation>
         )}
         {view.grandchildren.length > 0 && (
-          <Generation label="Grandchildren">
+          <Generation label="Grandchildren" row={rowOf('grandchildren')}>
             {view.grandchildren.map((g) => (
               <Group key={g.of} unit={`down-${g.of}`} label={`${first(g.of)}’s children`}>
                 {g.ids.map((id) =>
@@ -452,9 +479,9 @@ function FocusTree({
   )
 }
 
-function Generation({ label, children }: { label: string; children: ReactNode }) {
+function Generation({ label, row, children }: { label: string; row: number; children: ReactNode }) {
   return (
-    <div className={styles.generation}>
+    <div data-row={row} className={styles.generation} style={{ animationDelay: `${row * rowStagger}ms` }}>
       <span className={styles.generationLabel}>{label}</span>
       <div className={styles.row}>{children}</div>
     </div>
@@ -619,7 +646,7 @@ function SharedContact({ personId }: { personId: string }) {
   )
 }
 
-type Line = { key: string; d: string }
+type Line = { key: string; d: string; delay: number }
 
 // Where an element rests inside the panel: offsets, not screen boxes, so the slide-in doesn't skew it.
 function offsetBox(el: HTMLElement, panel: HTMLElement) {
@@ -650,6 +677,7 @@ function measure(panel: HTMLElement, rows: HTMLElement, view: FocusView, focus: 
     ...view.grandchildren.map((g) => ({ key: `down:${g.of}`, from: card(g.of), to: unit(`down-${g.of}`) })),
   ]
   const drawn = links.filter((l): l is { key: string; from: HTMLElement; to: HTMLElement } => !!l.from && !!l.to)
+  const delay = (to: HTMLElement) => Number(to.closest<HTMLElement>('[data-row]')?.dataset.row ?? 0) * rowStagger + rowLanded
   // The joining line runs just above the cards it feeds, so lines from the same parents share it; on a row
   // that wraps, the second line of cards gets its own, in the gap between the two.
   return drawn.map((l) => {
@@ -658,13 +686,38 @@ function measure(panel: HTMLElement, rows: HTMLElement, view: FocusView, focus: 
     const m = t.top - 12
     const dx = t.x - f.x
     if (Math.abs(dx) < 1) {
-      return { key: l.key, d: `M${f.x} ${f.bottom} V${t.top}` }
+      return { key: l.key, d: `M${f.x} ${f.bottom} V${t.top}`, delay: delay(l.to) }
     }
     const r = Math.max(0, Math.min(10, Math.abs(dx) / 2, m - f.bottom, t.top - m))
     const s = Math.sign(dx)
     return {
       key: l.key,
       d: `M${f.x} ${f.bottom} V${m - r} Q${f.x} ${m} ${f.x + s * r} ${m} H${t.x - s * r} Q${t.x} ${m} ${t.x} ${m + r} V${t.top}`,
+      delay: delay(l.to),
     }
   })
+}
+
+// The lines joining someone to the focus person, by the keys measure() gives them: a grandparent through
+// their child, a sibling through the parents, a grandchild through their parent. A partner shares the household.
+function chainTo(view: FocusView, focus: string, id: string | null): string[] {
+  if (!id || id === focus) {
+    return []
+  }
+  const childGroup = (child: string) => view.children.findIndex((g) => g.ids.includes(child))
+  const grandparent = view.grandparents.find((g) => g.ids.includes(id))
+  if (grandparent) {
+    return [`up:${grandparent.of}`, `sib:${focus}`]
+  }
+  if (view.parents.includes(id)) {
+    return [`sib:${focus}`]
+  }
+  if (view.siblings.some((s) => s.id === id)) {
+    return [`sib:${id}`, `sib:${focus}`]
+  }
+  if (childGroup(id) >= 0) {
+    return [`kids:${childGroup(id)}`]
+  }
+  const grandchild = view.grandchildren.find((g) => g.ids.includes(id))
+  return grandchild ? [`kids:${childGroup(grandchild.of)}`, `down:${grandchild.of}`] : []
 }
