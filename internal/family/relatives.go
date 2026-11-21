@@ -143,9 +143,19 @@ func linksFor(ctx context.Context, q *gen.Queries, id, relative uuid.UUID, in Re
 		}
 		parents = []uuid.UUID{in.SharedParentID}
 	}
-	links := make([]RelationshipInput, 0, len(parents))
+	theirs, err := q.FamilyParentsOf(ctx, relative)
+	if err != nil {
+		return nil, fmt.Errorf("relative's family parents: %w", err)
+	}
+	// Someone already in the tree may share a parent already: link only the ones they don't.
+	var links []RelationshipInput
 	for _, parent := range parents {
-		links = append(links, parentLink(parent, relative))
+		if !slices.Contains(theirs, parent) {
+			links = append(links, parentLink(parent, relative))
+		}
+	}
+	if len(links) == 0 {
+		return nil, fmt.Errorf("%w: they're already siblings", ErrRelationshipConflict)
 	}
 	return links, nil
 }

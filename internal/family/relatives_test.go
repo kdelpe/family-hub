@@ -67,12 +67,17 @@ func TestAddRelative(t *testing.T) {
 				return RelativeInput{Relation: RelationSibling, Person: &PersonInput{FirstName: "Paul"}}
 			},
 			wantName: "Paul", wantLinks: []string{"Rosa > Paul, biological"}},
+		{name: "a full sibling who already shares one parent", links: append(bothParents, [3]string{"Rosa", "Lucie", "biological"}), from: "Marie",
+			in: func(ids map[string]uuid.UUID) RelativeInput {
+				return RelativeInput{Relation: RelationSibling, PersonID: ids["Lucie"]}
+			},
+			wantName: "Lucie", wantLinks: []string{"Jean > Lucie, biological"}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, admin := newService(t)
-			ids := addPeople(t, svc, admin, "Rosa", "Jean", "Marie")
+			ids := addPeople(t, svc, admin, "Rosa", "Jean", "Marie", "Lucie")
 			for _, l := range tt.links {
 				addLink(t, svc, parentLink(ids[l[0]], ids[l[1]], l[2]))
 			}
@@ -168,6 +173,16 @@ func TestAddRelativeSavesNothingWhenRefused(t *testing.T) {
 				return RelativeInput{Relation: RelationSibling, Person: paul, SharedParentID: ids["Jean"]}
 			},
 			wantErr: "invalid relationship: the shared parent must be one of their parents"},
+		{name: "someone who is already their sibling", links: append(bothParents, [3]string{"Rosa", "Lucie", "biological"}, [3]string{"Jean", "Lucie", "adoptive"}), from: "Marie",
+			in: func(ids map[string]uuid.UUID) RelativeInput {
+				return RelativeInput{Relation: RelationSibling, PersonID: ids["Lucie"]}
+			},
+			wantErr: "relationship conflict: they're already siblings"},
+		{name: "a sibling through a parent who only fosters them", links: append(bothParents, [3]string{"Rosa", "Lucie", "foster"}), from: "Marie",
+			in: func(ids map[string]uuid.UUID) RelativeInput {
+				return RelativeInput{Relation: RelationSibling, PersonID: ids["Lucie"], SharedParentID: ids["Rosa"]}
+			},
+			wantErr: "relationship conflict: they're already linked this way; edit that link instead"},
 		{name: "a new third biological parent", links: bothParents, from: "Marie",
 			in:      func(map[string]uuid.UUID) RelativeInput { return RelativeInput{Relation: RelationParent, Person: paul} },
 			wantErr: "relationship conflict: the child already has two biological parents"},
