@@ -1,6 +1,11 @@
 .page {
   --card-width: 190px;
-  padding: 32px 40px 48px;
+  /* The page fits the window and the tree's panel takes what's left, so the page itself never scrolls; on a window
+     too short for a useful panel, it does. */
+  height: 100dvh;
+  min-height: 520px;
+  box-sizing: border-box;
+  padding: 32px 40px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -28,7 +33,8 @@
 /* Floats in the panel's corner, outside the moving tree, so it stays put. */
 .zoom {
   position: absolute;
-  top: 10px;
+  /* Below the ▲ arrow on the border, which can reach this corner on a narrow panel. */
+  top: 16px;
   right: 10px;
   z-index: 3;
   height: 44px;
@@ -88,13 +94,14 @@
 }
 
 .home {
-  height: 48px;
-  padding: 0 20px;
+  height: 40px;
+  padding: 0 18px;
   border: 0;
-  border-radius: 24px;
+  border-radius: 20px;
   background: var(--accent);
   color: var(--on-accent);
   font: inherit;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -106,20 +113,21 @@
 
 .searchInput {
   box-sizing: border-box;
-  width: 260px;
+  width: 240px;
   max-width: 100%;
-  height: 48px;
-  padding: 0 16px;
+  height: 40px;
+  padding: 0 14px;
   border: 1px solid var(--input-border);
-  border-radius: 24px;
+  border-radius: 20px;
   background: var(--surface);
   font: inherit;
+  font-size: 15px;
   color: var(--text);
 }
 
 .matches {
   position: absolute;
-  top: 54px;
+  top: 46px;
   left: 0;
   right: 0;
   z-index: 30;
@@ -192,6 +200,10 @@
 
 .frame {
   position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel {
@@ -201,9 +213,24 @@
   border: 1px solid var(--border);
   background: var(--surface-soft);
   cursor: grab;
+  flex: 1;
+  min-height: 0;
   user-select: none;
-  /* Up and down stays the page's scroll; sideways and pinching move and zoom the tree (Main.tsx). */
-  touch-action: pan-y;
+  /* Every finger moves or pinches the tree (Main.tsx); the page doesn't scroll. */
+  touch-action: none;
+}
+
+/* A soft edge where the tree runs on below the panel, so the cut looks meant; above the tree, under the controls. */
+.panel::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  height: 40px;
+  background: linear-gradient(to bottom, transparent, var(--surface-soft));
+  pointer-events: none;
 }
 
 .panel:active {
@@ -215,6 +242,10 @@
   top: 0;
   left: 0;
   transform-origin: 0 0;
+}
+
+.glide {
+  transition: transform 0.3s ease;
 }
 
 .lines {
@@ -279,6 +310,12 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
+}
+
+/* A longer line down to the parents, under the panel's top: their label starts 58px down at 100%, 29px at 50%, clear
+   of the ▲ arrow's 15px inside the border. */
+.spaced {
+  margin-top: 24px;
 }
 
 /* Each animated generation is its own stacking context, so a lifted card's z-index only counts inside its row:
@@ -497,23 +534,28 @@
   margin-inline: auto;
 }
 
+/* A long name is cut short on the label, not the button, whose ::after tap area reaches past it. */
+.edgeWords {
+  display: inline-block;
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* On the panel's borders, half in and half out (30px tall), so inside they cover only the edge's top of the line down to
+   the parents and the faded bottom, never a card the tree is placed to show. */
 .edgeTop {
-  top: 10px;
+  top: -15px;
 }
 
 .edgeBottom {
-  bottom: 10px;
+  bottom: -15px;
 }
 
 /* Room for the arrows, so at rest they don't sit on the first or last generation. With .rows, so the phone
    padding below doesn't undo it. */
-.rows.roomAbove {
-  padding-top: 52px;
-}
-
-.rows.roomBelow {
-  padding-bottom: 52px;
-}
 
 @keyframes slide-up {
   from {
@@ -572,6 +614,26 @@
   }
 }
 
+/* With the menu above the page rather than beside it, the window's height isn't the page's: the panel gets its own. */
+@media (max-width: 800px) {
+  .page {
+    height: auto;
+    min-height: 0;
+  }
+
+  .panel {
+    flex: none;
+    height: clamp(440px, calc(100dvh - 140px), 900px);
+  }
+}
+
+/* Where the page scrolls, up and down on touch scrolls it, as the way back to the controls (Main.tsx). */
+@media (max-width: 800px), (max-height: 519.98px) {
+  .panel {
+    touch-action: pan-y;
+  }
+}
+
 @media (max-width: 600px) {
   .page {
     /* Two cards side by side inside a group, on the narrowest phones too. */
@@ -601,19 +663,11 @@
   .tipAbove {
     display: block;
   }
-
-  /* Under the zoom control too. */
-  .edgeTop {
-    top: 64px;
-  }
-
-  .rows.roomAbove {
-    padding-top: 104px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card {
+  .card,
+  .glide {
     transition: none;
   }
 

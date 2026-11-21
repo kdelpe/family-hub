@@ -25,6 +25,17 @@ const tipText = 'Click or tap a name to center the tree on them · drag to move 
 // Each generation arrives this many ms after the one above and has landed after rowLanded (handed to
 // Main.module.css as --row-landed); a line draws once the generation it reaches has landed (design-notes §4.2).
 const rowStagger = 80
+// Recenter and the zoom reset glide the tree back this long (Main.module.css), rather than jump.
+const glideMs = 300
+// How far an arrow key moves the tree.
+const keyStep = 60
+// On a window too short or narrow for the page to fit, it scrolls: then a plain wheel and an up-and-down swipe are left
+// to the page, as the way back to the controls above the tree. The same query as Main.module.css's, so the gestures
+// and touch-action always agree.
+const scrollingPage = '(max-width: 800px), (max-height: 519.98px)'
+const pageScrolls = () => window.matchMedia?.(scrollingPage).matches ?? false
+// The room kept around the focus person's card when the tree has to move to show it.
+const cardRoom = 16
 const rowLanded = 400
 const rowsStyle = { '--row-landed': `${rowLanded}ms` } as CSSProperties
 
@@ -385,16 +396,28 @@ function FocusTree({
     })
   }
 
-  // Plain arrows at the panel's top and bottom saying there's more family that way, until the tree is moved by hand
-  // (owner's call, 2026-11-21). Each goes one generation: back along the line the arrows came by, else along the
-  // line that continues, to the parent whose parents have family above or the child whose children have children.
-  const upTo = backUp ?? view.grandparents.find((g) => g.ids.some((id) => treeParentsOf(family, id).length > 0))?.of
+  // Arrows at the panel's top and bottom naming the family that way, until the tree is moved by hand (owner's calls,
+  // 2026-11-21). Each goes one generation: back along the line the arrows came by, else up to a parent (the
+  // grandparents are always just above the panel's top: one whose parents' line continues, if any), or down to the
+  // child whose children have children.
+  const upTo =
+    backUp ??
+    (view.grandparents.find((g) => g.ids.some((id) => treeParentsOf(family, id).length > 0)) ?? view.grandparents[0])?.of
   const downTo = backDown ?? view.grandchildren.find((g) => g.ids.some((id) => treeChildrenOf(family, id).length > 0))?.of
-  const edge = (to: string | undefined, by: 'up' | 'down', where: string) =>
+  const edgeWords = (to: string, by: 'up' | 'down') => {
+    const more =
+      by === 'up'
+        ? treeParentsOf(family, to).length > 0
+        : treeChildrenOf(family, to).some((child) => treeChildrenOf(family, child).length > 0)
+    return more ? `${first(to)}’s ${by === 'up' ? 'parents' : 'grandchildren'}` : `Back to ${first(to)}`
+  }
+  const edge = (to: string | undefined, by: 'up' | 'down', where: string, hidden = false) =>
     to &&
-    !moved && (
+    !moved &&
+    !hidden && (
       <button type="button" className={`pill ${styles.more} ${styles.edge} ${styles[where]}`} onClick={() => onStep(by, to)}>
-        <span aria-hidden="true">{by === 'up' ? '▲' : '▼'} </span>more
+        <span aria-hidden="true">{by === 'up' ? '▲' : '▼'} </span>
+        <span className={styles.edgeWords}>{edgeWords(to, by)}</span>
         <span className="visually-hidden">: center the tree on {fullName(people.get(to)!)}</span>
       </button>
     )
@@ -403,11 +426,14 @@ function FocusTree({
   const stage = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLElement>(null)
   const [lines, setLines] = useState<{ width: number; height: number; paths: Line[] }>({ width: 0, height: 0, paths: [] })
-  // The tree is laid out at the panel's width, then scaled inside it: the panel keeps its size at every zoom,
-  // and scrolls when zoomed in.
-  const [panelWidth, setPanelWidth] = useState(0)
+  // The panel fills what the window leaves (Main.module.css); the tree is laid out at its width, then scaled and
+  // moved inside it.
+  const [panelSize, setPanelSize] = useState({ width: 0, height: 0 })
   // Where the cards are on the stage, so dragging can keep some of them, not just the empty stage, in sight.
   const [cards, setCards] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null)
+  // Down the stage, where the grandparents' cards end (0 with no grandparents shown): the panel's top edge starts
+  // there, so the lines run down from it to the parents and the household. And where the focus person's card is.
+  const [anchor, setAnchor] = useState<{ treeTop: number; card: { top: number; bottom: number } | null }>({ treeTop: 0, card: null })
   useLayoutEffect(() => {
     const p = panel.current
     const st = stage.current
@@ -416,9 +442,12 @@ function FocusTree({
       return
     }
     const draw = () => {
-      setPanelWidth(p.clientWidth)
+      setPanelSize({ width: p.clientWidth, height: p.clientHeight })
       setLines({ width: st.offsetWidth, height: st.offsetHeight, paths: measure(st, r, view, focus) })
       setCards(cardBounds(st, r))
+      const grandparents = [...r.querySelectorAll<HTMLElement>('[data-unit^="up-"]')].map((g) => offsetBox(g, st).bottom)
+      const card = focusCard.current?.closest<HTMLElement>('[data-card]')
+      setAnchor({ treeTop: grandparents.length ? Math.max(...grandparents) : 0, card: card ? offsetBox(card, st) : null })
     }
     draw()
     // Cards move without the panel resizing when the web fonts land or a row rewraps.
@@ -438,9 +467,17 @@ function FocusTree({
   const [drag, setDrag] = useState<{ x: number; y: number; recentered: number } | null>(null)
   const moved = drag?.recentered === recentered ? drag : null
   const setMoved = (to: { x: number; y: number } | null) => setDrag(to && { ...to, recentered })
-  const width = panelWidth
-  const height = lines.height
-  const centered = (z: number) => ({ x: (width * (1 - z)) / 2, y: z < 1 ? (height * (1 - z)) / 2 : 0 })
+  const { width, height } = panelSize
+  // Across, the tree is centered. Down, it starts at the bottom of the grandparents' cards, so nothing shows cut
+  // off at the panel's top: the lines come down from its edge to the parents, then the household (owner's call).
+  // Zoomed in on a short window, that can leave the focus person's card below the panel: then it moves up to show it.
+  const resting = (z: number) => {
+    const edge = -anchor.treeTop * z
+    const { card } = anchor
+    const showCard = card ? Math.max(height - cardRoom - card.bottom * z, cardRoom - card.top * z) : edge
+    return { x: (width * (1 - z)) / 2, y: Math.min(edge, showCard) }
+  }
+
   // At least 60px of the cards always stays in the panel, at every zoom and after the panel resizes.
   const keepInSight = (x: number, y: number, z: number) => {
     const c = cards ?? { left: 0, right: width, top: 0, bottom: height }
@@ -449,20 +486,89 @@ function FocusTree({
       y: Math.min(height - 60 - c.top * z, Math.max(60 - c.bottom * z, y)),
     }
   }
-  const at = moved ? keepInSight(moved.x, moved.y, zoom) : centered(zoom)
+  const at = moved ? keepInSight(moved.x, moved.y, zoom) : resting(zoom)
   // Pointer moves can come several to a render (a pinch's two fingers): each starts from the last one's result.
   const live = useRef({ at, zoom })
   useLayoutEffect(() => {
     live.current = { at, zoom }
   })
+
+  // Where the page scrolls, keyboard focus landing on the new focus card (preventScroll, above) brings the card into
+  // the window too, once it's measured and placed in the panel. Once per view, so a later scroll isn't undone.
+  const revealed = useRef(false)
+  useEffect(() => {
+    const card = focusCard.current
+    const p = panel.current
+    if (revealed.current || !card || !p || !anchor.card || document.activeElement !== card || !pageScrolls()) {
+      return
+    }
+    revealed.current = true
+    // Where the whole card will rest, not the button as it slides in.
+    const { y, z } = { y: live.current.at.y, z: live.current.zoom }
+    const panelTop = p.getBoundingClientRect().top + p.clientTop
+    const top = panelTop + y + anchor.card.top * z
+    const bottom = panelTop + y + anchor.card.bottom * z
+    if (top < 0 || bottom > window.innerHeight) {
+      window.scrollBy({ top: (top + bottom) / 2 - window.innerHeight / 2, behavior: 'instant' })
+    }
+  }, [anchor])
+  const reduced = useReducedMotion()
+  const [gliding, setGliding] = useState(false)
+  // As the state, but current within one event, which can move the tree several times.
+  const glidingNow = useRef(false)
+  const glideTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(glideTimer.current), [])
+  const endGlide = () => {
+    window.clearTimeout(glideTimer.current)
+    glidingNow.current = false
+    setGliding(false)
+  }
+  // Not with reduced motion, nor when the tree is already there: nothing would move, and a glide left on would make
+  // the next zoom take the resting tree for a moved one.
+  const glideBack = (toZoom: number) => {
+    const to = resting(toZoom)
+    const { at: from, zoom: fromZoom } = live.current
+    const there = Math.abs(to.x - from.x) < 0.5 && Math.abs(to.y - from.y) < 0.5 && toZoom === fromZoom
+    // Mid-glide, what's stored is already where it's going: a glide on its way there carries on.
+    if (there && glidingNow.current) {
+      return
+    }
+    if (reduced || there) {
+      endGlide()
+      return
+    }
+    window.clearTimeout(glideTimer.current)
+    glidingNow.current = true
+    setGliding(true)
+    glideTimer.current = window.setTimeout(endGlide, glideMs)
+  }
+  // A move by hand takes over at once from a glide under way, from where the tree is shown, part way: the position and
+  // zoom it's gliding to are already set.
+  const takeOverGlide = () => {
+    const st = stage.current
+    if (!glidingNow.current || !st || typeof DOMMatrixReadOnly === 'undefined') {
+      return
+    }
+    const shown = getComputedStyle(st).transform
+    const m = new DOMMatrixReadOnly(shown === 'none' ? undefined : shown)
+    endGlide()
+    live.current = { at: { x: m.e, y: m.f }, zoom: m.a }
+    setMoved({ x: m.e, y: m.f })
+    onZoom(() => m.a)
+  }
   const place = (x: number, y: number, z: number) => {
+    endGlide()
     const to = keepInSight(x, y, z)
     live.current = { at: to, zoom: z }
     setMoved(to)
   }
-  const moveBy = (dx: number, dy: number) => place(live.current.at.x + dx, live.current.at.y + dy, live.current.zoom)
+  const moveBy = (dx: number, dy: number) => {
+    takeOverGlide()
+    place(live.current.at.x + dx, live.current.at.y + dy, live.current.zoom)
+  }
   // A zoom keeps the point it's made at in place: the pointer or the pinch; the buttons keep a centered tree centered.
   const zoomAround = (change: (z: number) => number, point?: { x: number; y: number }) => {
+    takeOverGlide()
     const { at, zoom } = live.current
     const next = clampZoom(change(zoom))
     if (point && next !== zoom) {
@@ -472,29 +578,15 @@ function FocusTree({
     }
     onZoom(() => next)
   }
+  // The − / + buttons and keys: a centered tree stays centered; a moved one zooms about the panel's middle.
+  // Mid-glide counts as moved: the glide is taken over where it's shown, which isn't centered.
+  const zoomBy = (step: number) => zoomAround((z) => zoomStep(z, step), moved || glidingNow.current ? { x: width / 2, y: height / 2 } : undefined)
 
-  // The focus person's card is brought into view once the panel has its height: at once on opening the page,
-  // smoothly after centering on someone. Once per view, so a later drag or zoom doesn't pull the page back.
-  const reducedMotion = useReducedMotion()
-  const shown = useRef(false)
-  useEffect(() => {
-    const card = focusCard.current?.closest('[data-card]')
-    if (shown.current || !card || height === 0) {
-      return
-    }
-    shown.current = true
-    const box = card.getBoundingClientRect()
-    if (box.top < 0 || box.bottom > window.innerHeight) {
-      // The window only: scrollIntoView would also scroll the clipped panel, which the drag position doesn't know of.
-      const top = window.scrollY + box.top + box.height / 2 - window.innerHeight / 2
-      window.scrollTo({ top, behavior: direction && !reducedMotion ? 'smooth' : 'instant' })
-    }
-  }, [height, direction, reducedMotion])
-
-  // Ctrl + scroll, which is also how a trackpad pinch arrives; React's wheel listener can't prevent the page zoom.
-  const wheelZoom = useRef(zoomAround)
+  // The wheel: with Ctrl (also how a trackpad pinch arrives) it zooms, which React's wheel listener can't stop the
+  // page doing; without, it moves the tree, as the page itself doesn't scroll.
+  const wheelActions = useRef({ zoomAround, moveBy })
   useLayoutEffect(() => {
-    wheelZoom.current = zoomAround
+    wheelActions.current = { zoomAround, moveBy }
   })
   useEffect(() => {
     const p = panel.current
@@ -502,19 +594,24 @@ function FocusTree({
       return
     }
     const wheel = (event: WheelEvent) => {
-      if (!event.ctrlKey) {
+      if (!event.ctrlKey && pageScrolls()) {
         return
       }
       event.preventDefault()
+      if (!event.ctrlKey) {
+        const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? p.clientHeight : 1
+        wheelActions.current.moveBy(-event.deltaX * unit, -event.deltaY * unit)
+        return
+      }
       const box = p.getBoundingClientRect()
-      wheelZoom.current((z) => z * Math.exp(-event.deltaY / 200), { x: event.clientX - box.left, y: event.clientY - box.top })
+      wheelActions.current.zoomAround((z) => z * Math.exp(-event.deltaY / 200), { x: event.clientX - box.left, y: event.clientY - box.top })
     }
     p.addEventListener('wheel', wheel, { passive: false })
     return () => p.removeEventListener('wheel', wheel)
   }, [])
 
-  // Dragging moves the tree, from a card too: past a few pixels it's a drag, not a click. Two fingers pinch it and
-  // move it; one finger moves it sideways, leaving up and down to the page (touch-action on .panel).
+  // Dragging moves the tree, from a card too: past a few pixels it's a drag, not a click. One finger moves it, as a
+  // mouse does (only sideways where the page scrolls); two pinch it and move it (touch-action on .panel).
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const dragged = useRef(false)
   const start = useRef<{ x: number; y: number } | null>(null)
@@ -526,6 +623,7 @@ function FocusTree({
     if (event.pointerType === 'mouse' && event.button !== 0) {
       return
     }
+    takeOverGlide()
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
     start.current = { x: event.clientX, y: event.clientY }
     dragged.current = false
@@ -557,7 +655,7 @@ function FocusTree({
       p.setPointerCapture?.(event.pointerId)
     }
     if (dragged.current) {
-      moveBy(event.clientX - last.x, event.pointerType === 'touch' ? 0 : event.clientY - last.y)
+      moveBy(event.clientX - last.x, event.pointerType === 'touch' && pageScrolls() ? 0 : event.clientY - last.y)
     }
   }
   // On the window: a press released outside the panel before it became a drag never reaches the panel.
@@ -573,13 +671,31 @@ function FocusTree({
 
   return (
     <div className={styles.frame}>
-      <p className={styles.tip}>{tipText}</p>
-      {edge(upTo, 'up', 'edgeTop')}
+      {/* Gone once the tree is moved, as the arrows are, so it doesn't sit over the cards. */}
+      {!moved && <p className={styles.tip}>{tipText}</p>}
+      {/* Not while the tree rests moved up to show the focus card: a parent's card can then run under it. */}
+      {edge(upTo, 'up', 'edgeTop', at.y < -anchor.treeTop * zoom - 0.5)}
       <section
         ref={panel}
         aria-label={`Family tree centered on ${you ? 'you' : fullName(people.get(focus)!)}`}
         className={styles.panel}
         onPointerDown={onPointerDown}
+        // From a card or link in the tree: the arrow keys move it, + and − zoom it.
+        onKeyDown={(event) => {
+          if (event.altKey || event.ctrlKey || event.metaKey) {
+            return
+          }
+          const move = ({ ArrowLeft: [keyStep, 0], ArrowRight: [-keyStep, 0], ArrowUp: [0, keyStep], ArrowDown: [0, -keyStep] } as Record<string, [number, number]>)[event.key]
+          const zoomStepBy = event.key === '+' || event.key === '=' ? 0.1 : event.key === '-' || event.key === '_' ? -0.1 : 0
+          if (move) {
+            moveBy(...move)
+          } else if (zoomStepBy) {
+            zoomBy(zoomStepBy)
+          } else {
+            return
+          }
+          event.preventDefault()
+        }}
         onPointerMove={onPointerMove}
         // A drag that began on a card doesn't also center the tree on them. Only a pointer's click: Enter on a
         // card clicks it with no pointer (detail 0), and must still work after a drag the browser canceled.
@@ -620,12 +736,11 @@ function FocusTree({
             dragged.current = false
           }
         }}
-        style={{ height: height || undefined }}
       >
         <div
           ref={stage}
           data-stage
-          className={styles.stage}
+          className={gliding ? `${styles.stage} ${styles.glide}` : styles.stage}
           style={{
             width: width || undefined,
             transform: at.x === 0 && at.y === 0 && zoom === 1 ? undefined : `translate(${at.x}px, ${at.y}px) scale(${zoom})`,
@@ -653,11 +768,17 @@ function FocusTree({
           {/* Opening the page, the generations arrive in turn too. */}
           <div
             ref={rows}
-            className={[styles.rows, styles[direction ?? 'side'], upTo && styles.roomAbove, downTo && styles.roomBelow].filter(Boolean).join(' ')}
+            className={`${styles.rows} ${styles[direction ?? 'side']}`}
             style={rowsStyle}
           >
             {generations.map((g, row) => (
-              <Generation key={g.key} label={g.label} row={row} raised={hover !== null && g.ids.includes(hover)}>
+              <Generation
+                key={g.key}
+                label={g.label}
+                row={row}
+                raised={hover !== null && g.ids.includes(hover)}
+                spaced={g.key === 'parents' && generations[row - 1]?.key === 'grandparents'}
+              >
                 {g.body}
               </Generation>
             ))}
@@ -666,19 +787,28 @@ function FocusTree({
       </section>
       {edge(downTo, 'down', 'edgeBottom')}
       <div role="group" aria-label="Zoom" className={styles.zoom}>
-        <button type="button" aria-label="Zoom out" className={styles.zoomButton} disabled={zoom <= minZoom} onClick={() => zoomAround((z) => zoomStep(z, -0.1), moved ? { x: width / 2, y: height / 2 } : undefined)}>
+        <button type="button" aria-label="Zoom out" className={styles.zoomButton} disabled={zoom <= minZoom} onClick={() => zoomBy(-0.1)}>
           −
         </button>
         <button type="button" aria-label={`Reset zoom, now ${Math.round(zoom * 100)}%`} className={styles.zoomLevel} onClick={() => {
+            glideBack(1)
             setMoved(null)
             onZoom(() => 1)
           }}>
           {Math.round(zoom * 100)}%
         </button>
-        <button type="button" aria-label="Zoom in" className={styles.zoomButton} disabled={zoom >= maxZoom} onClick={() => zoomAround((z) => zoomStep(z, 0.1), moved ? { x: width / 2, y: height / 2 } : undefined)}>
+        <button type="button" aria-label="Zoom in" className={styles.zoomButton} disabled={zoom >= maxZoom} onClick={() => zoomBy(0.1)}>
           +
         </button>
-        <button type="button" className={styles.recenter} disabled={!moved} onClick={() => setMoved(null)}>
+        <button
+          type="button"
+          className={styles.recenter}
+          disabled={!moved}
+          onClick={() => {
+            glideBack(zoom)
+            setMoved(null)
+          }}
+        >
           Recenter
         </button>
       </div>
@@ -686,9 +816,12 @@ function FocusTree({
   )
 }
 
-function Generation({ label, row, raised, children }: { label: string; row: number; raised: boolean; children: ReactNode }) {
+// spaced: the parents' row under the grandparents, where the panel's top edge starts: a longer line down to it keeps
+// its label clear of the ▲ arrow.
+function Generation({ label, row, raised, spaced, children }: { label: string; row: number; raised: boolean; spaced: boolean; children: ReactNode }) {
+  const classes = [styles.generation, raised && styles.raised, spaced && styles.spaced].filter(Boolean).join(' ')
   return (
-    <div data-row={row} className={raised ? `${styles.generation} ${styles.raised}` : styles.generation} style={{ animationDelay: `${row * rowStagger}ms` }}>
+    <div data-row={row} className={classes} style={{ animationDelay: `${row * rowStagger}ms` }}>
       <span className={styles.generationLabel}>{label}</span>
       <div className={styles.row}>{children}</div>
     </div>
