@@ -416,7 +416,7 @@ function FocusTree({
     !moved && (
       <button type="button" className={`pill ${styles.more} ${styles.edge} ${styles[where]}`} onClick={() => onStep(by, to)}>
         <span aria-hidden="true">{by === 'up' ? '▲' : '▼'} </span>
-        {edgeWords(to, by)}
+        <span className={styles.edgeWords}>{edgeWords(to, by)}</span>
         <span className="visually-hidden">: center the tree on {fullName(people.get(to)!)}</span>
       </button>
     )
@@ -476,6 +476,21 @@ function FocusTree({
     const showCard = card ? Math.max(height - cardRoom - card.bottom * z, cardRoom - card.top * z) : edge
     return { x: (width * (1 - z)) / 2, y: Math.min(edge, showCard) }
   }
+
+  // Where the page scrolls, keyboard focus landing on the new focus card (preventScroll, above) brings the card into
+  // the window too, once it's measured and placed in the panel. Once per view, so a later scroll isn't undone.
+  const revealed = useRef(false)
+  useEffect(() => {
+    const card = focusCard.current
+    if (revealed.current || !card || !anchor.card || document.activeElement !== card || !pageScrolls()) {
+      return
+    }
+    revealed.current = true
+    const box = card.getBoundingClientRect()
+    if (box.top < 0 || box.bottom > window.innerHeight) {
+      window.scrollBy({ top: box.top + box.height / 2 - window.innerHeight / 2, behavior: 'instant' })
+    }
+  }, [anchor])
 
   // At least 60px of the cards always stays in the panel, at every zoom and after the panel resizes.
   const keepInSight = (x: number, y: number, z: number) => {
@@ -544,7 +559,8 @@ function FocusTree({
     onZoom(() => next)
   }
   // The − / + buttons and keys: a centered tree stays centered; a moved one zooms about the panel's middle.
-  const zoomBy = (step: number) => zoomAround((z) => zoomStep(z, step), moved ? { x: width / 2, y: height / 2 } : undefined)
+  // Mid-glide counts as moved: the glide is taken over where it's shown, which isn't centered.
+  const zoomBy = (step: number) => zoomAround((z) => zoomStep(z, step), moved || glidingNow.current ? { x: width / 2, y: height / 2 } : undefined)
 
   // The wheel: with Ctrl (also how a trackpad pinch arrives) it zooms, which React's wheel listener can't stop the
   // page doing; without, it moves the tree, as the page itself doesn't scroll.
@@ -731,7 +747,7 @@ function FocusTree({
           {/* Opening the page, the generations arrive in turn too. */}
           <div
             ref={rows}
-            className={[styles.rows, styles[direction ?? 'side'], upTo && styles.roomAbove, downTo && styles.roomBelow].filter(Boolean).join(' ')}
+            className={`${styles.rows} ${styles[direction ?? 'side']}`}
             style={rowsStyle}
           >
             {generations.map((g, row) => (
@@ -780,7 +796,7 @@ function FocusTree({
 }
 
 // spaced: the parents' row under the grandparents, where the panel's top edge starts: a longer line down to it keeps
-// its label clear of the ▲ more arrow.
+// its label clear of the ▲ arrow.
 function Generation({ label, row, raised, spaced, children }: { label: string; row: number; raised: boolean; spaced: boolean; children: ReactNode }) {
   const classes = [styles.generation, raised && styles.raised, spaced && styles.spaced].filter(Boolean).join(' ')
   return (

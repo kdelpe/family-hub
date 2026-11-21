@@ -685,6 +685,46 @@ describe('Main', () => {
     expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe('translate(-30px, -80px) scale(1.1)')
   })
 
+  it('zooms about the panel’s middle from a glide taken over, as from any moved tree', () => {
+    layOut({ tree: 2000 })
+    renderTree('fritz')
+    fireEvent.wheel(screen.getByRole('region', { name: 'Family tree centered on you' }), { deltaY: 100 })
+    fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
+    vi.stubGlobal(
+      'DOMMatrixReadOnly',
+      class {
+        a = 1
+        e = -30
+        f = -40
+      },
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+
+    // The panel's middle (300, 300) stays put: 300 − (300 + 30) × 1.1, 300 − (300 + 40) × 1.1.
+    const [x, y, z] = document.querySelector<HTMLElement>('[data-stage]')!.style.transform.match(/-?[\d.]+/g)!.map(Number)
+    expect([x, y, z].map((n) => Math.round(n! * 100) / 100)).toEqual([-63, -74, 1.1])
+  })
+
+  it.each([
+    { name: 'brings the card a keyboard pick lands on into the window, where the page scrolls', scrolls: true },
+    { name: 'leaves the window alone where the page doesn’t scroll', scrolls: false },
+  ])('$name', ({ scrolls }) => {
+    scrollingPage(scrolls)
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ y: 2000, height: 150 }))
+    const scrollBy = vi.fn()
+    vi.stubGlobal('scrollBy', scrollBy)
+    renderTree(null)
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Find a relative' }), { target: { value: 'maya' } })
+    const match = within(screen.getByRole('list', { name: 'Matching relatives' })).getByRole('button', { name: /Maya Pluviose/ })
+    act(() => match.focus())
+
+    fireEvent.click(match)
+
+    expect(cardOf('Maya')).toHaveFocus()
+    expect(scrollBy.mock.calls).toEqual(scrolls ? [[{ top: 2075 - window.innerHeight / 2, behavior: 'instant' }]] : [])
+  })
+
   it('moves the tree up and down with one finger, too', () => {
     layOut({ tree: 600 })
     renderTree('jr')
