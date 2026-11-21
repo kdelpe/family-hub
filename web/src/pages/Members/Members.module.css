@@ -71,7 +71,8 @@
   box-shadow:
     0 22px 44px var(--ink-20),
     inset 0 0 0 2px color-mix(in srgb, var(--surface) 10%, transparent);
-  transition: opacity 0.45s ease;
+  /* The board is the inside of the cover that's turning: it arrives as the cover lands and leaves as it lifts. */
+  transition: opacity 0.15s ease 0.75s;
 }
 
 .boardLeft {
@@ -192,6 +193,13 @@
   width: 2px;
   background: var(--border);
   z-index: 2;
+  transition: opacity 0.15s ease 0.75s;
+}
+
+.board.gone,
+.spine.gone {
+  opacity: 0;
+  transition-delay: 0s;
 }
 
 /* The closed cover lifts a little now and then, to invite a click. */
@@ -292,6 +300,19 @@
 
 .sb {
   transform: rotateY(calc(sin(calc(var(--fa) * 1deg)) * 30deg));
+}
+
+/* A cover is board, not paper: it swings flat, its halves overlapping a pixel so no seam shows. */
+.rigid .sb {
+  transform: none;
+}
+
+.rigid.leafNext .sb {
+  left: calc(100% - 1px);
+}
+
+.rigid.leafPrev .sb {
+  right: calc(100% - 1px);
 }
 
 .face {
@@ -539,6 +560,13 @@
   z-index: 1;
   touch-action: none;
   cursor: ns-resize;
+  animation: tabsIn 0.3s ease 0.45s backwards;
+}
+
+@keyframes tabsIn {
+  from {
+    opacity: 0;
+  }
 }
 
 .tab {
@@ -1419,7 +1447,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .book {
+  .book,
+  .board,
+  .spine {
     transition: none;
+  }
+
+  .tabs {
+    animation: none;
   }
 }

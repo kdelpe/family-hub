@@ -202,8 +202,6 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     { label: '♡', aria: 'Jump to In Memory', on: shown.some((p) => p.kind === 'memorial' || p.kind === 'divider') },
   ]
 
-  const closedStart = stop === 0 && tgtStop === 0
-  const closedEnd = stop === last && tgtStop === last
 
   const names = shown.flatMap((p) => {
     const who = nameOf(p)
@@ -259,6 +257,9 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     statics = cur
   }
   const hint = stop === 0 && !turn ? styles.coverHint! : ''
+  const emptyLeft = !single && book.pages[statics[0]!]!.kind === 'empty'
+  const emptyRight = !single && book.pages[statics[1]!]!.kind === 'empty'
+  const rigid = [front, backFace].some((i) => i !== null && (book.pages[i]!.kind === 'cover' || book.pages[i]!.kind === 'back'))
   // A single page always turns about its left edge; turning back, it comes in from the left.
   const leafDir: Dir = single ? 'next' : (turn?.dir ?? 'next')
 
@@ -278,11 +279,11 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     <div className={`${styles.bookArea} ${paused || reduced ? styles.still : ''} ${single ? styles.single : ''}`}>
       <div className={`${styles.book} ${!single && tgtStop === 0 ? styles.closedStart : ''} ${!single && tgtStop === last ? styles.closedEnd : ''}`}>
         {single ? (
-          <span aria-hidden="true" className={`${styles.board} ${styles.boardWhole}`} style={{ opacity: tgtStop === 0 || tgtStop === last ? 0 : 1 }} />
+          <span aria-hidden="true" className={`${styles.board} ${styles.boardWhole} ${tgtStop === 0 || tgtStop === last ? styles.gone : ''}`} />
         ) : (
           <>
-            <span aria-hidden="true" className={`${styles.board} ${styles.boardLeft}`} style={{ opacity: closedStart ? 0 : 1 }} />
-            <span aria-hidden="true" className={`${styles.board} ${styles.boardRight}`} style={{ opacity: closedEnd ? 0 : 1 }} />
+            <span aria-hidden="true" className={`${styles.board} ${styles.boardLeft} ${tgtStop === 0 ? styles.gone : ''}`} />
+            <span aria-hidden="true" className={`${styles.board} ${styles.boardRight} ${tgtStop === last ? styles.gone : ''}`} />
           </>
         )}
         <div
@@ -308,13 +309,18 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
           {single
             ? page(statics[0]!, 'whole', hint)
             : [page(statics[0]!, 'left'), page(statics[1]!, 'right', hint)]}
-          {!single && <div aria-hidden="true" className={styles.spine} style={{ opacity: closedStart || closedEnd ? 0 : 1 }} />}
+          {!single && <div aria-hidden="true" className={`${styles.spine} ${tgtStop === 0 || tgtStop === last ? styles.gone : ''}`} />}
           {turn && front !== null && (
             // Copies of pages shown elsewhere, mid-turn: kept from screen readers and the keyboard.
             <div aria-hidden="true" inert className={styles.turning}>
-              <span className={`${styles.cast} ${leafDir === 'next' ? styles.underNext : styles.underPrev}`} />
-              {!single && <span className={`${styles.cast} ${leafDir === 'next' ? styles.landNext : styles.landPrev}`} />}
-              <div className={`${styles.leaf} ${leafDir === 'next' ? styles.leafNext : styles.leafPrev}`}>
+              {/* No shadow falls where there's no page, beside a cover. */}
+              {!(leafDir === 'next' ? emptyRight : emptyLeft) && (
+                <span className={`${styles.cast} ${leafDir === 'next' ? styles.underNext : styles.underPrev}`} />
+              )}
+              {!single && !(leafDir === 'next' ? emptyLeft : emptyRight) && (
+                <span className={`${styles.cast} ${leafDir === 'next' ? styles.landNext : styles.landPrev}`} />
+              )}
+              <div className={`${styles.leaf} ${leafDir === 'next' ? styles.leafNext : styles.leafPrev} ${rigid ? styles.rigid : ''}`}>
                 <div className={`${styles.seg} ${styles.sa}`}>
                   {leafDir === 'next'
                     ? face(front, styles.square!, 'right', `${styles.innerRight} ${styles.saFrontNext}`)
@@ -370,7 +376,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
             </>
           )}
         </div>
-        {!closedStart && !closedEnd && (
+        {tgtStop !== 0 && tgtStop !== last && (
           <nav
             aria-label="Jump to a letter"
             className={styles.tabs}
