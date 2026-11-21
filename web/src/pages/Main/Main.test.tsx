@@ -86,16 +86,16 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// A laid-out panel and tree: jsdom gives everything no size and puts it at 0. The panel is 600px square, and the
-// stage, the cards and the focus person's household get the heights and place given.
-function layOut({ tree, card = 150, householdTop = 0 }: { tree: number; card?: number; householdTop?: number }) {
+// A laid-out panel and tree: jsdom gives everything no size and puts it at 0. The panel is 600px square; the stage,
+// the cards and the groups of grandparents get the heights given, and the grandparents' groups their place.
+function layOut({ tree, card = 150, grandparentsTop = 0 }: { tree: number; card?: number; grandparentsTop?: number }) {
   vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(600)
   vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(600)
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
-    return this.matches('[data-stage]') ? tree : this.matches('[data-card], [data-unit="household"]') ? card : 0
+    return this.matches('[data-stage]') ? tree : this.matches('[data-card], [data-unit^="up-"]') ? card : 0
   })
   vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (this: HTMLElement) {
-    return this.matches('[data-unit="household"]') ? householdTop : 0
+    return this.matches('[data-unit^="up-"]') ? grandparentsTop : 0
   })
 }
 
@@ -517,21 +517,30 @@ describe('Main', () => {
     ])
   })
 
-  // The page doesn't scroll: the panel fills the window, and the tree opens with the household in its middle.
+  // The page doesn't scroll: the panel fills the window, and its top edge is where the grandparents' cards end, so
+  // nothing shows cut off there.
   it.each([
-    { name: 'far down a tall tree', tree: 2000, householdTop: 1500, transform: 'translate(0px, -1275px) scale(1)' },
-    { name: 'near the top of a tall tree', tree: 2000, householdTop: 100, transform: 'translate(0px, 125px) scale(1)' },
-    { name: 'at the bottom of a tall tree', tree: 2000, householdTop: 1850, transform: 'translate(0px, -1625px) scale(1)' },
-    { name: 'in a tree shorter than the panel', tree: 400, householdTop: 100, transform: 'translate(0px, 125px) scale(1)' },
-  ])('opens with your household and siblings in the middle of the panel, $name', ({ tree, householdTop, transform }) => {
-    layOut({ tree, householdTop })
+    { name: 'starts at the bottom of the grandparents’ cards', who: 'fritz', transform: 'translate(0px, -350px) scale(1)' },
+    { name: 'starts at its own top with no grandparents to show', who: 'jr', transform: '' },
+  ])('the tree $name', ({ who, transform }) => {
+    layOut({ tree: 2000, grandparentsTop: 200 })
     const scrollTo = vi.fn()
     vi.stubGlobal('scrollTo', scrollTo)
 
-    renderTree('fritz')
+    renderTree(who)
 
     expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe(transform)
     expect(scrollTo).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { name: 'leaves room above the parents’ row under the grandparents, clear of the more arrow', who: 'fritz', spaced: true },
+    { name: 'leaves no extra room above parents who are the first row', who: 'jr', spaced: false },
+  ])('$name', ({ who, spaced }) => {
+    renderTree(who)
+
+    const parents = screen.getByText('Your parents').closest('[data-row]')!
+    expect(parents.className.includes('spaced')).toBe(spaced)
   })
 
   it('takes the tip off the panel once the tree is moved, and brings it back with Recenter', () => {
@@ -558,17 +567,17 @@ describe('Main', () => {
   })
 
   it('moves the tree up and down with one finger, too', () => {
-    layOut({ tree: 150 })
-    renderTree('fritz')
+    layOut({ tree: 600 })
+    renderTree('jr')
     const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
     const finger = (clientY: number) => ({ pointerId: 1, pointerType: 'touch', clientX: 100, clientY })
-    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe('translate(0px, 225px) scale(1)')
+    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe('')
 
     fireEvent.pointerDown(panel, finger(100))
     fireEvent.pointerMove(panel, finger(110))
     fireEvent.pointerMove(panel, finger(140))
 
-    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toMatch(/, 265px\) scale\(1\)$/)
+    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toMatch(/, 40px\) scale\(1\)$/)
   })
 
   it('lands keyboard focus on the tree once a first relative is picked from the search', () => {

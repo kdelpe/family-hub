@@ -408,8 +408,9 @@ function FocusTree({
   const [panelSize, setPanelSize] = useState({ width: 0, height: 0 })
   // Where the cards are on the stage, so dragging can keep some of them, not just the empty stage, in sight.
   const [cards, setCards] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null)
-  // The middle of the focus person's household, down the stage: the tree opens with it in the panel's middle.
-  const [householdMid, setHouseholdMid] = useState(0)
+  // Down the stage, where the grandparents' cards end (0 with no grandparents shown): the panel's top edge starts
+  // there, so the lines run down from it to the parents and the household.
+  const [treeTop, setTreeTop] = useState(0)
   useLayoutEffect(() => {
     const p = panel.current
     const st = stage.current
@@ -421,9 +422,8 @@ function FocusTree({
       setPanelSize({ width: p.clientWidth, height: p.clientHeight })
       setLines({ width: st.offsetWidth, height: st.offsetHeight, paths: measure(st, r, view, focus) })
       setCards(cardBounds(st, r))
-      const household = r.querySelector<HTMLElement>('[data-unit="household"]')
-      const box = household && offsetBox(household, st)
-      setHouseholdMid(box ? (box.top + box.bottom) / 2 : 0)
+      const grandparents = [...r.querySelectorAll<HTMLElement>('[data-unit^="up-"]')].map((g) => offsetBox(g, st).bottom)
+      setTreeTop(grandparents.length ? Math.max(...grandparents) : 0)
     }
     draw()
     // Cards move without the panel resizing when the web fonts land or a row rewraps.
@@ -444,9 +444,10 @@ function FocusTree({
   const moved = drag?.recentered === recentered ? drag : null
   const setMoved = (to: { x: number; y: number } | null) => setDrag(to && { ...to, recentered })
   const { width, height } = panelSize
-  // Across, the tree is centered; down, the focus person's household and siblings sit in the middle, parents above,
-  // however much of the tree there is above or below (owner's call).
-  const centered = (z: number) => ({ x: (width * (1 - z)) / 2, y: height / 2 - householdMid * z })
+  // Across, the tree is centered. Down, it starts at the bottom of the grandparents' cards, so nothing shows cut
+  // off at the panel's top: the lines come down from its edge to the parents, then the household (owner's call).
+  const resting = (z: number) => ({ x: (width * (1 - z)) / 2, y: -treeTop * z })
+
   // At least 60px of the cards always stays in the panel, at every zoom and after the panel resizes.
   const keepInSight = (x: number, y: number, z: number) => {
     const c = cards ?? { left: 0, right: width, top: 0, bottom: height }
@@ -455,7 +456,7 @@ function FocusTree({
       y: Math.min(height - 60 - c.top * z, Math.max(60 - c.bottom * z, y)),
     }
   }
-  const at = moved ? keepInSight(moved.x, moved.y, zoom) : centered(zoom)
+  const at = moved ? keepInSight(moved.x, moved.y, zoom) : resting(zoom)
   // Pointer moves can come several to a render (a pinch's two fingers): each starts from the last one's result.
   const live = useRef({ at, zoom })
   useLayoutEffect(() => {
@@ -648,7 +649,13 @@ function FocusTree({
             style={rowsStyle}
           >
             {generations.map((g, row) => (
-              <Generation key={g.key} label={g.label} row={row} raised={hover !== null && g.ids.includes(hover)}>
+              <Generation
+                key={g.key}
+                label={g.label}
+                row={row}
+                raised={hover !== null && g.ids.includes(hover)}
+                spaced={g.key === 'parents' && generations[row - 1]?.key === 'grandparents'}
+              >
                 {g.body}
               </Generation>
             ))}
@@ -677,9 +684,12 @@ function FocusTree({
   )
 }
 
-function Generation({ label, row, raised, children }: { label: string; row: number; raised: boolean; children: ReactNode }) {
+// spaced: the parents' row under the grandparents, where the panel's top edge starts: a longer line down to it keeps
+// its label clear of the ▲ more arrow.
+function Generation({ label, row, raised, spaced, children }: { label: string; row: number; raised: boolean; spaced: boolean; children: ReactNode }) {
+  const classes = [styles.generation, raised && styles.raised, spaced && styles.spaced].filter(Boolean).join(' ')
   return (
-    <div data-row={row} className={raised ? `${styles.generation} ${styles.raised}` : styles.generation} style={{ animationDelay: `${row * rowStagger}ms` }}>
+    <div data-row={row} className={classes} style={{ animationDelay: `${row * rowStagger}ms` }}>
       <span className={styles.generationLabel}>{label}</span>
       <div className={styles.row}>{children}</div>
     </div>

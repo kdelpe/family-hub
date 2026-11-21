@@ -292,6 +292,11 @@
   gap: 8px;
 }
 
+/* The ▲ more arrow ends 40px under the panel's top; the parents' label starts 58px under it (with the rows' gap). */
+.spaced {
+  margin-top: 24px;
+}
+
 /* Each animated generation is its own stacking context, so a lifted card's z-index only counts inside its row:
    raise its row above the rows its shadow reaches. A class, not :has(), which older browsers lack. */
 .raised {
@@ -633,6 +638,11 @@
 
   .rows.roomAbove {
     padding-top: 104px;
+  }
+
+  /* The arrow sits under the zoom control here, ending 94px down. */
+  .spaced {
+    margin-top: 72px;
   }
 }
 
