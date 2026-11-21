@@ -386,6 +386,24 @@ describe('Members', () => {
     expect(position()).toBe('Welcome')
   })
 
+  it.each([
+    { name: 'opens itself to the first pages on arrival', reduced: false, after: 'Welcome' },
+    { name: 'stays closed on arrival with reduced motion', reduced: true, after: 'Click the cover, or drag it, to open the book' },
+  ])('$name', async ({ reduced, after }) => {
+    stubMedia({ reduced })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await renderPage()
+      expect(position()).toBe('Click the cover, or drag it, to open the book')
+
+      await act(() => vi.advanceTimersByTimeAsync(600 + 920))
+
+      expect(position()).toBe(after)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('animates a turn, then lands on the next spread', async () => {
     stubMedia({ reduced: false })
     await renderPage()

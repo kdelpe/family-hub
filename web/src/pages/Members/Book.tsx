@@ -1,4 +1,4 @@
-import { type PointerEvent as ReactPointerEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { type PointerEvent as ReactPointerEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { type Book as BookData, nameOf, pageNumber, stopOf, stopsOf } from './bookPages'
 import { PageContent } from './PageContent'
@@ -26,6 +26,8 @@ type TabDrag = { nav: HTMLElement; id: number; start: number; cur: number; y0: n
 
 // A turn takes 0.9 s (Members.module.css), plus a frame.
 const turnMs = 920
+// How long the closed cover shows on arrival before it opens itself.
+const arrivalMs = 600
 // A flick is measured over this last stretch of the drag, so a page held still before letting go isn't flicked.
 const flickMs = 100
 // The page edges grow as pages pile up, up to this: a big family has thousands of pages.
@@ -113,6 +115,22 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     setTurn({ dir: to > stop ? 'next' : 'prev', to, mode: 'anim', stops, land })
     finish(land, turnMs)
   }
+
+  // Arriving on the page, the book opens itself to the first pages, so it's clear what it is and how it turns
+  // (owner's call). Not with reduced motion, and not once the book's been touched.
+  const openOnArrival = useRef(() => {})
+  useLayoutEffect(() => {
+    openOnArrival.current = () => stop === 0 && !turn && flipTo(1)
+  })
+  useEffect(() => {
+    if (reduced) {
+      return
+    }
+    const wait = window.setTimeout(() => openOnArrival.current(), arrivalMs)
+    return () => window.clearTimeout(wait)
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const goTo = (index: number) => flipTo(stopOf(stops, index), index)
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
