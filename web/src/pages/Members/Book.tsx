@@ -195,11 +195,12 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     if (turn) {
       return
     }
-    if (reduced) {
+    const turns = stop - 1
+    // One turn away (a very small book) is an ordinary turn: there's nothing to rewind.
+    if (reduced || turns <= 1) {
       flipTo(1)
       return
     }
-    const turns = stop - 1
     rewindMs.current = Math.max(rewindMinMs, Math.min(fastMs, rewindTotalMs / turns))
     queued.current = 1 - turns
     flipTo(stop - 1, undefined, rewindMs.current)
