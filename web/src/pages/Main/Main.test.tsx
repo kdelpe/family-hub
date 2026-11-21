@@ -95,6 +95,7 @@ function renderTree(personId: string | null, { url = '/tree', data = tree } = {}
       <RouterProvider router={createMemoryRouter([{ path: '/tree', element: <Main /> }], { initialEntries: [url] })} />
     </QueryClientProvider>,
   )
+  return client
 }
 
 const cardOf = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name} Pluviose`) })
@@ -250,6 +251,22 @@ describe('Main', () => {
     expect(screen.getByRole('button', { name: 'Reset zoom, now 110%' })).toBeInTheDocument()
   })
 
+  it('brings a moved tree back to the middle on Back to me when it’s already centered on you, keeping the zoom', () => {
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+    const mouse = { pointerId: 1, pointerType: 'mouse', button: 0 }
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    fireEvent.pointerDown(panel, { ...mouse, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(panel, { ...mouse, clientX: 140, clientY: 130 })
+    fireEvent.pointerUp(panel, mouse)
+    expect(screen.getByRole('button', { name: 'Recenter' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to me' }))
+
+    expect(screen.getByRole('button', { name: 'Recenter' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Reset zoom, now 110%' })).toBeInTheDocument()
+  })
+
   it('centers a tree that was moved when the zoom is reset', () => {
     renderTree('fritz')
     const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
@@ -289,6 +306,34 @@ describe('Main', () => {
     fireEvent.click(screen.getByRole('button', { name: 'more: center the tree on Fritz Pluviose' }))
     fireEvent.click(cardOf('Jean-Robert'))
     expect(screen.queryByRole('button', { name: 'more: center the tree on Fritz Pluviose' })).not.toBeInTheDocument()
+  })
+
+  it('forgets the arrows’ way back when the person already centered is picked again', () => {
+    renderTree('jonas')
+    fireEvent.click(screen.getByRole('button', { name: 'more: center the tree on Fritz Pluviose' }))
+    expect(screen.getByRole('button', { name: 'more: center the tree on Jonas Pluviose' })).toBeInTheDocument()
+
+    fireEvent.click(cardOf('Fritz'))
+
+    expect(screen.getByRole('region', { name: 'Family tree centered on Fritz Pluviose' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'more: center the tree on Jonas Pluviose' })).not.toBeInTheDocument()
+  })
+
+  it('drops the arrows’ way back once someone on it has left the tree', async () => {
+    const client = renderTree('fritz')
+    fireEvent.click(cardOf('Jonas'))
+    fireEvent.click(screen.getByRole('button', { name: 'more: center the tree on Fritz Pluviose' }))
+    expect(screen.getByRole('button', { name: 'more: center the tree on Jonas Pluviose' })).toBeInTheDocument()
+
+    act(() => {
+      client.setQueryData(treeKeys.all, {
+        persons: tree.persons.filter((p) => p.id !== 'jonas'),
+        relationships: tree.relationships.filter((r) => !('child_id' in r) || r.child_id !== 'jonas'),
+      })
+    })
+
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: /^more: center the tree on Jonas/ })).not.toBeInTheDocument())
+    expect(screen.getByRole('region', { name: 'Family tree centered on you' })).toBeInTheDocument()
   })
 
   it('hides the arrows once the tree is moved by hand, and Recenter brings them back', () => {

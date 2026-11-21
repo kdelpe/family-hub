@@ -53,9 +53,13 @@ export function Main() {
   const view = useMemo(() => (family && focus ? focusView(family, focus) : null), [family, focus])
   const [direction, setDirection] = useState<Direction | null>(null)
   const [status, setStatus] = useState('')
+  // Counts centerings on the person already centered, which bring a moved tree back to the middle too.
+  const [recentered, setRecentered] = useState(0)
 
   const centerOn = (to: string) => {
+    setLine(null)
     if (to === focus) {
+      setRecentered((n) => n + 1)
       return
     }
     if (focus && view) {
@@ -69,11 +73,11 @@ export function Main() {
       setStatus(`Family tree centered on ${fullName(people.get(to)!)}`)
     }
     setPicked(to)
-    setLine(null)
   }
-  // The people walked through with the ▲ / ▼ arrows, top to bottom, so the other arrow walks back along them.
+  // The people walked through with the ▲ / ▼ arrows, top to bottom, so the other arrow walks back along them;
+  // dropped once any of them has left the tree.
   const [line, setLine] = useState<{ ids: string[]; at: number } | null>(null)
-  const walked = line && line.ids[line.at] === focus ? line : focus ? { ids: [focus], at: 0 } : null
+  const walked = line && line.ids[line.at] === focus && line.ids.every((id) => people.has(id)) ? line : focus ? { ids: [focus], at: 0 } : null
   const step = (by: 'up' | 'down', to: string) => {
     centerOn(to)
     if (!walked) {
@@ -134,6 +138,7 @@ export function Main() {
             direction={direction}
             paused={paused}
             zoom={zoom}
+            recentered={recentered}
             backUp={walked?.ids[walked.at - 1]}
             backDown={walked?.ids[walked.at + 1]}
             onStep={step}
@@ -228,6 +233,7 @@ function FocusTree({
   direction,
   paused,
   zoom,
+  recentered,
   backUp,
   backDown,
   onStep,
@@ -243,6 +249,7 @@ function FocusTree({
   direction: Direction | null
   paused: boolean
   zoom: number
+  recentered: number
   backUp?: string
   backDown?: string
   onStep: (by: 'up' | 'down', to: string) => void
@@ -424,9 +431,11 @@ function FocusTree({
     }
   }, [view, focus])
 
-  // Where the tree's top-left corner sits in the panel, moved by dragging and zooming. Unset, it's centered
-  // across, and down too while smaller than the panel; centering on someone else starts afresh.
-  const [moved, setMoved] = useState<{ x: number; y: number } | null>(null)
+  // Where the tree's top-left corner sits in the panel, moved by dragging and zooming. Unset, it's centered across,
+  // and down too while smaller than the panel; centering on anyone, even the person already centered, starts afresh.
+  const [drag, setDrag] = useState<{ x: number; y: number; recentered: number } | null>(null)
+  const moved = drag?.recentered === recentered ? drag : null
+  const setMoved = (to: { x: number; y: number } | null) => setDrag(to && { ...to, recentered })
   const width = panelWidth
   const height = lines.height
   const centered = (z: number) => ({ x: (width * (1 - z)) / 2, y: z < 1 ? (height * (1 - z)) / 2 : 0 })
