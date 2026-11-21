@@ -369,7 +369,6 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
                 className={`${styles.corner} ${styles.cornerNext}`}
                 data-corner="next"
                 aria-label="Next page"
-                disabled={stop === last}
                 onClick={(event) => event.timeStamp - justDragged.current > 350 && flipTo(stop + 1)}
               >
                 <span aria-hidden="true" className={`${styles.ear} ${styles.earRight}`} style={{ opacity: stop === last - 1 ? 0 : 1 }} />
