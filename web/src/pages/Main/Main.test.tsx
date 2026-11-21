@@ -117,6 +117,8 @@ function renderTree(personId: string | null, { url = '/tree', data = tree } = {}
 }
 
 const cardOf = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name} Pluviose`) })
+// The card with its pills and quick look: where the mouse goes in and out.
+const personOf = (name: string) => cardOf(name).closest<HTMLElement>('[data-person]')!
 const trail = () => within(screen.getByRole('navigation', { name: "Where you've been" }))
 
 describe('Main', () => {
@@ -286,6 +288,21 @@ describe('Main', () => {
     expect(cardOf('Jean-Robert')).toHaveFocus()
     // Quietly: that focus doesn't open it again.
     expect(screen.queryByRole('link', { name: 'View profile ›' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    { name: 'leaves its card', move: () => fireEvent.pointerLeave(personOf('Jean-Robert'), { pointerType: 'mouse' }) },
+    { name: 'moves onto another card', move: () => fireEvent.pointerEnter(personOf('Nadège'), { pointerType: 'mouse' }) },
+  ])('keeps a quick look that holds keyboard focus open when the mouse $name', ({ move }) => {
+    renderTree('fritz')
+    act(() => cardOf('Jean-Robert').focus())
+    const link = screen.getByRole('link', { name: 'View profile ›' })
+    act(() => link.focus())
+
+    move()
+
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveFocus()
   })
 
   it('lands keyboard focus on the tree once a first relative is picked from the search', () => {

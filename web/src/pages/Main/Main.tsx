@@ -247,10 +247,12 @@ function FocusTree({
   const you = focus === viewerId
   const whose = (words: string) => (you ? `Your ${words}` : `${first(focus)}’s ${words}`)
 
-  // What the quick look shows: hovered or keyboard-focused, else the one a click kept open.
+  // What the quick look shows: hovered or keyboard-focused, else the one a click kept open. One that keyboard
+  // focus has moved into stays, whatever the mouse does, until focus leaves it: closing it would drop focus.
   const [hover, setHover] = useState<string | null>(null)
   const [pinned, setPinned] = useState<string | null>(null)
-  const open = hover ?? pinned
+  const [held, setHeld] = useState<string | null>(null)
+  const open = held ?? hover ?? pinned
   const clickTimer = useRef(0)
   // When the pressed button is gone with the old view, keyboard focus lands on the new focus card,
   // quietly: that focus shouldn't open its quick look.
@@ -279,6 +281,7 @@ function FocusTree({
       }
       setPinned(null)
       setHover(null)
+      setHeld(null)
     }
     document.addEventListener('pointerdown', close)
     document.addEventListener('keydown', escape)
@@ -309,6 +312,7 @@ function FocusTree({
       open={open === id}
       buttonRef={id === focus ? focusCard : undefined}
       onHover={(on) => !quietFocus.current && setHover((h) => (on ? id : h === id ? null : h))}
+      onHold={(on) => setHeld((h) => (on ? id : h === id ? null : h))}
       onClick={() => {
         window.clearTimeout(clickTimer.current)
         const closing = pinned === id
@@ -477,6 +481,7 @@ function Person({
   open,
   buttonRef,
   onHover,
+  onHold,
   onClick,
   onDoubleClick,
   onCenter,
@@ -491,6 +496,7 @@ function Person({
   open: boolean
   buttonRef?: Ref<HTMLButtonElement>
   onHover: (on: boolean) => void
+  onHold: (on: boolean) => void
   onClick: () => void
   onDoubleClick: () => void
   onCenter: () => void
@@ -502,8 +508,19 @@ function Person({
       className={styles.person}
       onPointerEnter={(event) => event.pointerType === 'mouse' && onHover(true)}
       onPointerLeave={(event) => event.pointerType === 'mouse' && onHover(false)}
-      onFocus={() => onHover(true)}
-      onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && onHover(false)}
+      onFocus={(event) => {
+        const inGlance = !!(event.target as Element).closest('[data-glance]')
+        onHold(inGlance)
+        if (!inGlance) {
+          onHover(true)
+        }
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          onHold(false)
+          onHover(false)
+        }
+      }}
     >
       <button
         ref={buttonRef}
