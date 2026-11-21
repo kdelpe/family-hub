@@ -207,17 +207,18 @@
   gap: 26px;
 }
 
-/* The generations arrive one after another, top to bottom; each one's delay is set inline. */
+/* The generations arrive one after another, top to bottom. Delays are set inline; the duration is --row-landed,
+   set on .rows from Main.tsx's rowLanded, which also times the lines drawn into them. */
 .up .generation {
-  animation: slide-up 0.4s ease-out both;
+  animation: slide-up var(--row-landed) ease-out both;
 }
 
 .down .generation {
-  animation: slide-down 0.4s ease-out both;
+  animation: slide-down var(--row-landed) ease-out both;
 }
 
 .side .generation {
-  animation: side 0.4s ease-out both;
+  animation: side var(--row-landed) ease-out both;
 }
 
 .generation {
@@ -229,8 +230,8 @@
 }
 
 /* Each animated generation is its own stacking context, so the quick look's z-index only counts inside its row:
-   raise the row it opens in above the rows it hangs over. */
-.generation:has(.glance) {
+   raise the row it opens in above the rows it hangs over. A class, not :has(), which older browsers lack. */
+.raised {
   z-index: 1;
 }
 
