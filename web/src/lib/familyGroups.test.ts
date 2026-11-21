@@ -17,6 +17,10 @@ const tree: Tree = {
   relationships: [
     parent('lucien', 'nadege'),
     parent('rose', 'nadege'),
+    parent('lucien', 'odette'),
+    parent('rose', 'odette'),
+    parent('rose', 'ti'),
+    parent('marc', 'nadege', 'foster'),
     { id: 'c1', type: 'couple', subtype: 'married', ended: false, person_ids: ['jeanrobert', 'nadege'] },
     { id: 'c2', type: 'couple', subtype: 'partner', ended: true, person_ids: ['nadege', 'paul'] },
     parent('nadege', 'maya'),
@@ -30,14 +34,18 @@ const tree: Tree = {
   ],
 }
 
-it('groups parents, partners, children, step-children and grandchildren', () => {
+it('groups parents, siblings, partners, children, step-children and grandchildren', () => {
   expect(familyGroups(tree, 'nadege')).toEqual({
     parents: ['lucien', 'rose'],
+    fosterParents: ['marc'],
+    // Odette once, though she shares both parents; Ti shares only Rose.
+    siblings: ['odette', 'ti'],
     partners: [
       { id: 'jeanrobert', married: true, ended: false },
       { id: 'paul', married: false, ended: true },
     ],
     children: ['maya'],
+    fosterChildren: ['lucie'],
     // Only a current partner's children, never Nadège's own or foster ones; the earlier split doesn't list him twice.
     stepChildren: [{ id: 'sabine', via: 'jeanrobert' }],
     grandchildren: ['naika'],

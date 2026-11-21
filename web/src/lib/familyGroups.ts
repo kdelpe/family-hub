@@ -4,15 +4,19 @@ export type StepChild = { id: string; via: string }
 
 export type FamilyGroups = {
   parents: string[]
+  fosterParents: string[]
+  siblings: string[]
   partners: Partner[]
   children: string[]
+  fosterChildren: string[]
   stepChildren: StepChild[]
   grandchildren: string[]
 }
 
 // One person's close family for their profile (design-notes §4.9), over family-parent links (§3.4).
 export function familyGroups(tree: Tree, personId: string, links: FamilyLinks = familyLinks(tree)): FamilyGroups {
-  const { parentsOf, childrenOf, fosterChildrenOf, partnersOf } = links
+  const { parentsOf, childrenOf, fosterParentsOf, fosterChildrenOf, partnersOf } = links
+  const parents = [...parentsOf(personId)]
   const children = childrenOf(personId)
   const partners = partnersOf(personId)
   // Never a step-parent to one's own or foster child.
@@ -29,9 +33,12 @@ export function familyGroups(tree: Tree, personId: string, links: FamilyLinks = 
     }
   }
   return {
-    parents: [...parentsOf(personId)],
+    parents,
+    fosterParents: [...fosterParentsOf(personId)],
+    siblings: [...new Set(parents.flatMap(childrenOf))].filter((id) => id !== personId),
     partners,
     children,
+    fosterChildren: fosterChildrenOf(personId),
     stepChildren: [...stepChildren.values()],
     grandchildren: [...new Set(children.flatMap(childrenOf))],
   }

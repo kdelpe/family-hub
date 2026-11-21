@@ -333,3 +333,324 @@ describe('PersonProfile', () => {
     expect(screen.getByRole('link', { name: 'See everyone in People' })).toHaveAttribute('href', '/people')
   })
 })
+
+describe('PersonProfile adding a relative', () => {
+  const pick = (name: string | RegExp) => fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name }))
+  const type = (text: string) => fireEvent.change(within(screen.getByRole('dialog')).getByRole('searchbox', { name: 'Name' }), { target: { value: text } })
+  const open = async (label: string) => fireEvent.click(await screen.findByRole('button', { name: label }))
+  const paolo = { ...full('nadege'), id: 'paolo', first_name: 'Paolo', last_name: 'Pluviose' }
+  const added = (person: Person, ids: string[]) => ({ status: 201, body: { person, relationships: ids.map((id) => ({ id })) } })
+
+  it.each([
+    { role: 'member' as const, want: [] },
+    { role: 'admin' as const, want: [['Parents', 'Add a parent'], ['Married to', 'Add a partner'], ['Siblings', 'Add a brother or sister'], ['Children', 'Add a child']] },
+  ])('shows the Add cards, in their groups, to $role only', async ({ role, want }) => {
+    renderPage({ role })
+    await screen.findByRole('heading', { name: 'Parents' })
+
+    const cards = screen.queryAllByRole('button', { name: /^Add a/ })
+    expect(cards.map((b) => [b.closest('div')!.querySelector('h3')!.textContent, b.textContent!.replace('+', '')])).toEqual(want)
+  })
+
+  it.each([
+    {
+      name: 'a new child, with their other parent',
+      open: 'Add a child',
+      steps: () => {
+        type('Paolo  Pluviose')
+        pick(/^Add “Paolo Pluviose” as someone new/)
+        pick('Born to Nadège')
+        pick(/^Jean-Robert Pluviose/)
+      },
+      sentence: 'Paolo Pluviose will be Nadège’s child. Jean-Robert is the other parent.',
+      body: { relation: 'child', person: { first_name: 'Paolo', last_name: 'Pluviose' }, subtype: 'biological', other_parent_id: 'jeanrobert' },
+    },
+    {
+      name: 'a former partner already in the tree',
+      open: 'Add a partner',
+      steps: () => {
+        type('sab')
+        pick(/^Sabine Pluviose/)
+        pick('No, partners')
+        pick(/^No, it ended/)
+      },
+      sentence: 'Sabine Pluviose will be Nadège’s former partner.',
+      body: { relation: 'partner', person_id: 'sabine', subtype: 'partner', ended: true },
+    },
+    {
+      name: 'an adoptive mother',
+      open: 'Add a parent',
+      steps: () => {
+        type('Sabine')
+        pick(/^Sabine Pluviose/)
+        pick('Adopted Nadège')
+      },
+      sentence: 'Sabine Pluviose will be Nadège’s adoptive mother.',
+      body: { relation: 'parent', person_id: 'sabine', subtype: 'adoptive' },
+    },
+    {
+      name: 'a new sister, through the one parent recorded',
+      open: 'Add a brother or sister',
+      steps: () => {
+        type('Odette')
+        pick(/^Add “Odette” as someone new/)
+      },
+      sentence: 'Odette will be Nadège’s sibling. They’ll be linked as a child of Lucien.',
+      body: { relation: 'sibling', person: { first_name: 'Odette', last_name: null } },
+    },
+  ])('adds $name', async ({ open: label, steps, sentence, body }) => {
+    const fetch = renderPage({ role: 'admin', answers: { 'POST /api/persons/nadege/relatives': added(paolo, ['n1']) } })
+    await open(label)
+
+    steps()
+
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText(sentence)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Add / }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(fetch).toHaveBeenCalledWith('/api/persons/nadege/relatives', expect.objectContaining({ method: 'POST', body: JSON.stringify(body) }))
+  })
+
+  it('shows the new relative, and Undo takes off the links and the person added', async () => {
+    const withPaolo: Tree = {
+      persons: [...tree.persons, slim('paolo', 'Paolo', 'male')],
+      relationships: [...tree.relationships, { id: 'n1', type: 'parent_child', subtype: 'biological', parent_id: 'nadege', child_id: 'paolo' }],
+    }
+    const fetch = renderPage({
+      role: 'admin',
+      answers: {
+        'GET /api/tree': [
+          { status: 200, body: tree },
+          { status: 200, body: withPaolo },
+          { status: 200, body: tree },
+        ],
+        'POST /api/persons/nadege/relatives': added(paolo, ['n1']),
+        'DELETE /api/relationships/n1': { status: 204 },
+        'DELETE /api/persons/paolo': { status: 204 },
+      },
+    })
+    await open('Add a child')
+    type('Paolo Pluviose')
+    pick(/^Add “Paolo Pluviose” as someone new/)
+    pick('Born to Nadège')
+    pick(/^Someone else/)
+    pick('Add Paolo')
+
+    expect(await screen.findByText('Paolo added as Nadège’s child.')).toBeInTheDocument()
+    const card = await screen.findByRole('link', { name: /Paolo Pluviose/ })
+    expect(card.className).toMatch(/fresh/)
+    expect(screen.getByRole('button', { name: 'Add a child' })).toHaveFocus()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+
+    await waitFor(() => expect(screen.queryByText('Paolo added as Nadège’s child.')).not.toBeInTheDocument())
+    const deletes = fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => url)
+    expect(deletes).toEqual(['/api/relationships/n1', '/api/persons/paolo'])
+    await waitFor(() => expect(screen.queryByRole('link', { name: /Paolo Pluviose/ })).not.toBeInTheDocument())
+  })
+
+  it('keeps someone already in the tree when undone', async () => {
+    const fetch = renderPage({
+      role: 'admin',
+      answers: { 'POST /api/persons/nadege/relatives': added(full('sabine'), ['n1']), 'DELETE /api/relationships/n1': { status: 204 } },
+    })
+    await open('Add a parent')
+    type('Sabine')
+    pick(/^Sabine Pluviose/)
+    pick('Adopted Nadège')
+    pick('Add Sabine')
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument())
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => url)).toEqual(['/api/relationships/n1'])
+  })
+
+  it('carries on from where a failed Undo stopped', async () => {
+    const fetch = renderPage({
+      role: 'admin',
+      answers: {
+        'POST /api/persons/nadege/relatives': added(paolo, ['n1', 'n2']),
+        'DELETE /api/relationships/n1': [{ status: 204 }, { status: 404, body: { error: { code: 'not_found', message: 'not found' } } }],
+        'DELETE /api/relationships/n2': [{ status: 503, body: { error: { code: 'busy', message: 'busy' } } }, { status: 204 }],
+        'DELETE /api/persons/paolo': { status: 204 },
+      },
+    })
+    await open('Add a child')
+    type('Paolo Pluviose')
+    pick(/^Add “Paolo Pluviose” as someone new/)
+    pick('Born to Nadège')
+    pick(/^Jean-Robert Pluviose/)
+    pick('Add Paolo')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+    expect(await screen.findByText('The family hub is busy right now. Try again in a moment.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument())
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => url)).toEqual([
+      '/api/relationships/n1',
+      '/api/relationships/n2',
+      '/api/relationships/n1',
+      '/api/relationships/n2',
+      '/api/persons/paolo',
+    ])
+  })
+
+  it('offers “Both” only to someone with two parents', async () => {
+    const threeParents: Tree = {
+      persons: [...tree.persons, slim('rose', 'Rose', 'female'), slim('marc', 'Marc', 'male')],
+      relationships: [
+        ...tree.relationships,
+        { id: 'p2', type: 'parent_child', subtype: 'biological', parent_id: 'rose', child_id: 'nadege' },
+        { id: 'p3', type: 'parent_child', subtype: 'adoptive', parent_id: 'marc', child_id: 'nadege' },
+      ],
+    }
+    renderPage({ role: 'admin', answers: { 'GET /api/tree': { status: 200, body: threeParents } } })
+    await open('Add a brother or sister')
+    type('Odette')
+    pick(/^Add “Odette” as someone new/)
+
+    const options = within(screen.getByRole('dialog')).getAllByRole('button', { name: /^(Both|Only)/ })
+    expect(options.map((b) => b.textContent)).toEqual([
+      'LMOnly Lucien Monestime',
+      'RPOnly Rose Pluviose',
+      'MPOnly Marc Pluviose',
+    ])
+  })
+
+  it('links an existing half sibling only through the parent they lack', async () => {
+    const twoParents: Tree = {
+      persons: [...tree.persons, slim('rose', 'Rose', 'female'), slim('ti', 'Ti', 'female')],
+      relationships: [
+        ...tree.relationships,
+        { id: 'p2', type: 'parent_child', subtype: 'biological', parent_id: 'rose', child_id: 'nadege' },
+        { id: 'p3', type: 'parent_child', subtype: 'biological', parent_id: 'rose', child_id: 'ti' },
+      ],
+    }
+    renderPage({ role: 'admin', answers: { 'GET /api/tree': { status: 200, body: twoParents } } })
+    await open('Add a brother or sister')
+    type('Ti')
+    pick(/^Ti Pluviose/)
+
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /^Only Rose Pluviose/ })).toBeDisabled()
+    pick(/^Both: Lucien and Rose/)
+
+    expect(screen.getByText('Ti Pluviose will be Nadège’s sister. They’ll be linked as a child of Lucien.')).toBeInTheDocument()
+  })
+
+  it.each([
+    { name: 'a half-sister, each with a parent the other lacks', who: 'Ti', only: /^Only Rose Pluviose/, sentence: 'Ti Pluviose will be Nadège’s half-sister. They’ll be linked as a child of Rose.' },
+    {
+      name: 'the neutral word, when the parents recorded prove neither',
+      who: 'Jean-Robert',
+      only: /^Only Lucien Monestime/,
+      sentence: 'Jean-Robert Pluviose will be Nadège’s sibling. They’ll be linked as a child of Lucien.',
+    },
+  ])('calls an existing sibling $name', async ({ who, only, sentence }) => {
+    const twoParents: Tree = {
+      persons: [...tree.persons, slim('rose', 'Rose', 'female'), slim('zoe', 'Zoé', 'female'), slim('ti', 'Ti', 'female')],
+      relationships: [
+        ...tree.relationships,
+        { id: 'p2', type: 'parent_child', subtype: 'biological', parent_id: 'rose', child_id: 'nadege' },
+        { id: 'p3', type: 'parent_child', subtype: 'biological', parent_id: 'zoe', child_id: 'ti' },
+      ],
+    }
+    renderPage({ role: 'admin', answers: { 'GET /api/tree': { status: 200, body: twoParents } } })
+    await open('Add a brother or sister')
+    type(who)
+    pick(new RegExp(`^${who} Pluviose`))
+    pick(only)
+
+    expect(screen.getByText(sentence)).toBeInTheDocument()
+  })
+
+  it('leaves out an other parent the child already has', async () => {
+    // Sabine is Jean-Robert's daughter; Nadège adopts her, with Jean-Robert as the other parent.
+    const fetch = renderPage({ role: 'admin', answers: { 'POST /api/persons/nadege/relatives': added(full('sabine'), ['n1']) } })
+    await open('Add a child')
+    type('Sabine')
+    pick(/^Sabine Pluviose/)
+    pick('Adopted by Nadège')
+    pick(/^Jean-Robert Pluviose/)
+    pick('Add Sabine')
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    const body = { relation: 'child', person_id: 'sabine', subtype: 'adoptive' }
+    expect(fetch).toHaveBeenCalledWith('/api/persons/nadege/relatives', expect.objectContaining({ body: JSON.stringify(body) }))
+  })
+
+  it('keeps Tab inside the sheet', async () => {
+    renderPage({ role: 'admin' })
+    await open('Add a parent')
+    const dialog = screen.getByRole('dialog')
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' })
+    const search = within(dialog).getByRole('searchbox', { name: 'Name' })
+
+    // Cancel is the first stop on this screen (Back is hidden), and the search box the last.
+    search.focus()
+    fireEvent.keyDown(search, { key: 'Tab' })
+    expect(cancel).toHaveFocus()
+    fireEvent.keyDown(cancel, { key: 'Tab', shiftKey: true })
+    expect(search).toHaveFocus()
+  })
+
+  it('clears a filled search box on Escape before closing', async () => {
+    renderPage({ role: 'admin' })
+    await open('Add a parent')
+    type('Sab')
+    const search = within(screen.getByRole('dialog')).getByRole('searchbox', { name: 'Name' })
+
+    fireEvent.keyDown(search, { key: 'Escape' })
+    expect(search).toHaveValue('')
+    fireEvent.keyDown(search, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('says why the server refused, and stays open to go back', async () => {
+    renderPage({
+      role: 'admin',
+      answers: {
+        'POST /api/persons/nadege/relatives': {
+          status: 409,
+          body: { error: { code: 'conflict', message: 'relationship conflict: the child already has two biological parents' } },
+        },
+      },
+    })
+    await open('Add a parent')
+    type('Sabine')
+    pick(/^Sabine Pluviose/)
+    pick('Birth mother')
+    pick('Add Sabine')
+
+    expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent('The child already has two biological parents.')
+    pick('← Back')
+    expect(screen.getByRole('heading', { name: 'How is Sabine Nadège’s parent?' })).toHaveFocus()
+  })
+
+  it('can’t pick someone already related that way', async () => {
+    renderPage({ role: 'admin' })
+    await open('Add a child')
+
+    type('Maya')
+
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /^Maya Pluviose/ })).toBeDisabled()
+    expect(screen.getByText('Already Nadège’s child')).toBeInTheDocument()
+  })
+
+  it('asks for a parent before a sibling, and Cancel or Escape closes', async () => {
+    const noParents: Tree = { ...tree, relationships: tree.relationships.filter((r) => r.id !== 'r1') }
+    renderPage({ role: 'admin', answers: { 'GET /api/tree': { status: 200, body: noParents } } })
+    await open('Add a brother or sister')
+
+    expect(screen.getByRole('heading', { name: 'Who are Nadège’s parents?' })).toBeInTheDocument()
+    pick(/^Add a parent for Nadège/)
+    expect(screen.getByRole('heading', { name: 'Who is Nadège’s parent?' })).toBeInTheDocument()
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await open('Add a parent')
+    pick('Cancel')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add a parent' })).toHaveFocus()
+  })
+})

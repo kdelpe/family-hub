@@ -161,6 +161,87 @@
   box-shadow: 0 12px 26px var(--shadow-press);
 }
 
+.fresh {
+  border: 2px solid var(--accent);
+  background: var(--accent-tint);
+}
+
+/* Admins only: where the new relative will appear. */
+.addCard {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 64px;
+  padding: 12px;
+  border: 2px dashed var(--line);
+  border-radius: 12px;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  text-align: left;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.addCard:hover,
+.addCard:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.plus {
+  box-sizing: border-box;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  box-sizing: border-box;
+  width: min(560px, calc(100% - 32px));
+  padding: 10px 10px 10px 18px;
+  border-radius: 16px;
+  background: var(--text);
+  color: var(--surface);
+  box-shadow: 0 12px 28px var(--shadow-lift);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  translate: -50% 0;
+}
+
+.toastActions {
+  display: flex;
+  gap: 8px;
+}
+
+.toastActions button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--surface);
+  border-radius: 22px;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: var(--surface);
+  cursor: pointer;
+}
+
 .avatar {
   width: 40px;
   height: 40px;
