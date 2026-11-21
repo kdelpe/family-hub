@@ -379,6 +379,72 @@ func TestRestorePerson(t *testing.T) {
 	}
 }
 
+func TestAddRelative(t *testing.T) {
+	const (
+		newParent = `{"relation":"parent","person":{"first_name":"Rosa","last_name":"Pierre","birth_date":"1950","birth_date_precision":"year"}}`
+		conflict  = `{"error":{"code":"conflict","message":"relationship conflict: the child already has two biological parents"}}`
+	)
+	newParentIn := family.RelativeInput{Relation: family.RelationParent,
+		Person: &family.PersonInput{FirstName: "Rosa", LastName: new("Pierre"), BirthDate: new("1950"), BirthDatePrecision: new("year")}}
+	added := family.AddedRelative{Person: testPerson, Relationships: []family.Relationship{testParentLink}}
+
+	tests := []struct {
+		name       string
+		id         string
+		session    bool
+		body       string
+		wantIn     *family.RelativeInput
+		addErr     error
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "someone new", session: true, body: newParent, wantIn: &newParentIn, wantStatus: http.StatusCreated,
+			wantBody: `{"person":` + testPersonBody + `,"relationships":[` + parentLinkBody + `]}`},
+		{name: "someone in the tree, every option passed on", session: true,
+			body: `{"relation":"child","person_id":"01890000-0000-7000-8000-0000000000cc","subtype":"adoptive","ended":true,
+				"other_parent_id":"01890000-0000-7000-8000-0000000000bb","shared_parent_id":"01890000-0000-7000-8000-0000000000dd"}`,
+			wantIn: &family.RelativeInput{Relation: family.RelationChild, PersonID: otherPersonID, Subtype: new("adoptive"), Ended: true,
+				OtherParentID:  uuid.MustParse("01890000-0000-7000-8000-0000000000bb"),
+				SharedParentID: uuid.MustParse("01890000-0000-7000-8000-0000000000dd")},
+			wantStatus: http.StatusCreated, wantBody: `{"person":` + testPersonBody + `,"relationships":[` + parentLinkBody + `]}`},
+		{name: "refused by the rules", session: true, body: newParent, wantIn: &newParentIn, addErr: family.ErrInvalidRelationship,
+			wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"validation_error","message":"invalid relationship"}}`},
+		{name: "a clash with the stored links", session: true, body: newParent, wantIn: &newParentIn,
+			addErr:     fmt.Errorf("%w: the child already has two biological parents", family.ErrRelationshipConflict),
+			wantStatus: http.StatusConflict, wantBody: conflict},
+		{name: "unknown or deleted", session: true, body: newParent, wantIn: &newParentIn, addErr: family.ErrPersonNotFound,
+			wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
+		{name: "busy", session: true, body: newParent, wantIn: &newParentIn, addErr: auth.ErrBusy, wantStatus: http.StatusServiceUnavailable, wantBody: busyBody},
+		{name: "database error", session: true, body: newParent, wantIn: &newParentIn, addErr: errors.New("db down"),
+			wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+		{name: "not a person id", id: "42", session: true, body: newParent, wantStatus: http.StatusNotFound, wantBody: personNotFoundBody},
+		{name: "unknown field", session: true, body: `{"relation":"cousin","cousin_id":"01890000-0000-7000-8000-0000000000cc"}`,
+			wantStatus: http.StatusBadRequest, wantBody: badJSONBody},
+		{name: "mounted without a session gate", body: newParent, wantStatus: http.StatusInternalServerError, wantBody: internalBody},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := mocks.NewFamilyService(t)
+			if tt.wantIn != nil {
+				svc.EXPECT().AddRelative(mock.Anything, testUser.ID, testPersonID, *tt.wantIn).Return(added, tt.addErr)
+			}
+			id := idOr(tt.id)
+			req := httptest.NewRequest(http.MethodPost, "/api/persons/"+id+"/relatives", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			req = withURLParam(req, "id", id)
+			role := ""
+			if tt.session {
+				role = auth.RoleAdmin
+			}
+
+			rec := serveAs(t, role, handler.NewFamily(svc).AddRelative, req)
+
+			assertBody(t, rec, tt.wantStatus, tt.wantBody)
+		})
+	}
+}
+
 func TestCreateRelationship(t *testing.T) {
 	const (
 		parentBody = `{"type":"parent_child","parent_id":"01890000-0000-7000-8000-0000000000aa","child_id":"01890000-0000-7000-8000-0000000000cc"}`

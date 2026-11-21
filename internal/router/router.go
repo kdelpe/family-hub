@@ -110,6 +110,7 @@ func New(h Handlers, mw Middleware) http.Handler {
 				r.Post("/persons", h.Family.CreatePerson)
 				r.Delete("/persons/{id}", h.Family.DeletePerson)
 				r.Post("/persons/{id}/restore", h.Family.RestorePerson)
+				r.Post("/persons/{id}/relatives", h.Family.AddRelative)
 				r.Post("/relationships", h.Family.CreateRelationship)
 				r.Patch("/relationships/{id}", h.Family.UpdateRelationship)
 				r.Delete("/relationships/{id}", h.Family.DeleteRelationship)

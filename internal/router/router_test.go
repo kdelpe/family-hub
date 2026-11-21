@@ -66,6 +66,7 @@ func TestRoutes(t *testing.T) {
 		{name: "the requests queue needs a session", method: http.MethodGet, path: "/api/admin/access-requests", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "adding a person needs a session", method: http.MethodPost, path: "/api/persons", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "linking people needs a session", method: http.MethodPost, path: "/api/relationships", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
+		{name: "adding a relative needs a session", method: http.MethodPost, path: "/api/persons/" + testID + "/relatives", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "logout without a session still clears", method: http.MethodPost, path: "/api/auth/logout", wantStatus: http.StatusNoContent},
 		{name: "cross-site POST to /api is refused", method: http.MethodPost, path: "/api/auth/login", header: http.Header{"Sec-Fetch-Site": {"cross-site"}}, wantStatus: http.StatusForbidden, wantType: "application/json"},
 		{name: "any other path is the app", method: http.MethodGet, path: "/persons/42", wantStatus: http.StatusOK, wantType: "text/html; charset=utf-8"},
@@ -184,6 +185,8 @@ func TestFamilyWritesAreAdminOnly(t *testing.T) {
 		{name: "an admin can link people", method: http.MethodPost, path: "/api/relationships", role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "an admin can edit a link", method: http.MethodPatch, path: "/api/relationships/" + testID, role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "an admin can delete a link", method: http.MethodDelete, path: "/api/relationships/42", role: auth.RoleAdmin, wantStatus: http.StatusNotFound},
+		{name: "a member can't add a relative", method: http.MethodPost, path: "/api/persons/" + testID + "/relatives", role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "an admin can add a relative", method: http.MethodPost, path: "/api/persons/" + testID + "/relatives", role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
 	}
 
 	for _, tt := range tests {

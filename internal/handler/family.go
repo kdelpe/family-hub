@@ -25,6 +25,7 @@ type FamilyService interface {
 	UpdatePerson(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch family.PersonPatch) (family.Person, error)
 	DeletePerson(ctx context.Context, id uuid.UUID) error
 	RestorePerson(ctx context.Context, id uuid.UUID) (family.Person, error)
+	AddRelative(ctx context.Context, createdBy, id uuid.UUID, in family.RelativeInput) (family.AddedRelative, error)
 	CreateRelationship(ctx context.Context, in family.RelationshipInput) (family.Relationship, error)
 	UpdateRelationship(ctx context.Context, id uuid.UUID, patch family.RelationshipPatch) (family.Relationship, error)
 	DeleteRelationship(ctx context.Context, id uuid.UUID) error
@@ -141,6 +142,21 @@ type updateRelationshipRequest struct {
 	Subtype required[string]  `json:"subtype"`
 	Ended   required[bool]    `json:"ended"`
 	Notes   optional[*string] `json:"notes"`
+}
+
+type addRelativeRequest struct {
+	Relation       string               `json:"relation"`
+	PersonID       uuid.UUID            `json:"person_id"`
+	Person         *createPersonRequest `json:"person"`
+	Subtype        *string              `json:"subtype"`
+	Ended          bool                 `json:"ended"`
+	OtherParentID  uuid.UUID            `json:"other_parent_id"`
+	SharedParentID uuid.UUID            `json:"shared_parent_id"`
+}
+
+type addedRelativeResponse struct {
+	Person        personResponse         `json:"person"`
+	Relationships []relationshipResponse `json:"relationships"`
 }
 
 type treeResponse struct {
@@ -325,6 +341,39 @@ func (f *Family) RestorePerson(w http.ResponseWriter, r *http.Request) {
 	}
 	person, err := f.svc.RestorePerson(r.Context(), id)
 	f.answer(w, r, http.StatusOK, person, err, "restore person")
+}
+
+func (f *Family) AddRelative(w http.ResponseWriter, r *http.Request) {
+	session, ok := CurrentSession(r.Context())
+	if !ok {
+		internalError(w, r, errors.New("no session in context"), "add relative mounted without RequireSession")
+		return
+	}
+	id, ok := personID(w, r)
+	if !ok {
+		return
+	}
+	var req addRelativeRequest
+	if !httpx.DecodeJSON(w, r, &req) {
+		return
+	}
+	in := family.RelativeInput{
+		Relation: req.Relation, PersonID: req.PersonID, Subtype: req.Subtype, Ended: req.Ended,
+		OtherParentID: req.OtherParentID, SharedParentID: req.SharedParentID,
+	}
+	if req.Person != nil {
+		in.Person = new(family.PersonInput(*req.Person))
+	}
+	added, err := f.svc.AddRelative(r.Context(), session.UserID, id, in)
+	if err != nil {
+		f.fail(w, r, err, "add relative")
+		return
+	}
+	resp := addedRelativeResponse{Person: toPersonResponse(added.Person), Relationships: make([]relationshipResponse, 0, len(added.Relationships))}
+	for _, rel := range added.Relationships {
+		resp.Relationships = append(resp.Relationships, toRelationshipResponse(rel))
+	}
+	httpx.JSON(w, http.StatusCreated, resp)
 }
 
 func (f *Family) CreateRelationship(w http.ResponseWriter, r *http.Request) {

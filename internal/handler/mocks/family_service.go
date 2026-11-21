@@ -48,6 +48,84 @@ func (_m *FamilyService) EXPECT() *FamilyService_Expecter {
 	return &FamilyService_Expecter{mock: &_m.Mock}
 }
 
+// AddRelative provides a mock function for the type FamilyService
+func (_mock *FamilyService) AddRelative(ctx context.Context, createdBy uuid.UUID, id uuid.UUID, in family.RelativeInput) (family.AddedRelative, error) {
+	ret := _mock.Called(ctx, createdBy, id, in)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AddRelative")
+	}
+
+	var r0 family.AddedRelative
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID, family.RelativeInput) (family.AddedRelative, error)); ok {
+		return returnFunc(ctx, createdBy, id, in)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID, family.RelativeInput) family.AddedRelative); ok {
+		r0 = returnFunc(ctx, createdBy, id, in)
+	} else {
+		r0 = ret.Get(0).(family.AddedRelative)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uuid.UUID, uuid.UUID, family.RelativeInput) error); ok {
+		r1 = returnFunc(ctx, createdBy, id, in)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// FamilyService_AddRelative_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AddRelative'
+type FamilyService_AddRelative_Call struct {
+	*mock.Call
+}
+
+// AddRelative is a helper method to define mock.On call
+//   - ctx context.Context
+//   - createdBy uuid.UUID
+//   - id uuid.UUID
+//   - in family.RelativeInput
+func (_e *FamilyService_Expecter) AddRelative(ctx any, createdBy any, id any, in any) *FamilyService_AddRelative_Call {
+	return &FamilyService_AddRelative_Call{Call: _e.mock.On("AddRelative", ctx, createdBy, id, in)}
+}
+
+func (_c *FamilyService_AddRelative_Call) Run(run func(ctx context.Context, createdBy uuid.UUID, id uuid.UUID, in family.RelativeInput)) *FamilyService_AddRelative_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		var arg3 family.RelativeInput
+		if args[3] != nil {
+			arg3 = args[3].(family.RelativeInput)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *FamilyService_AddRelative_Call) Return(addedRelative family.AddedRelative, err error) *FamilyService_AddRelative_Call {
+	_c.Call.Return(addedRelative, err)
+	return _c
+}
+
+func (_c *FamilyService_AddRelative_Call) RunAndReturn(run func(ctx context.Context, createdBy uuid.UUID, id uuid.UUID, in family.RelativeInput) (family.AddedRelative, error)) *FamilyService_AddRelative_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Ancestors provides a mock function for the type FamilyService
 func (_mock *FamilyService) Ancestors(ctx context.Context, viewer family.Viewer, id uuid.UUID, depth int) ([]family.Relative, error) {
 	ret := _mock.Called(ctx, viewer, id, depth)
