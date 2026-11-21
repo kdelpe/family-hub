@@ -25,6 +25,10 @@ const tipText = 'Click or tap a name to center the tree on them · drag to move 
 // Each generation arrives this many ms after the one above and has landed after rowLanded (handed to
 // Main.module.css as --row-landed); a line draws once the generation it reaches has landed (design-notes §4.2).
 const rowStagger = 80
+// Recenter and the zoom reset glide the tree back this long (Main.module.css), rather than jump.
+const glideMs = 300
+// How far an arrow key moves the tree.
+const keyStep = 60
 const rowLanded = 400
 const rowsStyle = { '--row-landed': `${rowLanded}ms` } as CSSProperties
 
@@ -385,16 +389,27 @@ function FocusTree({
     })
   }
 
-  // Plain arrows at the panel's top and bottom saying there's more family that way, until the tree is moved by hand
-  // (owner's call, 2026-11-21). Each goes one generation: back along the line the arrows came by, else along the
-  // line that continues, to the parent whose parents have family above or the child whose children have children.
-  const upTo = backUp ?? view.grandparents.find((g) => g.ids.some((id) => treeParentsOf(family, id).length > 0))?.of
+  // Arrows at the panel's top and bottom naming the family that way, until the tree is moved by hand (owner's calls,
+  // 2026-11-21). Each goes one generation: back along the line the arrows came by, else up to a parent (the
+  // grandparents are always just above the panel's top: one whose parents' line continues, if any), or down to the
+  // child whose children have children.
+  const upTo =
+    backUp ??
+    (view.grandparents.find((g) => g.ids.some((id) => treeParentsOf(family, id).length > 0)) ?? view.grandparents[0])?.of
   const downTo = backDown ?? view.grandchildren.find((g) => g.ids.some((id) => treeChildrenOf(family, id).length > 0))?.of
+  const edgeWords = (to: string, by: 'up' | 'down') => {
+    const more =
+      by === 'up'
+        ? treeParentsOf(family, to).length > 0
+        : treeChildrenOf(family, to).some((child) => treeChildrenOf(family, child).length > 0)
+    return more ? `${first(to)}’s ${by === 'up' ? 'parents' : 'grandchildren'}` : `Back to ${first(to)}`
+  }
   const edge = (to: string | undefined, by: 'up' | 'down', where: string) =>
     to &&
     !moved && (
       <button type="button" className={`pill ${styles.more} ${styles.edge} ${styles[where]}`} onClick={() => onStep(by, to)}>
-        <span aria-hidden="true">{by === 'up' ? '▲' : '▼'} </span>more
+        <span aria-hidden="true">{by === 'up' ? '▲' : '▼'} </span>
+        {edgeWords(to, by)}
         <span className="visually-hidden">: center the tree on {fullName(people.get(to)!)}</span>
       </button>
     )
@@ -462,7 +477,17 @@ function FocusTree({
   useLayoutEffect(() => {
     live.current = { at, zoom }
   })
+  const [gliding, setGliding] = useState(false)
+  const glideTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(glideTimer.current), [])
+  const glideBack = () => {
+    window.clearTimeout(glideTimer.current)
+    setGliding(true)
+    glideTimer.current = window.setTimeout(() => setGliding(false), glideMs)
+  }
   const place = (x: number, y: number, z: number) => {
+    // A move by hand takes over at once from a glide under way.
+    setGliding(false)
     const to = keepInSight(x, y, z)
     live.current = { at: to, zoom: z }
     setMoved(to)
@@ -479,6 +504,8 @@ function FocusTree({
     }
     onZoom(() => next)
   }
+  // The − / + buttons and keys: a centered tree stays centered; a moved one zooms about the panel's middle.
+  const zoomBy = (step: number) => zoomAround((z) => zoomStep(z, step), moved ? { x: width / 2, y: height / 2 } : undefined)
 
   // The wheel: with Ctrl (also how a trackpad pinch arrives) it zooms, which React's wheel listener can't stop the
   // page doing; without, it moves the tree, as the page itself doesn't scroll.
@@ -573,6 +600,22 @@ function FocusTree({
         aria-label={`Family tree centered on ${you ? 'you' : fullName(people.get(focus)!)}`}
         className={styles.panel}
         onPointerDown={onPointerDown}
+        // From a card or link in the tree: the arrow keys move it, + and − zoom it.
+        onKeyDown={(event) => {
+          if (event.altKey || event.ctrlKey || event.metaKey) {
+            return
+          }
+          const move = ({ ArrowLeft: [keyStep, 0], ArrowRight: [-keyStep, 0], ArrowUp: [0, keyStep], ArrowDown: [0, -keyStep] } as Record<string, [number, number]>)[event.key]
+          const zoomStepBy = event.key === '+' || event.key === '=' ? 0.1 : event.key === '-' || event.key === '_' ? -0.1 : 0
+          if (move) {
+            moveBy(...move)
+          } else if (zoomStepBy) {
+            zoomBy(zoomStepBy)
+          } else {
+            return
+          }
+          event.preventDefault()
+        }}
         onPointerMove={onPointerMove}
         // A drag that began on a card doesn't also center the tree on them. Only a pointer's click: Enter on a
         // card clicks it with no pointer (detail 0), and must still work after a drag the browser canceled.
@@ -617,7 +660,7 @@ function FocusTree({
         <div
           ref={stage}
           data-stage
-          className={styles.stage}
+          className={gliding ? `${styles.stage} ${styles.glide}` : styles.stage}
           style={{
             width: width || undefined,
             transform: at.x === 0 && at.y === 0 && zoom === 1 ? undefined : `translate(${at.x}px, ${at.y}px) scale(${zoom})`,
@@ -664,19 +707,28 @@ function FocusTree({
       </section>
       {edge(downTo, 'down', 'edgeBottom')}
       <div role="group" aria-label="Zoom" className={styles.zoom}>
-        <button type="button" aria-label="Zoom out" className={styles.zoomButton} disabled={zoom <= minZoom} onClick={() => zoomAround((z) => zoomStep(z, -0.1), moved ? { x: width / 2, y: height / 2 } : undefined)}>
+        <button type="button" aria-label="Zoom out" className={styles.zoomButton} disabled={zoom <= minZoom} onClick={() => zoomBy(-0.1)}>
           −
         </button>
         <button type="button" aria-label={`Reset zoom, now ${Math.round(zoom * 100)}%`} className={styles.zoomLevel} onClick={() => {
+            glideBack()
             setMoved(null)
             onZoom(() => 1)
           }}>
           {Math.round(zoom * 100)}%
         </button>
-        <button type="button" aria-label="Zoom in" className={styles.zoomButton} disabled={zoom >= maxZoom} onClick={() => zoomAround((z) => zoomStep(z, 0.1), moved ? { x: width / 2, y: height / 2 } : undefined)}>
+        <button type="button" aria-label="Zoom in" className={styles.zoomButton} disabled={zoom >= maxZoom} onClick={() => zoomBy(0.1)}>
           +
         </button>
-        <button type="button" className={styles.recenter} disabled={!moved} onClick={() => setMoved(null)}>
+        <button
+          type="button"
+          className={styles.recenter}
+          disabled={!moved}
+          onClick={() => {
+            glideBack()
+            setMoved(null)
+          }}
+        >
           Recenter
         </button>
       </div>

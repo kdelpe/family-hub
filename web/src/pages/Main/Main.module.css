@@ -217,6 +217,19 @@
   touch-action: none;
 }
 
+/* A soft edge where the tree runs on below the panel, so the cut looks meant; above the tree, under the controls. */
+.panel::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  height: 40px;
+  background: linear-gradient(to bottom, transparent, var(--surface-soft));
+  pointer-events: none;
+}
+
 .panel:active {
   cursor: grabbing;
 }
@@ -226,6 +239,10 @@
   top: 0;
   left: 0;
   transform-origin: 0 0;
+}
+
+.glide {
+  transition: transform 0.3s ease;
 }
 
 .lines {
@@ -647,7 +664,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card {
+  .card,
+  .glide {
     transition: none;
   }
 
