@@ -228,6 +228,12 @@
   gap: 8px;
 }
 
+/* Each animated generation is its own stacking context, so the quick look's z-index only counts inside its row:
+   raise the row it opens in above the rows it hangs over. */
+.generation:has(.glance) {
+  z-index: 1;
+}
+
 /* The label's own background stops a line passing behind it instead of striking through it. */
 .generationLabel {
   position: relative;
