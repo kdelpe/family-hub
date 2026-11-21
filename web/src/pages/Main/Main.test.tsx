@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,6 +49,18 @@ const tree = {
   ],
 }
 
+const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
+const row = (id: string, kind: string, value: string, visibility: string, platform: string | null = null, shared_with_you = false) => ({
+  id,
+  kind,
+  platform,
+  label: null,
+  value,
+  visibility,
+  href: null,
+  shared_with_you,
+})
+
 beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
@@ -57,24 +69,27 @@ beforeEach(() => {
       disconnect() {}
     },
   )
-  const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => json({ contacts: [] })),
   )
 })
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+  focusManager.setFocused(undefined)
+})
 
-function renderTree(personId: string | null) {
+function renderTree(personId: string | null, { url = '/tree', data = tree } = {}) {
   // Fresh for the whole test: only the quick look's contacts are fetched.
-  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
+  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   client.setQueryData(authKeys.me, { id: 'u1', email: 'fritz@example.com', role: 'member', person_id: personId })
-  client.setQueryData(treeKeys.all, tree)
+  client.setQueryData(treeKeys.all, data)
   client.setQueryData(familyKeys.summary, { people: 10, generations: 4, earliest_record: null })
   render(
     <QueryClientProvider client={client}>
-      <RouterProvider router={createMemoryRouter([{ path: '/tree', element: <Main /> }], { initialEntries: ['/tree'] })} />
+      <RouterProvider router={createMemoryRouter([{ path: '/tree', element: <Main /> }], { initialEntries: [url] })} />
     </QueryClientProvider>,
   )
 }
@@ -127,26 +142,14 @@ describe('Main', () => {
   })
 
   it('shows only a contact the family can see in the quick look', async () => {
-    const row = (id: string, kind: string, value: string, visibility: string, platform: string | null = null, shared_with_you = false) => ({
-      id,
-      kind,
-      platform,
-      label: null,
-      value,
-      visibility,
-      href: null,
-      shared_with_you,
-    })
     // A new Response each call: a body can be read only once.
     vi.mocked(fetch).mockImplementation(async () =>
-      new Response(JSON.stringify({
-          contacts: [
-            row('c1', 'email', 'hidden@example.com', 'hidden'),
-            row('c2', 'social', '+1 555 0100', 'on_request', 'whatsapp', true),
-            row('c3', 'email', 'jr@example.com', 'family'),
-          ],
-        }), {
-        headers: { 'Content-Type': 'application/json' },
+      json({
+        contacts: [
+          row('c1', 'email', 'hidden@example.com', 'hidden'),
+          row('c2', 'social', '+1 555 0100', 'on_request', 'whatsapp', true),
+          row('c3', 'email', 'jr@example.com', 'family'),
+        ],
       }),
     )
     renderTree('fritz')
@@ -203,5 +206,53 @@ describe('Main', () => {
 
     expect(screen.getByText('Your login isn’t linked to anyone in the tree yet. Find a relative above to start.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Back to me' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    { name: 'while it’s read again', next: () => new Promise<Response>(() => {}) },
+    { name: 'once reading it again failed', next: () => Promise.reject(new TypeError('Failed to fetch')) },
+  ])('hides the shared contact $name, since it may be hidden by now', async ({ next }) => {
+    let contacts = async () => json({ contacts: [row('c3', 'email', 'jr@example.com', 'family')] })
+    vi.mocked(fetch).mockImplementation((url) => (String(url).endsWith('/contacts') ? contacts() : Promise.resolve(json({}))))
+    renderTree('fritz')
+    fireEvent.click(cardOf('Jean-Robert'))
+    expect(await screen.findByText('Email · jr@example.com')).toBeInTheDocument()
+    contacts = next
+
+    // Coming back to the window reads the contacts again.
+    act(() => {
+      focusManager.setFocused(false)
+      focusManager.setFocused(true)
+    })
+
+    await vi.waitFor(() => expect(screen.queryByText('Email · jr@example.com')).not.toBeInTheDocument())
+    expect(screen.getByText('Taught in Jacmel for forty years.')).toBeInTheDocument()
+  })
+
+  it.each([
+    { name: 'Escape', dismiss: () => fireEvent.keyDown(document, { key: 'Escape' }) },
+    { name: 'a press elsewhere', dismiss: () => fireEvent.pointerDown(document.body) },
+  ])('lets $name cancel a click still waiting to open the quick look', ({ dismiss }) => {
+    vi.useFakeTimers()
+    renderTree('fritz')
+
+    fireEvent.click(cardOf('Jean-Robert'))
+    dismiss()
+    act(() => vi.advanceTimersByTime(500))
+
+    expect(screen.queryByRole('link', { name: 'View profile ›' })).not.toBeInTheDocument()
+  })
+
+  it('sends focus back to the card when Escape closes its quick look from inside', async () => {
+    renderTree('fritz')
+    fireEvent.click(cardOf('Jean-Robert'))
+    const link = await screen.findByRole('link', { name: 'View profile ›' })
+    link.focus()
+
+    fireEvent.keyDown(link, { key: 'Escape' })
+
+    expect(cardOf('Jean-Robert')).toHaveFocus()
+    // Quietly: that focus doesn't open it again.
+    expect(screen.queryByRole('link', { name: 'View profile ›' })).not.toBeInTheDocument()
   })
 })

@@ -246,18 +246,33 @@ function FocusTree({
   const [pinned, setPinned] = useState<string | null>(null)
   const open = hover ?? pinned
   const clickTimer = useRef(0)
+  // When the pressed button is gone with the old view, keyboard focus lands on the new focus card,
+  // quietly: that focus shouldn't open its quick look.
+  const focusCard = useRef<HTMLButtonElement>(null)
+  const quietFocus = useRef(false)
   useEffect(() => () => window.clearTimeout(clickTimer.current), [])
   useEffect(() => {
+    // A click still waiting would open it again.
     const close = (event: PointerEvent) => {
       if (!(event.target as Element).closest?.('[data-person]')) {
+        window.clearTimeout(clickTimer.current)
         setPinned(null)
       }
     }
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setPinned(null)
-        setHover(null)
+      if (event.key !== 'Escape') {
+        return
       }
+      window.clearTimeout(clickTimer.current)
+      // Focus inside the quick look would go with it: back to its card, quietly, so Tab carries on from there.
+      const active = document.activeElement
+      if (active?.closest('[data-glance]')) {
+        quietFocus.current = true
+        active.closest('[data-person]')?.querySelector('button')?.focus()
+        quietFocus.current = false
+      }
+      setPinned(null)
+      setHover(null)
     }
     document.addEventListener('pointerdown', close)
     document.addEventListener('keydown', escape)
@@ -267,10 +282,6 @@ function FocusTree({
     }
   }, [])
 
-  // When the pressed button is gone with the old view, keyboard focus lands on the new focus card,
-  // quietly: that focus shouldn't open its quick look.
-  const focusCard = useRef<HTMLButtonElement>(null)
-  const quietFocus = useRef(false)
   useEffect(() => {
     if (direction && (!document.activeElement || document.activeElement === document.body)) {
       quietFocus.current = true
@@ -516,7 +527,7 @@ function Glance({ person, relation, isFocus, onCenter }: { person: TreePerson; r
     return () => observer.disconnect()
   }, [])
   return (
-    <div ref={box} className={styles.glance} style={{ translate: `calc(-50% + ${shift}px) 0` }}>
+    <div ref={box} data-glance className={styles.glance} style={{ translate: `calc(-50% + ${shift}px) 0` }}>
       <div className={styles.glanceCard}>
         {relation && <span className={styles.glanceRelation}>{relation}</span>}
         {person.bio_excerpt && <span className={styles.glanceStory}>{person.bio_excerpt}</span>}
@@ -545,11 +556,15 @@ function SharedContact({ personId }: { personId: string }) {
     return () => window.clearTimeout(timer)
   }, [])
   const contacts = useQuery({ ...contactsQuery(personId), enabled: settled, staleTime: 0 })
+  // Only from an answer just read: while it's read again, or after that fails, the contact may since be hidden.
+  const fresh = settled && contacts.isSuccess && !contacts.isFetching
   // Admins and the person themselves get every row back, hidden ones too: show only what the family sees.
-  const shared = contacts.data?.find(
-    (c: Contact): c is ContactMethod =>
-      !isRequestable(c) && (c.kind === 'email' || c.kind === 'social') && kindOf(c) === null && c.visibility === 'family',
-  )
+  const shared = fresh
+    ? contacts.data.find(
+        (c: Contact): c is ContactMethod =>
+          !isRequestable(c) && (c.kind === 'email' || c.kind === 'social') && kindOf(c) === null && c.visibility === 'family',
+      )
+    : undefined
   if (!shared) {
     return null
   }
