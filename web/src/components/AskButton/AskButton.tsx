@@ -5,7 +5,9 @@ import {
   askFor,
   contactKeys,
   type ContactMethod,
+  type DirectoryEntry,
   directoryKeys,
+  isRequestable,
   kindOf,
   kindWords,
   type RequestKind,
@@ -20,7 +22,7 @@ const askLabels: Record<RequestKind, string> = {
   address: 'Request address',
 }
 
-// The dashed "Request phone number" button (design-notes §4.4), which turns into "✓ … requested" once asked.
+// The dashed "Request phone number" button (design-notes §4.3), which turns into "✓ … requested" once asked.
 export function AskButton({
   personId,
   kind,
@@ -36,9 +38,20 @@ export function AskButton({
   const ask = useMutation({
     mutationFn: () => askFor(personId, kind),
     // Not awaited: the ask is done, and a failed reload mustn't hold or undo it.
-    onSuccess: () => {
+    onSuccess: ({ my_request_status }) => {
       void queryClient.invalidateQueries({ queryKey: contactKeys.of(personId) })
-      void queryClient.invalidateQueries({ queryKey: directoryKeys.all })
+      if (my_request_status === 'shared') {
+        void queryClient.invalidateQueries({ queryKey: directoryKeys.all })
+        return
+      }
+      // The directory holds the whole family, so only this one entry changes rather than all of it being fetched again.
+      queryClient.setQueryData<DirectoryEntry[]>(directoryKeys.all, (people) =>
+        people?.map((p) =>
+          p.id !== personId
+            ? p
+            : { ...p, contacts: p.contacts.map((c) => (isRequestable(c) && c.kind === kind ? { ...c, my_request_status: 'requested' } : c)) },
+        ),
+      )
     },
   })
   if (ask.data?.my_request_status === 'shared') {
