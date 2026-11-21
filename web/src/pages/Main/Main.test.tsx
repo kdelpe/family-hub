@@ -357,7 +357,11 @@ describe('Main', () => {
 
     fireEvent.pointerDown(panel, finger(1, 100))
     fireEvent.pointerDown(panel, finger(2, 200))
-    fireEvent.pointerMove(panel, finger(2, 220))
+    // Both fingers in the same frame: the second move builds on the first.
+    act(() => {
+      panel.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, ...finger(1, 90) }))
+      panel.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, ...finger(2, 210) }))
+    })
 
     expect(screen.getByRole('button', { name: 'Reset zoom, now 120%' })).toBeInTheDocument()
   })
@@ -458,18 +462,26 @@ describe('Main', () => {
     ])
   })
 
-  it('brings the focus person’s card into view on opening the page', () => {
-    const scrolled: Element[] = []
+  it.each([
+    { name: 'on opening the page', zoomIn: false },
+    { name: 'after centering on someone while zoomed in, scrolling the window, never the panel', zoomIn: true },
+  ])('brings the focus person’s card into view $name', ({ zoomIn }) => {
     // A laid-out tree with the card below the fold: jsdom gives everything no size and puts it at 0.
     vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(1000)
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ y: 2000, height: 150 }))
-    Element.prototype.scrollIntoView = function (this: Element) {
-      scrolled.push(this)
-    }
+    const scrollTo = vi.fn()
+    vi.stubGlobal('scrollTo', scrollTo)
     renderTree('fritz')
+    if (zoomIn) {
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+      scrollTo.mockClear()
+      fireEvent.click(cardOf('Jean-Robert'))
+    }
 
-    expect(scrolled).toEqual([cardOf('Fritz').closest('[data-card]')])
-    delete (Element.prototype as Partial<Element>).scrollIntoView
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+    expect(scrollTo.mock.calls[0]![0]).toMatchObject({ top: 2075 - window.innerHeight / 2 })
+    const panel = screen.getByRole('region', { name: /^Family tree centered on/ })
+    expect([panel.scrollTop, panel.scrollLeft]).toEqual([0, 0])
     vi.restoreAllMocks()
   })
 

@@ -407,6 +407,8 @@ function FocusTree({
   // The tree is laid out at the panel's width, then scaled inside it: the panel keeps its size at every zoom,
   // and scrolls when zoomed in.
   const [panelWidth, setPanelWidth] = useState(0)
+  // Where the cards are on the stage, so dragging can keep some of them, not just the empty stage, in sight.
+  const [cards, setCards] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null)
   useLayoutEffect(() => {
     const p = panel.current
     const st = stage.current
@@ -417,6 +419,7 @@ function FocusTree({
     const draw = () => {
       setPanelWidth(p.clientWidth)
       setLines({ width: st.offsetWidth, height: st.offsetHeight, paths: measure(st, r, view, focus) })
+      setCards(cardBounds(st, r))
     }
     draw()
     // Cards move without the panel resizing when the web fonts land or a row rewraps.
@@ -439,18 +442,34 @@ function FocusTree({
   const width = panelWidth
   const height = lines.height
   const centered = (z: number) => ({ x: (width * (1 - z)) / 2, y: z < 1 ? (height * (1 - z)) / 2 : 0 })
-  const at = moved ?? centered(zoom)
-  // Some of the tree always stays in sight.
-  const keepInSight = (x: number, y: number, z: number) => ({
-    x: Math.min(width - 60, Math.max(60 - width * z, x)),
-    y: Math.min(height - 60, Math.max(60 - height * z, y)),
+  // At least 60px of the cards always stays in the panel, at every zoom and after the panel resizes.
+  const keepInSight = (x: number, y: number, z: number) => {
+    const c = cards ?? { left: 0, right: width, top: 0, bottom: height }
+    return {
+      x: Math.min(width - 60 - c.left * z, Math.max(60 - c.right * z, x)),
+      y: Math.min(height - 60 - c.top * z, Math.max(60 - c.bottom * z, y)),
+    }
+  }
+  const at = moved ? keepInSight(moved.x, moved.y, zoom) : centered(zoom)
+  // Pointer moves can come several to a render (a pinch's two fingers): each starts from the last one's result.
+  const live = useRef({ at, zoom })
+  useLayoutEffect(() => {
+    live.current = { at, zoom }
   })
-  const moveBy = (dx: number, dy: number) => setMoved(keepInSight(at.x + dx, at.y + dy, zoom))
+  const place = (x: number, y: number, z: number) => {
+    const to = keepInSight(x, y, z)
+    live.current = { at: to, zoom: z }
+    setMoved(to)
+  }
+  const moveBy = (dx: number, dy: number) => place(live.current.at.x + dx, live.current.at.y + dy, live.current.zoom)
   // A zoom keeps the point it's made at in place: the pointer or the pinch; the buttons keep a centered tree centered.
   const zoomAround = (change: (z: number) => number, point?: { x: number; y: number }) => {
+    const { at, zoom } = live.current
     const next = clampZoom(change(zoom))
     if (point && next !== zoom) {
-      setMoved(keepInSight(point.x - ((point.x - at.x) * next) / zoom, point.y - ((point.y - at.y) * next) / zoom, next))
+      place(point.x - ((point.x - at.x) * next) / zoom, point.y - ((point.y - at.y) * next) / zoom, next)
+    } else {
+      live.current = { at, zoom: next }
     }
     onZoom(() => next)
   }
@@ -467,7 +486,9 @@ function FocusTree({
     shown.current = true
     const box = card.getBoundingClientRect()
     if (box.top < 0 || box.bottom > window.innerHeight) {
-      card.scrollIntoView?.({ block: 'center', behavior: direction && !reducedMotion ? 'smooth' : 'instant' })
+      // The window only: scrollIntoView would also scroll the clipped panel, which the drag position doesn't know of.
+      const top = window.scrollY + box.top + box.height / 2 - window.innerHeight / 2
+      window.scrollTo({ top, behavior: direction && !reducedMotion ? 'smooth' : 'instant' })
     }
   }, [height, direction, reducedMotion])
 
@@ -524,10 +545,11 @@ function FocusTree({
       // The move and the zoom in one step: two separate updates from the same position would drop the move.
       const box = p.getBoundingClientRect()
       const point = { x: after.x - box.left, y: after.y - box.top }
+      const { at, zoom } = live.current
       const next = before.spread > 0 ? clampZoom((zoom * after.spread) / before.spread) : zoom
       const x = at.x + after.x - before.x
       const y = at.y + after.y - before.y
-      setMoved(keepInSight(point.x - ((point.x - x) * next) / zoom, point.y - ((point.y - y) * next) / zoom, next))
+      place(point.x - ((point.x - x) * next) / zoom, point.y - ((point.y - y) * next) / zoom, next)
       onZoom(() => next)
       return
     }
@@ -703,6 +725,19 @@ function Person({
 }
 
 type Line = { key: string; d: string; delay: number }
+
+function cardBounds(stage: HTMLElement, rows: HTMLElement) {
+  const boxes = [...rows.querySelectorAll<HTMLElement>('[data-card]')].map((el) => ({ el, ...offsetBox(el, stage) }))
+  if (boxes.length === 0) {
+    return null
+  }
+  return {
+    left: Math.min(...boxes.map((b) => b.x - b.el.offsetWidth / 2)),
+    right: Math.max(...boxes.map((b) => b.x + b.el.offsetWidth / 2)),
+    top: Math.min(...boxes.map((b) => b.top)),
+    bottom: Math.max(...boxes.map((b) => b.bottom)),
+  }
+}
 
 // Where an element rests on the stage: offsets, not screen boxes, so neither the slide-in nor the zoom skews it.
 function offsetBox(el: HTMLElement, panel: HTMLElement) {
