@@ -261,7 +261,7 @@ describe('FirstSetup', () => {
     expect(screen.queryByText('Foster Parent')).not.toBeInTheDocument()
     expect(screen.getByText('Darline · You')).toBeInTheDocument()
     expect(
-      screen.getByText('Your cousins Maya and Fritz are on the Monestime side. Something look wrong? Let an admin know and they’ll fix it.'),
+      screen.getByText('Your cousins Maya and Fritz are here too. Something look wrong? Let an admin know and they’ll fix it.'),
     ).toBeInTheDocument()
   })
 
@@ -281,7 +281,7 @@ describe('FirstSetup', () => {
     click('Continue')
 
     expect(
-      await screen.findByText('Your cousins Maya, Fritz, Sabine and 2 more are on the Monestime side. Something look wrong? Let an admin know and they’ll fix it.'),
+      await screen.findByText('Your cousins Maya, Fritz, Sabine and 2 more are here too. Something look wrong? Let an admin know and they’ll fix it.'),
     ).toBeInTheDocument()
   })
 

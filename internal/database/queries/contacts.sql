@@ -42,17 +42,16 @@ WHERE r.status IS DISTINCT FROM 'shared' OR NOT EXISTS (SELECT 1 FROM users ru
   JOIN persons rp ON rp.id = ru.person_id AND rp.deleted_at IS NULL WHERE ru.id = @requester_id)
 ORDER BY k.person_id, k.kind;
 
--- The directory: living people in the tree who share something, a family row or a kind to ask for (§4.4),
--- best matches first when searched.
--- Search matches names only, never contact values (§5.2). The limit is a backstop: only living people with a way to reach them are listed.
+-- The directory: every living person in the tree, for the Members book (design-notes §4.3), best matches first when searched.
+-- Search matches names only, never contact values (§5.2). The limit is a backstop well above any real family.
 -- name: DirectoryPersons :many
-SELECT p.id, p.first_name, p.last_name, p.side FROM persons p
+SELECT p.id, p.first_name, p.last_name, p.side,
+  EXISTS (SELECT 1 FROM users u WHERE u.person_id = p.id AND u.disabled_at IS NULL) AS has_account
+FROM persons p
 WHERE p.deleted_at IS NULL AND NOT p.is_deceased
   AND (@q::text = '' OR p.search_name ILIKE '%' || @q_like::text || '%' ESCAPE '\' OR p.search_name % @q::text)
-  AND EXISTS (SELECT 1 FROM contact_methods c WHERE c.person_id = p.id AND (c.visibility = 'family'
-    OR (c.visibility = 'on_request' AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = p.id AND u.disabled_at IS NULL))))
 ORDER BY CASE WHEN @q::text = '' THEN 0 ELSE similarity(p.search_name, @q::text) END DESC, lower(p.search_name), p.id
-LIMIT 5000;
+LIMIT 20000;
 
 -- name: GetContact :one
 SELECT id, kind, platform, label, value, visibility FROM contact_methods WHERE id = @id AND person_id = @person_id;

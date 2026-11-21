@@ -81,7 +81,7 @@ export function WelcomeInvite() {
 
 // Each view names the tab itself, so the title follows when a submit turns the form into BrokenLink.
 function PageTitle({ children }: { children: string }) {
-  return <title>{`${children} — Pluviose-Monestime Family Hub`}</title>
+  return <title>{`${children} — Pluviose Family Hub`}</title>
 }
 
 function SetPassword({ token, link }: { token: string; link: LinkPreview }) {

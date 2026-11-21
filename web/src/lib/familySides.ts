@@ -1,20 +1,13 @@
 import type { FamilySide } from '../api/accessRequests'
 
-// The two family names will come from FAMILY_SIDES once the server shares its settings; the sample family's for now.
-export const familyLines = { first: 'Pluviose', second: 'Monestime' } as const
+export const familyName = 'Pluviose'
 
+// The hub follows one family (owner's call, 2026-11-21): the data keeps a second side so it can come back, but
+// nobody is offered or shown one, and the Monestime side counts as family.
 export const familySides: { value: FamilySide; label: string }[] = [
-  { value: 'first', label: `${familyLines.first} side` },
-  { value: 'second', label: `${familyLines.second} side` },
+  { value: 'first', label: `${familyName} family` },
   { value: 'married_in', label: 'Married into the family' },
 ]
 
-export const sideLabel = (side: FamilySide) => familySides.find((s) => s.value === side)?.label ?? side
-
-// A People card's side tag: someone can also be on both sides, and "Married in" is the card's shorter wording.
-export const sideTags: Record<FamilySide | 'both', string> = {
-  first: sideLabel('first'),
-  second: sideLabel('second'),
-  both: 'Both sides',
-  married_in: 'Married in',
-}
+// Any side but married in, the kept-but-unoffered second one included, reads as the family.
+export const sideLabel = (side: FamilySide) => familySides.find((s) => s.value === (side === 'married_in' ? side : 'first'))!.label

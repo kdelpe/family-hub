@@ -30,6 +30,21 @@
   --side-both: #f1ede3;
   --side-married-in: #f2efe8;
   --portrait-umber: #a89478;
+  /* The Members book (design-notes §4.3): paper, gold tooling on the green cover, endpapers and page shading. */
+  --paper-rule: #f3ede1;
+  --page-number: #a89e8f;
+  --gold: #d9c38c;
+  --gold-pale: #eadfc2;
+  --endpaper: #e8efe9;
+  --ear-back: #e3d8c3;
+  --ear-fold: #eae1cf;
+  --cover-light: rgba(255, 255, 255, 0.1);
+  --cover-dark: rgba(0, 0, 0, 0.22);
+  --cover-grain: rgba(0, 0, 0, 0.025);
+  --cover-hinge: rgba(0, 0, 0, 0.28);
+  --cover-hinge-soft: rgba(0, 0, 0, 0.05);
+  --cover-sheen: rgba(255, 240, 200, 0.16);
+  --cover-text-shadow: rgba(0, 0, 0, 0.25);
 
   /* Illustration colors: the trees and the logo. Repeats point at the one color the mockups share. */
   --tree-branch: #8c7b5e;

@@ -3,8 +3,7 @@
 export const menuPages = [
   { path: '/', label: 'Home' },
   { path: '/tree', label: 'Family tree' },
-  { path: '/people', label: 'People' },
-  { path: '/directory', label: 'Directory' },
+  { path: '/members', label: 'Members' },
   { path: '/events', label: 'Events' },
   { path: '/stories', label: 'Stories' },
   { path: '/profile', label: 'My profile' },

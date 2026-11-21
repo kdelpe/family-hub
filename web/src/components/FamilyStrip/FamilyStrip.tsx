@@ -1,8 +1,7 @@
 import type { FamilySummary } from '../../api/family'
-import { familyLines } from '../../lib/familySides'
 import styles from './FamilyStrip.module.css'
 
-// The family at a glance, above People and the tree (design-notes §4.2, §4.3).
+// The family at a glance, above the tree (design-notes §4.2).
 export function FamilyStrip({ summary }: { summary: FamilySummary }) {
   const earliest = summary.earliest_record
   return (
@@ -12,9 +11,6 @@ export function FamilyStrip({ summary }: { summary: FamilySummary }) {
       </span>
       <span className={styles.stat}>
         <strong>{summary.generations}</strong> {summary.generations === 1 ? 'generation' : 'generations'}
-      </span>
-      <span className={styles.stat}>
-        {familyLines.first} &amp; {familyLines.second} lines
       </span>
       {earliest && (
         <span className={styles.stat}>

@@ -40,7 +40,7 @@ describe('RequestAccess', () => {
   it('sends the request and thanks the person by first name', async () => {
     const fetch = renderPage()
     fillRequired()
-    fireEvent.click(screen.getByRole('radio', { name: 'Monestime side' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Pluviose family' }))
     fireEvent.change(screen.getByLabelText('Relationship'), { target: { value: 'son' } })
     type('Their full name', ' Frantz Monestime ')
     type('Anything else? (optional)', 'Cousin Maya told me about the site.')
@@ -54,7 +54,7 @@ describe('RequestAccess', () => {
       body: JSON.stringify({
         full_name: 'Darline Monestime',
         email: 'darline.monestime@example.com',
-        side: 'second',
+        side: 'first',
         relationship: 'son',
         related_names: ['Frantz Monestime'],
         note: 'Cousin Maya told me about the site.',
@@ -80,9 +80,9 @@ describe('RequestAccess', () => {
     )
   })
 
-  it('offers the sides as one choice', () => {
+  it('offers the family or married in as one choice', () => {
     renderPage()
-    const pluviose = screen.getByRole('radio', { name: 'Pluviose side' })
+    const pluviose = screen.getByRole('radio', { name: 'Pluviose family' })
     const married = screen.getByRole('radio', { name: 'Married into the family' })
 
     fireEvent.click(pluviose)
@@ -139,7 +139,7 @@ describe('RequestAccess', () => {
 
     expect(fetch).toHaveBeenCalledTimes(1)
     expect(screen.getByLabelText('Email')).toHaveAttribute('readonly')
-    fireEvent.click(screen.getByRole('radio', { name: 'Pluviose side' }))
-    expect(screen.getByRole('radio', { name: 'Pluviose side' })).not.toBeChecked()
+    fireEvent.click(screen.getByRole('radio', { name: 'Pluviose family' }))
+    expect(screen.getByRole('radio', { name: 'Pluviose family' })).not.toBeChecked()
   })
 })

@@ -321,7 +321,7 @@ function Preview({
       <div className={styles.mail}>
         <div className={styles.mailHead}>
           <span>
-            <strong>From:</strong> Pluviose-Monestime Family Hub
+            <strong>From:</strong> Pluviose Family Hub
           </span>
           <span>
             <strong>Subject:</strong> {from ? `${from.first} invited you to the family hub` : 'You’re invited to the family hub'}
@@ -330,7 +330,7 @@ function Preview({
         <div className={styles.mailBody}>
           <span className={styles.mailGreeting}>Bonjou{inviteeFirst ? ` ${inviteeFirst}` : ''},</span>
           <span>
-            {from ? `${from.name} invited you to` : 'You’re invited to'} the Pluviose-Monestime Family Hub — a private place
+            {from ? `${from.name} invited you to` : 'You’re invited to'} the Pluviose Family Hub — a private place
             for our family’s tree, photos and stories.
           </span>
           {approver && <span className={styles.small}>Approved by {fullName(approver)}, admin.</span>}

@@ -329,8 +329,8 @@ describe('PersonProfile', () => {
     renderPage({ answers: { 'GET /api/persons/nadege': { status: 404, body: { error: { code: 'not_found', message: 'x' } } } } })
 
     expect(await screen.findByText(/We couldn’t find that person/)).toBeInTheDocument()
-    expect(document.title).toBe('Not found — Pluviose-Monestime Family Hub')
-    expect(screen.getByRole('link', { name: 'See everyone in People' })).toHaveAttribute('href', '/people')
+    expect(document.title).toBe('Not found — Pluviose Family Hub')
+    expect(screen.getByRole('link', { name: 'See everyone in Members' })).toHaveAttribute('href', '/members')
   })
 })
 

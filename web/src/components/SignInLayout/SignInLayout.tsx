@@ -13,7 +13,7 @@ export function SignInLayout() {
         <div className={styles.identity}>
           <Logo size={64} />
           <span className={styles.names}>
-            <span className={styles.familyName}>Pluviose-Monestime</span>
+            <span className={styles.familyName}>Pluviose</span>
             <span className={styles.hub}>Family Hub</span>
           </span>
         </div>

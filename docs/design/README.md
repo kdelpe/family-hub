@@ -1,6 +1,6 @@
 # docs/design
 
-The frontend design for the Pluviose-Monestime Family Hub, agreed in November 2026.
+The frontend design for the Pluviose Family Hub, agreed in November 2026.
 
 | File | What it is |
 |---|---|
@@ -16,6 +16,6 @@ The backend changes the design needs (access requests, invitation "from", storie
 
 The page files were made on a design canvas and use that canvas's small runtime (`support.js`, `<x-dc>` markup, a `DCLogic` class), so they **won't run as-is** in this repo or a plain browser, and they aren't copied into `web/`. Read them for exact markup, copy, colors and sizes, and rebuild them as React components with the colors as CSS variables (`design-notes.md` §1).
 
-Page order: before signing in → `Login`, `Request-Access`, `Welcome-Invite`, `First-Setup`, `Forgot-Password`. Signed in → `Home-Hearth`, `Main` (family tree), `People`, `Directory`, `Events`, `Stories`, `Story-Detail`, `Add-Story`, `My-Profile`, `Person-Profile`, `Manage-Access` (admins).
+Page order: before signing in → `Login`, `Request-Access`, `Welcome-Invite`, `First-Setup`, `Forgot-Password`. Signed in → `Home-Hearth`, `Main` (family tree), `Members` (replaces People and Directory), `Events`, `Stories`, `Story-Detail`, `Add-Story`, `My-Profile`, `Person-Profile`, `Manage-Access` (admins).
 
 All people and details in them are made-up sample data. The repo is private, so they keep the family's surnames; if it ever goes public, scrub them first (see `CLAUDE.md`).

@@ -85,13 +85,13 @@ func (q *Queries) DeleteContact(ctx context.Context, arg DeleteContactParams) (i
 }
 
 const directoryPersons = `-- name: DirectoryPersons :many
-SELECT p.id, p.first_name, p.last_name, p.side FROM persons p
+SELECT p.id, p.first_name, p.last_name, p.side,
+  EXISTS (SELECT 1 FROM users u WHERE u.person_id = p.id AND u.disabled_at IS NULL) AS has_account
+FROM persons p
 WHERE p.deleted_at IS NULL AND NOT p.is_deceased
   AND ($1::text = '' OR p.search_name ILIKE '%' || $2::text || '%' ESCAPE '\' OR p.search_name % $1::text)
-  AND EXISTS (SELECT 1 FROM contact_methods c WHERE c.person_id = p.id AND (c.visibility = 'family'
-    OR (c.visibility = 'on_request' AND EXISTS (SELECT 1 FROM users u WHERE u.person_id = p.id AND u.disabled_at IS NULL))))
 ORDER BY CASE WHEN $1::text = '' THEN 0 ELSE similarity(p.search_name, $1::text) END DESC, lower(p.search_name), p.id
-LIMIT 5000
+LIMIT 20000
 `
 
 type DirectoryPersonsParams struct {
@@ -100,15 +100,15 @@ type DirectoryPersonsParams struct {
 }
 
 type DirectoryPersonsRow struct {
-	ID        uuid.UUID
-	FirstName string
-	LastName  *string
-	Side      *string
+	ID         uuid.UUID
+	FirstName  string
+	LastName   *string
+	Side       *string
+	HasAccount bool
 }
 
-// The directory: living people in the tree who share something, a family row or a kind to ask for (§4.4),
-// best matches first when searched.
-// Search matches names only, never contact values (§5.2). The limit is a backstop: only living people with a way to reach them are listed.
+// The directory: every living person in the tree, for the Members book (design-notes §4.3), best matches first when searched.
+// Search matches names only, never contact values (§5.2). The limit is a backstop well above any real family.
 func (q *Queries) DirectoryPersons(ctx context.Context, arg DirectoryPersonsParams) ([]DirectoryPersonsRow, error) {
 	rows, err := q.db.Query(ctx, directoryPersons, arg.Q, arg.QLike)
 	if err != nil {
@@ -123,6 +123,7 @@ func (q *Queries) DirectoryPersons(ctx context.Context, arg DirectoryPersonsPara
 			&i.FirstName,
 			&i.LastName,
 			&i.Side,
+			&i.HasAccount,
 		); err != nil {
 			return nil, err
 		}

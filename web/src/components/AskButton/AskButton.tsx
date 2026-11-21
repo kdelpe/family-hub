@@ -1,11 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
+import { sameSession, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import {
   askFor,
   contactKeys,
   type ContactMethod,
+  type DirectoryEntry,
   directoryKeys,
+  isRequestable,
   kindOf,
   kindWords,
   type RequestKind,
@@ -20,11 +23,11 @@ const askLabels: Record<RequestKind, string> = {
   address: 'Request address',
 }
 
-// The dashed "Request phone number" button (design-notes §4.4), which turns into "✓ … requested" once asked.
+// The dashed "Request phone number" button (design-notes §4.3), which turns into "✓ … requested" once asked.
 export function AskButton({
   personId,
   kind,
-  asked,
+  asked: wasAsked,
   size,
 }: {
   personId: string
@@ -35,13 +38,34 @@ export function AskButton({
   const queryClient = useQueryClient()
   const ask = useMutation({
     mutationFn: () => askFor(personId, kind),
+    onMutate: sessionGeneration,
     // Not awaited: the ask is done, and a failed reload mustn't hold or undo it.
-    onSuccess: () => {
+    onSuccess: ({ my_request_status }, _, since) => {
+      // Asked as whoever was signed in before: the person signed in now hasn't asked.
+      if (!sameSession(since)) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: contactKeys.of(personId) })
-      void queryClient.invalidateQueries({ queryKey: directoryKeys.all })
+      if (my_request_status === 'shared') {
+        void queryClient.invalidateQueries({ queryKey: directoryKeys.all })
+        return
+      }
+      // The directory holds the whole family, so only this one entry changes rather than all of it being fetched again.
+      // A directory whose last fetch failed stays as it is: writing to it would mark it fetched and show it again.
+      if (queryClient.getQueryState(directoryKeys.all)?.status !== 'success') {
+        return
+      }
+      queryClient.setQueryData<DirectoryEntry[]>(directoryKeys.all, (people) =>
+        people?.map((p) =>
+          p.id !== personId
+            ? p
+            : { ...p, contacts: p.contacts.map((c) => (isRequestable(c) && c.kind === kind ? { ...c, my_request_status: 'requested' } : c)) },
+        ),
+      )
     },
   })
-  if (ask.data?.my_request_status === 'shared') {
+  const asked = ask.isSuccess && sameSession(ask.context)
+  if (asked && ask.data.my_request_status === 'shared') {
     // Already shared: the refetched contacts show it instead.
     return null
   }
@@ -50,9 +74,9 @@ export function AskButton({
     <>
       {/* Mounted before the ask, so screen readers announce the change. */}
       <span role="status" className="visually-hidden">
-        {ask.isSuccess ? done : ''}
+        {asked ? done : ''}
       </span>
-      {asked || ask.isSuccess ? (
+      {wasAsked || asked ? (
         <CheckPill size={size}>{done}</CheckPill>
       ) : (
         <span className={styles.ask}>

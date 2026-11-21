@@ -1,16 +1,15 @@
 import type { ReactNode } from 'react'
-import type { RouteObject } from 'react-router'
+import { Navigate, type RouteObject } from 'react-router'
 
 import { SignInLayout } from '../components/SignInLayout/SignInLayout'
-import { Directory } from '../pages/Directory/Directory'
 import { FirstSetup } from '../pages/FirstSetup/FirstSetup'
 import { ForgotPassword } from '../pages/ForgotPassword/ForgotPassword'
 import { HomeHearth } from '../pages/HomeHearth/HomeHearth'
 import { Login } from '../pages/Login/Login'
 import { Main } from '../pages/Main/Main'
 import { ManageAccess } from '../pages/ManageAccess/ManageAccess'
+import { Members } from '../pages/Members/Members'
 import { MyProfile } from '../pages/MyProfile/MyProfile'
-import { People } from '../pages/People/People'
 import { PersonProfile } from '../pages/PersonProfile/PersonProfile'
 import { RequestAccess } from '../pages/RequestAccess/RequestAccess'
 import { WelcomeInvite } from '../pages/WelcomeInvite/WelcomeInvite'
@@ -21,8 +20,7 @@ import { adminPages, menuPages } from './signedInPages'
 const built: Record<string, ReactNode> = {
   '/': <HomeHearth />,
   '/tree': <Main />,
-  '/people': <People />,
-  '/directory': <Directory />,
+  '/members': <Members />,
   '/profile': <MyProfile />,
   '/admin/members': <ManageAccess />,
 }
@@ -44,6 +42,9 @@ export const routes: RouteObject[] = [
     children: [
       ...[...menuPages, ...adminPages].map(({ path }) => ({ path, element: built[path] ?? <NotBuiltYet /> })),
       { path: '/people/:id', element: <PersonProfile /> },
+      // Members replaced both (design-notes §4.3); old bookmarks land there.
+      { path: '/people', element: <Navigate to="/members" replace /> },
+      { path: '/directory', element: <Navigate to="/members" replace /> },
     ],
   },
   { path: '*', element: <NotBuiltYet /> },

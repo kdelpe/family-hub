@@ -245,7 +245,7 @@ func TestContactRequests(t *testing.T) {
 }
 
 func TestDirectory(t *testing.T) {
-	entry := contacts.DirectoryEntry{ID: testPersonID, FirstName: "Maya", LastName: new("Pluviose"), Side: new("paternal"),
+	entry := contacts.DirectoryEntry{ID: testPersonID, FirstName: "Maya", LastName: new("Pluviose"), Side: new("paternal"), HasAccount: true,
 		Listing: contacts.Listing{Contacts: []contacts.Contact{testContact}, Requestable: []contacts.Requestable{{Kind: "phone", MyRequestStatus: "none"}}, Full: true}}
 	tests := []struct {
 		name       string
@@ -256,7 +256,7 @@ func TestDirectory(t *testing.T) {
 		wantBody   string
 	}{
 		{name: "each person with what the viewer may see", query: "maya", entries: []contacts.DirectoryEntry{entry}, wantStatus: http.StatusOK,
-			wantBody: `{"people":[{"id":"` + testPersonID.String() + `","first_name":"Maya","last_name":"Pluviose","side":"paternal","contacts":[` +
+			wantBody: `{"people":[{"id":"` + testPersonID.String() + `","first_name":"Maya","last_name":"Pluviose","side":"paternal","has_account":true,"contacts":[` +
 				testContactBody + `,{"kind":"phone","requestable":true,"my_request_status":"none"}]}]}`},
 		{name: "nobody", entries: []contacts.DirectoryEntry{}, wantStatus: http.StatusOK, wantBody: `{"people":[]}`},
 		{name: "a search too long", query: "maya", err: fmt.Errorf("%w: search is longer than 100 characters", family.ErrInvalidFilter),

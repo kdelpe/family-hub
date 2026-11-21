@@ -91,13 +91,13 @@ export function Main() {
     }
   }
 
-  // Paused from the People page or Home, which keep the button (design-notes §6.4).
+  // Paused from Home, which keeps the button (design-notes §6.4).
   const [paused] = useMotionPaused()
   const [zoom, setZoom] = useState(1)
 
   return (
     <main className={styles.page}>
-      <title>Family tree — Pluviose-Monestime Family Hub</title>
+      <title>Family tree — Pluviose Family Hub</title>
       <h1 className="visually-hidden">Family tree</h1>
       <div className={styles.top}>
         <div className={styles.stats}>{summary.data && <FamilyStrip summary={summary.data} />}</div>

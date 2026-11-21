@@ -1,6 +1,6 @@
 # Family Hub: Frontend Design Notes ("Heirloom")
 
-The agreed look and behaviour for the Pluviose-Monestime Family Hub frontend (Phase 4a/4b and later), from the design canvas of November 2026. The page files in `pages/` are the visual reference; this file is the spec to build from. Where the two disagree, this file wins.
+The agreed look and behaviour for the Pluviose Family Hub frontend (Phase 4a/4b and later), from the design canvas of November 2026. The page files in `pages/` are the visual reference; this file is the spec to build from. Where the two disagree, this file wins.
 
 All names, dates, stories, phone numbers and addresses in the mockups are **made up** sample data.
 
@@ -90,8 +90,8 @@ White text only ever sits on `--accent` (buttons, the focus avatar).
 
 ### 2.1 Left menu (signed-in pages)
 
-- Top: logo mark (52px circle, tree glyph) **centered above** "Pluviose-Monestime" (Fraunces 22px/600) and "FAMILY HUB" (13px small caps). The whole block links to Home.
-- Items, in order: **Home · Family tree · People · Directory · Events · Stories · My profile**.
+- Top: logo mark (52px circle, tree glyph) **centered above** "Pluviose" (Fraunces 22px/600) and "FAMILY HUB" (13px small caps). The whole block links to Home.
+- Items, in order: **Home · Family tree · Members · Events · Stories · My profile**.
 - **Admin** section (admins only), under a thin divider and small "ADMIN" label: **Members & invites**.
 - Bottom: "Signed in as Maya".
 - **My profile's badge:** how many requests for your details wait for an answer (architecture §5.2), as a small accent pill after the label, read out as *"My profile, 2 requests for your details"*. Only a login linked to someone in the tree gets one. It rereads the count every minute while the window is open, so a new request shows without a reload (owner's call).
@@ -106,10 +106,10 @@ Placeholder until a real logo exists: circle `#E6EEE9` with a `#2F5D50` outline,
 
 Initials avatar (circle, Fraunces), name (600), one line underneath with the relation **from the viewer's point of view** ("Mother", "Half-sister").
 
-**No birthdays or dates in the family tree**: not on cards or chips. Dates appear only on profiles and the birthday lists (People cards show none either, §4.3), following the masking rules (living people month/day only, deceased full years, "c. 1935" for approximate dates).
+**No birthdays or dates in the family tree**: not on cards or chips. Dates appear only on profiles and the birthday lists (the Members book shows none either, §4.3), following the masking rules (living people month/day only, deceased full years, "c. 1935" for approximate dates).
 
 ### 2.4 Card hover (everywhere)
-Every card-style item lifts on hover **and** on keyboard focus inside it: `translate: 0 -4px` plus `box-shadow: 0 12px 26px rgba(43,38,32,.12)`, 200ms. Use the `translate` property (not `transform`) so it never fights a card's entrance animation. Applies to: Home cards and Story of the week, tree cards (which also scale slightly), People cards, Directory rows, Events timeline cards and Media tiles, Stories cards/storytellers/featured story, profile family cards, admin request cards. Off with reduced motion.
+Every card-style item lifts on hover **and** on keyboard focus inside it: `translate: 0 -4px` plus `box-shadow: 0 12px 26px rgba(43,38,32,.12)`, 200ms. Use the `translate` property (not `transform`) so it never fights a card's entrance animation. Applies to: Home cards and Story of the week, tree cards (which also scale slightly), Members list rows, Events timeline cards and Media tiles, Stories cards/storytellers/featured story, profile family cards, admin request cards. Off with reduced motion.
 
 ### 2.5 Buttons
 
@@ -136,7 +136,7 @@ All five pages share a two-column layout: **left brand panel** (`--brand-panel`)
 ### 3.2 Request access
 - Intro: *"Tell us a little about yourself and an admin will take a look. If they approve, you'll get an invitation by email."* (No family surnames, since in-laws and married relatives may not carry them.)
 - Full name · Email.
-- **"How are you connected to the family?"**: Pluviose side · Monestime side · Married into the family. (No "family friend" option, on purpose.)
+- **"How are you connected to the family?"**: Pluviose family · Married into the family. (No "family friend" option, on purpose.) **Owner's call (2026-11-21):** the hub follows the Pluviose family only, so the Monestime side is no longer offered or shown anywhere: no Monestime option here, no side chip but **Married in**, and the family strip drops its *lines* chip. The data keeps the `second` side, so it could come back; people recorded on it count as family.
 - **"How are you related?"** as one sentence: *I'm the [daughter ▾] of [name] and [name]*, with **+ Add another name** (up to 4). Relationship list: daughter, son, grandchild, sister, brother, niece or nephew, cousin, wife/husband/partner, mother or father, other relative. Names are **typed**, never suggested from the tree (that would reveal family names to strangers). Hint: *"Name a parent, grandparent or sibling if you can — it helps us find your place in the tree."*
 - "Anything else? (optional)" textarea.
 - **Send my request** → thank-you state: *"Your request is with the admins. If they approve it, you'll get an invitation email… usually within a few days."* + *"Know one of the admins? A quick call or text can speed things up."* Always the same response, whatever the email.
@@ -156,7 +156,7 @@ All five pages share a two-column layout: **left brand panel** (`--brand-panel`)
 Not drawn in the mockup, proposed with the real data (November 2026):
 - It shows the signed-in person's own data. **Continue** on step 1 saves a changed story (an error keeps them on the step); **Skip for now** leaves it as it was. The switches save as soon as they're flipped, the same switch as My profile's.
 - Step 2 lists the rows already on file (an admin may have added some), in My profile's order. With none: *"Nothing here yet. You can add a phone, email or address on My profile."*
-- Step 3 leaves out a generation the tree doesn't have, and foster parents (architecture §3.4); with no parents it says *"Your parents aren't in the tree yet."* The family line names up to three living first cousins, as in the mockup: *"Your cousins Maya, Fritz and Sabine are on the Pluviose side."*, *"…and 4 more"* past three, *"are here too"* when they're on different sides, and nothing with no cousins.
+- Step 3 leaves out a generation the tree doesn't have, and foster parents (architecture §3.4); with no parents it says *"Your parents aren't in the tree yet."* The family line names up to three living first cousins: *"Your cousins Maya, Fritz and Sabine are here too."* (the mockup's *"are on the Pluviose side"* went with the sides, §3.2), *"…and 4 more"* past three, and nothing with no cousins.
 - Signed out, it goes to sign in; a login linked to nobody goes straight to Home.
 
 ### 3.5 Forgot password (side path from Sign in)
@@ -176,7 +176,7 @@ Not drawn in the mockup, proposed with the real data (November 2026):
 Built client-side from `/api/tree`.
 
 Look:
-- A **family strip** on the left of the search's row: *38 people · 5 generations · Pluviose & Monestime lines · Earliest record: c. 1900, Jacmel* (pill chips).
+- A **family strip** on the left of the search's row: *38 people · 5 generations · Earliest record: c. 1900, Jacmel* (pill chips).
 - The tree sits on a `--surface-soft` panel (radius 22px). The mockup's pale watermark tree behind the rows is left out (owner's call, 2026-11-20, after trying it in a prototype): names didn't sit on its branches.
 - **Even proportions:** every person, grandparents and grandchildren included, uses **the same card**: 190 wide (owner's call, 2026-11-21, so the tree fills its panel; 150 on phones), radius 14, a 50px framed portrait (cream + sand double ring) that fades between initials and a photo placeholder (6s, each person offset), name 15px/600 on one line (wrapping only on phones), relation 13px. Same gap (14px) between cards in every row and the same spacing between generations.
 - Each generation has a small uppercase label above it (*Grandparents · Your parents · Your household & siblings · Your children · Grandchildren*). Couples and parent groups sit in a soft rounded group (`rgba(255,253,248,.75)`, 1px border); your household uses `--accent-tint` with a 2px accent border.
@@ -208,20 +208,45 @@ Interaction:
 - The tree opens centered on you, or on the person a profile's **Center the tree on …** asked for (`/tree?person=<id>`), if they're in the tree. The page scrolls so that person's card sits mid-screen (owner's call, 2026-11-21; on a phone the tree starts well below the fold), and after centering on someone whose card is off screen, it scrolls there smoothly (at once with reduced motion).
 - Later: keyboard arrows and phone swipes to move a generation; URL per focus (`/tree/<person>`) so browser Back works and links can be shared.
 
-### 4.3 People
-Everyone in the archive (including those who have passed and people without accounts), **one card per person, A–Z by first name**, 5 across.
-- **60 cards at a time** (owner's call, 2026-11-20): a centered **Show more** pill under the grid adds the next 60, and a new search or filter starts back at 60. A 5,200-person test family drew 72,000 elements at once, about 1.5 s of a phone's time.
-- Above the grid: title, search, the family strip (*38 people · 5 generations · …*), filter pills (Everyone · Living · Remembered · Pluviose side · Monestime side).
-- **Card:** a 64px band across the top tinted by side (Pluviose `#EDF2EE`, Monestime `#F3ECE0`, both `#F1EDE3`, married in `#F2EFE8`; yours `--accent-tint`) with a faint mountain line; an 80px framed portrait overlapping the band (cream + sand ring) that fades between initials and a photo placeholder; name, relation, a side tag in the band color, and **"In memory"** with a small leaf for those who have passed. **No dates.** Lifts 3px with a soft shadow on hover/focus. Your card has an accent border.
-- Each card links to the full profile.
+### 4.3 Members (route and file: `Members`)
+**One page for everyone.** Members replaces both the old People grid and the Directory/Address book, so there is no second list of people anywhere. It's a green clothbound book, **one person per page, two per spread**, with the living A to Z and an **In Memory** section at the back for those who have passed.
 
-### 4.4 Directory
-Title **Directory** and a name search; no intro line, since the rows explain themselves. The family phone book for **living relatives only**. One row per person (framed avatar, name, relation) with only what they chose to share:
-- **Email**, shown with an **Email** button, if marked visible: a green pill shaped like the social pills (regular weight, envelope icon), so it doesn't outweigh the rest of the row.
-- **Social accounts** as small pill buttons with a neutral link icon and the platform name (Instagram, Facebook, TikTok, YouTube, X…), linking out. Use an official icon set for platform marks in the real build rather than hand-drawn logos.
-- **Phone numbers, WhatsApp and addresses are never listed.** If the person allows it, a dashed **Request phone number / Request WhatsApp / Request address** button appears; after asking it becomes *"✓ Phone number requested"*. The person then decides in My profile (§4.8). Once they share it, the row says *"✓ Phone number shared with you"*, linking to their profile, where the number is shown. Admins, who can't ask, see *"Phone number and address on request"* instead of the buttons. WhatsApp counts as a phone number because opening a chat reveals it.
-- Footer: only living members appear; phone/address are shared only on request; link to My profile.
-People stays the page for *everyone* (including those who have passed and people without accounts); the two are kept separate on purpose.
+**Page order** (index 0 is the empty space left of the closed cover):
+1. **Front cover** (closed book, centered on the page). Leather-look green with a soft highlight, a darker hinge strip on the spine side, a double gold border with corner flourishes, the gold tree mark, **Pluviose**, a gold rule with a diamond, **FAMILY MEMBERS** in spaced capitals, and *Lakay se lakay* at the bottom. A light sheen sweeps across it every 7 s, and every 6 s the cover lifts slightly (rotateY −14°) to invite a click.
+2. **Inside front cover:** dotted green endpaper with a bookplate: tree mark, *This book belongs to the Pluviose family*, *Kept by everyone, for everyone.*
+3. **Welcome** (page 1): *Everyone in our family, in one book*, a short intro, three notes (email/socials shown only when shared; phone, WhatsApp and address never printed, ask instead; click or drag to turn), and a link to My profile.
+4. **Inside** (page 2): contents with dotted leaders and page numbers (Welcome · Members, A to Z, with letter buttons · In Memory), every entry clickable, plus a **Married in · N** count (the only side shown, §3.2).
+5. **Members A–Z**, one page each, by first name then last name (*Anna* before *Anna Maria*): big corner letter, portrait, name, relation, a **Married in** chip for those who married in, Email button, social pills, and the dashed **Request phone number / WhatsApp / address** buttons (become *"✓ … requested"*). Your own page shows *"This is your page"* + **Edit in My profile ›** instead of contact info. Someone without an account shows *"Not on the hub yet."* **Open profile ›** at the bottom. A long list of contacts scrolls inside the page, between the name and **Open profile ›**. **No dates.**
+6. **In Memory** divider: an olive-branch drawing, *In Memory*, *Those who came before us…*, and the count.
+7. **Memorial pages**, one each: soft parchment wash at the top, portrait in grayscale with a hint of sepia, name, relation, side, a leaf + **IN LOVING MEMORY**, one remembered line in italic quotes, then **Open profile ›**. No contact details and no dates.
+8. A **Notes** page if needed to even out the pages, the **inside back cover** (endpaper with *Sa w plante, se li w rekòlte.* / *What you plant is what you harvest.*), then the **back cover** (closed, centered, small gold tree).
+
+**Opening and closing:** click the cover, drag it, or press **Open ▶**. While closed, the book is shifted half a page and scaled up to fill the space (`translateX(calc(-30.5% + 8.54px)) scale(1.22)`, top-center origin, 172 px extra bottom margin so the buttons move down; 0.75 s), so the larger cover sits in the middle, and the green board, spine line, tabs and corner ears are hidden. They appear as it opens. The back cover works the same in reverse.
+
+**Turning:**
+- **Click** anywhere on a page (not a button or link): the right page goes forward, the left page goes back.
+- **Drag:** grab a page and pull it toward the spine. The page follows the pointer (`angle = acos(1 − 2p)`) and **bends**: it's two hinged pieces, with the outer 32% rotating an extra `sin(angle) × 30°`. It darkens toward vertical, the outer piece catches a highlight, and shadows fall on the page underneath and on the landing page. Let go past halfway, or flick toward the spine (measured over the last 100 ms, so a page held still isn't flicked), and it finishes; otherwise it falls back (200–660 ms), as it does when the touch becomes a scroll. A 6 px dead zone separates a click from a drag. On touch, use `touch-action: pan-y`.
+- Also: the folded **dog-ear** corners (grow on hover; the right one peeks every 7 s), **◀ Previous / Next ▶** (0.9 s turn), **← →** when the book has focus, the **letter tabs** on the right edge (one per letter that has someone, plus **♡** for In Memory; the current one is highlighted), and the contents page. Tapping a tab or a contents entry flips straight to it in one turn. The book stays at that person, not just their spread, and a button on the page turned away hands keyboard focus to the book, so the arrow keys keep turning.
+- **Slide along the tabs:** press on the tabs and slide up or down (mouse or finger; `touch-action: none` on the tab strip). After 6 px of movement it switches to scrubbing: the nearest tab widens to 46 px, a round accent bubble with that letter pops out on the page side of the tab, and the book jumps instantly (no turn animation) to that letter's spread as you pass each tab. Letting go leaves you there. A press without sliding acts like a tap (animated turn). Keyboard Enter/Space on a tab still works.
+- **Page edges** pile up on the left as you go and thin out on the right.
+- **Status line** under the book: *"Pages 3–4 · Darline & Fabienne"*; on the cover, *"Click the cover, or drag it, to open the book"*.
+
+**Book / List** switch: the List shows **With us** and **In memory** as two 3-column grids (avatar, name, relation · city or "In memory"), and clicking a row opens the book at that page. **Find someone…** searches everyone and opens the book at the first match.
+
+**Implementation:** one registered CSS property (`@property --fa`, a number in degrees) on the pages container drives the rotation, bend, shading and shadows through `calc()`, `sin()` and `cos()`. While dragging, write `--fa` straight to the element with no re-render per pointer move; animated turns are keyframes on `--fa`, and letting go is a CSS transition on `--fa`. Keep conditional elements (tabs, leaf) *after* the pages container in the markup so it is never re-created mid-drag. A library such as StPageFlip is fine if it keeps the same feel. With reduced motion: no sheen or cover nudge, and turns are instant; a dragged page doesn't follow the pointer, and letting go turns it at once, or not.
+
+**Data:** living members come from `GET /api/directory` (every living person, with `has_account` for *"Not on the hub yet"*); the In Memory pages come from `/api/tree`'s persons with `is_deceased` (name, side, `bio_excerpt` as the remembered line, left out when there's none); relations come from the tree. Contact rules are in architecture §5.2.
+
+**Built (owner's calls, 2026-11-21):**
+- **Just the book** (owner's call after the first build): no page title, subtitle, **Find someone…** search or **Book / List** switch; the letter tabs and Contents do the finding. A hidden "Members" heading stays for screen readers. The book and the buttons under it **fill the window without scrolling**: the page height is the window less the buttons (440–820 px; on phones 440–700 px under the menu). On the shortest books, whatever doesn't fit on a page (the Welcome notes, a long remembered line) scrolls inside that page. Closed, the cover slides to the middle at its own size rather than the mockup's 1.22× scale, which would have made the open book shorter. No Pause motion button.
+- **Under the book** (owner's call): closed, front or back, there's only the line saying how to open it or go back, no buttons (the cover opens by a click, a drag or **→**). They go as soon as the book starts to close (Previous, Next, a click, or a drag let go to finish), and come back as it starts to open. Open, the status line becomes a **page box**: *◀ Previous · Page [ 4 ] of 30 · Next ▶*. It shows the page the book is open at: the one typed (or jumped to), from the moment Enter is pressed, even when it's the right-hand page; after ◀ Previous or Next ▶, the spread's first page. Type a page number and press Enter (or leave the box) to turn straight there in one turn, and Escape or a number that isn't a page puts it back. The names in the status line are still announced to screen readers.
+- **The covers swing flat** (they're board, not paper, so they don't bend like the pages), with no shadow cast where there's no page beside them. The green board inside a cover arrives as the cover lands and goes as it lifts, and the letter tabs fade in after it opens and leave as it starts to close.
+- **Phones** turn **one page at a time**: the same book, cover and turns, one page filling the width, without the blank and Notes pages; dragging either way turns, and turning back brings the previous page in from the left. A tap anywhere on the front cover opens the book, and on the back cover goes back. Under the book, ◀ and ▶ show without their words and the page box without its label, so all three fit; the page box counts only the pages a phone shows.
+- **The green board, the cover's sheen and its lift are on**, as described here. (The mockup's CSS leaves its reduced-motion block unclosed, so it showed them only with reduced motion; that was a slip.) The sheen, the lift, the peeking corner and the portrait fades stop with reduced motion or the site-wide Pause motion (§6.4); turns are instant with reduced motion.
+- **Left out for now, to come back:** the **city chip** (there's no city field yet) and **Share a memory ›** (until Add a story exists).
+- As elsewhere, relations drop "Your", and your own page says "You".
+- **Ask to share** follows the Directory's rules it replaces: dashed **Request …** buttons become *"✓ … requested"*; once shared, *"✓ Phone number shared with you"* links to their profile, where the value is shown; admins, who can't ask, see *"Phone number and address on request"*. WhatsApp counts as a phone number. *"Not on the hub yet"* shows only when someone without a login has nothing shared either.
+- The page edges stop growing at 18px, since a big family has thousands of pages. No library: the CSS-property approach above.
 
 ### 4.5 Events
 Title **Events**. Segmented **Timeline / Media**, plus two buttons shown to admins (and to members once `MEMBERS_CAN_CONTRIBUTE` is on):
@@ -277,9 +302,9 @@ Back to the tree · portrait, relation, name, maiden name, birthday, place, stor
 
 ### 4.10 Members & invites (admins only)
 Tabs: **Requests (n)** · **Invite someone** · **Everyone (n)**.
-- **Requests:** name + email, side chip, source chip ("Asked on the sign-in page" / "Suggested by Stanley Jean-Louis"), **Related to** lines with a badge **✓ In the tree** or **Not found — check spelling**, their note, when. **Approve & invite** → Invite tab with that person preselected. **Not now** → quietly set aside (they're never told), with Undo for 90 days (declined requests are deleted after that).
+- **Requests:** name + email, a chip (*Pluviose family* or *Married into the family*; an older Monestime-side request shows as family), source chip ("Asked on the sign-in page" / "Suggested by Stanley Jean-Louis"), **Related to** lines with a badge **✓ In the tree** or **Not found — check spelling**, their note, when. **Approve & invite** → Invite tab with that person preselected. **Not now** → quietly set aside (they're never told), with Undo for 90 days (declined requests are deleted after that).
 - **Invite someone:** 1) pick the person **in the tree first** ("Not in the tree yet? Add them first") · 2) email + role (Member / Admin, each with a one-line description) · 3) **Who is the invitation from?** (defaults to the member who suggested them, otherwise you; other admins selectable) · 4) live email preview. **Send invitation** → *"Invitation sent to Kervens, from Stanley Jean-Louis."*
-- **Email copy:** subject *"<From first name> invited you to the family hub"*; body *"Bonjou Kervens, <From full name> invited you to the Pluviose-Monestime Family Hub — a private place for our family's tree, photos and stories."*; if the sender isn't the admin who approved it, add *"Approved by <admin>, admin."*; button **Set up my account**; small print about the 7 days and admins seeing everything.
+- **Email copy:** subject *"<From first name> invited you to the family hub"*; body *"Bonjou Kervens, <From full name> invited you to the Pluviose Family Hub — a private place for our family's tree, photos and stories."*; if the sender isn't the admin who approved it, add *"Approved by <admin>, admin."*; button **Set up my account**; small print about the 7 days and admins seeing everything.
 - **Everyone:** table (scrolls sideways on small screens): name, sign-in email (admins only), role, status (Active · Invited · expires in N days · Invited · expired · Disabled), and one action (**Send password reset** / **Resend invitation**).
 
 Wording rule everywhere: say **"admin"**, not "family admin".
@@ -323,7 +348,7 @@ Generated once (seeded, deterministic) and embedded as inline SVG:
 - No looping motion anywhere else.
 
 ### 6.4 Pausing the motion
-The swaying, the leaf colour cycle, the Home photo/caption cycle and the People portrait fade run longer than 5 seconds beside other content, so each tree and the People grid get a **Pause motion / Play motion** text button (a real `<button>` whose text says what it will do, so no `aria-pressed`, 13px `--muted` under the tree or its caption, and on People at the end of the filter row, 44px tall hit area). Pausing freezes everything as it is (portraits stay on their initials) and stops the photo cycle; it's one choice for the whole site, remembered for the session. With reduced motion there is nothing to pause, so the button is hidden. (WCAG 2.2.2.) **Exception, owner's choice (2026-11-14):** the sign-in tree on the five pre-login pages has no pause button, as in their mockups. **Owner's choice (2026-11-21):** neither has the family tree page, for more room; its portraits follow the choice made on People or Home, and reduced motion still stops them.
+The swaying, the leaf colour cycle, and the Home photo/caption cycle run longer than 5 seconds beside other content, so each tree gets a **Pause motion / Play motion** text button (a real `<button>` whose text says what it will do, so no `aria-pressed`, 13px `--muted` under the tree or its caption, 44px tall hit area). Pausing freezes everything as it is (portraits stay on their initials) and stops the photo cycle; it's one choice for the whole site, remembered for the session. With reduced motion there is nothing to pause, so the button is hidden. (WCAG 2.2.2.) **Exception, owner's choice (2026-11-14):** the sign-in tree on the five pre-login pages has no pause button, as in their mockups. **Owner's choice (2026-11-21):** neither has the family tree page, for more room; its portraits follow the choice made on Home, and reduced motion still stops them. The Members book has none either, as drawn: its sheen, cover lift, peeking corner and portrait fades follow the same choice (§4.3).
 
 ---
 

@@ -62,10 +62,10 @@ export function PersonProfile() {
   if (person.error) {
     return (
       <main className={styles.page}>
-        <title>{`${notFound ? 'Not found' : 'Profile'} — Pluviose-Monestime Family Hub`}</title>
+        <title>{`${notFound ? 'Not found' : 'Profile'} — Pluviose Family Hub`}</title>
         {notFound ? (
           <p>
-            We couldn’t find that person. <Link to="/people">See everyone in People</Link>
+            We couldn’t find that person. <Link to="/members">See everyone in Members</Link>
           </p>
         ) : (
           <p role="alert">{errorMessage(person.error)}</p>
@@ -88,7 +88,7 @@ export function PersonProfile() {
 
   return (
     <main className={styles.page}>
-      <title>{`${name} — Pluviose-Monestime Family Hub`}</title>
+      <title>{`${name} — Pluviose Family Hub`}</title>
       <Link to="/tree" className={styles.back}>
         ← Back to the family tree
       </Link>

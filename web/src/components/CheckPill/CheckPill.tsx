@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 
 import styles from './CheckPill.module.css'
 
-// The tinted "✓ …" pill for something already done, like "Phone number requested" (design-notes §4.4).
+// The tinted "✓ …" pill for something already done, like "Phone number requested" (design-notes §4.3).
 export function CheckPill({ size, to, children }: { size: 'large' | 'small'; to?: string; children: ReactNode }) {
   const className = `${styles.pill} ${size === 'large' ? styles.large : styles.small}`
   const content = (

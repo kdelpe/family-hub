@@ -105,17 +105,18 @@ func (s *Service) List(ctx context.Context, viewer family.Viewer, personID uuid.
 	return listing, nil
 }
 
-// DirectoryEntry is one living person who shares something, with what this viewer may see of it.
+// DirectoryEntry is one living person, with what this viewer may see of their contacts.
 type DirectoryEntry struct {
-	ID        uuid.UUID
-	FirstName string
-	LastName  *string
-	Side      *string
+	ID         uuid.UUID
+	FirstName  string
+	LastName   *string
+	Side       *string
+	HasAccount bool
 	Listing
 }
 
-// Directory is the family phone book (design-notes §4.4): living people with a family row or a kind to ask
-// for, A–Z, optionally searched by name. Each comes with exactly what List would give this viewer.
+// Directory is the Members book's living pages (design-notes §4.3): every living person A–Z, optionally searched
+// by name, each with whether they have a login and exactly what List would give this viewer.
 func (s *Service) Directory(ctx context.Context, viewer family.Viewer, query string) ([]DirectoryEntry, error) {
 	query, err := family.SearchQuery(query)
 	if err != nil {
@@ -137,7 +138,7 @@ func (s *Service) Directory(ctx context.Context, viewer family.Viewer, query str
 		}
 		entries = make([]DirectoryEntry, 0, len(people))
 		for _, p := range people {
-			entries = append(entries, DirectoryEntry{ID: p.ID, FirstName: p.FirstName, LastName: p.LastName, Side: p.Side, Listing: listings[p.ID]})
+			entries = append(entries, DirectoryEntry{ID: p.ID, FirstName: p.FirstName, LastName: p.LastName, Side: p.Side, HasAccount: p.HasAccount, Listing: listings[p.ID]})
 		}
 		return nil
 	})
