@@ -175,23 +175,26 @@ Not drawn in the mockup, proposed with the real data (November 2026):
 ### 4.2 Family tree (focus view)
 Built client-side from `/api/tree`.
 
-Look ("tree watermark"):
+Look:
 - A **family strip** under the title: *38 people · 5 generations · Pluviose & Monestime lines · Earliest record: c. 1900, Jacmel* (pill chips).
-- The tree sits on a `--surface-soft` panel (radius 22px). Behind everything, a **large, very pale tree** (`#EAE1D0` strokes, `#EFE7D8` leaf blobs) fills the panel: trunk rising from the bottom centre, limbs spreading behind each generation, a few roots. Purely decorative, never moves, `aria-hidden`.
+- The tree sits on a `--surface-soft` panel (radius 22px). The mockup's pale watermark tree behind the rows is left out (owner's call, 2026-11-20, after trying it in a prototype): names didn't sit on its branches.
 - **Even proportions:** every person, grandparents and grandchildren included, uses **the same card**: 150 × 118, radius 14, a 50px framed portrait (cream + sand double ring) that fades between initials and a photo placeholder (6s, each person offset), name 15px/600, relation 13px. Same gap (14px) between cards in every row and the same spacing between generations.
 - Each generation has a small uppercase label above it (*Grandparents · Your parents · Your household & siblings · Your children · Grandchildren*). Couples and parent groups sit in a soft rounded group (`rgba(255,253,248,.75)`, 1px border); your household uses `--accent-tint` with a 2px accent border.
-- Grandparents / grandchildren with more family beyond them get a small **▲ more / ▼ more** pill under their card.
-- No visible connector lines: the watermark tree does that job.
+- Grandparents / grandchildren with more family beyond them get a small **▲ more / ▼ more** pill under their card. Its accessible name starts with the word it shows, *"More: center the tree on Joseph Pluviose"*, so voice control finds it by saying "more" (owner's call, 2026-11-20; the mockup's label leaves the word out).
+- **Connector lines** (`--line`, 2px, rounded corners) join each set of parents to their children: grandparents to the parent they raised, parents to you and each sibling, your household to each children group, a child to their own children. Lines from the same parents share one joining line just above the row they feed. `aria-hidden`; the generation labels say the same in words.
+- Your children are grouped by their other parent (*"With Nadège"*, *"With Guerline"*), so each marriage reads as its own household; the label shows only when there's more than one group or partner.
+- Adoptive and foster links get a small word after the relation: *"Son · adopted"*, *"Mother · adoptive"*, *"Daughter · foster"*, on every row, grandparents and grandchildren too. It's left out only when the relation already says it (*"Foster mother"*); a closer tie keeps it (*"Grandmother · foster"*). With no relation to the viewer, the card says *"Foster parent"* or *"Foster child"*, and a sibling only by fostering *"… · foster sibling"*.
+- Planned polish (next PR): lines grow in after centering, the line chain between the hovered card and the focus person turns green, and generations cascade in one after another.
 
 One **focus person**; shows:
 - **Grandparents** (two generations up), grouped per parent, each card with **▲ more** when there's more family above.
 - **Parents** household.
-- **Focus row:** siblings split left and right · the focus person's **household** box (`--accent-tint`, 2px accent border) with current partners, and former partners with a dashed border labelled "Former partner".
+- **Focus row:** siblings split left and right · the focus person's **household** box (`--accent-tint`, 2px accent border) with current partners, and former partners with a dashed border, labelled with your relation to them ("Former stepmother", "Mother"), or "Former partner" when there is none.
 - **Children**, then **grandchildren**, each grandchild card with **▼ more** when they have children.
 - Half-siblings labelled from the viewer's point of view ("Half-sister", or "… · half-sibling").
 
 Interaction:
-- **Hover or keyboard focus** on a card: the card lifts (`translateY(-3px) scale(1.04)`, soft shadow) and a **quick look** (250px card) appears just below it: relation, 2-line story, shared email or social account (never phone or address), **View profile ›**, and a quiet **Center here** link. (No dates.) No backdrop, nothing else covered.
+- **Hover or keyboard focus** on a card: the card lifts (`translateY(-3px) scale(1.04)`, soft shadow) and a **quick look** (250px card) appears just below it: relation, 2-line story, shared email or social account (never phone or address), **View profile ›**, and a quiet **Center here** link. (No dates.) No backdrop, nothing else covered. A quick look that keyboard focus has moved into stays open, whatever the mouse does, until focus leaves it or Escape closes it. A long email or handle wraps inside it.
 - **Click** keeps the quick look open (that's how phones and tablets get it); click again to close. The click waits **230ms** before acting so a double-click can cancel it.
 - **Double-click** centers the tree on that person (no quick-look flash).
 - Centering animates: the tree slides **down** into place when moving to a descendant, **up** when moving to an ancestor, and fades/scales slightly sideways otherwise (0.5s).
@@ -199,6 +202,7 @@ Interaction:
 - Search box suggests up to 6 matching names as you type; picking one centers the tree.
 - Tip text: *"Hover or tap a name for a quick look · double-click to center the tree on them"*.
 - An `aria-live` region announces "Family tree centered on …".
+- The tree opens centered on you, or on the person a profile's **Center the tree on …** asked for (`/tree?person=<id>`), if they're in the tree.
 - Later: keyboard arrows and phone swipes to move a generation; URL per focus (`/tree/<person>`) so browser Back works and links can be shared.
 
 ### 4.3 People

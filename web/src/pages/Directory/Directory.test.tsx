@@ -11,9 +11,9 @@ import { Directory } from './Directory'
 
 const tree: Tree = {
   persons: [
-    { id: 'maya', first_name: 'Maya', last_name: 'Pluviose', side: 'both', gender: 'female', is_deceased: false },
-    { id: 'fritz', first_name: 'Fritz', last_name: 'Pluviose', side: 'both', gender: 'male', is_deceased: false },
-    { id: 'nadege', first_name: 'Nadège', last_name: 'Pluviose', side: 'second', gender: 'female', is_deceased: false },
+    { id: 'maya', first_name: 'Maya', last_name: 'Pluviose', side: 'both', gender: 'female', is_deceased: false, bio_excerpt: null },
+    { id: 'fritz', first_name: 'Fritz', last_name: 'Pluviose', side: 'both', gender: 'male', is_deceased: false, bio_excerpt: null },
+    { id: 'nadege', first_name: 'Nadège', last_name: 'Pluviose', side: 'second', gender: 'female', is_deceased: false, bio_excerpt: null },
   ],
   relationships: [
     { id: 'r1', type: 'parent_child', subtype: 'biological', parent_id: 'nadege', child_id: 'maya' },

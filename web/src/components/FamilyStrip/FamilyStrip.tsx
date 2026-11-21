@@ -1,0 +1,28 @@
+import type { FamilySummary } from '../../api/family'
+import { familyLines } from '../../lib/familySides'
+import styles from './FamilyStrip.module.css'
+
+// The family at a glance, above People and the tree (design-notes §4.2, §4.3).
+export function FamilyStrip({ summary }: { summary: FamilySummary }) {
+  const earliest = summary.earliest_record
+  return (
+    <div className={styles.strip}>
+      <span className={`${styles.stat} ${styles.statFirst}`}>
+        <strong>{summary.people}</strong> {summary.people === 1 ? 'person' : 'people'}
+      </span>
+      <span className={styles.stat}>
+        <strong>{summary.generations}</strong> {summary.generations === 1 ? 'generation' : 'generations'}
+      </span>
+      <span className={styles.stat}>
+        {familyLines.first} &amp; {familyLines.second} lines
+      </span>
+      {earliest && (
+        <span className={styles.stat}>
+          Earliest record: {earliest.circa ? 'c. ' : ''}
+          {earliest.year}
+          {earliest.place ? `, ${earliest.place}` : ''}
+        </span>
+      )}
+    </div>
+  )
+}

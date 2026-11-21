@@ -14,6 +14,7 @@ const person = (id: string, first_name: string, over: Partial<TreePerson> = {}):
   side: 'first',
   gender: 'female',
   is_deceased: false,
+  bio_excerpt: null,
   ...over,
 })
 
