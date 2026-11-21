@@ -512,9 +512,9 @@ describe('PersonProfile adding a relative', () => {
 
     const options = within(screen.getByRole('dialog')).getAllByRole('button', { name: /^(Both|Only)/ })
     expect(options.map((b) => b.textContent)).toEqual([
-      'LMOnly Lucien MonestimeHalf sibling',
-      'RPOnly Rose PluvioseHalf sibling',
-      'MPOnly Marc PluvioseHalf sibling',
+      'LMOnly Lucien Monestime',
+      'RPOnly Rose Pluviose',
+      'MPOnly Marc Pluviose',
     ])
   })
 
@@ -536,6 +536,32 @@ describe('PersonProfile adding a relative', () => {
     pick(/^Both: Lucien and Rose/)
 
     expect(screen.getByText('Ti Pluviose will be Nadège’s sister. They’ll be linked as a child of Lucien.')).toBeInTheDocument()
+  })
+
+  it.each([
+    { name: 'a half-sister, each with a parent the other lacks', who: 'Ti', only: /^Only Rose Pluviose/, sentence: 'Ti Pluviose will be Nadège’s half-sister. They’ll be linked as a child of Rose.' },
+    {
+      name: 'the neutral word, when the parents recorded prove neither',
+      who: 'Jean-Robert',
+      only: /^Only Lucien Monestime/,
+      sentence: 'Jean-Robert Pluviose will be Nadège’s sibling. They’ll be linked as a child of Lucien.',
+    },
+  ])('calls an existing sibling $name', async ({ who, only, sentence }) => {
+    const twoParents: Tree = {
+      persons: [...tree.persons, slim('rose', 'Rose', 'female'), slim('zoe', 'Zoé', 'female'), slim('ti', 'Ti', 'female')],
+      relationships: [
+        ...tree.relationships,
+        { id: 'p2', type: 'parent_child', subtype: 'biological', parent_id: 'rose', child_id: 'nadege' },
+        { id: 'p3', type: 'parent_child', subtype: 'biological', parent_id: 'zoe', child_id: 'ti' },
+      ],
+    }
+    renderPage({ role: 'admin', answers: { 'GET /api/tree': { status: 200, body: twoParents } } })
+    await open('Add a brother or sister')
+    type(who)
+    pick(new RegExp(`^${who} Pluviose`))
+    pick(only)
+
+    expect(screen.getByText(sentence)).toBeInTheDocument()
   })
 
   it('clears a filled search box on Escape before closing', async () => {

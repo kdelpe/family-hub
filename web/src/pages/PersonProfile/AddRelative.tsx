@@ -24,7 +24,7 @@ export const addLabel: Record<Relation, string> = {
   sibling: 'Add a brother or sister',
 }
 
-type Answers = { kind: ParentKind; married: boolean; ended: boolean; half: boolean }
+type Answers = { kind: ParentKind; married: boolean; ended: boolean; siblings: 'full' | 'half' | 'unproven' }
 
 // The relative's link word for the last screen and the toast: "daughter", "former wife", "adoptive father".
 function linkWord(relation: Relation, gender: TreePerson['gender'], a: Answers) {
@@ -32,7 +32,12 @@ function linkWord(relation: Relation, gender: TreePerson['gender'], a: Answers) 
     case 'partner':
       return (a.ended ? 'former ' : '') + (a.married ? gendered(gender, 'husband', 'wife', 'spouse') : 'partner')
     case 'sibling':
-      return (a.half ? 'half ' : '') + gendered(gender, 'brother', 'sister', 'sibling')
+      // As relation.ts words it: the neutral word when the recorded parents prove neither full nor half (§3.4).
+      return a.siblings === 'half'
+        ? gendered(gender, 'half-brother', 'half-sister', 'half-sibling')
+        : a.siblings === 'full'
+          ? gendered(gender, 'brother', 'sister', 'sibling')
+          : 'sibling'
     default: {
       const kind = a.kind === 'adoptive' ? 'adoptive ' : a.kind === 'foster' ? 'foster ' : ''
       return kind + (relation === 'parent' ? gendered(gender, 'father', 'mother', 'parent') : gendered(gender, 'son', 'daughter', 'child'))
@@ -70,9 +75,14 @@ type Props = {
 export function AddRelative({ tree, byId, links, person, relation, onRelation, onClose, onAdded }: Props) {
   const me = person.first_name
   // Fixed when the sheet opens, so a tree refetch midway can't add or drop a question under the admin.
-  const [parents] = useState(() => [...links.parentsOf(person.id)].filter((id) => byId.has(id)))
-  const [partners] = useState(() => links.partnersOf(person.id).filter((p) => byId.has(p.id)))
-  const named = (id: string) => byId.get(id)!
+  const [opened] = useState(() => {
+    const parents = [...links.parentsOf(person.id)].filter((id) => byId.has(id))
+    const partners = links.partnersOf(person.id).filter((p) => byId.has(p.id))
+    return { parents, partners, people: new Map([...parents, ...partners.map((p) => p.id)].map((id) => [id, byId.get(id)!])) }
+  })
+  const { parents, partners } = opened
+  // Their records as the sheet opened, in case a refetch drops one of them.
+  const named = (id: string) => opened.people.get(id)!
   const [at, setAt] = useState(0)
   const [query, setQuery] = useState('')
   const [who, setWho] = useState<Who | null>(null)
@@ -102,8 +112,13 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
   const theirParents = relative ? links.parentsOf(relative.id) : new Set<string>()
   const via = shared ? [shared] : parents
   const after = new Set([...theirParents, ...via])
-  const half = parents.some((p) => !after.has(p)) || [...after].some((p) => !parents.includes(p))
-  const word = linkWord(relation, gender, { kind, married, ended, half })
+  const siblings =
+    parents.some((p) => after.has(p)) && parents.some((p) => !after.has(p)) && [...after].some((p) => !parents.includes(p))
+      ? 'half'
+      : parents.length >= 2 && after.size === parents.length && parents.every((p) => after.has(p))
+        ? 'full'
+        : 'unproven'
+  const word = linkWord(relation, gender, { kind, married, ended, siblings })
   const typed = query.trim().replace(/\s+/g, ' ')
   const matches = useMemo(() => {
     const found = []
@@ -209,7 +224,7 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
     }
   }
 
-  const firstOf = (id: string) => byId.get(id)?.first_name ?? ''
+  const firstOf = (id: string) => (opened.people.get(id) ?? byId.get(id))?.first_name ?? ''
   const avatar = (p: Named | undefined) =>
     p && (
       <span aria-hidden="true" className={styles.avatar}>
@@ -303,7 +318,7 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
     screen = (
       <ul className={styles.options}>
         {partners.map((p) => {
-          const word = linkWord('partner', named(p.id).gender, { kind, married: p.married, ended: p.ended, half: false })
+          const word = linkWord('partner', named(p.id).gender, { kind, married: p.married, ended: p.ended, siblings })
           return choice(p.id, answer(() => setOther(p.id)), fullName(named(p.id)), `${me}’s ${word}`, avatar(named(p.id)))
         })}
         {choice('none', answer(() => setOther(null)), 'Someone else, or not known yet', 'You can add them later')}
@@ -336,7 +351,7 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
         {parents.map((p) =>
           theirParents.has(p)
             ? choice(p, () => {}, `Only ${fullName(named(p))}`, `Already ${theirs.first_name}’s parent`, avatar(named(p)), true)
-            : choice(p, answer(() => setShared(p)), `Only ${fullName(named(p))}`, `Half ${sibling}`, avatar(named(p))),
+            : choice(p, answer(() => setShared(p)), `Only ${fullName(named(p))}`, null, avatar(named(p))),
         )}
       </ul>
     )
@@ -390,7 +405,7 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
     >
       <div className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="add-relative-question" onKeyDown={onKeyDown}>
         <div className={styles.bar}>
-          <button type="button" className={styles.nav} onClick={() => go(-1)} hidden={at === 0}>
+          <button type="button" className={styles.nav} onClick={() => go(-1)} hidden={at === 0} disabled={save.isPending}>
             ← Back
           </button>
           <span className={styles.dots} role="img" aria-label={`Step ${at + 1} of ${steps.length}`}>

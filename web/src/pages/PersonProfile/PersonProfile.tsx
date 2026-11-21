@@ -287,7 +287,8 @@ function Family({
       </h2>
       {relatives.error && <p role="alert">{errorMessage(relatives.error)}</p>}
       {groups.map((group: Group) => (
-        <div key={group.title} className={styles.group}>
+        // Keyed by its Add card where it has one, so the card (and focus on it) survives a partner group renaming.
+        <div key={group.add ?? group.title} className={styles.group}>
           <h3 className={styles.groupTitle}>{group.title}</h3>
           <ul className={styles.cards}>
             {group.people.map(({ id, note: text }) => {
