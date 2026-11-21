@@ -328,4 +328,16 @@ describe('Main', () => {
 
     expect(cardOf(card)).toHaveTextContent(sub)
   })
+
+  // Inline, where the page sets them: jsdom's computed style has no animations.
+  it.each([
+    { name: 'Grandparents', delay: '0ms' },
+    { name: 'Your parents', delay: '80ms' },
+    { name: 'Your household & siblings', delay: '160ms' },
+    { name: 'Your children', delay: '240ms' },
+  ])('brings in “$name” at $delay, top to bottom', ({ name, delay }) => {
+    renderTree('fritz')
+
+    expect(screen.getByText(name).parentElement!.style.animationDelay).toBe(delay)
+  })
 })

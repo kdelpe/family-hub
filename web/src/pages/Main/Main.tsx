@@ -20,6 +20,8 @@ const trailLength = 8
 const maxMatches = 6
 // A click waits this long so a double-click can cancel it (design-notes §4.2).
 const clickDelay = 230
+// Each generation arrives this many ms after the one above (design-notes §4.2).
+const rowStagger = 80
 
 type Direction = 'up' | 'down' | 'side'
 
@@ -357,6 +359,15 @@ function FocusTree({
     return card(id, { sub: word ? (rel ? `${rel} · ${word}` : word[0]!.toUpperCase() + word.slice(1)) : rel })
   })
   const split = Math.ceil(siblings.length / 2)
+  // Top to bottom, the order the generations arrive in.
+  const order = [
+    view.grandparents.length > 0 && 'grandparents',
+    view.parents.length > 0 && 'parents',
+    'household',
+    view.children.length > 0 && 'children',
+    view.grandchildren.length > 0 && 'grandchildren',
+  ].filter(Boolean)
+  const rowOf = (name: string) => order.indexOf(name)
 
   const rows = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLElement>(null)
@@ -390,9 +401,10 @@ function FocusTree({
           ))}
         </svg>
       </div>
-      <div ref={rows} className={direction ? `${styles.rows} ${styles[direction]}` : styles.rows}>
+      {/* Opening the page, the generations arrive in turn too. */}
+      <div ref={rows} className={`${styles.rows} ${styles[direction ?? 'side']}`}>
         {view.grandparents.length > 0 && (
-          <Generation label="Grandparents">
+          <Generation label="Grandparents" row={rowOf('grandparents')}>
             {view.grandparents.map((g) => (
               <Group key={g.of} unit={`up-${g.of}`} label={`${first(g.of)}’s parents`}>
                 {g.ids.map((id) =>
@@ -406,11 +418,11 @@ function FocusTree({
           </Generation>
         )}
         {view.parents.length > 0 && (
-          <Generation label={whose('parents')}>
+          <Generation label={whose('parents')} row={rowOf('parents')}>
             <Group unit="parents">{view.parents.map((id) => card(id, { sub: labelled(id, parentWords[family.linkOf(focus, id) ?? 'biological']) }))}</Group>
           </Generation>
         )}
-        <Generation label={whose('household & siblings')}>
+        <Generation label={whose('household & siblings')} row={rowOf('household')}>
           {siblings.slice(0, split)}
           <Group unit="household" household>
             {card(focus)}
@@ -421,7 +433,7 @@ function FocusTree({
           {siblings.slice(split)}
         </Generation>
         {view.children.length > 0 && (
-          <Generation label={whose('children')}>
+          <Generation label={whose('children')} row={rowOf('children')}>
             {view.children.map((g, i) => (
               <Group
                 key={g.with.join(' ') || 'none'}
@@ -434,7 +446,7 @@ function FocusTree({
           </Generation>
         )}
         {view.grandchildren.length > 0 && (
-          <Generation label="Grandchildren">
+          <Generation label="Grandchildren" row={rowOf('grandchildren')}>
             {view.grandchildren.map((g) => (
               <Group key={g.of} unit={`down-${g.of}`} label={`${first(g.of)}’s children`}>
                 {g.ids.map((id) =>
@@ -452,9 +464,9 @@ function FocusTree({
   )
 }
 
-function Generation({ label, children }: { label: string; children: ReactNode }) {
+function Generation({ label, row, children }: { label: string; row: number; children: ReactNode }) {
   return (
-    <div className={styles.generation}>
+    <div data-row={row} className={styles.generation} style={{ animationDelay: `${row * rowStagger}ms` }}>
       <span className={styles.generationLabel}>{label}</span>
       <div className={styles.row}>{children}</div>
     </div>
