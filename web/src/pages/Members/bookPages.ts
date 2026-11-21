@@ -90,3 +90,7 @@ export const stopOf = (stops: number[][], index: number) =>
 
 export const nameOf = (page: BookPage) =>
   page.kind === 'person' ? page.living.entry : page.kind === 'memorial' ? page.remembered.person : null
+
+// --book-page-1 to -8 in tokens.css: pages take them in turn from Welcome on (its cream sits well beside the
+// endpaper's green), and so do the letter tabs.
+export const pageTints = 8

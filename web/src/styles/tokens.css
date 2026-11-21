@@ -28,15 +28,23 @@
   --side-first: #edf2ee;
   --side-second: #f3ece0;
   --side-both: #f1ede3;
-  --side-married-in: #f2efe8;
   --portrait-umber: #a89478;
   /* The Members book (design-notes §4.3): paper, gold tooling on the green cover, endpapers and page shading. */
   --page-number: #a89e8f;
+  /* The Members book's page tints, warm and no greys, from coolors' popular neutral palettes. Pages take them in
+     turn, so facing pages never match; each sits well beside the next. */
+  --book-page-1: #faedcd; /* papaya cream */
+  --book-page-2: #ddbea9; /* desert sand */
+  --book-page-3: #f0ead2; /* eggshell */
+  --book-page-4: #ccd5ae; /* tea green */
+  --book-page-5: #ede0d4; /* almond */
+  --book-page-6: #ead2ac; /* wheat */
+  --book-page-7: #eddcd2; /* champagne pink */
+  --book-page-8: #e9edc9; /* pale sage */
+  --book-divider: #b5c99a;
   --gold: #d9c38c;
   --gold-pale: #eadfc2;
   --endpaper: #e8efe9;
-  --ear-back: #e3d8c3;
-  --ear-fold: #eae1cf;
   --cover-light: rgba(255, 255, 255, 0.1);
   --cover-dark: rgba(0, 0, 0, 0.22);
   --cover-grain: rgba(0, 0, 0, 0.025);

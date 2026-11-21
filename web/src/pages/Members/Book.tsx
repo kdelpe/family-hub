@@ -1,12 +1,12 @@
-import { type PointerEvent as ReactPointerEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
-import { type Book as BookData, nameOf, pageNumber, stopOf, stopsOf } from './bookPages'
+import { type Book as BookData, nameOf, pageNumber, pageTints, stopOf, stopsOf } from './bookPages'
 import { PageContent } from './PageContent'
 import styles from './Members.module.css'
 
 type Dir = 'next' | 'prev'
 // land: the page an animated turn is bringing into view (a drag's isn't known until it's let go).
-type Turn = { dir: Dir; to: number; mode: 'anim' | 'drag' | 'settle'; stops: number[][]; land?: number }
+type Turn = { dir: Dir; to: number; mode: 'anim' | 'drag' | 'settle'; stops: number[][]; land?: number; ms?: number }
 type Drag = {
   id: number
   el: HTMLDivElement
@@ -26,8 +26,13 @@ type TabDrag = { nav: HTMLElement; id: number; start: number; cur: number; y0: n
 
 // A turn takes 0.9 s (Members.module.css), plus a frame.
 const turnMs = 920
-// How long the closed cover shows on arrival before it opens itself.
-const arrivalMs = 600
+// Turns queued by quick clicks run at twice the speed, so the book keeps up with them.
+const fastMs = 470
+// On arrival the book is picked up off the table (Members.module.css, 1 s), then opens itself.
+const arrivalMs = 1150
+// Start again rewinds the whole book in about this long, however many pages it has, at no more than this a turn.
+const rewindTotalMs = 2400
+const rewindMinMs = 160
 // A flick is measured over this last stretch of the drag, so a page held still before letting go isn't flicked.
 const flickMs = 100
 // The page edges grow as pages pile up, up to this: a big family has thousands of pages.
@@ -91,7 +96,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     }, ms)
   }
   // Lands on the page asked for, not just its spread, so a refetch that moves the spreads keeps that person in view.
-  const flipTo = (to: number, page?: number) => {
+  const flipTo = (to: number, page?: number, ms = turnMs) => {
     if (turn || to < 0 || to > last) {
       return
     }
@@ -112,15 +117,68 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
       onAt(land)
       return
     }
-    setTurn({ dir: to > stop ? 'next' : 'prev', to, mode: 'anim', stops, land })
-    finish(land, turnMs)
+    setTurn({ dir: to > stop ? 'next' : 'prev', to, mode: 'anim', stops, land, ms })
+    finish(land, ms)
   }
+
+  // One page on or back (buttons, corners, keys, a click on the page). Clicked again mid-turn, the turns queue up
+  // rather than being dropped; a click the other way takes one back.
+  const queued = useRef(0)
+  // Set while Start again rewinds the book: its turns' speed, and clicks don't add to it.
+  const rewindMs = useRef<number | null>(null)
+  const step = (dir: 1 | -1) => {
+    if (rewindMs.current !== null) {
+      return
+    }
+    if (!turn) {
+      flipTo(stop + dir)
+    } else if (turn.mode === 'anim') {
+      queued.current = Math.max(-8, Math.min(8, queued.current + dir))
+    }
+  }
+  const nextQueued = useRef(() => {})
+  useLayoutEffect(() => {
+    nextQueued.current = () => {
+      const dir = Math.sign(queued.current)
+      queued.current -= dir
+      if (dir !== 0 && stop + dir >= 0 && stop + dir <= last) {
+        flipTo(stop + dir, undefined, rewindMs.current ?? fastMs)
+      } else {
+        queued.current = 0
+      }
+      if (queued.current === 0) {
+        rewindMs.current = null
+      }
+    }
+  })
+  // Once a turn has landed and rendered, so the next turn's animation starts afresh.
+  useEffect(() => {
+    if (turn || queued.current === 0) {
+      return
+    }
+    const wait = window.setTimeout(() => nextQueued.current(), 30)
+    return () => window.clearTimeout(wait)
+  }, [turn])
 
   // Arriving on the page, the book opens itself to the first pages, so it's clear what it is and how it turns
   // (owner's call). Not with reduced motion, and not once the book's been touched.
+  // Arriving, the closed book is picked up off the table before it opens (owner's call).
+  const [pickUp, setPickUp] = useState(!reduced && stop === 0)
+  // Until it opens itself, the line saying how to open it is kept out of sight (owner's call); it's there for a cover
+  // turned back to, and with reduced motion, when the book stays closed.
+  const [arriving, setArriving] = useState(!reduced && stop === 0)
+  // Any turn, the reader's own included, ends the arrival.
+  if (arriving && turn) {
+    setArriving(false)
+  }
   const openOnArrival = useRef(() => {})
   useLayoutEffect(() => {
-    openOnArrival.current = () => stop === 0 && !turn && flipTo(1)
+    openOnArrival.current = () => {
+      setArriving(false)
+      if (stop === 0 && !turn) {
+        flipTo(1)
+      }
+    }
   })
   useEffect(() => {
     if (reduced) {
@@ -132,10 +190,32 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const goTo = (index: number) => flipTo(stopOf(stops, index), index)
+  // From the back cover, every page turns back quickly to Welcome (owner's call), so the book can be read again.
+  const startAgain = () => {
+    if (turn) {
+      return
+    }
+    if (reduced) {
+      flipTo(1)
+      return
+    }
+    const turns = stop - 1
+    rewindMs.current = Math.max(rewindMinMs, Math.min(fastMs, rewindTotalMs / turns))
+    queued.current = 1 - turns
+    flipTo(stop - 1, undefined, rewindMs.current)
+  }
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     const target = event.target as Element
-    if (turn || event.button > 0 || target.closest('a, input, select, textarea, button:not([data-corner])')) {
+    if (event.button > 0 || target.closest('a, input, select, textarea, button:not([data-corner])')) {
+      return
+    }
+    if (turn) {
+      // Mid-turn, a click on the page queues the next turn; the corners queue by their own click.
+      if (!target.closest('[data-corner]')) {
+        const box = event.currentTarget.getBoundingClientRect()
+        step(event.clientX >= box.left + box.width / 2 ? 1 : -1)
+      }
       return
     }
     // A press on a scrollbar (a long list of contacts) scrolls; it doesn't turn the page.
@@ -227,7 +307,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     if (!d.on) {
       // The corners turn by their own click.
       if (!d.corner && !canceled) {
-        flipTo(stop + (d.side === 'next' ? 1 : -1))
+        step(d.side === 'next' ? 1 : -1)
       }
       return
     }
@@ -326,9 +406,26 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
       // By who's on it, not where: a page's request buttons mustn't pass to whoever lands there after a refetch.
       key={`${place}-${book.keys[index]}`}
       data-page
-      className={`${styles.page} ${styles[place]} ${extra} ${book.pages[index]!.kind === 'empty' ? styles.hidden : ''}`}
+      className={`${styles.page} ${styles[place]} ${extra} ${book.pages[index]!.kind === 'empty' ? styles.hidden : ''} ${place !== 'whole' && boardSized(index) ? styles.boardSized : ''}`}
     >
       <PageContent book={book} index={index} outer={place === 'right' ? 'right' : 'left'} viewerId={viewerId} paused={paused} goTo={goTo} />
+    </div>
+  )
+  const isCover = (index: number | null) => index !== null && (book.pages[index]!.kind === 'cover' || book.pages[index]!.kind === 'back')
+  const boardSized = (index: number) => isCover(index)
+  // A turning cover is one stiff board, as big as the green board it lies on; its inside shows the endpaper within a
+  // green rim, as it will once it lands.
+  const board = (index: number | null, outer: 'left' | 'right', back = false) => (
+    <div className={`${styles.face} ${back ? styles.back : ''} ${outer === 'right' ? styles.boardFaceRight : styles.boardFaceLeft}`}>
+      {index !== null &&
+        (isCover(index) ? (
+          <PageContent book={book} index={index} outer={outer} viewerId={viewerId} paused={paused} goTo={goTo} />
+        ) : (
+          <div className={`${styles.turnIn} ${outer === 'right' ? styles.turnInRight : styles.turnInLeft}`}>
+            <PageContent book={book} index={index} outer={outer} viewerId={viewerId} paused={paused} goTo={goTo} />
+          </div>
+        ))}
+      <span className={styles.shade} />
     </div>
   )
   const face = (index: number | null, className: string, outer: 'left' | 'right', inner: string, back = false) => (
@@ -363,7 +460,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   const hint = stop === 0 && !turn ? styles.coverHint! : ''
   const emptyLeft = !single && book.pages[statics[0]!]!.kind === 'empty'
   const emptyRight = !single && book.pages[statics[1]!]!.kind === 'empty'
-  const rigid = [front, backFace].some((i) => i !== null && (book.pages[i]!.kind === 'cover' || book.pages[i]!.kind === 'back'))
+  const rigid = [front, backFace].some(isCover)
   // A single page always turns about its left edge; turning back, it comes in from the left.
   const leafDir: Dir = single ? 'next' : (turn?.dir ?? 'next')
 
@@ -376,12 +473,18 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
           : styles.animPrev
       : styles.dragging
     : ''
-  const stackLeft = stop === 0 ? 0 : Math.min(maxStack, 3 + Math.round(stop * 0.8))
-  const stackRight = stop === last ? 0 : Math.min(maxStack, 3 + Math.round((last - stop) * 0.8))
+  // Closed, the cover hides the pages' edges, as a hardcover does.
+  const stackLeft = stop === 0 || stop === last ? 0 : Math.min(maxStack, 3 + Math.round(stop * 0.8))
+  const stackRight = stop === 0 || stop === last ? 0 : Math.min(maxStack, 3 + Math.round((last - stop) * 0.8))
 
   return (
     <div className={`${styles.bookArea} ${paused || reduced ? styles.still : ''} ${single ? styles.single : ''}`}>
-      <div className={`${styles.book} ${!single && tgtStop === 0 ? styles.closedStart : ''} ${!single && tgtStop === last ? styles.closedEnd : ''}`}>
+      <div
+        className={`${styles.book} ${!single && tgtStop === 0 ? styles.closedStart : ''} ${!single && tgtStop === last ? styles.closedEnd : ''} ${pickUp ? styles.pickUp : ''}`}
+        // The board arrives as a cover lands, which is sooner on a quick turn.
+        style={{ '--land': `${Math.round(((turn?.ms ?? turnMs) - 20) * 0.82)}ms` } as CSSProperties}
+        onAnimationEnd={(event) => event.target === event.currentTarget && setPickUp(false)}
+      >
         {single ? (
           <span aria-hidden="true" className={`${styles.board} ${styles.boardWhole} ${tgtStop === 0 || tgtStop === last ? styles.gone : ''}`} />
         ) : (
@@ -393,6 +496,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
         <div
           ref={pagesRef}
           className={`${styles.pages} ${turnClass}`}
+          style={turn?.ms && turn.ms !== turnMs ? { animationDuration: `${turn.ms - 20}ms` } : undefined}
           tabIndex={0}
           role="group"
           aria-roledescription="book"
@@ -404,7 +508,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
           onKeyDown={(event) => {
             if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
               event.preventDefault()
-              flipTo(stop + (event.key === 'ArrowRight' ? 1 : -1))
+              step(event.key === 'ArrowRight' ? 1 : -1)
             }
           }}
         >
@@ -424,59 +528,64 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
               {!single && !(leafDir === 'next' ? emptyLeft : emptyRight) && (
                 <span className={`${styles.cast} ${leafDir === 'next' ? styles.landNext : styles.landPrev}`} />
               )}
-              <div className={`${styles.leaf} ${leafDir === 'next' ? styles.leafNext : styles.leafPrev} ${rigid ? styles.rigid : ''}`}>
-                <div className={`${styles.seg} ${styles.sa}`}>
-                  {leafDir === 'next'
-                    ? face(front, styles.square!, 'right', `${styles.innerRight} ${styles.saFrontNext}`)
-                    : face(front, styles.square!, 'left', `${styles.innerLeft} ${styles.saFrontPrev}`)}
-                  {leafDir === 'next'
-                    ? face(backFace, styles.square!, 'left', `${styles.innerLeft} ${styles.saBackNext}`, true)
-                    : face(backFace, styles.square!, 'right', `${styles.innerRight} ${styles.saBackPrev}`, true)}
-                  <div className={`${styles.seg} ${styles.sb}`}>
-                    {leafDir === 'next' ? (
-                      <>
-                        <div className={`${styles.face} ${styles.roundRight}`}>
-                          <div className={`${styles.inner} ${styles.innerRight} ${styles.sbFrontNext}`}>
-                            <PageContent book={book} index={front} outer="right" viewerId={viewerId} paused={paused} goTo={goTo} />
-                          </div>
-                          <span className={styles.shade} />
-                          <span className={styles.gloss} />
-                        </div>
-                        {face(backFace, styles.roundLeft!, 'left', `${styles.innerLeft} ${styles.sbBackNext}`, true)}
-                      </>
-                    ) : (
-                      <>
-                        <div className={`${styles.face} ${styles.roundLeft}`}>
-                          <div className={`${styles.inner} ${styles.innerLeft} ${styles.sbFrontPrev}`}>
-                            <PageContent book={book} index={front} outer="left" viewerId={viewerId} paused={paused} goTo={goTo} />
-                          </div>
-                          <span className={styles.shade} />
-                          <span className={styles.gloss} />
-                        </div>
-                        {face(backFace, styles.roundRight!, 'right', `${styles.innerRight} ${styles.sbBackPrev}`, true)}
-                      </>
-                    )}
+              {rigid && !single ? (
+                <div className={`${styles.leaf} ${leafDir === 'next' ? styles.leafNext : styles.leafPrev}`}>
+                  <div className={`${styles.seg} ${styles.boardLeaf}`}>
+                    {leafDir === 'next' ? board(front, 'right') : board(front, 'left')}
+                    {leafDir === 'next' ? board(backFace, 'left', true) : board(backFace, 'right', true)}
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className={`${styles.leaf} ${leafDir === 'next' ? styles.leafNext : styles.leafPrev} ${rigid ? styles.rigid : ''}`}>
+                  <div className={`${styles.seg} ${styles.sa}`}>
+                    {leafDir === 'next'
+                      ? face(front, styles.square!, 'right', `${styles.innerRight} ${styles.saFrontNext}`)
+                      : face(front, styles.square!, 'left', `${styles.innerLeft} ${styles.saFrontPrev}`)}
+                    {leafDir === 'next'
+                      ? face(backFace, styles.square!, 'left', `${styles.innerLeft} ${styles.saBackNext}`, true)
+                      : face(backFace, styles.square!, 'right', `${styles.innerRight} ${styles.saBackPrev}`, true)}
+                    <div className={`${styles.seg} ${styles.sb}`}>
+                      {leafDir === 'next' ? (
+                        <>
+                          <div className={`${styles.face} ${styles.roundRight}`}>
+                            <div className={`${styles.inner} ${styles.innerRight} ${styles.sbFrontNext}`}>
+                              <PageContent book={book} index={front} outer="right" viewerId={viewerId} paused={paused} goTo={goTo} />
+                            </div>
+                            <span className={styles.shade} />
+                            <span className={styles.gloss} />
+                          </div>
+                          {face(backFace, styles.roundLeft!, 'left', `${styles.innerLeft} ${styles.sbBackNext}`, true)}
+                        </>
+                      ) : (
+                        <>
+                          <div className={`${styles.face} ${styles.roundLeft}`}>
+                            <div className={`${styles.inner} ${styles.innerLeft} ${styles.sbFrontPrev}`}>
+                              <PageContent book={book} index={front} outer="left" viewerId={viewerId} paused={paused} goTo={goTo} />
+                            </div>
+                            <span className={styles.shade} />
+                            <span className={styles.gloss} />
+                          </div>
+                          {face(backFace, styles.roundRight!, 'right', `${styles.innerRight} ${styles.sbBackPrev}`, true)}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {stop !== 0 && stop !== last && (
             <>
               {!single && (
-                <button type="button" className={`${styles.corner} ${styles.cornerPrev}`} data-corner="prev" aria-label="Previous page" onClick={(event) => event.timeStamp - justDragged.current > 350 && flipTo(stop - 1)}>
-                  <span aria-hidden="true" className={`${styles.ear} ${styles.earLeft}`} />
-                </button>
+                <button type="button" className={`${styles.corner} ${styles.cornerPrev}`} data-corner="prev" aria-label="Previous page" onClick={(event) => event.timeStamp - justDragged.current > 350 && step(-1)} />
               )}
               <button
                 type="button"
                 className={`${styles.corner} ${styles.cornerNext}`}
                 data-corner="next"
                 aria-label="Next page"
-                onClick={(event) => event.timeStamp - justDragged.current > 350 && flipTo(stop + 1)}
-              >
-                <span aria-hidden="true" className={`${styles.ear} ${styles.earRight}`} style={{ opacity: stop === last - 1 ? 0 : 1 }} />
-              </button>
+                onClick={(event) => event.timeStamp - justDragged.current > 350 && step(1)}
+              />
             </>
           )}
         </div>
@@ -539,6 +648,8 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
                 aria-label={t.aria}
                 aria-current={t.on ? 'true' : undefined}
                 className={`${styles.tab} ${t.on ? styles.tabOn : ''} ${scrub?.tab === i ? styles.tabScrub : ''}`}
+                // The page tints in turn, so no two tabs side by side match; the current one stays white.
+                style={t.on ? undefined : { background: `var(--book-page-${(i % pageTints) + 1})` }}
                 // The pointer already handled it; a keyboard Enter or Space arrives only as this click.
                 onClick={(event) => event.timeStamp - tabHandled.current > 400 && goTo(tabTargets[i]!)}
               >
@@ -557,7 +668,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
         {/* Closed, the line under the cover says how to open it; the buttons and page box come with the open book. */}
         {!closed && (
           <>
-            <button type="button" className={`pill ${styles.prevButton}`} onClick={() => flipTo(stop - 1)}>
+            <button type="button" className={`pill ${styles.prevButton}`} onClick={() => step(-1)}>
               ◀ <span className={styles.word}>Previous</span>
             </button>
             <form
@@ -587,12 +698,28 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
             </form>
           </>
         )}
-        <span aria-live="polite" className={closed ? styles.position : 'visually-hidden'}>
+        {/* At the back cover: back a page, or start again from the front. */}
+        {heading === last && (
+          <button type="button" className={`pill ${styles.prevButton}`} onClick={() => step(-1)}>
+            ◀ <span className={styles.word}>Previous</span>
+          </button>
+        )}
+        <span
+          aria-live="polite"
+          className={heading === 0 ? styles.position : 'visually-hidden'}
+          // Hidden, not removed, so the book doesn't move when it shows.
+          style={heading === 0 && arriving ? { visibility: 'hidden' } : undefined}
+        >
           {position}
         </span>
         {!closed && (
-          <button type="button" className={`pill ${styles.nextButton}`} onClick={() => flipTo(stop + 1)}>
+          <button type="button" className={`pill ${styles.nextButton}`} onClick={() => step(1)}>
             <span className={styles.word}>Next</span> ▶
+          </button>
+        )}
+        {heading === last && (
+          <button type="button" className={`pill ${styles.nextButton}`} onClick={startAgain}>
+            ↺ <span className={styles.word}>Start again</span>
           </button>
         )}
       </div>

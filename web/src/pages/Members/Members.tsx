@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
+import { useLocation } from 'react-router'
 
 import { directoryQuery } from '../../api/contacts'
 import { treeQuery } from '../../api/tree'
@@ -15,6 +16,11 @@ import styles from './Members.module.css'
 // Everyone in one place (design-notes §4.3): the living A to Z with how to reach them, and those remembered, as a
 // book that fits the window. It replaces the People grid and the Directory.
 export function Members() {
+  // Each visit starts at the closed cover, even Members clicked in the menu while already here (owner's call).
+  return <MembersBook key={useLocation().key} />
+}
+
+function MembersBook() {
   const { user } = useSignedIn()
   const viewerId = user?.person_id ?? null
   const directory = useQuery(directoryQuery)
