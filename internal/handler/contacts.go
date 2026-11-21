@@ -75,10 +75,11 @@ type directoryResponse struct {
 }
 
 type directoryEntryResponse struct {
-	ID        uuid.UUID `json:"id"`
-	FirstName string    `json:"first_name"`
-	LastName  *string   `json:"last_name"`
-	Side      *string   `json:"side"`
+	ID         uuid.UUID `json:"id"`
+	FirstName  string    `json:"first_name"`
+	LastName   *string   `json:"last_name"`
+	Side       *string   `json:"side"`
+	HasAccount bool      `json:"has_account"`
 	contactsResponse
 }
 
@@ -207,7 +208,7 @@ func (c *Contacts) Directory(w http.ResponseWriter, r *http.Request) {
 	resp := directoryResponse{People: make([]directoryEntryResponse, 0, len(entries))}
 	for _, e := range entries {
 		resp.People = append(resp.People, directoryEntryResponse{
-			ID: e.ID, FirstName: e.FirstName, LastName: e.LastName, Side: e.Side, contactsResponse: toContactsResponse(e.Listing),
+			ID: e.ID, FirstName: e.FirstName, LastName: e.LastName, Side: e.Side, HasAccount: e.HasAccount, contactsResponse: toContactsResponse(e.Listing),
 		})
 	}
 	httpx.JSON(w, http.StatusOK, resp)

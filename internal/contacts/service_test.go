@@ -284,9 +284,14 @@ func TestDirectory(t *testing.T) {
 	_, err = pool.Exec(t.Context(), `UPDATE persons SET deleted_at = now() WHERE id = $1`, deleted)
 	require.NoError(t, err)
 	pluviose := new("Pluviose")
-	mayaAsFamily := DirectoryEntry{ID: *maya.PersonID, FirstName: "Maya", LastName: pluviose,
+	nothing := Listing{Contacts: []Contact{}}
+	darlineEntry := DirectoryEntry{ID: *darline.PersonID, FirstName: "Darline", LastName: new("Monestime"), HasAccount: true, Listing: nothing}
+	mayaAsFamily := DirectoryEntry{ID: *maya.PersonID, FirstName: "Maya", LastName: pluviose, HasAccount: true,
 		Listing: Listing{Contacts: []Contact{mayaEmail}, Requestable: []Requestable{{"phone", "none"}}}}
 	rosaEntry := DirectoryEntry{ID: rosa, FirstName: "Rosa", Listing: Listing{Contacts: []Contact{rosaEmail}}}
+	quietEntry := DirectoryEntry{ID: quiet, FirstName: "Quiet", Listing: nothing}
+	// A disabled login doesn't count as an account.
+	unanswerableEntry := DirectoryEntry{ID: unanswerable, FirstName: "Unanswerable", Listing: nothing}
 
 	tests := []struct {
 		name   string
@@ -294,10 +299,12 @@ func TestDirectory(t *testing.T) {
 		query  string
 		want   []DirectoryEntry
 	}{
-		{name: "living people who share something, A–Z, as this viewer sees them", viewer: darline,
-			want: []DirectoryEntry{mayaAsFamily, rosaEntry}},
+		{name: "every living person, A–Z, as this viewer sees them", viewer: darline,
+			want: []DirectoryEntry{{ID: *darline.PersonID, FirstName: "Darline", LastName: new("Monestime"), HasAccount: true, Listing: Listing{Contacts: []Contact{}, Full: true}},
+				mayaAsFamily, quietEntry, rosaEntry, unanswerableEntry}},
 		{name: "their own entry in full", viewer: maya,
-			want: []DirectoryEntry{{ID: *maya.PersonID, FirstName: "Maya", LastName: pluviose, Listing: Listing{Contacts: []Contact{mayaEmail, mayaPhone}, Full: true}}, rosaEntry}},
+			want: []DirectoryEntry{darlineEntry, {ID: *maya.PersonID, FirstName: "Maya", LastName: pluviose, HasAccount: true,
+				Listing: Listing{Contacts: []Contact{mayaEmail, mayaPhone}, Full: true}}, quietEntry, rosaEntry, unanswerableEntry}},
 		{name: "searched by name", viewer: darline, query: "  pluvi ", want: []DirectoryEntry{mayaAsFamily}},
 		{name: "a typo still finds them", viewer: darline, query: "Mya Pluviose", want: []DirectoryEntry{mayaAsFamily}},
 		{name: "never by contact value", viewer: darline, query: "rosa@example.com", want: []DirectoryEntry{}},
@@ -325,7 +332,7 @@ func TestDirectoryShowsWhatWasShared(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, svc.Decide(t.Context(), maya, requests[0].ID, Share))
 
-	got, err := svc.Directory(t.Context(), darline, "")
+	got, err := svc.Directory(t.Context(), darline, "Maya")
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
