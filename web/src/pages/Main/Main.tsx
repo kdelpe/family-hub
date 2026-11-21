@@ -29,6 +29,9 @@ const rowStagger = 80
 const glideMs = 300
 // How far an arrow key moves the tree.
 const keyStep = 60
+// On a window too short or narrow for the page to fit (Main.module.css), it scrolls: then a plain wheel and an up-and-
+// down swipe are left to the page, as the way back to the controls above the tree.
+const pageScrolls = () => document.documentElement.scrollHeight > window.innerHeight
 const rowLanded = 400
 const rowsStyle = { '--row-landed': `${rowLanded}ms` } as CSSProperties
 
@@ -519,6 +522,9 @@ function FocusTree({
       return
     }
     const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && pageScrolls()) {
+        return
+      }
       event.preventDefault()
       if (!event.ctrlKey) {
         const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? p.clientHeight : 1
@@ -533,7 +539,7 @@ function FocusTree({
   }, [])
 
   // Dragging moves the tree, from a card too: past a few pixels it's a drag, not a click. One finger moves it, as a
-  // mouse does; two pinch it and move it (touch-action on .panel).
+  // mouse does (only sideways where the page scrolls); two pinch it and move it (touch-action on .panel).
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const dragged = useRef(false)
   const start = useRef<{ x: number; y: number } | null>(null)
@@ -576,7 +582,7 @@ function FocusTree({
       p.setPointerCapture?.(event.pointerId)
     }
     if (dragged.current) {
-      moveBy(event.clientX - last.x, event.clientY - last.y)
+      moveBy(event.clientX - last.x, event.pointerType === 'touch' && pageScrolls() ? 0 : event.clientY - last.y)
     }
   }
   // On the window: a press released outside the panel before it became a drag never reaches the panel.

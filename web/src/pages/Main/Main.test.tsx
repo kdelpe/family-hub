@@ -613,6 +613,30 @@ describe('Main', () => {
     expect(screen.getByRole('button', { name: 'Reset zoom, now 100%' })).toBeInTheDocument()
   })
 
+  // A window too short or narrow for the page to fit: the page scrolls, and up and down are left to it.
+  it.each([
+    { name: 'a plain wheel', gesture: (panel: HTMLElement) => fireEvent.wheel(panel, { deltaY: 50 }) },
+    {
+      name: 'an up-and-down swipe',
+      gesture: (panel: HTMLElement) => {
+        const finger = (clientY: number) => ({ pointerId: 1, pointerType: 'touch', clientX: 100, clientY })
+        fireEvent.pointerDown(panel, finger(100))
+        fireEvent.pointerMove(panel, finger(110))
+        return fireEvent.pointerMove(panel, finger(160))
+      },
+    },
+  ])('leaves $name to a page that scrolls', ({ gesture }) => {
+    layOut({ tree: 600 })
+    vi.spyOn(document.documentElement, 'scrollHeight', 'get').mockReturnValue(window.innerHeight + 200)
+    renderTree('jr')
+
+    const handled = !gesture(screen.getByRole('region', { name: 'Family tree centered on you' }))
+
+    expect(handled).toBe(false)
+    // No move down or up: jsdom writes translate(x) alone when y is 0.
+    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).not.toMatch(/translate\([^,)]*, /)
+  })
+
   it('moves the tree up and down with one finger, too', () => {
     layOut({ tree: 600 })
     renderTree('jr')

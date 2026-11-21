@@ -620,6 +620,13 @@
   }
 }
 
+/* Where the page scrolls, up and down on touch scrolls it, as the way back to the controls (Main.tsx). */
+@media (max-width: 800px), (max-height: 519.98px) {
+  .panel {
+    touch-action: pan-y;
+  }
+}
+
 @media (max-width: 600px) {
   .page {
     /* Two cards side by side inside a group, on the narrowest phones too. */
