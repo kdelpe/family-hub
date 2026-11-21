@@ -83,7 +83,21 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
+
+// A laid-out panel and tree: jsdom gives everything no size and puts it at 0. The panel is 600px square, and the
+// stage, the cards and the focus person's household get the heights and place given.
+function layOut({ tree, card = 150, householdTop = 0 }: { tree: number; card?: number; householdTop?: number }) {
+  vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(600)
+  vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(600)
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+    return this.matches('[data-stage]') ? tree : this.matches('[data-card], [data-unit="household"]') ? card : 0
+  })
+  vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (this: HTMLElement) {
+    return this.matches('[data-unit="household"]') ? householdTop : 0
+  })
+}
 
 function renderTree(personId: string | null, { url = '/tree', data = tree } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
@@ -351,8 +365,7 @@ describe('Main', () => {
   })
 
   it('moves the tree to show a card tabbed to outside the panel', () => {
-    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(1000)
-    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(600)
+    layOut({ tree: 1000 })
     renderTree('fritz')
     const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
     const card = cardOf('Sabine').closest('[data-card]')!
@@ -504,27 +517,58 @@ describe('Main', () => {
     ])
   })
 
+  // The page doesn't scroll: the panel fills the window, and the tree opens with the household in its middle.
   it.each([
-    { name: 'on opening the page', zoomIn: false },
-    { name: 'after centering on someone while zoomed in, scrolling the window, never the panel', zoomIn: true },
-  ])('brings the focus person’s card into view $name', ({ zoomIn }) => {
-    // A laid-out tree with the card below the fold: jsdom gives everything no size and puts it at 0.
-    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(1000)
-    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ y: 2000, height: 150 }))
+    { name: 'far down a tall tree', tree: 2000, householdTop: 1500, transform: 'translate(0px, -1275px) scale(1)' },
+    { name: 'near the top of a tall tree', tree: 2000, householdTop: 100, transform: 'translate(0px, 125px) scale(1)' },
+    { name: 'at the bottom of a tall tree', tree: 2000, householdTop: 1850, transform: 'translate(0px, -1625px) scale(1)' },
+    { name: 'in a tree shorter than the panel', tree: 400, householdTop: 100, transform: 'translate(0px, 125px) scale(1)' },
+  ])('opens with your household and siblings in the middle of the panel, $name', ({ tree, householdTop, transform }) => {
+    layOut({ tree, householdTop })
     const scrollTo = vi.fn()
     vi.stubGlobal('scrollTo', scrollTo)
-    renderTree('fritz')
-    if (zoomIn) {
-      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
-      scrollTo.mockClear()
-      fireEvent.click(cardOf('Jean-Robert'))
-    }
 
-    expect(scrollTo).toHaveBeenCalledTimes(1)
-    expect(scrollTo.mock.calls[0]![0]).toMatchObject({ top: 2075 - window.innerHeight / 2 })
-    const panel = screen.getByRole('region', { name: /^Family tree centered on/ })
-    expect([panel.scrollTop, panel.scrollLeft]).toEqual([0, 0])
-    vi.restoreAllMocks()
+    renderTree('fritz')
+
+    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe(transform)
+    expect(scrollTo).not.toHaveBeenCalled()
+  })
+
+  it('takes the tip off the panel once the tree is moved, and brings it back with Recenter', () => {
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+    const tip = () => within(panel.parentElement!).queryByText(/^Click or tap a name/)
+    expect(tip()).toBeInTheDocument()
+
+    fireEvent.wheel(panel, { deltaY: 50 })
+    expect(tip()).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
+    expect(tip()).toBeInTheDocument()
+  })
+
+  it('moves the tree with a plain wheel or two-finger scroll, instead of scrolling the page', () => {
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+
+    expect(fireEvent.wheel(panel, { deltaX: 10, deltaY: 50 })).toBe(false)
+
+    expect(screen.getByRole('button', { name: 'Recenter' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Reset zoom, now 100%' })).toBeInTheDocument()
+  })
+
+  it('moves the tree up and down with one finger, too', () => {
+    layOut({ tree: 150 })
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+    const finger = (clientY: number) => ({ pointerId: 1, pointerType: 'touch', clientX: 100, clientY })
+    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe('translate(0px, 225px) scale(1)')
+
+    fireEvent.pointerDown(panel, finger(100))
+    fireEvent.pointerMove(panel, finger(110))
+    fireEvent.pointerMove(panel, finger(140))
+
+    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toMatch(/, 265px\) scale\(1\)$/)
   })
 
   it('lands keyboard focus on the tree once a first relative is picked from the search', () => {

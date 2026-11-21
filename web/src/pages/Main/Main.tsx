@@ -9,7 +9,7 @@ import { PhotoFade } from '../../components/PhotoFade/PhotoFade'
 import { errorMessage } from '../../lib/errorMessage'
 import { familyLinks, type FamilyLinks } from '../../lib/familyLinks'
 import { focusView, type FocusView, treeChildrenOf, treeParentsOf } from '../../lib/familyView'
-import { useMotionPaused, useReducedMotion } from '../../lib/motion'
+import { useMotionPaused } from '../../lib/motion'
 import { fullName, initials, nameMatches } from '../../lib/names'
 import { relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
@@ -403,11 +403,13 @@ function FocusTree({
   const stage = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLElement>(null)
   const [lines, setLines] = useState<{ width: number; height: number; paths: Line[] }>({ width: 0, height: 0, paths: [] })
-  // The tree is laid out at the panel's width, then scaled inside it: the panel keeps its size at every zoom,
-  // and scrolls when zoomed in.
-  const [panelWidth, setPanelWidth] = useState(0)
+  // The panel fills what the window leaves (Main.module.css); the tree is laid out at its width, then scaled and
+  // moved inside it.
+  const [panelSize, setPanelSize] = useState({ width: 0, height: 0 })
   // Where the cards are on the stage, so dragging can keep some of them, not just the empty stage, in sight.
   const [cards, setCards] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null)
+  // The middle of the focus person's household, down the stage: the tree opens with it in the panel's middle.
+  const [householdMid, setHouseholdMid] = useState(0)
   useLayoutEffect(() => {
     const p = panel.current
     const st = stage.current
@@ -416,9 +418,12 @@ function FocusTree({
       return
     }
     const draw = () => {
-      setPanelWidth(p.clientWidth)
+      setPanelSize({ width: p.clientWidth, height: p.clientHeight })
       setLines({ width: st.offsetWidth, height: st.offsetHeight, paths: measure(st, r, view, focus) })
       setCards(cardBounds(st, r))
+      const household = r.querySelector<HTMLElement>('[data-unit="household"]')
+      const box = household && offsetBox(household, st)
+      setHouseholdMid(box ? (box.top + box.bottom) / 2 : 0)
     }
     draw()
     // Cards move without the panel resizing when the web fonts land or a row rewraps.
@@ -438,9 +443,10 @@ function FocusTree({
   const [drag, setDrag] = useState<{ x: number; y: number; recentered: number } | null>(null)
   const moved = drag?.recentered === recentered ? drag : null
   const setMoved = (to: { x: number; y: number } | null) => setDrag(to && { ...to, recentered })
-  const width = panelWidth
-  const height = lines.height
-  const centered = (z: number) => ({ x: (width * (1 - z)) / 2, y: z < 1 ? (height * (1 - z)) / 2 : 0 })
+  const { width, height } = panelSize
+  // Across, the tree is centered; down, the focus person's household and siblings sit in the middle, parents above,
+  // however much of the tree there is above or below (owner's call).
+  const centered = (z: number) => ({ x: (width * (1 - z)) / 2, y: height / 2 - householdMid * z })
   // At least 60px of the cards always stays in the panel, at every zoom and after the panel resizes.
   const keepInSight = (x: number, y: number, z: number) => {
     const c = cards ?? { left: 0, right: width, top: 0, bottom: height }
@@ -473,28 +479,11 @@ function FocusTree({
     onZoom(() => next)
   }
 
-  // The focus person's card is brought into view once the panel has its height: at once on opening the page,
-  // smoothly after centering on someone. Once per view, so a later drag or zoom doesn't pull the page back.
-  const reducedMotion = useReducedMotion()
-  const shown = useRef(false)
-  useEffect(() => {
-    const card = focusCard.current?.closest('[data-card]')
-    if (shown.current || !card || height === 0) {
-      return
-    }
-    shown.current = true
-    const box = card.getBoundingClientRect()
-    if (box.top < 0 || box.bottom > window.innerHeight) {
-      // The window only: scrollIntoView would also scroll the clipped panel, which the drag position doesn't know of.
-      const top = window.scrollY + box.top + box.height / 2 - window.innerHeight / 2
-      window.scrollTo({ top, behavior: direction && !reducedMotion ? 'smooth' : 'instant' })
-    }
-  }, [height, direction, reducedMotion])
-
-  // Ctrl + scroll, which is also how a trackpad pinch arrives; React's wheel listener can't prevent the page zoom.
-  const wheelZoom = useRef(zoomAround)
+  // The wheel: with Ctrl (also how a trackpad pinch arrives) it zooms, which React's wheel listener can't stop the
+  // page doing; without, it moves the tree, as the page itself doesn't scroll.
+  const wheelActions = useRef({ zoomAround, moveBy })
   useLayoutEffect(() => {
-    wheelZoom.current = zoomAround
+    wheelActions.current = { zoomAround, moveBy }
   })
   useEffect(() => {
     const p = panel.current
@@ -502,19 +491,21 @@ function FocusTree({
       return
     }
     const wheel = (event: WheelEvent) => {
+      event.preventDefault()
       if (!event.ctrlKey) {
+        const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? p.clientHeight : 1
+        wheelActions.current.moveBy(-event.deltaX * unit, -event.deltaY * unit)
         return
       }
-      event.preventDefault()
       const box = p.getBoundingClientRect()
-      wheelZoom.current((z) => z * Math.exp(-event.deltaY / 200), { x: event.clientX - box.left, y: event.clientY - box.top })
+      wheelActions.current.zoomAround((z) => z * Math.exp(-event.deltaY / 200), { x: event.clientX - box.left, y: event.clientY - box.top })
     }
     p.addEventListener('wheel', wheel, { passive: false })
     return () => p.removeEventListener('wheel', wheel)
   }, [])
 
-  // Dragging moves the tree, from a card too: past a few pixels it's a drag, not a click. Two fingers pinch it and
-  // move it; one finger moves it sideways, leaving up and down to the page (touch-action on .panel).
+  // Dragging moves the tree, from a card too: past a few pixels it's a drag, not a click. One finger moves it, as a
+  // mouse does; two pinch it and move it (touch-action on .panel).
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const dragged = useRef(false)
   const start = useRef<{ x: number; y: number } | null>(null)
@@ -557,7 +548,7 @@ function FocusTree({
       p.setPointerCapture?.(event.pointerId)
     }
     if (dragged.current) {
-      moveBy(event.clientX - last.x, event.pointerType === 'touch' ? 0 : event.clientY - last.y)
+      moveBy(event.clientX - last.x, event.clientY - last.y)
     }
   }
   // On the window: a press released outside the panel before it became a drag never reaches the panel.
@@ -573,7 +564,8 @@ function FocusTree({
 
   return (
     <div className={styles.frame}>
-      <p className={styles.tip}>{tipText}</p>
+      {/* Gone once the tree is moved, as the arrows are, so it doesn't sit over the cards. */}
+      {!moved && <p className={styles.tip}>{tipText}</p>}
       {edge(upTo, 'up', 'edgeTop')}
       <section
         ref={panel}
@@ -620,7 +612,6 @@ function FocusTree({
             dragged.current = false
           }
         }}
-        style={{ height: height || undefined }}
       >
         <div
           ref={stage}

@@ -1,6 +1,11 @@
 .page {
   --card-width: 190px;
-  padding: 32px 40px 48px;
+  /* The page fits the window and the tree's panel takes what's left, so the page itself never scrolls; on a window
+     too short for a useful panel, it does. */
+  height: 100dvh;
+  min-height: 520px;
+  box-sizing: border-box;
+  padding: 32px 40px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -192,6 +197,10 @@
 
 .frame {
   position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel {
@@ -201,9 +210,11 @@
   border: 1px solid var(--border);
   background: var(--surface-soft);
   cursor: grab;
+  flex: 1;
+  min-height: 0;
   user-select: none;
-  /* Up and down stays the page's scroll; sideways and pinching move and zoom the tree (Main.tsx). */
-  touch-action: pan-y;
+  /* Every finger moves or pinches the tree (Main.tsx); the page doesn't scroll. */
+  touch-action: none;
 }
 
 .panel:active {
@@ -569,6 +580,19 @@
   100% {
     stroke-dashoffset: 0;
     opacity: 1;
+  }
+}
+
+/* With the menu above the page rather than beside it, the window's height isn't the page's: the panel gets its own. */
+@media (max-width: 800px) {
+  .page {
+    height: auto;
+    min-height: 0;
+  }
+
+  .panel {
+    flex: none;
+    height: clamp(440px, calc(100dvh - 140px), 900px);
   }
 }
 
