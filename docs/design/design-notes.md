@@ -184,7 +184,8 @@ Look:
 - **Connector lines** (`--line`, 2px, rounded corners) join each set of parents to their children: grandparents to the parent they raised, parents to you and each sibling, your household to each children group, a child to their own children. Lines from the same parents share one joining line just above the row they feed. `aria-hidden`; the generation labels say the same in words.
 - Your children are grouped by their other parent (*"With Nadège"*, *"With Guerline"*), so each marriage reads as its own household; the label shows only when there's more than one group or partner.
 - Adoptive and foster links get a small word after the relation: *"Son · adopted"*, *"Mother · adoptive"*, *"Daughter · foster"*, on every row, grandparents and grandchildren too. It's left out only when the relation already says it (*"Foster mother"*); a closer tie keeps it (*"Grandmother · foster"*). With no relation to the viewer, the card says *"Foster parent"* or *"Foster child"*, and a sibling only by fostering *"… · foster sibling"*.
-- Planned polish (next PR): lines grow in after centering, the line chain between the hovered card and the focus person turns green, and generations cascade in one after another.
+- **Lines draw in** once both their ends have landed (0.4s each), from the parents down to the children, with the sign-in tree's drawing trick (§6.1).
+- **The chain turns green:** while a card's quick look is open (hover, keyboard focus or a click), the lines between that card and the focus person turn `--accent` and 2.5px, fading in over 150ms: a grandparent through their child, a sibling through the parents, a grandchild through their parent. A partner shares the household, so nothing lights. (Owner's call, 2026-11-20.)
 
 One **focus person**; shows:
 - **Grandparents** (two generations up), grouped per parent, each card with **▲ more** when there's more family above.
@@ -197,7 +198,7 @@ Interaction:
 - **Hover or keyboard focus** on a card: the card lifts (`translateY(-3px) scale(1.04)`, soft shadow) and a **quick look** (250px card) appears just below it: relation, 2-line story, shared email or social account (never phone or address), **View profile ›**, and a quiet **Center here** link. (No dates.) No backdrop, nothing else covered. A quick look that keyboard focus has moved into stays open, whatever the mouse does, until focus leaves it or Escape closes it. A long email or handle wraps inside it.
 - **Click** keeps the quick look open (that's how phones and tablets get it); click again to close. The click waits **230ms** before acting so a double-click can cancel it.
 - **Double-click** centers the tree on that person (no quick-look flash).
-- Centering animates: the tree slides **down** into place when moving to a descendant, **up** when moving to an ancestor, and fades/scales slightly sideways otherwise (0.5s).
+- Centering animates, and so does opening the page: the generations arrive one after another, top to bottom, 80ms apart and 0.4s each. They slide **down** into place when moving to a descendant, **up** when moving to an ancestor, and fade/scale slightly sideways otherwise, as on opening (owner's call, 2026-11-20). With reduced motion everything is simply there, the green chain included.
 - Trail above the tree: *Me › Naïka › Naomie* (last 8 steps; earlier steps clickable). **Back** (disabled at start) and **Back to me**.
 - Search box suggests up to 6 matching names as you type; picking one centers the tree.
 - Tip text: *"Hover or tap a name for a quick look · double-click to center the tree on them"*.
@@ -309,7 +310,7 @@ Generated once (seeded, deterministic) and embedded as inline SVG:
 
 ### 6.3 Other motion
 - Page content fades up 14px (0.6–0.8s).
-- Tree-page re-centering slide (0.5s) and quick-look pop (0.16s).
+- Tree page: generations cascade in (80ms apart, 0.4s each), lines draw in after them (0.4s), the chain to the focus person fades green (150ms), and the quick look pops (0.16s).
 - Menu hover 150ms.
 - No looping motion anywhere else.
 
