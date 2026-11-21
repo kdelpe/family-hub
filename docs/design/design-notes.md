@@ -183,7 +183,7 @@ Look:
 - Grandparents / grandchildren with more family beyond them get a small **▲ more / ▼ more** pill under their card. Its accessible name starts with the word it shows, *"More: center the tree on Joseph Pluviose"*, so voice control finds it by saying "more" (owner's call, 2026-11-20; the mockup's label leaves the word out).
 - **Connector lines** (`--line`, 2px, rounded corners) join each set of parents to their children: grandparents to the parent they raised, parents to you and each sibling, your household to each children group, a child to their own children. Lines from the same parents share one joining line just above the row they feed. `aria-hidden`; the generation labels say the same in words.
 - Your children are grouped by their other parent (*"With Nadège"*, *"With Guerline"*), so each marriage reads as its own household; the label shows only when there's more than one group or partner.
-- Adoptive and foster links get a small word after the relation: *"Son · adopted"*, *"Mother · adoptive"*, *"Daughter · foster"*.
+- Adoptive and foster links get a small word after the relation: *"Son · adopted"*, *"Mother · adoptive"*, *"Daughter · foster"*, on every row, grandparents and grandchildren too. It's left out only when the relation already says it (*"Foster mother"*); a closer tie keeps it (*"Grandmother · foster"*). With no relation to the viewer, the card says *"Foster parent"* or *"Foster child"*, and a sibling only by fostering *"… · foster sibling"*.
 - Planned polish (next PR): lines grow in after centering, the line chain between the hovered card and the focus person turns green, and generations cascade in one after another.
 
 One **focus person**; shows:

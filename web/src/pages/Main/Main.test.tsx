@@ -49,6 +49,28 @@ const tree = {
   ],
 }
 
+// Rose fosters her grandson Peterson and was fostered by Odette; her daughter Marie-Thérèse fosters Naomie.
+const fostering = {
+  persons: [
+    person('rose', 'Rose', 'female'),
+    person('frantz', 'Frantz', 'male'),
+    person('mt', 'Marie-Thérèse', 'female'),
+    person('mirlande', 'Mirlande', 'female'),
+    person('peterson', 'Peterson', 'male'),
+    person('odette', 'Odette', 'female'),
+    person('naomie', 'Naomie', 'female'),
+  ],
+  relationships: [
+    parent('rose', 'frantz'),
+    parent('rose', 'mt'),
+    parent('frantz', 'peterson'),
+    parent('mirlande', 'peterson'),
+    parent('rose', 'peterson', 'foster'),
+    parent('odette', 'rose', 'foster'),
+    parent('mt', 'naomie', 'foster'),
+  ],
+}
+
 const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
 const row = (id: string, kind: string, value: string, visibility: string, platform: string | null = null, shared_with_you = false) => ({
   id,
@@ -264,5 +286,17 @@ describe('Main', () => {
     expect(cardOf('Jean-Robert')).toHaveFocus()
     // Quietly: that focus doesn't open it again.
     expect(screen.queryByRole('link', { name: 'View profile ›' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    { name: 'a foster child who is also a grandchild', viewer: 'rose', card: 'Peterson', sub: 'Grandson · foster' },
+    { name: 'a foster parent who is also a grandmother', viewer: 'peterson', card: 'Rose', sub: 'Grandmother · foster' },
+    { name: 'a foster sibling who is also a nephew', viewer: 'mt', card: 'Peterson', sub: 'Nephew · foster sibling' },
+    { name: 'a grandparent only by fostering', viewer: 'peterson', card: 'Odette', sub: 'Foster parent' },
+    { name: 'a grandchild only by fostering', viewer: 'rose', card: 'Naomie', sub: 'Foster child' },
+  ])('says a foster link a closer relation hides: $name', ({ viewer, card, sub }) => {
+    renderTree(viewer, { data: fostering })
+
+    expect(cardOf(card)).toHaveTextContent(sub)
   })
 })

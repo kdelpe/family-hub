@@ -208,7 +208,7 @@ function Search({
 }
 
 // A small label on adoptive and foster links (architecture §7), said from each side, with a whole label
-// when the viewer has no relation to them. Centered on you, the relation already says foster ("Foster mother").
+// when the viewer has no relation to them.
 const parentWords = {
   biological: null,
   adoptive: { word: 'adoptive', alone: 'Adoptive parent' },
@@ -327,7 +327,8 @@ function FocusTree({
   )
   const labelled = (id: string, link: { word: string; alone: string } | null) => {
     const rel = relations.get(id) ?? ''
-    if (!link || (you && link.word === 'foster')) {
+    // The viewer's relation may already say it ("Foster mother"), but a closer tie wins there ("Grandmother").
+    if (!link || rel.toLowerCase().includes(link.word)) {
       return rel
     }
     return rel ? `${rel} · ${link.word}` : link.alone
@@ -335,8 +336,18 @@ function FocusTree({
 
   const siblings = view.siblings.map(({ id, half, foster }) => {
     const rel = relations.get(id) ?? ''
-    // From another focus, the viewer's label may not say half or foster: say it from the focus person's side.
-    const word = you || id === viewerId ? null : foster ? 'foster sibling' : half && !(viewerId && family.halfSiblings(viewerId, id)) ? 'half-sibling' : null
+    // Said from the focus person's side when the viewer's label doesn't say it already: centered on you, a
+    // half-sibling is "Half-sister", but a foster sibling may be "Niece".
+    const word =
+      id === viewerId
+        ? null
+        : foster
+          ? rel.toLowerCase().includes('foster')
+            ? null
+            : 'foster sibling'
+          : half && !you && !(viewerId && family.halfSiblings(viewerId, id))
+            ? 'half-sibling'
+            : null
     return card(id, { sub: word ? (rel ? `${rel} · ${word}` : word[0]!.toUpperCase() + word.slice(1)) : rel })
   })
   const split = Math.ceil(siblings.length / 2)
@@ -378,7 +389,12 @@ function FocusTree({
           <Generation label="Grandparents">
             {view.grandparents.map((g) => (
               <Group key={g.of} unit={`up-${g.of}`} label={`${first(g.of)}’s parents`}>
-                {g.ids.map((id) => card(id, { more: treeParentsOf(family, id).length > 0 ? 'up' : undefined }))}
+                {g.ids.map((id) =>
+                  card(id, {
+                    sub: labelled(id, parentWords[family.linkOf(g.of, id) ?? 'biological']),
+                    more: treeParentsOf(family, id).length > 0 ? 'up' : undefined,
+                  }),
+                )}
               </Group>
             ))}
           </Generation>
@@ -415,7 +431,12 @@ function FocusTree({
           <Generation label="Grandchildren">
             {view.grandchildren.map((g) => (
               <Group key={g.of} unit={`down-${g.of}`} label={`${first(g.of)}’s children`}>
-                {g.ids.map((id) => card(id, { more: treeChildrenOf(family, id).length > 0 ? 'down' : undefined }))}
+                {g.ids.map((id) =>
+                  card(id, {
+                    sub: labelled(id, childWords[family.linkOf(id, g.of) ?? 'biological']),
+                    more: treeChildrenOf(family, id).length > 0 ? 'down' : undefined,
+                  }),
+                )}
               </Group>
             ))}
           </Generation>
