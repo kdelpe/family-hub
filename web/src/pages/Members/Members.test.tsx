@@ -175,8 +175,8 @@ describe('Members', () => {
   })
 
   it.each([
-    { name: 'goes to a page typed and entered', typed: '7', finish: 'enter', shows: 'Pages 6–7 · Naomie', box: '6' },
-    { name: 'goes to a page typed when leaving the box', typed: '3', finish: 'blur', shows: 'Pages 2–3 · Fritz', box: '2' },
+    { name: 'goes to a page typed and entered', typed: '7', finish: 'enter', shows: 'Pages 6–7 · Naomie', box: '7' },
+    { name: 'goes to a page typed when leaving the box', typed: '3', finish: 'blur', shows: 'Pages 2–3 · Fritz', box: '3' },
     { name: 'stays put for a page past the end', typed: '99', finish: 'enter', shows: 'Welcome', box: '1' },
     { name: 'stays put for page 0', typed: '0', finish: 'enter', shows: 'Welcome', box: '1' },
     { name: 'stays put when Escape drops what was typed', typed: '5', finish: 'escape', shows: 'Welcome', box: '1' },
@@ -198,6 +198,34 @@ describe('Members', () => {
 
     expect(position()).toBe(shows)
     expect(pageBox()).toHaveValue(box)
+  })
+
+  it('shows the page typed from the moment it’s entered, through the turn and after, until the book moves on', async () => {
+    stubMedia({ reduced: false })
+    await renderPage()
+    vi.useFakeTimers()
+    try {
+      const wait = () =>
+        act(() => {
+          vi.advanceTimersByTime(920)
+        })
+      openBook()
+      wait()
+
+      fireEvent.change(pageBox(), { target: { value: '7' } })
+      fireEvent.submit(pageBox().closest('form')!)
+      expect(book()).toHaveClass(/animNext/)
+      expect(pageBox()).toHaveValue('7')
+      wait()
+      expect(position()).toBe('Pages 6–7 · Naomie')
+      expect(pageBox()).toHaveValue('7')
+
+      press('◀ Previous')
+      wait()
+      expect(pageBox()).toHaveValue('4')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('lists what’s inside, with page numbers and letters, and no family sides', async () => {

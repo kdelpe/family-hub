@@ -5,7 +5,8 @@ import { PageContent } from './PageContent'
 import styles from './Members.module.css'
 
 type Dir = 'next' | 'prev'
-type Turn = { dir: Dir; to: number; mode: 'anim' | 'drag' | 'settle'; stops: number[][] }
+// land: the page an animated turn is bringing into view (a drag's isn't known until it's let go).
+type Turn = { dir: Dir; to: number; mode: 'anim' | 'drag' | 'settle'; stops: number[][]; land?: number }
 type Drag = {
   id: number
   el: HTMLDivElement
@@ -109,7 +110,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
       onAt(land)
       return
     }
-    setTurn({ dir: to > stop ? 'next' : 'prev', to, mode: 'anim', stops })
+    setTurn({ dir: to > stop ? 'next' : 'prev', to, mode: 'anim', stops, land })
     finish(land, turnMs)
   }
   const goTo = (index: number) => flipTo(stopOf(stops, index), index)
@@ -273,6 +274,12 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   const numbers = cur.flatMap((i) => pageNumber(book, i) ?? [])
   const total = Math.max(...book.pages.map((_, i) => Number(pageNumber(book, i) ?? 0)))
   const closed = stop === 0 || stop === last
+  // The box shows the page asked for (a typed page, a person jumped to), from the moment the turn starts; turned to
+  // by Previous or Next, the spread's first numbered page.
+  const boxAt = turn?.land ?? at
+  const boxSpread = stops[stopOf(stops, boxAt)]!
+  const boxNumber =
+    (boxSpread.includes(boxAt) ? pageNumber(book, boxAt) : null) ?? boxSpread.flatMap((i) => pageNumber(book, i) ?? [])[0] ?? ''
   // Anything typed in the page box is taken on Enter or on leaving it; a number that isn't a page puts it back.
   const goToPage = () => {
     const n = Number(draft)
@@ -546,7 +553,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
                 autoComplete="off"
                 enterKeyHint="go"
                 size={3}
-                value={draft ?? numbers[0] ?? ''}
+                value={draft ?? boxNumber}
                 onFocus={(event) => event.currentTarget.select()}
                 onChange={(event) => setDraft(event.currentTarget.value.replace(/\D/g, ''))}
                 onKeyDown={(event) => event.key === 'Escape' && setDraft(null)}
