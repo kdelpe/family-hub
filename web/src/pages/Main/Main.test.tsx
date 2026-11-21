@@ -190,13 +190,48 @@ describe('Main', () => {
     fireEvent.pointerMove(panel, { ...mouse, clientX: 120, clientY: 90 })
     fireEvent.pointerMove(panel, { ...mouse, clientX: 140, clientY: 80 })
     fireEvent.pointerUp(panel, mouse)
-    fireEvent.click(cardOf('Jean-Robert'))
+    // A pointer's click has a click count in detail; a keyboard's has 0.
+    fireEvent.click(cardOf('Jean-Robert'), { detail: 1 })
 
     expect(stage.style.transform).not.toBe('')
     expect(screen.getByRole('region', { name: 'Family tree centered on you' })).toBeInTheDocument()
 
-    fireEvent.click(cardOf('Jean-Robert'))
+    fireEvent.click(cardOf('Jean-Robert'), { detail: 1 })
     expect(screen.getByRole('region', { name: 'Family tree centered on Jean-Robert Pluviose' })).toBeInTheDocument()
+  })
+
+  it('still centers on a card from the keyboard after a drag the browser canceled', () => {
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+    const mouse = { pointerId: 1, pointerType: 'mouse', button: 0 }
+    fireEvent.pointerDown(cardOf('Jean-Robert'), { ...mouse, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(panel, { ...mouse, clientX: 140, clientY: 80 })
+    fireEvent.pointerCancel(panel, mouse)
+
+    fireEvent.click(cardOf('Jean-Robert'), { detail: 0 })
+
+    expect(screen.getByRole('region', { name: 'Family tree centered on Jean-Robert Pluviose' })).toBeInTheDocument()
+  })
+
+  it('doesn’t move the tree when the mouse comes back after a press released outside the panel', () => {
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+    const mouse = { pointerId: 1, pointerType: 'mouse', button: 0 }
+    fireEvent.pointerDown(panel, { ...mouse, clientX: 100, clientY: 100 })
+    fireEvent.pointerUp(window, mouse)
+
+    fireEvent.pointerMove(panel, { ...mouse, clientX: 140, clientY: 130 })
+
+    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe('')
+    expect(screen.getByRole('button', { name: 'Recenter' })).toBeDisabled()
+  })
+
+  it('keeps the profile links from being dragged as links, so a drag from one moves the tree', () => {
+    renderTree('fritz')
+
+    for (const link of screen.getAllByRole('link', { name: /^View profile of / })) {
+      expect(link).toHaveAttribute('draggable', 'false')
+    }
   })
 
   it('recenters a tree that was moved, keeping its zoom', () => {

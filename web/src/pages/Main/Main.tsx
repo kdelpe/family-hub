@@ -530,9 +530,16 @@ function FocusTree({
       moveBy(event.clientX - last.x, event.pointerType === 'touch' ? 0 : event.clientY - last.y)
     }
   }
-  const onPointerEnd = (event: ReactPointerEvent<HTMLElement>) => {
-    pointers.current.delete(event.pointerId)
-  }
+  // On the window: a press released outside the panel before it became a drag never reaches the panel.
+  useEffect(() => {
+    const end = (event: PointerEvent) => pointers.current.delete(event.pointerId)
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
+    return () => {
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+    }
+  }, [])
 
   return (
     <div className={styles.frame}>
@@ -544,11 +551,10 @@ function FocusTree({
         className={styles.panel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={onPointerEnd}
-        onPointerCancel={onPointerEnd}
-        // A drag that began on a card doesn't also center the tree on them.
+        // A drag that began on a card doesn't also center the tree on them. Only a pointer's click: Enter on a
+        // card clicks it with no pointer (detail 0), and must still work after a drag the browser canceled.
         onClickCapture={(event) => {
-          if (dragged.current) {
+          if (dragged.current && event.detail > 0) {
             event.stopPropagation()
             event.preventDefault()
             dragged.current = false
@@ -678,7 +684,8 @@ function Person({
           <span className={styles.name}>{fullName(person)}</span>
           {sub && <span className={styles.sub}>{sub}</span>}
         </button>
-        <Link to={`/people/${person.id}`} className={styles.profileLink}>
+        {/* Not draggable as a link, so a drag that starts on it moves the tree. */}
+        <Link to={`/people/${person.id}`} draggable={false} className={styles.profileLink}>
           View profile <span className="visually-hidden">of {fullName(person)}</span> ›
         </Link>
       </div>
