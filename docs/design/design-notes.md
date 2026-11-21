@@ -238,14 +238,13 @@ Interaction:
 **Data:** living members come from `GET /api/directory` (every living person, with `has_account` for *"Not on the hub yet"*); the In Memory pages come from `/api/tree`'s persons with `is_deceased` (name, side, `bio_excerpt` as the remembered line, left out when there's none); relations come from the tree. Contact rules are in architecture §5.2.
 
 **Built (owner's calls, 2026-11-21):**
+- **Just the book** (owner's call after the first build): no page title, subtitle, **Find someone…** search or **Book / List** switch; the letter tabs and Contents do the finding. A hidden "Members" heading stays for screen readers. The book and the buttons under it **fill the window without scrolling**: the page height is the window less the buttons (440–820 px; on phones 440–700 px under the menu). Closed, the cover slides to the middle at its own size rather than the mockup's 1.22× scale, which would have made the open book shorter. No Pause motion button.
 - **Phones** turn **one page at a time**: the same book, cover and turns, one page filling the width, without the blank and Notes pages; dragging either way turns, and turning back brings the previous page in from the left.
 - **The green board, the cover's sheen and its lift are on**, as described here. (The mockup's CSS leaves its reduced-motion block unclosed, so it showed them only with reduced motion; that was a slip.) The sheen, the lift, the peeking corner and the portrait fades stop with reduced motion or the site-wide Pause motion (§6.4); turns are instant with reduced motion.
 - **Left out for now, to come back:** the **city chip** (there's no city field yet) and **Share a memory ›** (until Add a story exists).
 - As elsewhere, relations drop "Your", and your own page says "You".
 - **Ask to share** follows the Directory's rules it replaces: dashed **Request …** buttons become *"✓ … requested"*; once shared, *"✓ Phone number shared with you"* links to their profile, where the value is shown; admins, who can't ask, see *"Phone number and address on request"*. WhatsApp counts as a phone number. *"Not on the hub yet"* shows only when someone without a login has nothing shared either.
 - The page edges stop growing at 18px, since a big family has thousands of pages. No library: the CSS-property approach above.
-
-
 
 ### 4.5 Events
 Title **Events**. Segmented **Timeline / Media**, plus two buttons shown to admins (and to members once `MEMBERS_CAN_CONTRIBUTE` is on):
