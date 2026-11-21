@@ -1,0 +1,1598 @@
+/* The page turn's angle in degrees (Book.tsx): registered, so it can be animated and transitioned. */
+@property --fa {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.main {
+  --ink-06: color-mix(in srgb, var(--text) 6%, transparent);
+  --ink-10: color-mix(in srgb, var(--text) 10%, transparent);
+  --ink-12: color-mix(in srgb, var(--text) 12%, transparent);
+  --ink-18: color-mix(in srgb, var(--text) 18%, transparent);
+  --ink-20: color-mix(in srgb, var(--text) 20%, transparent);
+  --ink-22: color-mix(in srgb, var(--text) 22%, transparent);
+  --ink-26: color-mix(in srgb, var(--text) 26%, transparent);
+  --ink-28: color-mix(in srgb, var(--text) 28%, transparent);
+  --ink-30: color-mix(in srgb, var(--text) 30%, transparent);
+  --ink-32: color-mix(in srgb, var(--text) 32%, transparent);
+  --ink-34: color-mix(in srgb, var(--text) 34%, transparent);
+  --paper: var(--surface);
+  --paper-lines: repeating-linear-gradient(to bottom, transparent 0, transparent 31px, var(--paper-rule) 31px, var(--paper-rule) 32px);
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 30px 40px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow: hidden;
+  line-height: normal;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.heading {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 40px;
+  font-weight: 500;
+}
+
+.subtitle {
+  color: var(--muted);
+}
+
+.search {
+  height: 46px;
+  width: 240px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0 16px;
+  border: 1px solid var(--input-border);
+  border-radius: 23px;
+  background: var(--surface);
+  font: inherit;
+  color: var(--text);
+}
+
+.views {
+  display: flex;
+  padding: 4px;
+  border-radius: 24px;
+  background: var(--nav-active);
+}
+
+.viewButton {
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 19px;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.viewButton[aria-pressed='true'] {
+  background: var(--surface);
+}
+
+/* ---- The book ---- */
+
+/* Room on the right for the letter tabs, which stick out of the book. */
+.bookArea {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding-right: 34px;
+}
+
+.book {
+  position: relative;
+  width: 100%;
+  max-width: 940px;
+  padding: 14px;
+  box-sizing: border-box;
+  transform-origin: 50% 0;
+  transition:
+    transform 0.75s cubic-bezier(0.4, 0.1, 0.25, 1),
+    margin-bottom 0.75s cubic-bezier(0.4, 0.1, 0.25, 1);
+}
+
+/* Closed, the cover sits mid-page, a little larger; the buttons move down with it. */
+.closedStart {
+  transform: translateX(calc(-30.5% + 8.54px)) scale(1.22);
+  margin-bottom: 172px;
+}
+
+.closedEnd {
+  transform: translateX(calc(30.5% - 8.54px)) scale(1.22);
+  margin-bottom: 172px;
+}
+
+.board {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  background: var(--accent);
+  box-shadow:
+    0 22px 44px var(--ink-20),
+    inset 0 0 0 2px color-mix(in srgb, var(--surface) 10%, transparent);
+  transition: opacity 0.45s ease;
+}
+
+.boardLeft {
+  left: 0;
+  border-radius: 18px 0 0 18px;
+}
+
+.boardRight {
+  right: 0;
+  border-radius: 0 18px 18px 0;
+}
+
+.boardWhole {
+  left: 0;
+  width: 100%;
+  border-radius: 18px;
+}
+
+.pages {
+  position: relative;
+  height: 760px;
+  perspective: 2600px;
+  perspective-origin: 50% 45%;
+  touch-action: pan-y;
+  cursor: grab;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pages:focus-visible {
+  box-shadow: 0 0 0 3px var(--gold);
+  border-radius: 10px;
+}
+
+.dragging {
+  cursor: grabbing;
+}
+
+.animNext {
+  animation: turn-next 0.9s cubic-bezier(0.45, 0.05, 0.3, 1) forwards;
+}
+
+.animPrev {
+  animation: turn-prev 0.9s cubic-bezier(0.45, 0.05, 0.3, 1) forwards;
+}
+
+/* One page at a time, turning back brings the previous page in from the left. */
+.animUnturn {
+  animation: turn-back 0.9s cubic-bezier(0.45, 0.05, 0.3, 1) forwards;
+}
+
+@keyframes turn-next {
+  from {
+    --fa: 0;
+  }
+  to {
+    --fa: -180;
+  }
+}
+
+@keyframes turn-prev {
+  from {
+    --fa: 0;
+  }
+  to {
+    --fa: 180;
+  }
+}
+
+@keyframes turn-back {
+  from {
+    --fa: -180;
+  }
+  to {
+    --fa: 0;
+  }
+}
+
+.page {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  background-color: var(--paper);
+  background-image: var(--paper-lines);
+  overflow: hidden;
+}
+
+.left {
+  left: 0;
+  border-radius: 10px 0 0 10px;
+  box-shadow: inset -18px 0 22px -18px var(--ink-18);
+}
+
+.right {
+  right: 0;
+  border-radius: 0 10px 10px 0;
+  box-shadow: inset 18px 0 22px -18px var(--ink-18);
+}
+
+.whole {
+  left: 0;
+  width: 100%;
+  border-radius: 4px 10px 10px 4px;
+  box-shadow: inset 18px 0 22px -18px var(--ink-18);
+}
+
+.hidden {
+  visibility: hidden;
+}
+
+.spine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: var(--border);
+  z-index: 2;
+}
+
+/* The closed cover lifts a little now and then, to invite a click. */
+.coverHint {
+  transform-origin: left center;
+  animation: cover-hint 6s ease-in-out 2s infinite;
+}
+
+@keyframes cover-hint {
+  0%,
+  82%,
+  100% {
+    transform: rotateY(0);
+  }
+  88% {
+    transform: rotateY(-14deg);
+  }
+  94% {
+    transform: rotateY(-3deg);
+  }
+}
+
+.stack {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  pointer-events: none;
+  background: repeating-linear-gradient(to right, var(--border) 0 1px, var(--surface-soft) 1px 2px);
+}
+
+/* ---- A page mid-turn: two hinged pieces, the outer 32% bending a little more ---- */
+
+.turning {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.leaf {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  transform-style: preserve-3d;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.leafNext {
+  left: 50%;
+  --s: -1;
+}
+
+.leafPrev {
+  left: 0;
+  --s: 1;
+}
+
+.single .leafNext {
+  left: 0;
+  width: 100%;
+}
+
+.seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  transform-style: preserve-3d;
+}
+
+.leafNext .sa {
+  left: 0;
+  width: 68%;
+  transform-origin: left center;
+}
+
+.leafNext .sb {
+  left: 100%;
+  width: 47.0588%;
+  transform-origin: left center;
+}
+
+.leafPrev .sa {
+  right: 0;
+  width: 68%;
+  transform-origin: right center;
+}
+
+.leafPrev .sb {
+  right: 100%;
+  width: 47.0588%;
+  transform-origin: right center;
+}
+
+.sa {
+  transform: rotateY(calc(var(--fa) * 1deg));
+}
+
+.sb {
+  transform: rotateY(calc(sin(calc(var(--fa) * 1deg)) * 30deg));
+}
+
+.face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+}
+
+.back {
+  transform: rotateY(180deg);
+}
+
+.square {
+  border-radius: 0;
+}
+
+.roundRight {
+  border-radius: 0 10px 10px 0;
+}
+
+.roundLeft {
+  border-radius: 10px 0 0 10px;
+}
+
+/* Each piece shows its slice of a whole page, laid out at the page's full width. */
+.inner {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background-color: var(--paper);
+  background-image: var(--paper-lines);
+}
+
+.innerRight {
+  box-shadow: inset 18px 0 22px -18px var(--ink-18);
+}
+
+.innerLeft {
+  box-shadow: inset -18px 0 22px -18px var(--ink-18);
+}
+
+.saFrontNext,
+.saBackPrev {
+  left: 0;
+  width: 147.0588%;
+}
+
+.saBackNext,
+.saFrontPrev {
+  left: -47.0588%;
+  width: 147.0588%;
+}
+
+.sbFrontNext,
+.sbBackPrev {
+  left: -212.5%;
+  width: 312.5%;
+}
+
+.sbBackNext,
+.sbFrontPrev {
+  left: 0;
+  width: 312.5%;
+}
+
+/* Darker toward vertical; the outer piece catches a highlight. */
+.shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  opacity: calc(sin(calc(var(--fa) * var(--s) * 1deg)) * 0.95);
+}
+
+.leafNext .face:not(.back) .shade {
+  background: linear-gradient(to right, var(--ink-10), var(--ink-26));
+}
+
+.leafPrev .face:not(.back) .shade {
+  background: linear-gradient(to left, var(--ink-10), var(--ink-26));
+}
+
+.leafNext .face.back .shade {
+  background: linear-gradient(to left, var(--ink-30), var(--ink-06));
+}
+
+.leafPrev .face.back .shade {
+  background: linear-gradient(to right, var(--ink-30), var(--ink-06));
+}
+
+.gloss {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  opacity: calc(sin(calc(var(--fa) * var(--s) * 1deg)) * 0.85);
+}
+
+.leafNext .gloss {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--surface) 0%, transparent) 10%,
+    color-mix(in srgb, var(--surface) 55%, transparent) 55%,
+    color-mix(in srgb, var(--surface) 0%, transparent) 95%
+  );
+}
+
+.leafPrev .gloss {
+  background: linear-gradient(
+    to left,
+    color-mix(in srgb, var(--surface) 0%, transparent) 10%,
+    color-mix(in srgb, var(--surface) 55%, transparent) 55%,
+    color-mix(in srgb, var(--surface) 0%, transparent) 95%
+  );
+}
+
+/* Shadows on the page underneath and on the page it lands on. */
+.cast {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.underNext {
+  left: 50%;
+  background: linear-gradient(to right, var(--ink-34), transparent 60%);
+  opacity: sin(calc(var(--fa) * -1deg));
+}
+
+.single .underNext {
+  left: 0;
+  width: 100%;
+}
+
+.landNext {
+  left: 0;
+  border-radius: 10px 0 0 10px;
+  background: linear-gradient(to left, var(--ink-32), transparent 60%);
+  opacity: max(0, calc(cos(calc(var(--fa) * 1deg)) * -1.8 * sin(calc(var(--fa) * -1deg))));
+}
+
+.underPrev {
+  left: 0;
+  background: linear-gradient(to left, var(--ink-34), transparent 60%);
+  opacity: sin(calc(var(--fa) * 1deg));
+}
+
+.landPrev {
+  left: 50%;
+  border-radius: 0 10px 10px 0;
+  background: linear-gradient(to right, var(--ink-32), transparent 60%);
+  opacity: max(0, calc(cos(calc(var(--fa) * 1deg)) * -1.8 * sin(calc(var(--fa) * 1deg))));
+}
+
+/* ---- Corners, tabs and the buttons under the book ---- */
+
+.corner {
+  position: absolute;
+  bottom: 0;
+  width: 96px;
+  height: 96px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  z-index: 6;
+}
+
+.corner:disabled {
+  cursor: default;
+}
+
+.cornerPrev {
+  left: 0;
+  border-radius: 0 0 0 10px;
+}
+
+.cornerNext {
+  right: 0;
+  border-radius: 0 0 10px 0;
+}
+
+.ear {
+  position: absolute;
+  bottom: 0;
+  width: 30px;
+  height: 30px;
+  transition:
+    width 0.28s ease,
+    height 0.28s ease;
+}
+
+.earRight {
+  right: 0;
+  border-top-left-radius: 8px;
+  background: linear-gradient(to top left, var(--ear-back) 0 49%, var(--ink-28) 50%, var(--ear-fold) 53%, var(--surface) 92%);
+  box-shadow: -3px -3px 7px var(--ink-12);
+  animation: peek 7s ease-in-out 3.2s infinite;
+}
+
+.earLeft {
+  left: 0;
+  border-top-right-radius: 8px;
+  background: linear-gradient(to top right, var(--ear-back) 0 49%, var(--ink-28) 50%, var(--ear-fold) 53%, var(--surface) 92%);
+  box-shadow: 3px -3px 7px var(--ink-12);
+}
+
+.corner:not(:disabled):hover .ear {
+  animation: none;
+  width: 64px;
+  height: 64px;
+}
+
+@keyframes peek {
+  0%,
+  80%,
+  100% {
+    width: 30px;
+    height: 30px;
+  }
+  86% {
+    width: 50px;
+    height: 50px;
+  }
+  92% {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+.tabs {
+  position: absolute;
+  top: 26px;
+  right: -34px;
+  bottom: 26px;
+  width: 34px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  z-index: 1;
+  touch-action: none;
+  cursor: ns-resize;
+}
+
+.tab {
+  height: 36px;
+  width: 34px;
+  border: 0;
+  border-radius: 0 10px 10px 0;
+  background: var(--nav-active);
+  color: var(--text-2);
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    width 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.tabOn {
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.tabScrub {
+  width: 46px;
+}
+
+.scrub {
+  position: absolute;
+  left: -70px;
+  width: 56px;
+  height: 56px;
+  margin-top: -10px;
+  border-radius: 50% 50% 8px 50%;
+  z-index: 9;
+  background: var(--accent);
+  color: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+  font-size: 28px;
+  box-shadow: 0 8px 18px var(--ink-22);
+  pointer-events: none;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.prevButton,
+.nextButton {
+  height: 46px;
+  padding: 0 20px;
+  border-radius: 23px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.prevButton {
+  border: 1px solid var(--input-border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.nextButton {
+  border: 0;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.prevButton:disabled,
+.nextButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.position {
+  min-width: 280px;
+  text-align: center;
+  color: var(--text-2);
+}
+
+/* Paused, or with reduced motion: no sheen, no cover lift, no peeking corner. */
+.still .coverHint,
+.still .sheen,
+.still .earRight {
+  animation: none;
+}
+
+/* ---- Inside the pages ---- */
+
+.cornerLetter {
+  position: absolute;
+  top: 18px;
+  font-family: var(--font-serif);
+  font-size: 40px;
+  color: var(--border);
+  line-height: 1;
+}
+
+.atLeft {
+  left: 22px;
+}
+
+.atRight {
+  right: 22px;
+}
+
+.pageNumber {
+  position: absolute;
+  bottom: 16px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--page-number);
+}
+
+.personPage {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 54px 36px 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.portrait {
+  position: relative;
+  overflow: hidden;
+  width: 96px;
+  height: 96px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--avatar);
+  box-shadow:
+    0 0 0 4px var(--surface),
+    0 0 0 6px var(--avatar);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+  font-size: 31px;
+  color: var(--text);
+}
+
+.sepia {
+  filter: grayscale(1) sepia(0.25);
+}
+
+.name {
+  margin: 8px 0 0;
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.relation {
+  color: var(--text-2);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.chip {
+  padding: 2px 10px;
+  border-radius: 12px;
+  color: var(--text-2);
+}
+
+.sideFirst {
+  background: var(--side-first);
+}
+
+.sideSecond {
+  background: var(--side-second);
+}
+
+.sideBoth {
+  background: var(--side-both);
+}
+
+.sideMarriedIn {
+  background: var(--side-married-in);
+}
+
+.rule {
+  height: 1px;
+  background: var(--divider);
+}
+
+.reach {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sectionLabel,
+.kicker {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sectionBody {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.emailRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.emailValue {
+  font-size: 15px;
+  word-break: break-all;
+}
+
+.emailButton {
+  height: 34px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 17px;
+  background: var(--accent);
+  color: var(--on-accent);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.emailButton:hover {
+  color: var(--on-accent);
+}
+
+.social {
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 17px;
+  border: 1px solid var(--input-border);
+  background: var(--surface-soft);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.linkIcon path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.onRequest {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.yourPage {
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--side-first);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.yourPageTitle {
+  font-weight: 600;
+}
+
+.boxText {
+  font-size: 15px;
+  color: var(--text-2);
+  line-height: 1.45;
+}
+
+.boxLink {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.notOnHub {
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  font-size: 15px;
+  color: var(--text-2);
+  line-height: 1.45;
+}
+
+.openProfile {
+  margin-top: auto;
+  align-self: center;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.memorialPage {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 64px 40px 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  text-align: center;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--nav-active) 35%, transparent), transparent 50%);
+}
+
+.inMemory {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.inMemory path {
+  fill: var(--leaf-5);
+}
+
+.remembered {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 20px;
+  line-height: 1.5;
+  color: var(--text);
+  max-width: 330px;
+}
+
+.memorialLinks {
+  margin-top: auto;
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* The covers: leather-look green with gold tooling. */
+.cover {
+  position: absolute;
+  inset: 0;
+  background-color: var(--accent);
+  background-image:
+    radial-gradient(ellipse at 30% 18%, var(--cover-light), transparent 55%),
+    radial-gradient(ellipse at 85% 95%, var(--cover-dark), transparent 55%),
+    repeating-radial-gradient(circle at 40% 40%, var(--cover-grain) 0 2px, transparent 2px 5px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--on-accent) 8%, transparent);
+}
+
+.backCover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+}
+
+.hinge,
+.hingeBack {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+}
+
+.hinge {
+  left: 0;
+  background: linear-gradient(to right, var(--cover-hinge), var(--cover-hinge-soft));
+  border-right: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+}
+
+.hingeBack {
+  right: 0;
+  background: linear-gradient(to left, var(--cover-hinge), var(--cover-hinge-soft));
+  border-left: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+}
+
+.border {
+  position: absolute;
+  inset: 22px 16px 22px 40px;
+  border: 1.5px solid color-mix(in srgb, var(--gold) 85%, transparent);
+  border-radius: 6px;
+}
+
+.borderInner {
+  position: absolute;
+  inset: 28px 22px 28px 46px;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  border-radius: 4px;
+}
+
+.borderBack {
+  position: absolute;
+  inset: 22px 40px 22px 16px;
+  border: 1.5px solid color-mix(in srgb, var(--gold) 60%, transparent);
+  border-radius: 6px;
+}
+
+.flourish {
+  position: absolute;
+}
+
+.flourish path {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.3;
+}
+
+.flourish circle {
+  fill: var(--gold);
+}
+
+.topLeft {
+  top: 34px;
+  left: 46px;
+}
+
+.topRight {
+  top: 34px;
+  right: 22px;
+  transform: scaleX(-1);
+}
+
+.bottomLeft {
+  bottom: 34px;
+  left: 46px;
+  transform: scaleY(-1);
+}
+
+.bottomRight {
+  bottom: 34px;
+  right: 22px;
+  transform: scale(-1, -1);
+}
+
+.coverWords {
+  position: absolute;
+  inset: 0 0 0 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  color: var(--bg);
+}
+
+.gold {
+  color: var(--gold);
+}
+
+.goldSoft {
+  color: color-mix(in srgb, var(--gold) 75%, transparent);
+}
+
+.accentMark {
+  color: var(--accent);
+}
+
+.faintMark {
+  color: var(--avatar);
+}
+
+.coverTitle {
+  font-family: var(--font-serif);
+  font-size: 40px;
+  line-height: 1.1;
+  color: var(--gold-pale);
+  text-shadow: 0 1px 0 var(--cover-text-shadow);
+}
+
+.coverRule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.coverRule span {
+  width: 56px;
+  height: 1px;
+  background: var(--gold);
+}
+
+.coverRule .diamond {
+  width: 7px;
+  height: 7px;
+  transform: rotate(45deg);
+}
+
+.coverLabel {
+  font-size: 15px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.motto {
+  position: absolute;
+  bottom: 64px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 17px;
+  color: color-mix(in srgb, var(--gold-pale) 80%, transparent);
+}
+
+.sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, var(--cover-sheen) 48%, transparent 58%);
+  background-size: 260% 100%;
+  animation: sheen 7s ease-in-out 1s infinite;
+}
+
+@keyframes sheen {
+  0% {
+    background-position: 120% 0;
+  }
+  35%,
+  100% {
+    background-position: -60% 0;
+  }
+}
+
+.endpaper {
+  position: absolute;
+  inset: 0;
+  background-color: var(--endpaper);
+  background-image:
+    radial-gradient(circle at 25% 25%, color-mix(in srgb, var(--accent) 20%, transparent) 2.2px, transparent 2.8px),
+    radial-gradient(circle at 75% 75%, color-mix(in srgb, var(--accent) 12%, transparent) 2.2px, transparent 2.8px);
+  background-size: 30px 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bookplate {
+  width: 300px;
+  max-width: calc(100% - 40px);
+  padding: 30px 26px;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  outline: 1px solid var(--accent);
+  outline-offset: 5px;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  box-shadow: 0 8px 18px var(--ink-12);
+}
+
+.bookplateName {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.bookplateNote,
+.proverbEnglish {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.proverb {
+  padding: 22px 30px;
+  background: var(--surface);
+  border-radius: 4px;
+  border: 1px solid var(--input-border);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 8px 18px var(--ink-10);
+}
+
+.proverbKreyol {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 21px;
+}
+
+.textPage {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 64px 44px 50px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.welcomeTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.welcomeIntro {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.notesList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.note {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.noteMark {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--side-first);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ownPage {
+  margin-top: auto;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface-soft);
+  border: 1px dashed var(--border);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.ownPage a {
+  font-weight: 600;
+}
+
+.contentsTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 32px;
+  font-weight: 400;
+}
+
+.toc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.entryButton {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.entryButton:hover .entryTitle {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.entryTitle {
+  font-family: var(--font-serif);
+  font-size: 21px;
+}
+
+.leader {
+  flex: 1;
+  border-bottom: 2px dotted var(--input-border);
+  transform: translateY(-5px);
+}
+
+.entryPage {
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.entryNote {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.letters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.letter {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.sideCounts {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sideCount {
+  padding: 4px 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.divider {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 64px 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  text-align: center;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--nav-active) 50%, transparent), color-mix(in srgb, var(--nav-active) 10%, transparent));
+}
+
+.branch g {
+  fill: var(--leaf-5);
+}
+
+.stem {
+  fill: none;
+  stroke: var(--leaf-5);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.berry {
+  fill: var(--leaf-4);
+}
+
+.dividerTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 44px;
+  font-weight: 400;
+}
+
+.dividerText {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--text-2);
+  max-width: 340px;
+}
+
+.notesPage {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--page-number);
+  text-align: center;
+}
+
+.notesTitle {
+  font-family: var(--font-serif);
+  font-size: 18px;
+}
+
+/* ---- The list ---- */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.listLabel {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.listLabelLater {
+  margin-top: 10px;
+}
+
+.grid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.row {
+  width: 100%;
+  height: 100%;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  cursor: pointer;
+  transition:
+    translate 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.row:hover,
+.row:focus-visible {
+  translate: 0 -4px;
+  box-shadow: 0 12px 26px var(--ink-12);
+}
+
+.rowAvatar {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--avatar);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+}
+
+.gray {
+  filter: grayscale(1);
+}
+
+.rowWords {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.rowName {
+  font-weight: 600;
+}
+
+.rowSub {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.rowOpen {
+  font-size: 14px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .main {
+    padding: 24px 16px 40px;
+  }
+
+  .search {
+    width: 100%;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .book {
+    padding: 10px;
+  }
+
+  .pages {
+    height: 700px;
+  }
+
+  .personPage {
+    padding: 54px 24px 44px;
+  }
+
+  .textPage {
+    padding: 64px 28px 50px;
+  }
+
+  .memorialPage {
+    padding: 64px 24px 44px;
+  }
+
+  .divider {
+    padding: 64px 28px;
+  }
+
+  .position {
+    min-width: 0;
+    flex: 1;
+    font-size: 15px;
+  }
+
+  .prevButton,
+  .nextButton {
+    padding: 0 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book,
+  .row {
+    transition: none;
+  }
+}

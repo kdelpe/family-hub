@@ -48,6 +48,7 @@ export type DirectoryEntry = {
   first_name: string
   last_name: string | null
   side: TreePerson['side']
+  has_account: boolean
   contacts: Contact[]
 }
 

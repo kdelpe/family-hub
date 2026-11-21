@@ -1,0 +1,458 @@
+import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react'
+
+import { type Book as BookData, letterOf, nameOf, pageNumber, stopOf, stopsOf } from './bookPages'
+import { PageContent } from './PageContent'
+import styles from './Members.module.css'
+
+type Dir = 'next' | 'prev'
+type Turn = { dir: Dir; to: number; mode: 'anim' | 'drag' | 'settle' }
+type Drag = {
+  id: number
+  el: HTMLDivElement
+  side: Dir
+  corner: boolean
+  x0: number
+  left: number
+  right: number
+  on: boolean
+  dir: Dir
+  to: number
+  p: number
+  hist: [number, number][]
+}
+type TabDrag = { nav: HTMLElement; id: number; start: number; cur: number; y0: number; moved: boolean }
+
+// A turn takes 0.9 s (Members.module.css), plus a frame.
+const turnMs = 920
+// The page edges grow as pages pile up, up to this: a big family has thousands of pages.
+const maxStack = 18
+
+type Props = {
+  book: BookData
+  // One page at a time, on a phone.
+  single: boolean
+  // The page the book is open at (index into book.pages); the stop showing it is what's drawn.
+  at: number
+  onAt: (index: number) => void
+  viewerId: string | null
+  paused: boolean
+  reduced: boolean
+}
+
+// The Members book (design-notes §4.3): one registered property, --fa, turns a page through calc(), sin() and cos()
+// in the CSS; a drag writes it straight to the element, with no render per pointer move.
+export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Props) {
+  const stops = stopsOf(book, single)
+  const last = stops.length - 1
+  const stop = stopOf(stops, at)
+  const [turn, setTurn] = useState<Turn | null>(null)
+  const [scrub, setScrub] = useState<{ tab: number; top: number } | null>(null)
+  const pagesRef = useRef<HTMLDivElement>(null)
+  const timer = useRef<number | undefined>(undefined)
+  const drag = useRef<Drag | null>(null)
+  const justDragged = useRef(-Infinity)
+  const tabDrag = useRef<TabDrag | null>(null)
+  const tabHandled = useRef(-Infinity)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+
+  const goStop = (s: number) => onAt(stops[s]![0]!)
+  const finish = (to: number | null, ms: number) => {
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
+      const el = pagesRef.current
+      if (el) {
+        el.style.transition = 'none'
+        el.style.removeProperty('--fa')
+      }
+      if (to !== null) {
+        goStop(to)
+      }
+      setTurn(null)
+    }, ms)
+  }
+  const flipTo = (to: number) => {
+    if (turn || to === stop || to < 0 || to > last) {
+      return
+    }
+    if (reduced) {
+      goStop(to)
+      return
+    }
+    setTurn({ dir: to > stop ? 'next' : 'prev', to, mode: 'anim' })
+    finish(to, turnMs)
+  }
+  const goTo = (index: number) => flipTo(stopOf(stops, index))
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const target = event.target as Element
+    if (turn || event.button > 0 || target.closest('a, input, select, textarea, button:not([data-corner])')) {
+      return
+    }
+    const el = event.currentTarget
+    const box = el.getBoundingClientRect()
+    const side: Dir = event.clientX >= box.left + box.width / 2 ? 'next' : 'prev'
+    const to = stop + (side === 'next' ? 1 : -1)
+    if (!single && (to < 0 || to > last)) {
+      return
+    }
+    drag.current = {
+      id: event.pointerId,
+      el,
+      side,
+      corner: !!target.closest('[data-corner]'),
+      x0: event.clientX,
+      left: box.left,
+      right: box.right,
+      on: false,
+      dir: side,
+      to,
+      p: 0,
+      hist: [[event.timeStamp, event.clientX]],
+    }
+  }
+
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current
+    if (!d || event.pointerId !== d.id) {
+      return
+    }
+    const dx = event.clientX - d.x0
+    if (!d.on) {
+      // A 6px dead zone keeps a click a click.
+      if (Math.abs(dx) < 6) {
+        return
+      }
+      // A spread turns the page grabbed, toward the spine; a single page turns whichever way it's pulled.
+      d.dir = single ? (dx < 0 ? 'next' : 'prev') : d.side
+      d.to = stop + (d.dir === 'next' ? 1 : -1)
+      if ((d.dir === 'next') !== dx < 0 || d.to < 0 || d.to > last) {
+        drag.current = null
+        return
+      }
+      d.on = true
+      d.el.setPointerCapture?.(d.id)
+      d.el.style.transition = 'none'
+      d.el.style.setProperty('--fa', single && d.dir === 'prev' ? '-180' : '0')
+      setTurn({ dir: d.dir, to: d.to, mode: 'drag' })
+    }
+    // Done when the pointer reaches the far edge: the left one turning forward, the right one turning back.
+    const far = d.dir === 'next' ? d.left : d.right
+    const p = Math.min(1, Math.max(0, dx / (far - d.x0)))
+    d.p = p
+    const angle = (Math.acos(1 - 2 * p) * 180) / Math.PI
+    const fa = single && d.dir === 'prev' ? angle - 180 : d.dir === 'next' ? -angle : angle
+    d.el.style.setProperty('--fa', fa.toFixed(2))
+    d.hist.push([event.timeStamp, event.clientX])
+    if (d.hist.length > 6) {
+      d.hist.shift()
+    }
+  }
+
+  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current
+    if (!d || event.pointerId !== d.id) {
+      return
+    }
+    drag.current = null
+    if (!d.on) {
+      // The corners turn by their own click.
+      if (!d.corner) {
+        flipTo(stop + (d.side === 'next' ? 1 : -1))
+      }
+      return
+    }
+    justDragged.current = event.timeStamp
+    const first = d.hist[0]!
+    const lastMove = d.hist.at(-1)!
+    const speed = lastMove[0] > first[0] ? (lastMove[1] - first[1]) / (lastMove[0] - first[0]) : 0
+    const toward = d.dir === 'next' ? -speed : speed
+    // Past halfway, or flicked toward the spine: it finishes; otherwise it falls back.
+    const done = d.p > 0.5 ? toward > -0.3 : toward > 0.35 && d.p > 0.03
+    const end = single && d.dir === 'prev' ? (done ? 0 : -180) : done ? (d.dir === 'next' ? -180 : 180) : 0
+    const ms = Math.round(200 + 460 * (done ? 1 - d.p : d.p))
+    d.el.style.transition = `--fa ${ms}ms cubic-bezier(.25,.8,.35,1)`
+    d.el.style.setProperty('--fa', String(end))
+    setTurn((t) => t && { ...t, mode: 'settle' })
+    finish(done ? d.to : null, ms + 30)
+  }
+
+  // The letter tabs: a tap turns there; pressing and sliding scrubs straight to each letter as it's passed.
+  const tabAt = (nav: HTMLElement, y: number) => {
+    let best: { i: number; top: number } | null = null
+    let distance = Infinity
+    nav.querySelectorAll<HTMLButtonElement>('button[data-tab]').forEach((b) => {
+      const box = b.getBoundingClientRect()
+      const d = Math.abs(y - (box.top + box.height / 2))
+      if (d < distance) {
+        distance = d
+        best = { i: Number(b.dataset.tab), top: b.offsetTop }
+      }
+    })
+    return best as { i: number; top: number } | null
+  }
+
+  const letters = [...new Set(book.living.map((l) => letterOf(l.entry.first_name)))]
+  const firstOf = (letter: string) => book.pages.findIndex((p) => p.kind === 'person' && p.letter === letter)
+  const tabTargets = [...letters.map(firstOf), book.memoryStart]
+
+  const cur = stops[stop]!
+  const tgtStop = turn ? turn.to : stop
+  const tgt = stops[tgtStop]!
+  const shown = cur.map((i) => book.pages[i]!)
+  const tabs = [
+    ...letters.map((letter) => ({ label: letter, aria: `Jump to ${letter}`, on: shown.some((p) => p.kind === 'person' && p.letter === letter) })),
+    { label: '♡', aria: 'Jump to In Memory', on: shown.some((p) => p.kind === 'memorial' || p.kind === 'divider') },
+  ]
+
+  const closedStart = stop === 0 && tgtStop === 0
+  const closedEnd = stop === last && tgtStop === last
+
+  const names = shown.flatMap((p) => {
+    const who = nameOf(p)
+    return who ? [who.first_name] : []
+  })
+  const numbers = cur.flatMap((i) => pageNumber(book, i) ?? [])
+  let position = numbers.length
+    ? `Page${numbers.length > 1 ? `s ${numbers[0]}–${numbers[1]}` : ` ${numbers[0]}`}${names.length ? ` · ${names.join(' & ')}` : ''}`
+    : ''
+  if (stop === 0) {
+    position = 'Click the cover, or drag it, to open the book'
+  } else if (stop === last) {
+    position = 'The end · click the back cover to go back'
+  } else if (shown.some((p) => p.kind === 'endpaperFront')) {
+    position = 'Welcome'
+  }
+
+  const page = (index: number, place: 'left' | 'right' | 'whole', extra = '') => (
+    <div
+      key={`${place}-${index}`}
+      className={`${styles.page} ${styles[place]} ${extra} ${book.pages[index]!.kind === 'empty' ? styles.hidden : ''}`}
+    >
+      <PageContent book={book} index={index} outer={place === 'right' ? 'right' : 'left'} viewerId={viewerId} paused={paused} goTo={goTo} />
+    </div>
+  )
+  const face = (index: number | null, className: string, inner: string, back = false) => (
+    <div className={`${styles.face} ${back ? styles.back : ''} ${className}`}>
+      <div className={`${styles.inner} ${inner}`}>
+        {index !== null && (
+          <PageContent book={book} index={index} outer={inner.includes(styles.innerRight!) ? 'right' : 'left'} viewerId={viewerId} paused={paused} goTo={goTo} />
+        )}
+      </div>
+      <span className={styles.shade} />
+    </div>
+  )
+
+  // The static pages under a turning leaf, and what the leaf carries on each side.
+  let statics: number[]
+  let front: number | null = null
+  let backFace: number | null = null
+  if (single) {
+    statics = turn?.dir === 'next' ? tgt : cur
+    front = turn ? (turn.dir === 'next' ? cur[0]! : tgt[0]!) : null
+  } else if (turn?.dir === 'next') {
+    statics = [cur[0]!, tgt[1]!]
+    front = cur[1]!
+    backFace = tgt[0]!
+  } else if (turn?.dir === 'prev') {
+    statics = [tgt[0]!, cur[1]!]
+    front = cur[0]!
+    backFace = tgt[1]!
+  } else {
+    statics = cur
+  }
+  const hint = stop === 0 && !turn ? styles.coverHint! : ''
+  // A single page always turns about its left edge; turning back, it comes in from the left.
+  const leafDir: Dir = single ? 'next' : (turn?.dir ?? 'next')
+
+  const turnClass = turn
+    ? turn.mode === 'anim'
+      ? single && turn.dir === 'prev'
+        ? styles.animUnturn
+        : turn.dir === 'next'
+          ? styles.animNext
+          : styles.animPrev
+      : styles.dragging
+    : ''
+  const stackLeft = stop === 0 ? 0 : Math.min(maxStack, 3 + Math.round(stop * 0.8))
+  const stackRight = stop === last ? 0 : Math.min(maxStack, 3 + Math.round((last - stop) * 0.8))
+
+  return (
+    <div className={`${styles.bookArea} ${paused || reduced ? styles.still : ''} ${single ? styles.single : ''}`}>
+      <div className={`${styles.book} ${!single && tgtStop === 0 ? styles.closedStart : ''} ${!single && tgtStop === last ? styles.closedEnd : ''}`}>
+        {single ? (
+          <span aria-hidden="true" className={`${styles.board} ${styles.boardWhole}`} style={{ opacity: tgtStop === 0 || tgtStop === last ? 0 : 1 }} />
+        ) : (
+          <>
+            <span aria-hidden="true" className={`${styles.board} ${styles.boardLeft}`} style={{ opacity: closedStart ? 0 : 1 }} />
+            <span aria-hidden="true" className={`${styles.board} ${styles.boardRight}`} style={{ opacity: closedEnd ? 0 : 1 }} />
+          </>
+        )}
+        <div
+          ref={pagesRef}
+          className={`${styles.pages} ${turnClass}`}
+          tabIndex={0}
+          role="group"
+          aria-roledescription="book"
+          aria-label="Members book. Click or drag a page, or use the left and right arrow keys, to turn."
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+              event.preventDefault()
+              flipTo(stop + (event.key === 'ArrowRight' ? 1 : -1))
+            }
+          }}
+        >
+          <span aria-hidden="true" className={styles.stack} style={{ left: -stackLeft, width: stackLeft }} />
+          <span aria-hidden="true" className={styles.stack} style={{ right: -stackRight, width: stackRight }} />
+          {single
+            ? page(statics[0]!, 'whole', hint)
+            : [page(statics[0]!, 'left'), page(statics[1]!, 'right', hint)]}
+          {!single && <div aria-hidden="true" className={styles.spine} style={{ opacity: closedStart || closedEnd ? 0 : 1 }} />}
+          {turn && front !== null && (
+            // Copies of pages shown elsewhere, mid-turn: kept from screen readers and the keyboard.
+            <div aria-hidden="true" inert className={styles.turning}>
+              <span className={`${styles.cast} ${leafDir === 'next' ? styles.underNext : styles.underPrev}`} />
+              {!single && <span className={`${styles.cast} ${leafDir === 'next' ? styles.landNext : styles.landPrev}`} />}
+              <div className={`${styles.leaf} ${leafDir === 'next' ? styles.leafNext : styles.leafPrev}`}>
+                <div className={`${styles.seg} ${styles.sa}`}>
+                  {leafDir === 'next'
+                    ? face(front, styles.square!, `${styles.innerRight} ${styles.saFrontNext}`)
+                    : face(front, styles.square!, `${styles.innerLeft} ${styles.saFrontPrev}`)}
+                  {leafDir === 'next'
+                    ? face(backFace, styles.square!, `${styles.innerLeft} ${styles.saBackNext}`, true)
+                    : face(backFace, styles.square!, `${styles.innerRight} ${styles.saBackPrev}`, true)}
+                  <div className={`${styles.seg} ${styles.sb}`}>
+                    {leafDir === 'next' ? (
+                      <>
+                        <div className={`${styles.face} ${styles.roundRight}`}>
+                          <div className={`${styles.inner} ${styles.innerRight} ${styles.sbFrontNext}`}>
+                            <PageContent book={book} index={front} outer="right" viewerId={viewerId} paused={paused} goTo={goTo} />
+                          </div>
+                          <span className={styles.shade} />
+                          <span className={styles.gloss} />
+                        </div>
+                        {face(backFace, styles.roundLeft!, `${styles.innerLeft} ${styles.sbBackNext}`, true)}
+                      </>
+                    ) : (
+                      <>
+                        <div className={`${styles.face} ${styles.roundLeft}`}>
+                          <div className={`${styles.inner} ${styles.innerLeft} ${styles.sbFrontPrev}`}>
+                            <PageContent book={book} index={front} outer="left" viewerId={viewerId} paused={paused} goTo={goTo} />
+                          </div>
+                          <span className={styles.shade} />
+                          <span className={styles.gloss} />
+                        </div>
+                        {face(backFace, styles.roundRight!, `${styles.innerRight} ${styles.sbBackPrev}`, true)}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {stop !== 0 && stop !== last && (
+            <>
+              {!single && (
+                <button type="button" className={`${styles.corner} ${styles.cornerPrev}`} data-corner="prev" aria-label="Previous page" onClick={(event) => event.timeStamp - justDragged.current > 350 && flipTo(stop - 1)}>
+                  <span aria-hidden="true" className={`${styles.ear} ${styles.earLeft}`} />
+                </button>
+              )}
+              <button
+                type="button"
+                className={`${styles.corner} ${styles.cornerNext}`}
+                data-corner="next"
+                aria-label="Next page"
+                disabled={stop === last}
+                onClick={(event) => event.timeStamp - justDragged.current > 350 && flipTo(stop + 1)}
+              >
+                <span aria-hidden="true" className={`${styles.ear} ${styles.earRight}`} style={{ opacity: stop === last - 1 ? 0 : 1 }} />
+              </button>
+            </>
+          )}
+        </div>
+        {!closedStart && !closedEnd && (
+          <nav
+            aria-label="Jump to a letter"
+            className={styles.tabs}
+            onPointerDown={(event) => {
+              if (turn) {
+                return
+              }
+              const t = tabAt(event.currentTarget, event.clientY)
+              if (!t) {
+                return
+              }
+              tabDrag.current = { nav: event.currentTarget, id: event.pointerId, start: t.i, cur: t.i, y0: event.clientY, moved: false }
+              event.currentTarget.setPointerCapture?.(event.pointerId)
+              event.preventDefault()
+            }}
+            onPointerMove={(event) => {
+              const d = tabDrag.current
+              if (!d || event.pointerId !== d.id || (!d.moved && Math.abs(event.clientY - d.y0) < 6)) {
+                return
+              }
+              const t = tabAt(d.nav, event.clientY)
+              if (t && (!d.moved || t.i !== d.cur)) {
+                d.moved = true
+                d.cur = t.i
+                setScrub({ tab: t.i, top: t.top })
+                onAt(tabTargets[t.i]!)
+              }
+            }}
+            onPointerUp={(event) => {
+              const d = tabDrag.current
+              if (!d || event.pointerId !== d.id) {
+                return
+              }
+              tabDrag.current = null
+              tabHandled.current = event.timeStamp
+              if (d.moved) {
+                setScrub(null)
+              } else {
+                goTo(tabTargets[d.start]!)
+              }
+            }}
+            onPointerCancel={() => {
+              tabDrag.current = null
+              setScrub(null)
+            }}
+          >
+            {tabs.map((t, i) => (
+              <button
+                key={t.label}
+                type="button"
+                data-tab={i}
+                aria-label={t.aria}
+                aria-current={t.on ? 'true' : undefined}
+                className={`${styles.tab} ${t.on ? styles.tabOn : ''} ${scrub?.tab === i ? styles.tabScrub : ''}`}
+                // The pointer already handled it; a keyboard Enter or Space arrives only as this click.
+                onClick={(event) => event.timeStamp - tabHandled.current > 400 && goTo(tabTargets[i]!)}
+              >
+                {t.label}
+              </button>
+            ))}
+            {scrub && (
+              <span aria-hidden="true" className={styles.scrub} style={{ top: scrub.top }}>
+                {tabs[scrub.tab]!.label}
+              </span>
+            )}
+          </nav>
+        )}
+      </div>
+      <div className={styles.controls}>
+        <button type="button" className={`pill ${styles.prevButton}`} disabled={stop === 0} onClick={() => flipTo(stop - 1)}>
+          ◀ Previous
+        </button>
+        <span aria-live="polite" className={styles.position}>
+          {position}
+        </span>
+        <button type="button" className={`pill ${styles.nextButton}`} disabled={stop === last} onClick={() => flipTo(stop + 1)}>
+          {stop === 0 ? 'Open ▶' : 'Next ▶'}
+        </button>
+      </div>
+    </div>
+  )
+}

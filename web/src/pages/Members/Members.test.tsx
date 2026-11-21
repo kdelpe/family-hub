@@ -1,0 +1,276 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { createMemoryRouter } from 'react-router'
+import { RouterProvider } from 'react-router/dom'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { authKeys } from '../../api/auth'
+import type { ContactMethod, DirectoryEntry } from '../../api/contacts'
+import type { Tree, TreePerson } from '../../api/tree'
+import { Members } from './Members'
+
+const person = (id: string, first: string, over: Partial<TreePerson> = {}): TreePerson => ({
+  id,
+  first_name: first,
+  last_name: 'Pluviose',
+  side: 'first',
+  gender: 'female',
+  is_deceased: false,
+  bio_excerpt: null,
+  ...over,
+})
+
+const tree: Tree = {
+  persons: [
+    person('maya', 'Maya', { side: 'both' }),
+    person('fritz', 'Fritz', { side: 'both', gender: 'male' }),
+    person('nadege', 'Nadège', { side: 'second' }),
+    person('naomie', 'Naomie', { last_name: 'Désir', side: 'both' }),
+    person('joseph', 'Joseph', { gender: 'male', is_deceased: true, bio_excerpt: 'Drove a yellow cab in New York.' }),
+  ],
+  relationships: [
+    { id: 'r1', type: 'parent_child', subtype: 'biological', parent_id: 'nadege', child_id: 'maya' },
+    { id: 'r2', type: 'parent_child', subtype: 'biological', parent_id: 'nadege', child_id: 'fritz' },
+    { id: 'r3', type: 'parent_child', subtype: 'biological', parent_id: 'maya', child_id: 'naomie' },
+  ],
+}
+
+const method = (over: Partial<ContactMethod> & Pick<ContactMethod, 'id' | 'kind' | 'value'>): ContactMethod => ({
+  platform: null,
+  label: null,
+  visibility: 'family',
+  href: null,
+  shared_with_you: false,
+  ...over,
+})
+
+const people: DirectoryEntry[] = [
+  {
+    id: 'fritz',
+    first_name: 'Fritz',
+    last_name: 'Pluviose',
+    side: 'both',
+    has_account: true,
+    contacts: [
+      method({ id: 'c1', kind: 'email', value: 'fritz.p@example.com' }),
+      method({ id: 'c2', kind: 'social', platform: 'youtube', value: '@fritzpluviose', href: 'https://www.youtube.com/@fritzpluviose' }),
+      method({ id: 'c3', kind: 'phone', value: '(555) 010-2231', visibility: 'on_request', shared_with_you: true }),
+      method({ id: 'c4', kind: 'email', value: 'hidden@example.com', visibility: 'hidden' }),
+    ],
+  },
+  { id: 'maya', first_name: 'Maya', last_name: 'Pluviose', side: 'both', has_account: true, contacts: [] },
+  {
+    id: 'nadege',
+    first_name: 'Nadège',
+    last_name: 'Pluviose',
+    side: 'second',
+    has_account: true,
+    contacts: [
+      { kind: 'address', requestable: true, my_request_status: 'none' },
+      { kind: 'phone', requestable: true, my_request_status: 'requested' },
+    ],
+  },
+  { id: 'naomie', first_name: 'Naomie', last_name: 'Désir', side: 'both', has_account: false, contacts: [] },
+]
+
+// Reduced motion turns pages at once, so the tests needn't wait out the animation.
+function stubMedia({ narrow = false, reduced = true } = {}) {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('reduce') ? reduced : query.includes('max-width') ? narrow : false,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }))
+}
+
+async function renderPage() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      const body = url === '/api/directory' ? { people } : url === '/api/tree' ? tree : null
+      return body ? Promise.resolve(new Response(JSON.stringify(body), { status: 200 })) : Promise.reject(new TypeError('Failed to fetch'))
+    }),
+  )
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  client.setQueryData(authKeys.me, { id: 'u', email: 'maya.pluviose@example.com', role: 'member', person_id: 'maya' })
+  const router = createMemoryRouter([{ path: '/members', element: <Members /> }], { initialEntries: ['/members'] })
+  render(
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  )
+  await screen.findByRole('group', { name: /^Members book/ })
+}
+
+const book = () => screen.getByRole('group', { name: /^Members book/ })
+// The line under the book saying where it's open.
+const position = () => document.querySelector('[aria-live]')!.textContent
+const press = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }))
+
+beforeEach(() => stubMedia())
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+describe('Members', () => {
+  it('opens on the closed cover, then the bookplate and Welcome', async () => {
+    await renderPage()
+
+    expect(position()).toBe('Click the cover, or drag it, to open the book')
+    expect(within(book()).getByText('Family members')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '◀ Previous' })).toBeDisabled()
+
+    press('Open ▶')
+
+    expect(position()).toBe('Welcome')
+    expect(within(book()).getByText('the Pluviose-Monestime family')).toBeInTheDocument()
+    expect(within(book()).getByRole('heading', { name: 'Everyone in our family, in one book' })).toBeInTheDocument()
+    expect(within(book()).getByRole('link', { name: 'My profile ›' })).toHaveAttribute('href', '/profile')
+  })
+
+  it('lists what’s inside, with page numbers, letters and the family’s sides', async () => {
+    await renderPage()
+    press('Open ▶')
+    press('Next ▶')
+
+    expect(position()).toBe('Pages 2–3 · Fritz')
+    const inside = within(book())
+    expect(inside.getByRole('button', { name: 'Members, A to Z, page 3' })).toBeInTheDocument()
+    expect(inside.getByText('4 people with us')).toBeInTheDocument()
+    expect(inside.getByRole('button', { name: 'In Memory, page 7' })).toBeInTheDocument()
+    expect(inside.getByText('1 remembered')).toBeInTheDocument()
+    expect(inside.getByText('Pluviose side · 1')).toBeInTheDocument()
+    expect(inside.getByText('Both sides · 3')).toBeInTheDocument()
+
+    fireEvent.click(inside.getByRole('button', { name: 'Go to N' }))
+
+    expect(position()).toBe('Pages 4–5 · Maya & Nadège')
+  })
+
+  it('shows what each person shares, and never a phone number or address', async () => {
+    await renderPage()
+    press('Open ▶')
+    press('Next ▶')
+
+    const fritz = within(book())
+    expect(fritz.getByRole('heading', { name: 'Fritz Pluviose' })).toBeInTheDocument()
+    expect(fritz.getByText('Sibling')).toBeInTheDocument()
+    expect(fritz.getByText('Both sides')).toBeInTheDocument()
+    expect(fritz.getByRole('link', { name: 'Email Fritz' })).toHaveAttribute('href', 'mailto:fritz.p@example.com')
+    expect(fritz.getByRole('link', { name: 'Fritz on YouTube' })).toHaveAttribute('href', 'https://www.youtube.com/@fritzpluviose')
+    expect(fritz.getByRole('link', { name: /Phone number shared with you/ })).toHaveAttribute('href', '/people/fritz')
+    expect(fritz.queryByText(/555/)).not.toBeInTheDocument()
+    expect(fritz.queryByText('hidden@example.com')).not.toBeInTheDocument()
+    expect(fritz.getByRole('link', { name: 'Open profile of Fritz Pluviose›' })).toHaveAttribute('href', '/people/fritz')
+  })
+
+  it('offers to ask for what isn’t shared, and shows your own page and someone not on the hub', async () => {
+    await renderPage()
+    press('Open ▶')
+    press('Next ▶')
+    press('Next ▶')
+
+    const spread = within(book())
+    expect(spread.getByText('This is your page.')).toBeInTheDocument()
+    expect(spread.getByText('You')).toBeInTheDocument()
+    expect(spread.getByRole('link', { name: 'Edit in My profile ›' })).toHaveAttribute('href', '/profile')
+    expect(spread.getByRole('button', { name: 'Request address' })).toBeInTheDocument()
+    expect(spread.getByText('Phone number requested')).toBeInTheDocument()
+
+    press('Next ▶')
+
+    expect(position()).toBe('Pages 6–7 · Naomie')
+    expect(within(book()).getByText('Not on the hub yet, so there’s nothing to share here.')).toBeInTheDocument()
+  })
+
+  it('remembers those who have passed, with no contact details', async () => {
+    await renderPage()
+    press('Open ▶')
+
+    press('Jump to In Memory')
+    expect(position()).toBe('Pages 6–7 · Naomie')
+    press('Next ▶')
+
+    const page = within(book())
+    expect(position()).toBe('Page 8 · Joseph')
+    expect(page.getByText('In loving memory')).toBeInTheDocument()
+    expect(page.getByText('“Drove a yellow cab in New York.”')).toBeInTheDocument()
+    expect(page.getByRole('link', { name: 'Open profile of Joseph Pluviose›' })).toHaveAttribute('href', '/people/joseph')
+    expect(page.queryByRole('button', { name: /^Request/ })).not.toBeInTheDocument()
+  })
+
+  it('turns with the arrow keys, the letter tabs and the corners, and closes at the back cover', async () => {
+    await renderPage()
+    fireEvent.keyDown(book(), { key: 'ArrowRight' })
+    expect(position()).toBe('Welcome')
+
+    press('Jump to M')
+    expect(position()).toBe('Pages 4–5 · Maya & Nadège')
+    expect(screen.getByRole('button', { name: 'Jump to M' })).toHaveAttribute('aria-current', 'true')
+
+    press('Next page')
+    press('Next page')
+    expect(position()).toBe('Page 8 · Joseph')
+    press('Next ▶')
+    expect(position()).toBe('The end · click the back cover to go back')
+    expect(screen.getByRole('button', { name: 'Next ▶' })).toBeDisabled()
+
+    fireEvent.keyDown(book(), { key: 'ArrowLeft' })
+    expect(position()).toBe('Page 8 · Joseph')
+  })
+
+  it('animates a turn, then lands on the next spread', async () => {
+    stubMedia({ reduced: false })
+    await renderPage()
+    vi.useFakeTimers()
+    try {
+      press('Open ▶')
+
+      expect(book()).toHaveClass(/animNext/)
+      act(() => {
+        vi.advanceTimersByTime(920)
+      })
+      expect(book()).not.toHaveClass(/animNext/)
+      expect(position()).toBe('Welcome')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lists everyone and opens the book at the one picked', async () => {
+    await renderPage()
+    press('List')
+
+    expect(screen.getByRole('heading', { name: 'With us' })).toBeInTheDocument()
+    expect(within(screen.getByRole('button', { name: /^Maya Pluviose/ })).getByText('You')).toBeInTheDocument()
+    expect(within(screen.getByRole('button', { name: /^Joseph Pluviose/ })).getByText('In memory')).toBeInTheDocument()
+
+    press(/^Nadège Pluviose/)
+
+    expect(position()).toBe('Pages 4–5 · Maya & Nadège')
+    expect(screen.getByRole('button', { name: 'Book' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('opens the book at the first name that matches the search', async () => {
+    await renderPage()
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Find someone' }), { target: { value: 'jos' } })
+
+    expect(position()).toBe('Page 8 · Joseph')
+  })
+
+  it('shows one page at a time on a phone', async () => {
+    stubMedia({ narrow: true })
+    await renderPage()
+    expect(position()).toBe('Click the cover, or drag it, to open the book')
+
+    press('Open ▶')
+    expect(position()).toBe('Welcome')
+    press('Next ▶')
+    expect(position()).toBe('Page 1')
+    press('Jump to F')
+
+    expect(position()).toBe('Page 3 · Fritz')
+    expect(within(book()).queryByText('Maya Pluviose')).not.toBeInTheDocument()
+  })
+})
