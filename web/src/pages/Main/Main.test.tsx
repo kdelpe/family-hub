@@ -350,6 +350,30 @@ describe('Main', () => {
     expect(screen.getByRole('button', { name: /^more:/ })).toBeInTheDocument()
   })
 
+  it('moves the tree to show a card tabbed to outside the panel', () => {
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+    const card = cardOf('Sabine').closest('[data-card]')!
+    vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 600, height: 800 }))
+    vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ x: 700, y: 100, width: 190, height: 156 }))
+
+    act(() => cardOf('Sabine').focus())
+
+    expect(screen.getByRole('button', { name: 'Recenter' })).toBeEnabled()
+    vi.restoreAllMocks()
+  })
+
+  it('turns the browser scrolling the panel, to show a card tabbed to, into a move of the tree', () => {
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+
+    panel.scrollLeft = 120
+    fireEvent.scroll(panel)
+
+    expect([panel.scrollLeft, panel.scrollTop]).toEqual([0, 0])
+    expect(screen.getByRole('button', { name: 'Recenter' })).toBeEnabled()
+  })
+
   it('zooms with a two-finger pinch', () => {
     renderTree('fritz')
     const panel = screen.getByRole('region', { name: 'Family tree centered on you' })

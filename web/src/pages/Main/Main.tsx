@@ -584,6 +584,35 @@ function FocusTree({
         onPointerMove={onPointerMove}
         // A drag that began on a card doesn't also center the tree on them. Only a pointer's click: Enter on a
         // card clicks it with no pointer (detail 0), and must still work after a drag the browser canceled.
+        onFocus={(event) => {
+          // A card tabbed to outside the panel is brought in by moving the tree, with a little room around it.
+          const card = (event.target as HTMLElement).closest('[data-card]')
+          if (!card) {
+            return
+          }
+          const box = card.getBoundingClientRect()
+          const view = event.currentTarget.getBoundingClientRect()
+          if (view.width === 0) {
+            return
+          }
+          const shift = (start: number, end: number, from: number, to: number) =>
+            start < from + 16 ? from + 16 - start : end > to - 16 ? to - 16 - end : 0
+          const dx = shift(box.left, box.right, view.left, view.right)
+          const dy = shift(box.top, box.bottom, view.top, view.bottom)
+          if (dx || dy) {
+            moveBy(dx, dy)
+          }
+        }}
+        onScroll={(event) => {
+          // The browser scrolls the clipped panel to show a card tabbed to: make that a move of the tree instead,
+          // which Recenter can undo.
+          const el = event.currentTarget
+          if (el.scrollLeft || el.scrollTop) {
+            moveBy(-el.scrollLeft, -el.scrollTop)
+            el.scrollLeft = 0
+            el.scrollTop = 0
+          }
+        }}
         onClickCapture={(event) => {
           if (dragged.current && event.detail > 0) {
             event.stopPropagation()
