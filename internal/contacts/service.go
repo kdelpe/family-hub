@@ -105,7 +105,7 @@ func (s *Service) List(ctx context.Context, viewer family.Viewer, personID uuid.
 	return listing, nil
 }
 
-// DirectoryEntry is one living person who shares something, with what this viewer may see of it.
+// DirectoryEntry is one living person, with what this viewer may see of their contacts.
 type DirectoryEntry struct {
 	ID         uuid.UUID
 	FirstName  string
