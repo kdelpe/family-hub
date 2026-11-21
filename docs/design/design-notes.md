@@ -202,6 +202,7 @@ Interaction:
 - Search box suggests up to 6 matching names as you type; picking one centers the tree.
 - Tip text: *"Hover or tap a name for a quick look · double-click to center the tree on them"*.
 - An `aria-live` region announces "Family tree centered on …".
+- The tree opens centered on you, or on the person a profile's **Center the tree on …** asked for (`/tree?person=<id>`), if they're in the tree.
 - Later: keyboard arrows and phone swipes to move a generation; URL per focus (`/tree/<person>`) so browser Back works and links can be shared.
 
 ### 4.3 People

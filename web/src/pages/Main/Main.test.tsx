@@ -209,6 +209,16 @@ describe('Main', () => {
   })
 
   it.each([
+    { name: 'the person a profile asked for', viewer: 'fritz', url: '/tree?person=nadege', centered: 'Nadège Pluviose' },
+    { name: 'you, when that person isn’t in the tree', viewer: 'fritz', url: '/tree?person=nobody', centered: 'you' },
+    { name: 'the person asked for, for a login linked to nobody', viewer: null, url: '/tree?person=maya', centered: 'Maya Pluviose' },
+  ])('opens on $name', ({ viewer, url, centered }) => {
+    renderTree(viewer, { url })
+
+    expect(screen.getByRole('region', { name: `Family tree centered on ${centered}` })).toBeInTheDocument()
+  })
+
+  it.each([
     { name: 'while it’s read again', next: () => new Promise<Response>(() => {}) },
     { name: 'once reading it again failed', next: () => Promise.reject(new TypeError('Failed to fetch')) },
   ])('hides the shared contact $name, since it may be hidden by now', async ({ next }) => {

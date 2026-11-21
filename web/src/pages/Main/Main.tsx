@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { type ReactNode, type Ref, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 
 import { type Contact, type ContactMethod, contactsQuery, isRequestable, kindOf, platformLabel } from '../../api/contacts'
 import { familySummaryQuery } from '../../api/family'
@@ -36,9 +36,13 @@ export function Main() {
     [tree.data, family, viewerId],
   )
 
-  // Until someone is picked, the trail is just you; people since removed from the tree drop out of it.
+  // Until someone is picked, the trail is where the tree opened: the person a profile's "Center the tree on …"
+  // asked for, else you. People since removed from the tree drop out of it.
+  const [params] = useSearchParams()
+  const requested = params.get('person')
+  const start = requested && people.has(requested) ? requested : viewerId
   const [picked, setPicked] = useState<string[] | null>(null)
-  const trail = (picked ?? (viewerId ? [viewerId] : []))
+  const trail = (picked ?? (start ? [start] : []))
     .filter((id) => people.has(id))
     .filter((id, i, kept) => id !== kept[i - 1])
   const focus = trail.at(-1) ?? null
