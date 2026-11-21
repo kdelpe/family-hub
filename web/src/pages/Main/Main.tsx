@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { type CSSProperties, type ReactNode, type Ref, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
-import { type Contact, type ContactMethod, contactsQuery, isRequestable, kindOf, platformLabel } from '../../api/contacts'
 import { familySummaryQuery } from '../../api/family'
 import { type TreePerson, treeQuery } from '../../api/tree'
 import { FamilyStrip } from '../../components/FamilyStrip/FamilyStrip'
@@ -16,10 +15,13 @@ import { relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
 import styles from './Main.module.css'
 
-const trailLength = 8
 const maxMatches = 6
-// A click waits this long so a double-click can cancel it (design-notes §4.2).
-const clickDelay = 230
+const minZoom = 0.5
+const maxZoom = 1.5
+const clampZoom = (zoom: number) => Math.min(maxZoom, Math.max(minZoom, zoom))
+// The buttons move in steps of 10%, landing on whole steps after a pinch.
+const zoomStep = (zoom: number, by: number) => clampZoom(Math.round((zoom + by) * 10) / 10)
+const tipText = 'Click or tap a name to center the tree on them · drag to move it'
 // Each generation arrives this many ms after the one above and has landed after rowLanded (handed to
 // Main.module.css as --row-landed); a line draws once the generation it reaches has landed (design-notes §4.2).
 const rowStagger = 80
@@ -41,83 +43,70 @@ export function Main() {
     [tree.data, family, viewerId],
   )
 
-  // Until someone is picked, the trail is where the tree opened: the person a profile's "Center the tree on …"
-  // asked for, else you. People since removed from the tree drop out of it.
+  // Until someone is picked, the tree centers where it opened: on the person a profile's "Center the tree on …"
+  // asked for, else you. Someone since removed from the tree is dropped.
   const [params] = useSearchParams()
   const requested = params.get('person')
   const start = requested && people.has(requested) ? requested : viewerId
-  const [picked, setPicked] = useState<string[] | null>(null)
-  const trail = (picked ?? (start ? [start] : []))
-    .filter((id) => people.has(id))
-    .filter((id, i, kept) => id !== kept[i - 1])
-  const focus = trail.at(-1) ?? null
+  const [picked, setPicked] = useState<string | null>(null)
+  const focus = [picked, start].find((id) => id && people.has(id)) ?? null
   const view = useMemo(() => (family && focus ? focusView(family, focus) : null), [family, focus])
   const [direction, setDirection] = useState<Direction | null>(null)
   const [status, setStatus] = useState('')
 
-  const moveTo = (next: string[]) => {
-    const to = next.at(-1)
-    if (to && focus && to !== focus && view) {
+  const centerOn = (to: string) => {
+    if (to === focus) {
+      return
+    }
+    if (focus && view) {
       const above = view.parents.includes(to) || view.grandparents.some((g) => g.ids.includes(to))
       const below = view.children.some((g) => g.ids.includes(to)) || view.grandchildren.some((g) => g.ids.includes(to))
       setDirection(above ? 'up' : below ? 'down' : 'side')
       setStatus(`Family tree centered on ${to === viewerId ? 'you' : fullName(people.get(to)!)}`)
-    } else if (to && !focus) {
+    } else if (!focus) {
       // Sideways, as from nowhere in particular; it also lands keyboard focus on the tree once the search clears.
       setDirection('side')
       setStatus(`Family tree centered on ${fullName(people.get(to)!)}`)
     }
-    setPicked(next)
+    setPicked(to)
+    setLine(null)
   }
-  const centerOn = (id: string) => {
-    if (id !== focus) {
-      moveTo([...trail, id].slice(-trailLength))
+  // The people walked through with the ▲ / ▼ arrows, top to bottom, so the other arrow walks back along them.
+  const [line, setLine] = useState<{ ids: string[]; at: number } | null>(null)
+  const walked = line && line.ids[line.at] === focus ? line : focus ? { ids: [focus], at: 0 } : null
+  const step = (by: 'up' | 'down', to: string) => {
+    centerOn(to)
+    if (!walked) {
+      return
+    }
+    const { ids, at } = walked
+    if (by === 'up') {
+      setLine(ids[at - 1] === to ? { ids, at: at - 1 } : { ids: [to, ...ids.slice(at)], at: 0 })
+    } else {
+      setLine(ids[at + 1] === to ? { ids, at: at + 1 } : { ids: [...ids.slice(0, at + 1), to], at: at + 1 })
     }
   }
 
-  const [paused, setPaused] = useMotionPaused()
-  const reducedMotion = useReducedMotion()
+  // Paused from the People page or Home, which keep the button (design-notes §6.4).
+  const [paused] = useMotionPaused()
+  const [zoom, setZoom] = useState(1)
 
   return (
     <main className={styles.page}>
       <title>Family tree — Pluviose-Monestime Family Hub</title>
+      <h1 className="visually-hidden">Family tree</h1>
       <div className={styles.top}>
-        <h1 className={styles.title}>Family tree</h1>
-        <Search persons={tree.data?.persons ?? []} relations={relations} onPick={centerOn} />
-        <button
-          type="button"
-          className={`pill ${styles.back}`}
-          disabled={trail.length < 2}
-          onClick={() => moveTo(trail.slice(0, -1))}
-        >
-          Back
-        </button>
-        {viewerId && people.has(viewerId) && (
-          <button type="button" className={`pill ${styles.home}`} onClick={() => centerOn(viewerId)}>
-            Back to me
-          </button>
-        )}
+        <div className={styles.stats}>{summary.data && <FamilyStrip summary={summary.data} />}</div>
+        <div className={styles.controls}>
+          <Search persons={tree.data?.persons ?? []} relations={relations} onPick={centerOn} />
+          {viewerId && people.has(viewerId) && (
+            <button type="button" className={`pill ${styles.home}`} onClick={() => centerOn(viewerId)}>
+              Back to me
+            </button>
+          )}
+        </div>
       </div>
 
-      <nav aria-label="Where you've been" className={styles.trail}>
-        {trail.map((id, i) => (
-          <span key={`${i}-${id}`} className={styles.step}>
-            {i > 0 && <span aria-hidden="true">›</span>}
-            {i === trail.length - 1 ? (
-              <span aria-current="true" className={styles.here}>
-                {id === viewerId ? 'Me' : people.get(id)!.first_name}
-              </span>
-            ) : (
-              <button type="button" className={styles.stepButton} onClick={() => moveTo(trail.slice(0, i + 1))}>
-                {id === viewerId ? 'Me' : people.get(id)!.first_name}
-              </button>
-            )}
-          </span>
-        ))}
-        <span className={styles.tip}>Hover or tap a name for a quick look · double-click to center the tree on them</span>
-      </nav>
-
-      {summary.data && <FamilyStrip summary={summary.data} />}
       <p aria-live="polite" className="visually-hidden">
         {status}
       </p>
@@ -131,25 +120,27 @@ export function Main() {
       ) : !focus || !view ? (
         <p className={styles.note}>Your login isn’t linked to anyone in the tree yet. Find a relative above to start.</p>
       ) : (
-        <FocusTree
-          key={focus}
-          people={people}
-          family={family}
-          view={view}
-          focus={focus}
-          viewerId={viewerId}
-          relations={relations}
-          direction={direction}
-          paused={paused}
-          onCenter={centerOn}
-        />
-      )}
-
-      {/* The portraits' fade runs on; with reduced motion there's none to pause (design-notes §6.4). */}
-      {!reducedMotion && focus && (
-        <button type="button" className={styles.pause} onClick={() => setPaused(!paused)}>
-          {paused ? 'Play motion' : 'Pause motion'}
-        </button>
+        <>
+          {/* On phones, where the panel's corner is the zoom control's. */}
+          <p className={styles.tipAbove}>{tipText}</p>
+          <FocusTree
+            key={focus}
+            people={people}
+            family={family}
+            view={view}
+            focus={focus}
+            viewerId={viewerId}
+            relations={relations}
+            direction={direction}
+            paused={paused}
+            zoom={zoom}
+            backUp={walked?.ids[walked.at - 1]}
+            backDown={walked?.ids[walked.at + 1]}
+            onStep={step}
+            onZoom={(change) => setZoom((z) => clampZoom(change(z)))}
+            onCenter={centerOn}
+          />
+        </>
       )}
     </main>
   )
@@ -236,6 +227,11 @@ function FocusTree({
   relations,
   direction,
   paused,
+  zoom,
+  backUp,
+  backDown,
+  onStep,
+  onZoom,
   onCenter,
 }: {
   people: Map<string, TreePerson>
@@ -246,55 +242,23 @@ function FocusTree({
   relations: Map<string, string>
   direction: Direction | null
   paused: boolean
+  zoom: number
+  backUp?: string
+  backDown?: string
+  onStep: (by: 'up' | 'down', to: string) => void
+  onZoom: (change: (zoom: number) => number) => void
   onCenter: (id: string) => void
 }) {
   const first = (id: string) => people.get(id)!.first_name
   const you = focus === viewerId
   const whose = (words: string) => (you ? `Your ${words}` : `${first(focus)}’s ${words}`)
 
-  // What the quick look shows: hovered or keyboard-focused, else the one a click kept open. One that keyboard
-  // focus has moved into stays, whatever the mouse does, until focus leaves it: closing it would drop focus.
+  // The card under the mouse or keyboard focus: lifted, with the lines to the focus person in green.
   const [hover, setHover] = useState<string | null>(null)
-  const [pinned, setPinned] = useState<string | null>(null)
-  const [held, setHeld] = useState<string | null>(null)
-  const open = held ?? hover ?? pinned
-  const clickTimer = useRef(0)
   // When the pressed button is gone with the old view, keyboard focus lands on the new focus card,
-  // quietly: that focus shouldn't open its quick look.
+  // quietly: that focus shouldn't lift it.
   const focusCard = useRef<HTMLButtonElement>(null)
   const quietFocus = useRef(false)
-  useEffect(() => () => window.clearTimeout(clickTimer.current), [])
-  useEffect(() => {
-    // A click still waiting would open it again.
-    const close = (event: PointerEvent) => {
-      if (!(event.target as Element).closest?.('[data-person]')) {
-        window.clearTimeout(clickTimer.current)
-        setPinned(null)
-      }
-    }
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') {
-        return
-      }
-      window.clearTimeout(clickTimer.current)
-      // Focus inside the quick look would go with it: back to its card, quietly, so Tab carries on from there.
-      const active = document.activeElement
-      if (active?.closest('[data-glance]')) {
-        quietFocus.current = true
-        active.closest('[data-person]')?.querySelector('button')?.focus()
-        quietFocus.current = false
-      }
-      setPinned(null)
-      setHover(null)
-      setHeld(null)
-    }
-    document.addEventListener('pointerdown', close)
-    document.addEventListener('keydown', escape)
-    return () => {
-      document.removeEventListener('pointerdown', close)
-      document.removeEventListener('keydown', escape)
-    }
-  }, [])
 
   useEffect(() => {
     if (direction && (!document.activeElement || document.activeElement === document.body)) {
@@ -304,35 +268,18 @@ function FocusTree({
     }
   }, [direction])
 
-  const card = (id: string, { sub, former, more }: { sub?: string; former?: boolean; more?: 'up' | 'down' } = {}) => (
+
+  const card = (id: string, { sub, former }: { sub?: string; former?: boolean } = {}) => (
     <Person
       key={id}
       person={people.get(id)!}
       sub={sub ?? relations.get(id) ?? ''}
-      relation={relations.get(id) ?? null}
       isFocus={id === focus}
       former={former}
       paused={paused}
-      more={more}
-      open={open === id}
+      lifted={hover === id}
       buttonRef={id === focus ? focusCard : undefined}
       onHover={(on) => !quietFocus.current && setHover((h) => (on ? id : h === id ? null : h))}
-      onHold={(on) => setHeld((h) => (on ? id : h === id ? null : h))}
-      onClick={() => {
-        window.clearTimeout(clickTimer.current)
-        const closing = pinned === id
-        clickTimer.current = window.setTimeout(() => {
-          setPinned(closing ? null : id)
-          // A second tap closes it, even while the mouse still rests on the card.
-          if (closing) {
-            setHover(null)
-          }
-        }, clickDelay)
-      }}
-      onDoubleClick={() => {
-        window.clearTimeout(clickTimer.current)
-        onCenter(id)
-      }}
       onCenter={() => onCenter(id)}
     />
   )
@@ -362,7 +309,7 @@ function FocusTree({
     return card(id, { sub: word ? (rel ? `${rel} · ${word}` : word[0]!.toUpperCase() + word.slice(1)) : rel })
   })
   const split = Math.ceil(siblings.length / 2)
-  const chain = new Set(chainTo(view, focus, open))
+  const chain = new Set(chainTo(view, focus, hover))
 
   // Top to bottom, the order the generations arrive in; a generation with nobody in it is left out.
   const generations: { key: string; label: string; ids: string[]; body: ReactNode }[] = []
@@ -373,12 +320,7 @@ function FocusTree({
       ids: view.grandparents.flatMap((g) => g.ids),
       body: view.grandparents.map((g) => (
         <Group key={g.of} unit={`up-${g.of}`} label={`${first(g.of)}’s parents`}>
-          {g.ids.map((id) =>
-            card(id, {
-              sub: labelled(id, parentWords[family.linkOf(g.of, id) ?? 'biological']),
-              more: treeParentsOf(family, id).length > 0 ? 'up' : undefined,
-            }),
-          )}
+          {g.ids.map((id) => card(id, { sub: labelled(id, parentWords[family.linkOf(g.of, id) ?? 'biological']) }))}
         </Group>
       )),
     })
@@ -431,27 +373,44 @@ function FocusTree({
       ids: view.grandchildren.flatMap((g) => g.ids),
       body: view.grandchildren.map((g) => (
         <Group key={g.of} unit={`down-${g.of}`} label={`${first(g.of)}’s children`}>
-          {g.ids.map((id) =>
-            card(id, {
-              sub: labelled(id, childWords[family.linkOf(id, g.of) ?? 'biological']),
-              more: treeChildrenOf(family, id).length > 0 ? 'down' : undefined,
-            }),
-          )}
+          {g.ids.map((id) => card(id, { sub: labelled(id, childWords[family.linkOf(id, g.of) ?? 'biological']) }))}
         </Group>
       )),
     })
   }
 
+  // Plain arrows at the panel's top and bottom saying there's more family that way, until the tree is moved by hand
+  // (owner's call, 2026-11-21). Each goes one generation: back along the line the arrows came by, else along the
+  // line that continues, to the parent whose parents have family above or the child whose children have children.
+  const upTo = backUp ?? view.grandparents.find((g) => g.ids.some((id) => treeParentsOf(family, id).length > 0))?.of
+  const downTo = backDown ?? view.grandchildren.find((g) => g.ids.some((id) => treeChildrenOf(family, id).length > 0))?.of
+  const edge = (to: string | undefined, by: 'up' | 'down', where: string) =>
+    to &&
+    !moved && (
+      <button type="button" className={`pill ${styles.more} ${styles.edge} ${styles[where]}`} onClick={() => onStep(by, to)}>
+        <span aria-hidden="true">{by === 'up' ? '▲' : '▼'} </span>more
+        <span className="visually-hidden">: center the tree on {fullName(people.get(to)!)}</span>
+      </button>
+    )
+
   const rows = useRef<HTMLDivElement>(null)
+  const stage = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLElement>(null)
   const [lines, setLines] = useState<{ width: number; height: number; paths: Line[] }>({ width: 0, height: 0, paths: [] })
+  // The tree is laid out at the panel's width, then scaled inside it: the panel keeps its size at every zoom,
+  // and scrolls when zoomed in.
+  const [panelWidth, setPanelWidth] = useState(0)
   useLayoutEffect(() => {
     const p = panel.current
+    const st = stage.current
     const r = rows.current
-    if (!p || !r) {
+    if (!p || !st || !r) {
       return
     }
-    const draw = () => setLines({ width: p.clientWidth, height: p.clientHeight, paths: measure(p, r, view, focus) })
+    const draw = () => {
+      setPanelWidth(p.clientWidth)
+      setLines({ width: st.offsetWidth, height: st.offsetHeight, paths: measure(st, r, view, focus) })
+    }
     draw()
     // Cards move without the panel resizing when the web fonts land or a row rewraps.
     const observer = new ResizeObserver(draw)
@@ -465,36 +424,199 @@ function FocusTree({
     }
   }, [view, focus])
 
+  // Where the tree's top-left corner sits in the panel, moved by dragging and zooming. Unset, it's centered
+  // across, and down too while smaller than the panel; centering on someone else starts afresh.
+  const [moved, setMoved] = useState<{ x: number; y: number } | null>(null)
+  const width = panelWidth
+  const height = lines.height
+  const centered = (z: number) => ({ x: (width * (1 - z)) / 2, y: z < 1 ? (height * (1 - z)) / 2 : 0 })
+  const at = moved ?? centered(zoom)
+  // Some of the tree always stays in sight.
+  const keepInSight = (x: number, y: number, z: number) => ({
+    x: Math.min(width - 60, Math.max(60 - width * z, x)),
+    y: Math.min(height - 60, Math.max(60 - height * z, y)),
+  })
+  const moveBy = (dx: number, dy: number) => setMoved(keepInSight(at.x + dx, at.y + dy, zoom))
+  // A zoom keeps the point it's made at in place: the pointer or the pinch; the buttons keep a centered tree centered.
+  const zoomAround = (change: (z: number) => number, point?: { x: number; y: number }) => {
+    const next = clampZoom(change(zoom))
+    if (point && next !== zoom) {
+      setMoved(keepInSight(point.x - ((point.x - at.x) * next) / zoom, point.y - ((point.y - at.y) * next) / zoom, next))
+    }
+    onZoom(() => next)
+  }
+
+  // The focus person's card is brought into view once the panel has its height: at once on opening the page,
+  // smoothly after centering on someone. Once per view, so a later drag or zoom doesn't pull the page back.
+  const reducedMotion = useReducedMotion()
+  const shown = useRef(false)
+  useEffect(() => {
+    const card = focusCard.current?.closest('[data-card]')
+    if (shown.current || !card || height === 0) {
+      return
+    }
+    shown.current = true
+    const box = card.getBoundingClientRect()
+    if (box.top < 0 || box.bottom > window.innerHeight) {
+      card.scrollIntoView?.({ block: 'center', behavior: direction && !reducedMotion ? 'smooth' : 'instant' })
+    }
+  }, [height, direction, reducedMotion])
+
+  // Ctrl + scroll, which is also how a trackpad pinch arrives; React's wheel listener can't prevent the page zoom.
+  const wheelZoom = useRef(zoomAround)
+  useLayoutEffect(() => {
+    wheelZoom.current = zoomAround
+  })
+  useEffect(() => {
+    const p = panel.current
+    if (!p) {
+      return
+    }
+    const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) {
+        return
+      }
+      event.preventDefault()
+      const box = p.getBoundingClientRect()
+      wheelZoom.current((z) => z * Math.exp(-event.deltaY / 200), { x: event.clientX - box.left, y: event.clientY - box.top })
+    }
+    p.addEventListener('wheel', wheel, { passive: false })
+    return () => p.removeEventListener('wheel', wheel)
+  }, [])
+
+  // Dragging moves the tree, from a card too: past a few pixels it's a drag, not a click. Two fingers pinch it and
+  // move it; one finger moves it sideways, leaving up and down to the page (touch-action on .panel).
+  const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const dragged = useRef(false)
+  const start = useRef<{ x: number; y: number } | null>(null)
+  const middle = () => {
+    const [a, b] = [...pointers.current.values()]
+    return a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, spread: Math.hypot(a.x - b.x, a.y - b.y) } : null
+  }
+  const onPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) {
+      return
+    }
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    start.current = { x: event.clientX, y: event.clientY }
+    dragged.current = false
+  }
+  const onPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const last = pointers.current.get(event.pointerId)
+    if (!last) {
+      return
+    }
+    const p = event.currentTarget
+    const before = middle()
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    const after = middle()
+    if (before && after) {
+      dragged.current = true
+      // The move and the zoom in one step: two separate updates from the same position would drop the move.
+      const box = p.getBoundingClientRect()
+      const point = { x: after.x - box.left, y: after.y - box.top }
+      const next = before.spread > 0 ? clampZoom((zoom * after.spread) / before.spread) : zoom
+      const x = at.x + after.x - before.x
+      const y = at.y + after.y - before.y
+      setMoved(keepInSight(point.x - ((point.x - x) * next) / zoom, point.y - ((point.y - y) * next) / zoom, next))
+      onZoom(() => next)
+      return
+    }
+    if (!dragged.current && start.current && Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > 5) {
+      dragged.current = true
+      p.setPointerCapture?.(event.pointerId)
+    }
+    if (dragged.current) {
+      moveBy(event.clientX - last.x, event.pointerType === 'touch' ? 0 : event.clientY - last.y)
+    }
+  }
+  const onPointerEnd = (event: ReactPointerEvent<HTMLElement>) => {
+    pointers.current.delete(event.pointerId)
+  }
+
   return (
-    <section ref={panel} aria-label={`Family tree centered on ${you ? 'you' : fullName(people.get(focus)!)}`} className={styles.panel}>
-      <div aria-hidden="true" className={styles.lines}>
-        <svg width={lines.width} height={lines.height}>
-          {lines.paths.map((l) => (
-            <path key={l.key} data-line={l.key} d={l.d} pathLength={100} style={{ animationDelay: `${l.delay}ms` }} />
-          ))}
-          {/* Drawn again on top, so a line it shares a stretch with can't cover the green. Mounted with the rest, so
-              a line still drawing in turns green as it draws. */}
-          {lines.paths.map((l) => (
-            <path
-              key={`over:${l.key}`}
-              data-chain={chain.has(l.key) ? l.key : undefined}
-              d={l.d}
-              pathLength={100}
-              className={chain.has(l.key) ? `${styles.over} ${styles.chain}` : styles.over}
-              style={{ animationDelay: `${l.delay}ms` }}
-            />
-          ))}
-        </svg>
+    <div className={styles.frame}>
+      <p className={styles.tip}>{tipText}</p>
+      {edge(upTo, 'up', 'edgeTop')}
+      <section
+        ref={panel}
+        aria-label={`Family tree centered on ${you ? 'you' : fullName(people.get(focus)!)}`}
+        className={styles.panel}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        // A drag that began on a card doesn't also center the tree on them.
+        onClickCapture={(event) => {
+          if (dragged.current) {
+            event.stopPropagation()
+            event.preventDefault()
+            dragged.current = false
+          }
+        }}
+        style={{ height: height || undefined }}
+      >
+        <div
+          ref={stage}
+          data-stage
+          className={styles.stage}
+          style={{
+            width: width || undefined,
+            transform: at.x === 0 && at.y === 0 && zoom === 1 ? undefined : `translate(${at.x}px, ${at.y}px) scale(${zoom})`,
+          }}
+        >
+          <div aria-hidden="true" className={styles.lines}>
+            <svg width={lines.width} height={lines.height}>
+              {lines.paths.map((l) => (
+                <path key={l.key} data-line={l.key} d={l.d} pathLength={100} style={{ animationDelay: `${l.delay}ms` }} />
+              ))}
+              {/* Drawn again on top, so a line it shares a stretch with can't cover the green. Mounted with the rest, so
+                  a line still drawing in turns green as it draws. */}
+              {lines.paths.map((l) => (
+                <path
+                  key={`over:${l.key}`}
+                  data-chain={chain.has(l.key) ? l.key : undefined}
+                  d={l.d}
+                  pathLength={100}
+                  className={chain.has(l.key) ? `${styles.over} ${styles.chain}` : styles.over}
+                  style={{ animationDelay: `${l.delay}ms` }}
+                />
+              ))}
+            </svg>
+          </div>
+          {/* Opening the page, the generations arrive in turn too. */}
+          <div
+            ref={rows}
+            className={[styles.rows, styles[direction ?? 'side'], upTo && styles.roomAbove, downTo && styles.roomBelow].filter(Boolean).join(' ')}
+            style={rowsStyle}
+          >
+            {generations.map((g, row) => (
+              <Generation key={g.key} label={g.label} row={row} raised={hover !== null && g.ids.includes(hover)}>
+                {g.body}
+              </Generation>
+            ))}
+          </div>
+        </div>
+      </section>
+      {edge(downTo, 'down', 'edgeBottom')}
+      <div role="group" aria-label="Zoom" className={styles.zoom}>
+        <button type="button" aria-label="Zoom out" className={styles.zoomButton} disabled={zoom <= minZoom} onClick={() => zoomAround((z) => zoomStep(z, -0.1), moved ? { x: width / 2, y: height / 2 } : undefined)}>
+          −
+        </button>
+        <button type="button" aria-label={`Reset zoom, now ${Math.round(zoom * 100)}%`} className={styles.zoomLevel} onClick={() => {
+            setMoved(null)
+            onZoom(() => 1)
+          }}>
+          {Math.round(zoom * 100)}%
+        </button>
+        <button type="button" aria-label="Zoom in" className={styles.zoomButton} disabled={zoom >= maxZoom} onClick={() => zoomAround((z) => zoomStep(z, 0.1), moved ? { x: width / 2, y: height / 2 } : undefined)}>
+          +
+        </button>
+        <button type="button" className={styles.recenter} disabled={!moved} onClick={() => setMoved(null)}>
+          Recenter
+        </button>
       </div>
-      {/* Opening the page, the generations arrive in turn too. */}
-      <div ref={rows} className={`${styles.rows} ${styles[direction ?? 'side']}`} style={rowsStyle}>
-        {generations.map((g, row) => (
-          <Generation key={g.key} label={g.label} row={row} raised={open !== null && g.ids.includes(open)}>
-            {g.body}
-          </Generation>
-        ))}
-      </div>
-    </section>
+    </div>
   )
 }
 
@@ -519,155 +641,54 @@ function Group({ unit, label, household, children }: { unit: string; label?: str
 function Person({
   person,
   sub,
-  relation,
   isFocus,
   former,
   paused,
-  more,
-  open,
+  lifted,
   buttonRef,
   onHover,
-  onHold,
-  onClick,
-  onDoubleClick,
   onCenter,
 }: {
   person: TreePerson
   sub: string
-  relation: string | null
   isFocus: boolean
   former?: boolean
   paused: boolean
-  more?: 'up' | 'down'
-  open: boolean
+  lifted: boolean
   buttonRef?: Ref<HTMLButtonElement>
   onHover: (on: boolean) => void
-  onHold: (on: boolean) => void
-  onClick: () => void
-  onDoubleClick: () => void
   onCenter: () => void
 }) {
-  const classes = [styles.card, isFocus && styles.focusCard, former && styles.former, open && styles.lifted].filter(Boolean).join(' ')
+  const classes = [styles.card, isFocus && styles.focusCard, former && styles.former, lifted && styles.lifted].filter(Boolean).join(' ')
   return (
     <div
       data-person={person.id}
       className={styles.person}
       onPointerEnter={(event) => event.pointerType === 'mouse' && onHover(true)}
       onPointerLeave={(event) => event.pointerType === 'mouse' && onHover(false)}
-      onFocus={(event) => {
-        const inGlance = !!(event.target as Element).closest('[data-glance]')
-        onHold(inGlance)
-        if (!inGlance) {
-          onHover(true)
-        }
-      }}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
-          onHold(false)
-          onHover(false)
-        }
-      }}
+      onFocus={() => onHover(true)}
+      onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && onHover(false)}
     >
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-expanded={open}
-        className={classes}
-        onClick={onClick}
-        onDoubleClick={onDoubleClick}
-      >
-        <span aria-hidden="true" className={isFocus ? `${styles.avatar} ${styles.focusAvatar}` : styles.avatar}>
-          {initials(person)}
-          <PhotoFade person={person} paused={paused} />
-        </span>
-        <span className={styles.name}>{fullName(person)}</span>
-        {sub && <span className={styles.sub}>{sub}</span>}
-      </button>
-      {more && (
-        <button type="button" className={`pill ${styles.more}`} aria-label={`More: center the tree on ${fullName(person)}`} onClick={onCenter}>
-          {more === 'up' ? '▲ more' : '▼ more'}
+      <div data-card className={classes}>
+        <button ref={buttonRef} type="button" className={styles.center} onClick={onCenter}>
+          <span aria-hidden="true" className={isFocus ? `${styles.avatar} ${styles.focusAvatar}` : styles.avatar}>
+            {initials(person)}
+            <PhotoFade person={person} paused={paused} />
+          </span>
+          <span className={styles.name}>{fullName(person)}</span>
+          {sub && <span className={styles.sub}>{sub}</span>}
         </button>
-      )}
-      {open && <Glance person={person} relation={relation} isFocus={isFocus} onCenter={onCenter} />}
-    </div>
-  )
-}
-
-// The quick look under a card: relation, two lines of story, one shared email or social account, and links.
-function Glance({ person, relation, isFocus, onCenter }: { person: TreePerson; relation: string | null; isFocus: boolean; onCenter: () => void }) {
-  const box = useRef<HTMLDivElement>(null)
-  const [shift, setShift] = useState(0)
-  // Kept inside the tree panel, so a card at the edge doesn't push the page sideways. Offsets, like the
-  // lines, so a slide-in under way doesn't skew it.
-  useLayoutEffect(() => {
-    const el = box.current
-    const anchor = el?.parentElement
-    const panel = el?.closest('section')
-    if (!el || !anchor || !panel) {
-      return
-    }
-    const place = () => {
-      const half = el.offsetWidth / 2
-      const { x } = offsetBox(anchor, panel)
-      setShift(Math.max(8 - (x - half), Math.min(0, panel.clientWidth - 8 - (x + half))))
-    }
-    place()
-    const observer = new ResizeObserver(place)
-    observer.observe(panel)
-    return () => observer.disconnect()
-  }, [])
-  return (
-    <div ref={box} data-glance className={styles.glance} style={{ translate: `calc(-50% + ${shift}px) 0` }}>
-      <div className={styles.glanceCard}>
-        {relation && <span className={styles.glanceRelation}>{relation}</span>}
-        {person.bio_excerpt && <span className={styles.glanceStory}>{person.bio_excerpt}</span>}
-        <SharedContact personId={person.id} />
-        <div className={styles.glanceFoot}>
-          <Link to={`/people/${person.id}`} className={styles.profileLink}>
-            View profile ›
-          </Link>
-          {!isFocus && (
-            <button type="button" className={styles.centerHere} onClick={onCenter}>
-              Center here
-            </button>
-          )}
-        </div>
+        <Link to={`/people/${person.id}`} className={styles.profileLink}>
+          View profile <span className="visually-hidden">of {fullName(person)}</span> ›
+        </Link>
       </div>
     </div>
   )
 }
 
-// Asked for afresh each time a quick look stays open a moment, never from a cache (architecture §7), so a
-// contact just hidden is gone at once. Never a phone, WhatsApp or an address, even one shared with you.
-function SharedContact({ personId }: { personId: string }) {
-  const [settled, setSettled] = useState(false)
-  useEffect(() => {
-    const timer = window.setTimeout(() => setSettled(true), 150)
-    return () => window.clearTimeout(timer)
-  }, [])
-  const contacts = useQuery({ ...contactsQuery(personId), enabled: settled, staleTime: 0 })
-  // Only from an answer just read: while it's read again, or after that fails, the contact may since be hidden.
-  const fresh = settled && contacts.isSuccess && !contacts.isFetching
-  // Admins and the person themselves get every row back, hidden ones too: show only what the family sees.
-  const shared = fresh
-    ? contacts.data.find(
-        (c: Contact): c is ContactMethod =>
-          !isRequestable(c) && (c.kind === 'email' || c.kind === 'social') && kindOf(c) === null && c.visibility === 'family',
-      )
-    : undefined
-  if (!shared) {
-    return null
-  }
-  return (
-    <span>
-      {shared.kind === 'email' ? 'Email' : platformLabel(shared.platform)} · {shared.value}
-    </span>
-  )
-}
-
 type Line = { key: string; d: string; delay: number }
 
-// Where an element rests inside the panel: offsets, not screen boxes, so the slide-in doesn't skew it.
+// Where an element rests on the stage: offsets, not screen boxes, so neither the slide-in nor the zoom skews it.
 function offsetBox(el: HTMLElement, panel: HTMLElement) {
   let x = 0
   let y = 0
@@ -682,7 +703,7 @@ function offsetBox(el: HTMLElement, panel: HTMLElement) {
 function measure(panel: HTMLElement, rows: HTMLElement, view: FocusView, focus: string): Line[] {
   const box = (el: HTMLElement) => offsetBox(el, panel)
   const unit = (name: string) => rows.querySelector<HTMLElement>(`[data-unit="${name}"]`)
-  const card = (id: string) => rows.querySelector<HTMLElement>(`[data-person="${id}"] button`)
+  const card = (id: string) => rows.querySelector<HTMLElement>(`[data-person="${id}"] [data-card]`)
   // A line into a group stops at the group's edge: you inside your household, children inside theirs.
   const links: { key: string; from: HTMLElement | null; to: HTMLElement | null }[] = [
     ...view.grandparents.map((g) => ({ key: `up:${g.of}`, from: unit(`up-${g.of}`), to: card(g.of) })),

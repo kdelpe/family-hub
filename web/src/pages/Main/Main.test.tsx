@@ -1,4 +1,4 @@
-import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
@@ -71,18 +71,6 @@ const fostering = {
   ],
 }
 
-const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
-const row = (id: string, kind: string, value: string, visibility: string, platform: string | null = null, shared_with_you = false) => ({
-  id,
-  kind,
-  platform,
-  label: null,
-  value,
-  visibility,
-  href: null,
-  shared_with_you,
-})
-
 beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
@@ -91,20 +79,13 @@ beforeEach(() => {
       disconnect() {}
     },
   )
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => json({ contacts: [] })),
-  )
 })
 
 afterEach(() => {
-  vi.useRealTimers()
   vi.unstubAllGlobals()
-  focusManager.setFocused(undefined)
 })
 
 function renderTree(personId: string | null, { url = '/tree', data = tree } = {}) {
-  // Fresh for the whole test: only the quick look's contacts are fetched.
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   client.setQueryData(authKeys.me, { id: 'u1', email: 'fritz@example.com', role: 'member', person_id: personId })
   client.setQueryData(treeKeys.all, data)
@@ -119,7 +100,6 @@ function renderTree(personId: string | null, { url = '/tree', data = tree } = {}
 const cardOf = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name} Pluviose`) })
 // The card with its pills and quick look: where the mouse goes in and out.
 const personOf = (name: string) => cardOf(name).closest<HTMLElement>('[data-person]')!
-const trail = () => within(screen.getByRole('navigation', { name: "Where you've been" }))
 // The lines drawn green: the chain between the open quick look and the focus person.
 const chain = () => [...document.querySelectorAll('[data-chain]')].map((p) => p.getAttribute('data-chain')).sort()
 
@@ -135,56 +115,186 @@ describe('Main', () => {
     expect(cardOf('Tim')).toHaveTextContent('Son · adopted')
     expect(cardOf('Odette')).toHaveTextContent('Former wife')
     expect(screen.getByText((_, el) => el?.textContent === '4 generations')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled()
   })
 
-  it('centers on a relative on double-click, then goes back', () => {
+  it('centers on a relative on a click', () => {
     renderTree('fritz')
 
-    fireEvent.doubleClick(cardOf('Jean-Robert'))
+    fireEvent.click(cardOf('Jean-Robert'))
 
     expect(screen.getByRole('region', { name: 'Family tree centered on Jean-Robert Pluviose' })).toBeInTheDocument()
     expect(screen.getByText('With Guerline')).toBeInTheDocument()
     expect(screen.getByText('Jean-Robert’s parents')).toBeInTheDocument()
     expect(screen.getByText('Family tree centered on Jean-Robert Pluviose')).toBeInTheDocument()
-    expect(trail().getByRole('button', { name: 'Me' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+  })
+
+  it('links every card to its person’s profile, with no pop-up to open first', () => {
+    renderTree('fritz')
+
+    for (const person of document.querySelectorAll<HTMLElement>('[data-person]')) {
+      expect(within(person).getByRole('link', { name: /^View profile of .+ ›$/ })).toHaveAttribute('href', `/people/${person.dataset.person}`)
+    }
+    expect(screen.getByRole('link', { name: 'View profile of Jean-Robert Pluviose ›' })).toBeInTheDocument()
+
+    fireEvent.pointerEnter(personOf('Jean-Robert'), { pointerType: 'mouse' })
+
+    expect(screen.queryByText('Taught in Jacmel for forty years.')).not.toBeInTheDocument()
+  })
+
+  it('has no title, Back or Pause motion button around the tree', () => {
+    renderTree('fritz')
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Family tree' })).toHaveClass('visually-hidden')
+    expect(screen.queryByRole('button', { name: /motion|^Back$/ })).not.toBeInTheDocument()
+  })
+
+  it('goes back to you from a relative', () => {
+    renderTree('fritz')
+    fireEvent.click(cardOf('Jean-Robert'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to me' }))
 
     expect(screen.getByRole('region', { name: 'Family tree centered on you' })).toBeInTheDocument()
   })
 
-  it('opens a quick look on click and closes it on a second click', async () => {
+  it.each([
+    { name: 'zooms in a step', press: ['Zoom in'], level: '110%', scale: 'scale(1.1)' },
+    { name: 'zooms out a step', press: ['Zoom out'], level: '90%', scale: 'scale(0.9)' },
+    { name: 'stops at 150%', press: Array(8).fill('Zoom in'), level: '150%', scale: 'scale(1.5)' },
+    { name: 'stops at 50%', press: Array(8).fill('Zoom out'), level: '50%', scale: 'scale(0.5)' },
+  ])('$name with the buttons, and keeps the zoom while centering', ({ press, level, scale }) => {
     renderTree('fritz')
+    const stage = () => document.querySelector<HTMLElement>('[data-stage]')!
 
+    for (const name of press) {
+      const button = screen.getByRole('button', { name })
+      if (!(button as HTMLButtonElement).disabled) {
+        fireEvent.click(button)
+      }
+    }
+
+    expect(screen.getByRole('button', { name: `Reset zoom, now ${level}` })).toBeInTheDocument()
+    expect(stage().style.transform).toMatch(new RegExp(`${scale.replace(/[().]/g, '\\$&')}$`))
     fireEvent.click(cardOf('Jean-Robert'))
-
-    expect(await screen.findByText('Taught in Jacmel for forty years.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'View profile ›' })).toHaveAttribute('href', '/people/jr')
-
-    fireEvent.click(cardOf('Jean-Robert'))
-
-    await vi.waitFor(() => expect(screen.queryByText('Taught in Jacmel for forty years.')).not.toBeInTheDocument())
+    expect(stage().style.transform).toMatch(new RegExp(`${scale.replace(/[().]/g, '\\$&')}$`))
   })
 
-  it('shows only a contact the family can see in the quick look', async () => {
-    // A new Response each call: a body can be read only once.
-    vi.mocked(fetch).mockImplementation(async () =>
-      json({
-        contacts: [
-          row('c1', 'email', 'hidden@example.com', 'hidden'),
-          row('c2', 'social', '+1 555 0100', 'on_request', 'whatsapp', true),
-          row('c3', 'email', 'jr@example.com', 'family'),
-        ],
-      }),
-    )
+  it('moves the tree when dragged, and a drag from a card doesn’t center on them', () => {
     renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+    const stage = document.querySelector<HTMLElement>('[data-stage]')!
+    const mouse = { pointerId: 1, pointerType: 'mouse', button: 0 }
 
+    fireEvent.pointerDown(cardOf('Jean-Robert'), { ...mouse, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(panel, { ...mouse, clientX: 120, clientY: 90 })
+    fireEvent.pointerMove(panel, { ...mouse, clientX: 140, clientY: 80 })
+    fireEvent.pointerUp(panel, mouse)
     fireEvent.click(cardOf('Jean-Robert'))
 
-    expect(await screen.findByText('Email · jr@example.com')).toBeInTheDocument()
-    expect(screen.queryByText(/hidden@example.com/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/555 0100/)).not.toBeInTheDocument()
+    expect(stage.style.transform).not.toBe('')
+    expect(screen.getByRole('region', { name: 'Family tree centered on you' })).toBeInTheDocument()
+
+    fireEvent.click(cardOf('Jean-Robert'))
+    expect(screen.getByRole('region', { name: 'Family tree centered on Jean-Robert Pluviose' })).toBeInTheDocument()
+  })
+
+  it('recenters a tree that was moved, keeping its zoom', () => {
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+    const mouse = { pointerId: 1, pointerType: 'mouse', button: 0 }
+    expect(screen.getByRole('button', { name: 'Recenter' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    fireEvent.pointerDown(panel, { ...mouse, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(panel, { ...mouse, clientX: 140, clientY: 130 })
+    fireEvent.pointerUp(panel, mouse)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
+
+    expect(screen.getByRole('button', { name: 'Recenter' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Reset zoom, now 110%' })).toBeInTheDocument()
+  })
+
+  it('centers a tree that was moved when the zoom is reset', () => {
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+    const mouse = { pointerId: 1, pointerType: 'mouse', button: 0 }
+    fireEvent.pointerDown(panel, { ...mouse, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(panel, { ...mouse, clientX: 140, clientY: 130 })
+    fireEvent.pointerUp(panel, mouse)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
+
+    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe('')
+  })
+
+  it.each([
+    { name: 'up to the parent whose line continues', viewer: 'jonas', arrow: 'more: center the tree on Fritz Pluviose', next: 'Fritz Pluviose' },
+    { name: 'down to the child whose children have children', viewer: 'joseph', arrow: 'more: center the tree on Jean-Robert Pluviose', next: 'Jean-Robert Pluviose' },
+  ])('has a plain arrow at the panel’s edge that goes $name', ({ viewer, arrow, next }) => {
+    renderTree(viewer)
+
+    const button = screen.getByRole('button', { name: arrow })
+    expect(button.textContent).toMatch(/^[▲▼] more:/)
+    expect(button.closest('[data-person]')).toBeNull()
+    fireEvent.click(button)
+
+    expect(screen.getByRole('region', { name: `Family tree centered on ${next}` })).toBeInTheDocument()
+  })
+
+  it('walks back down the line the up arrow came by, even with nobody further below', () => {
+    renderTree('jonas')
+
+    fireEvent.click(screen.getByRole('button', { name: 'more: center the tree on Fritz Pluviose' }))
+    expect(screen.getByRole('region', { name: 'Family tree centered on Fritz Pluviose' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'more: center the tree on Jonas Pluviose' }))
+    expect(screen.getByRole('region', { name: 'Family tree centered on you' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'more: center the tree on Fritz Pluviose' }))
+    fireEvent.click(cardOf('Jean-Robert'))
+    expect(screen.queryByRole('button', { name: 'more: center the tree on Fritz Pluviose' })).not.toBeInTheDocument()
+  })
+
+  it('hides the arrows once the tree is moved by hand, and Recenter brings them back', () => {
+    renderTree('jonas')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+    const mouse = { pointerId: 1, pointerType: 'mouse', button: 0 }
+
+    fireEvent.pointerDown(panel, { ...mouse, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(panel, { ...mouse, clientX: 140, clientY: 130 })
+    fireEvent.pointerUp(panel, mouse)
+    expect(screen.queryByRole('button', { name: /^more:/ })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
+    expect(screen.getByRole('button', { name: /^more:/ })).toBeInTheDocument()
+  })
+
+  it('zooms with a two-finger pinch', () => {
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+    const finger = (pointerId: number, clientX: number) => ({ pointerId, pointerType: 'touch', clientX, clientY: 100 })
+
+    fireEvent.pointerDown(panel, finger(1, 100))
+    fireEvent.pointerDown(panel, finger(2, 200))
+    fireEvent.pointerMove(panel, finger(2, 220))
+
+    expect(screen.getByRole('button', { name: 'Reset zoom, now 120%' })).toBeInTheDocument()
+  })
+
+  it('zooms with Ctrl and the wheel, which is also a trackpad pinch, and resets', () => {
+    renderTree('fritz')
+    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+
+    fireEvent.wheel(panel, { ctrlKey: true, deltaY: -200 })
+    expect(screen.getByRole('button', { name: /^Reset zoom, now 150%$/ })).toBeInTheDocument()
+    fireEvent.wheel(panel, { deltaY: -200 })
+    expect(screen.getByRole('button', { name: /^Reset zoom, now 150%$/ })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
+
+    expect(screen.getByRole('button', { name: 'Reset zoom, now 100%' })).toBeInTheDocument()
+    expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe('')
   })
 
   it('finds a relative without accents and centers on them', () => {
@@ -200,7 +310,7 @@ describe('Main', () => {
   it('keeps the viewer’s relation on a former partner of someone else', () => {
     renderTree('fritz')
 
-    fireEvent.doubleClick(cardOf('Jean-Robert'))
+    fireEvent.click(cardOf('Jean-Robert'))
 
     expect(cardOf('Guerline')).toHaveTextContent('Former stepmother')
   })
@@ -244,55 +354,7 @@ describe('Main', () => {
     expect(screen.getByRole('region', { name: `Family tree centered on ${centered}` })).toBeInTheDocument()
   })
 
-  it.each([
-    { name: 'while it’s read again', next: () => new Promise<Response>(() => {}) },
-    { name: 'once reading it again failed', next: () => Promise.reject(new TypeError('Failed to fetch')) },
-  ])('hides the shared contact $name, since it may be hidden by now', async ({ next }) => {
-    let contacts = async () => json({ contacts: [row('c3', 'email', 'jr@example.com', 'family')] })
-    vi.mocked(fetch).mockImplementation((url) => (String(url).endsWith('/contacts') ? contacts() : Promise.resolve(json({}))))
-    renderTree('fritz')
-    fireEvent.click(cardOf('Jean-Robert'))
-    expect(await screen.findByText('Email · jr@example.com')).toBeInTheDocument()
-    contacts = next
-
-    // Coming back to the window reads the contacts again.
-    act(() => {
-      focusManager.setFocused(false)
-      focusManager.setFocused(true)
-    })
-
-    await vi.waitFor(() => expect(screen.queryByText('Email · jr@example.com')).not.toBeInTheDocument())
-    expect(screen.getByText('Taught in Jacmel for forty years.')).toBeInTheDocument()
-  })
-
-  it.each([
-    { name: 'Escape', dismiss: () => fireEvent.keyDown(document, { key: 'Escape' }) },
-    { name: 'a press elsewhere', dismiss: () => fireEvent.pointerDown(document.body) },
-  ])('lets $name cancel a click still waiting to open the quick look', ({ dismiss }) => {
-    vi.useFakeTimers()
-    renderTree('fritz')
-
-    fireEvent.click(cardOf('Jean-Robert'))
-    dismiss()
-    act(() => vi.advanceTimersByTime(500))
-
-    expect(screen.queryByRole('link', { name: 'View profile ›' })).not.toBeInTheDocument()
-  })
-
-  it('sends focus back to the card when Escape closes its quick look from inside', async () => {
-    renderTree('fritz')
-    fireEvent.click(cardOf('Jean-Robert'))
-    const link = await screen.findByRole('link', { name: 'View profile ›' })
-    link.focus()
-
-    fireEvent.keyDown(link, { key: 'Escape' })
-
-    expect(cardOf('Jean-Robert')).toHaveFocus()
-    // Quietly: that focus doesn't open it again.
-    expect(screen.queryByRole('link', { name: 'View profile ›' })).not.toBeInTheDocument()
-  })
-
-  it('raises only the generation whose quick look is open, for every card, so it can hang over the rows below', () => {
+  it('raises only the generation whose card is lifted, for every card, so its shadow sits over the rows nearby', () => {
     renderTree('fritz')
     const people = [...document.querySelectorAll<HTMLElement>('[data-person]')]
     expect(people.length).toBeGreaterThan(5)
@@ -316,19 +378,19 @@ describe('Main', () => {
     ])
   })
 
-  it.each([
-    { name: 'leaves its card', move: () => fireEvent.pointerLeave(personOf('Jean-Robert'), { pointerType: 'mouse' }) },
-    { name: 'moves onto another card', move: () => fireEvent.pointerEnter(personOf('Nadège'), { pointerType: 'mouse' }) },
-  ])('keeps a quick look that holds keyboard focus open when the mouse $name', ({ move }) => {
+  it('brings the focus person’s card into view on opening the page', () => {
+    const scrolled: Element[] = []
+    // A laid-out tree with the card below the fold: jsdom gives everything no size and puts it at 0.
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(1000)
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ y: 2000, height: 150 }))
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this)
+    }
     renderTree('fritz')
-    act(() => cardOf('Jean-Robert').focus())
-    const link = screen.getByRole('link', { name: 'View profile ›' })
-    act(() => link.focus())
 
-    move()
-
-    expect(link).toBeInTheDocument()
-    expect(link).toHaveFocus()
+    expect(scrolled).toEqual([cardOf('Fritz').closest('[data-card]')])
+    delete (Element.prototype as Partial<Element>).scrollIntoView
+    vi.restoreAllMocks()
   })
 
   it('lands keyboard focus on the tree once a first relative is picked from the search', () => {
