@@ -23,6 +23,7 @@
   --warning-tint: #f6e3d4;
   --shadow-lift: rgba(43, 38, 32, 0.16);
   --shadow-press: rgba(43, 38, 32, 0.12);
+  --scrim: rgba(43, 38, 32, 0.38);
   /* People cards' top band, by family side (design-notes §4.3). */
   --side-first: #edf2ee;
   --side-second: #f3ece0;
