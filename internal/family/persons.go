@@ -184,13 +184,9 @@ func (s *Service) CreatePerson(ctx context.Context, createdBy uuid.UUID, in Pers
 	var person Person
 	// The created_by foreign key waits on the creator's users row, which sign-ins lock FOR UPDATE.
 	err = s.write(ctx, "create person", func(q *gen.Queries) error {
-		id, err := q.CreatePerson(ctx, gen.CreatePersonParams{
-			FirstName: f.FirstName, MiddleName: f.MiddleName, LastName: f.LastName, MaidenName: f.MaidenName, Side: f.Side,
-			BirthPlace: f.BirthPlace, Gender: f.Gender, BirthDate: f.birthDate, BirthDatePrecision: f.BirthDatePrecision,
-			DeathDate: f.deathDate, DeathDatePrecision: f.DeathDatePrecision, IsDeceased: f.IsDeceased, Bio: f.Bio, CreatedBy: &createdBy,
-		})
+		id, err := insertPerson(ctx, q, createdBy, f)
 		if err != nil {
-			return fmt.Errorf("create person: %w", err)
+			return err
 		}
 		person, err = get(ctx, q, Viewer{IsAdmin: true}, id)
 		return err
@@ -199,6 +195,18 @@ func (s *Service) CreatePerson(ctx context.Context, createdBy uuid.UUID, in Pers
 		return Person{}, err
 	}
 	return person, nil
+}
+
+func insertPerson(ctx context.Context, q *gen.Queries, createdBy uuid.UUID, f fields) (uuid.UUID, error) {
+	id, err := q.CreatePerson(ctx, gen.CreatePersonParams{
+		FirstName: f.FirstName, MiddleName: f.MiddleName, LastName: f.LastName, MaidenName: f.MaidenName, Side: f.Side,
+		BirthPlace: f.BirthPlace, Gender: f.Gender, BirthDate: f.birthDate, BirthDatePrecision: f.BirthDatePrecision,
+		DeathDate: f.deathDate, DeathDatePrecision: f.DeathDatePrecision, IsDeceased: f.IsDeceased, Bio: f.Bio, CreatedBy: &createdBy,
+	})
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("create person: %w", err)
+	}
+	return id, nil
 }
 
 // UpdatePerson lets an admin change anything, and a member only their own name, birthday and bio (§4).

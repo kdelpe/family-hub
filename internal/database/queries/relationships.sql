@@ -28,6 +28,13 @@ SELECT EXISTS (SELECT 1 FROM anc WHERE id = @child_id::uuid);
 SELECT count(*) FROM relationships
 WHERE type = 'parent_child' AND subtype = 'biological' AND person_b = @child_id AND id <> @except_id;
 
+-- The parents a sibling is linked through: biological or adoptive, and still in the tree.
+-- name: FamilyParentsOf :many
+SELECT r.person_a FROM relationships r
+JOIN persons p ON p.id = r.person_a AND p.deleted_at IS NULL
+WHERE r.type = 'parent_child' AND r.subtype IN ('biological', 'adoptive') AND r.person_b = @child_id
+ORDER BY r.person_a;
+
 -- name: CreateRelationship :one
 INSERT INTO relationships (type, subtype, ended, person_a, person_b, notes)
 VALUES (@type, @subtype, @ended, @person_a, @person_b, sqlc.narg(notes))
