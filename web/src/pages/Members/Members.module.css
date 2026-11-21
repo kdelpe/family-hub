@@ -700,7 +700,6 @@
 /* A matching pair: same size and colours, whichever way they turn. */
 .prevButton,
 .nextButton {
-  min-width: 124px;
   height: 46px;
   padding: 0 20px;
   border-radius: 23px;
@@ -1446,6 +1445,12 @@
     min-height: 100dvh;
     justify-content: center;
     padding-top: 44px;
+  }
+
+  /* The same width for the pair; a phone hides their words to fit the page box between them. */
+  .prevButton,
+  .nextButton {
+    min-width: 124px;
   }
 }
 
