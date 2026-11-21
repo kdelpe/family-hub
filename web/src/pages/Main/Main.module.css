@@ -188,6 +188,16 @@
   animation: draw 0.4s ease-out both;
 }
 
+.lines .over {
+  stroke: transparent;
+  stroke-width: 2.5;
+  transition: stroke 0.15s ease-out;
+}
+
+.lines .chain {
+  stroke: var(--accent);
+}
+
 .rows {
   position: relative;
   padding: 22px 20px 26px;

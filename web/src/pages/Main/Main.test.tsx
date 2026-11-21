@@ -120,6 +120,8 @@ const cardOf = (name: string) => screen.getByRole('button', { name: new RegExp(`
 // The card with its pills and quick look: where the mouse goes in and out.
 const personOf = (name: string) => cardOf(name).closest<HTMLElement>('[data-person]')!
 const trail = () => within(screen.getByRole('navigation', { name: "Where you've been" }))
+// The lines drawn green: the chain between the open quick look and the focus person.
+const chain = () => [...document.querySelectorAll('[data-chain]')].map((p) => p.getAttribute('data-chain')).sort()
 
 describe('Main', () => {
   it('centers on the viewer with their family around them', () => {
@@ -349,5 +351,29 @@ describe('Main', () => {
     renderTree('fritz')
 
     expect(document.querySelector<SVGElement>(`[data-line="${line}"]`)!.style.animationDelay).toBe(delay)
+  })
+
+  it.each([
+    { name: 'a grandparent, through their child', viewer: 'fritz', card: 'Joseph', data: tree, lit: ['sib:fritz', 'up:jr'] },
+    { name: 'a parent', viewer: 'fritz', card: 'Nadège', data: tree, lit: ['sib:fritz'] },
+    { name: 'a sibling, through the parents', viewer: 'fritz', card: 'Maya', data: tree, lit: ['sib:fritz', 'sib:maya'] },
+    { name: 'a partner, sharing the household', viewer: 'fritz', card: 'Fabienne', data: tree, lit: [] },
+    { name: 'a child in the second group', viewer: 'fritz', card: 'Tim', data: tree, lit: ['kids:1'] },
+    { name: 'a grandchild, through their parent', viewer: 'rose', card: 'Naomie', data: fostering, lit: ['down:mt', 'kids:0'] },
+  ])('turns green the lines between the focus person and $name', ({ viewer, card, data, lit }) => {
+    renderTree(viewer, { data })
+    expect(chain()).toEqual([])
+
+    fireEvent.pointerEnter(personOf(card), { pointerType: 'mouse' })
+
+    expect(chain()).toEqual(lit)
+  })
+
+  it('draws a green line in with the rest, so a card already under the pointer lights it as it draws', () => {
+    renderTree('fritz')
+
+    fireEvent.pointerEnter(personOf('Joseph'), { pointerType: 'mouse' })
+
+    expect(document.querySelector<SVGElement>('[data-chain="up:jr"]')!.style.animationDelay).toBe('480ms')
   })
 })

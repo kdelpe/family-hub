@@ -370,6 +370,7 @@ function FocusTree({
     view.grandchildren.length > 0 && 'grandchildren',
   ].filter(Boolean)
   const rowOf = (name: string) => order.indexOf(name)
+  const chain = new Set(chainTo(view, focus, open))
 
   const rows = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLElement>(null)
@@ -400,6 +401,18 @@ function FocusTree({
         <svg width={lines.width} height={lines.height}>
           {lines.paths.map((l) => (
             <path key={l.key} data-line={l.key} d={l.d} pathLength={100} style={{ animationDelay: `${l.delay}ms` }} />
+          ))}
+          {/* Drawn again on top, so a line it shares a stretch with can't cover the green. Mounted with the rest, so
+              a line still drawing in turns green as it draws. */}
+          {lines.paths.map((l) => (
+            <path
+              key={`over:${l.key}`}
+              data-chain={chain.has(l.key) ? l.key : undefined}
+              d={l.d}
+              pathLength={100}
+              className={chain.has(l.key) ? `${styles.over} ${styles.chain}` : styles.over}
+              style={{ animationDelay: `${l.delay}ms` }}
+            />
           ))}
         </svg>
       </div>
@@ -683,4 +696,28 @@ function measure(panel: HTMLElement, rows: HTMLElement, view: FocusView, focus: 
       delay: delay(l.to),
     }
   })
+}
+
+// The lines joining someone to the focus person, by the keys measure() gives them: a grandparent through
+// their child, a sibling through the parents, a grandchild through their parent. A partner shares the household.
+function chainTo(view: FocusView, focus: string, id: string | null): string[] {
+  if (!id || id === focus) {
+    return []
+  }
+  const childGroup = (child: string) => view.children.findIndex((g) => g.ids.includes(child))
+  const grandparent = view.grandparents.find((g) => g.ids.includes(id))
+  if (grandparent) {
+    return [`up:${grandparent.of}`, `sib:${focus}`]
+  }
+  if (view.parents.includes(id)) {
+    return [`sib:${focus}`]
+  }
+  if (view.siblings.some((s) => s.id === id)) {
+    return [`sib:${id}`, `sib:${focus}`]
+  }
+  if (childGroup(id) >= 0) {
+    return [`kids:${childGroup(id)}`]
+  }
+  const grandchild = view.grandchildren.find((g) => g.ids.includes(id))
+  return grandchild ? [`kids:${childGroup(grandchild.of)}`, `down:${grandchild.of}`] : []
 }
