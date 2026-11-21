@@ -9,7 +9,7 @@ import { PhotoFade } from '../../components/PhotoFade/PhotoFade'
 import { errorMessage } from '../../lib/errorMessage'
 import { familyLinks, type FamilyLinks } from '../../lib/familyLinks'
 import { focusView, type FocusView, treeChildrenOf, treeParentsOf } from '../../lib/familyView'
-import { useMotionPaused } from '../../lib/motion'
+import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, initials, nameMatches } from '../../lib/names'
 import { relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
@@ -411,9 +411,10 @@ function FocusTree({
         : treeChildrenOf(family, to).some((child) => treeChildrenOf(family, child).length > 0)
     return more ? `${first(to)}’s ${by === 'up' ? 'parents' : 'grandchildren'}` : `Back to ${first(to)}`
   }
-  const edge = (to: string | undefined, by: 'up' | 'down', where: string) =>
+  const edge = (to: string | undefined, by: 'up' | 'down', where: string, hidden = false) =>
     to &&
-    !moved && (
+    !moved &&
+    !hidden && (
       <button type="button" className={`pill ${styles.more} ${styles.edge} ${styles[where]}`} onClick={() => onStep(by, to)}>
         <span aria-hidden="true">{by === 'up' ? '▲' : '▼'} </span>
         <span className={styles.edgeWords}>{edgeWords(to, by)}</span>
@@ -477,21 +478,6 @@ function FocusTree({
     return { x: (width * (1 - z)) / 2, y: Math.min(edge, showCard) }
   }
 
-  // Where the page scrolls, keyboard focus landing on the new focus card (preventScroll, above) brings the card into
-  // the window too, once it's measured and placed in the panel. Once per view, so a later scroll isn't undone.
-  const revealed = useRef(false)
-  useEffect(() => {
-    const card = focusCard.current
-    if (revealed.current || !card || !anchor.card || document.activeElement !== card || !pageScrolls()) {
-      return
-    }
-    revealed.current = true
-    const box = card.getBoundingClientRect()
-    if (box.top < 0 || box.bottom > window.innerHeight) {
-      window.scrollBy({ top: box.top + box.height / 2 - window.innerHeight / 2, behavior: 'instant' })
-    }
-  }, [anchor])
-
   // At least 60px of the cards always stays in the panel, at every zoom and after the panel resizes.
   const keepInSight = (x: number, y: number, z: number) => {
     const c = cards ?? { left: 0, right: width, top: 0, bottom: height }
@@ -506,6 +492,27 @@ function FocusTree({
   useLayoutEffect(() => {
     live.current = { at, zoom }
   })
+
+  // Where the page scrolls, keyboard focus landing on the new focus card (preventScroll, above) brings the card into
+  // the window too, once it's measured and placed in the panel. Once per view, so a later scroll isn't undone.
+  const revealed = useRef(false)
+  useEffect(() => {
+    const card = focusCard.current
+    const p = panel.current
+    if (revealed.current || !card || !p || !anchor.card || document.activeElement !== card || !pageScrolls()) {
+      return
+    }
+    revealed.current = true
+    // Where the whole card will rest, not the button as it slides in.
+    const { y, z } = { y: live.current.at.y, z: live.current.zoom }
+    const panelTop = p.getBoundingClientRect().top + p.clientTop
+    const top = panelTop + y + anchor.card.top * z
+    const bottom = panelTop + y + anchor.card.bottom * z
+    if (top < 0 || bottom > window.innerHeight) {
+      window.scrollBy({ top: (top + bottom) / 2 - window.innerHeight / 2, behavior: 'instant' })
+    }
+  }, [anchor])
+  const reduced = useReducedMotion()
   const [gliding, setGliding] = useState(false)
   // As the state, but current within one event, which can move the tree several times.
   const glidingNow = useRef(false)
@@ -516,7 +523,15 @@ function FocusTree({
     glidingNow.current = false
     setGliding(false)
   }
-  const glideBack = () => {
+  // Not with reduced motion, nor when the tree is already there: nothing would move, and a glide left on would make
+  // the next zoom take the resting tree for a moved one.
+  const glideBack = (toZoom: number) => {
+    const to = resting(toZoom)
+    const { at: from, zoom: fromZoom } = live.current
+    if (reduced || (Math.abs(to.x - from.x) < 0.5 && Math.abs(to.y - from.y) < 0.5 && toZoom === fromZoom)) {
+      endGlide()
+      return
+    }
     window.clearTimeout(glideTimer.current)
     glidingNow.current = true
     setGliding(true)
@@ -653,7 +668,8 @@ function FocusTree({
     <div className={styles.frame}>
       {/* Gone once the tree is moved, as the arrows are, so it doesn't sit over the cards. */}
       {!moved && <p className={styles.tip}>{tipText}</p>}
-      {edge(upTo, 'up', 'edgeTop')}
+      {/* Not while the tree rests moved up to show the focus card: a parent's card can then run under it. */}
+      {edge(upTo, 'up', 'edgeTop', at.y < -anchor.treeTop * zoom - 0.5)}
       <section
         ref={panel}
         aria-label={`Family tree centered on ${you ? 'you' : fullName(people.get(focus)!)}`}
@@ -770,7 +786,7 @@ function FocusTree({
           −
         </button>
         <button type="button" aria-label={`Reset zoom, now ${Math.round(zoom * 100)}%`} className={styles.zoomLevel} onClick={() => {
-            glideBack()
+            glideBack(1)
             setMoved(null)
             onZoom(() => 1)
           }}>
@@ -784,7 +800,7 @@ function FocusTree({
           className={styles.recenter}
           disabled={!moved}
           onClick={() => {
-            glideBack()
+            glideBack(zoom)
             setMoved(null)
           }}
         >

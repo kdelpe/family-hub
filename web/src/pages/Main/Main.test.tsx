@@ -478,6 +478,11 @@ describe('Main', () => {
       })
       expect(stage()).not.toHaveClass(/glide/)
 
+      // Already centered at 100%, a reset has nothing to glide.
+      fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
+      expect(stage()).not.toHaveClass(/glide/)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
       fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
       expect(stage()).toHaveClass(/glide/)
       fireEvent.wheel(panel, { deltaY: 50 })
@@ -722,7 +727,8 @@ describe('Main', () => {
     fireEvent.click(match)
 
     expect(cardOf('Maya')).toHaveFocus()
-    expect(scrollBy.mock.calls).toEqual(scrolls ? [[{ top: 2075 - window.innerHeight / 2, behavior: 'instant' }]] : [])
+    // Where the card will rest: the panel's top (2000 here) plus the card's place in it, which jsdom lays out at 0.
+    expect(scrollBy.mock.calls).toEqual(scrolls ? [[{ top: 2000 - window.innerHeight / 2, behavior: 'instant' }]] : [])
   })
 
   it('moves the tree up and down with one finger, too', () => {
