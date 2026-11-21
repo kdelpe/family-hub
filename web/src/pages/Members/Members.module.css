@@ -641,16 +641,32 @@
   color: var(--on-accent);
 }
 
-.prevButton:disabled,
-.nextButton:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
 .position {
   min-width: 280px;
   text-align: center;
   color: var(--text-2);
+}
+
+.pageBox {
+  min-width: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-2);
+}
+
+.pageField {
+  width: 3.5em;
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 6px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
 }
 
 /* Paused, or with reduced motion: no sheen, no cover lift, no peeking corner. */

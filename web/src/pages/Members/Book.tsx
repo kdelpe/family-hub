@@ -1,4 +1,4 @@
-import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type PointerEvent as ReactPointerEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { type Book as BookData, nameOf, pageNumber, stopOf, stopsOf } from './bookPages'
 import { PageContent } from './PageContent'
@@ -54,6 +54,9 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   // Like a turn, a scrub belongs to the tabs it started on: a refetch can take letters away.
   const [scrubbed, setScrub] = useState<{ tab: number; top: number; book: BookData } | null>(null)
   const scrub = scrubbed?.book === book ? scrubbed : null
+  // What's typed in the page box until it's taken; otherwise the box shows the page the book is open at.
+  const [draft, setDraft] = useState<string | null>(null)
+  const pageField = useId()
   const pagesRef = useRef<HTMLDivElement>(null)
   const timer = useRef<number | undefined>(undefined)
   const drag = useRef<Drag | null>(null)
@@ -95,10 +98,10 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
       }
       return
     }
-    // A control on a page turned away (or a corner, closing the book) goes with it: the book takes focus, so the
-    // arrow keys still turn.
+    // A control on a page turned away (or a corner or button, closing the book) goes with it: the book takes focus, so
+    // the arrow keys still turn.
     const active = document.activeElement
-    if (active?.closest('[data-page]') || (active?.closest('[data-corner]') && (to === 0 || to === last))) {
+    if (active?.closest('[data-page]') || (active?.closest('[data-corner], [data-controls]') && (to === 0 || to === last))) {
       pagesRef.current?.focus({ preventScroll: true })
     }
     const land = page ?? stops[to]![0]!
@@ -268,6 +271,16 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     return who ? [who.first_name] : []
   })
   const numbers = cur.flatMap((i) => pageNumber(book, i) ?? [])
+  const total = Math.max(...book.pages.map((_, i) => Number(pageNumber(book, i) ?? 0)))
+  const closed = stop === 0 || stop === last
+  // Anything typed in the page box is taken on Enter or on leaving it; a number that isn't a page puts it back.
+  const goToPage = () => {
+    const n = Number(draft)
+    setDraft(null)
+    if (draft && Number.isInteger(n) && n >= 1 && n <= total) {
+      goTo(book.welcome + n - 1)
+    }
+  }
   let position = numbers.length
     ? `Page${numbers.length > 1 ? `s ${numbers[0]}–${numbers[1]}` : ` ${numbers[0]}`}${names.length ? ` · ${names.join(' & ')}` : ''}`
     : ''
@@ -511,16 +524,46 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
           </nav>
         )}
       </div>
-      <div className={styles.controls}>
-        <button type="button" className={`pill ${styles.prevButton}`} disabled={stop === 0} onClick={() => flipTo(stop - 1)}>
-          ◀ Previous
-        </button>
-        <span aria-live="polite" className={styles.position}>
+      <div className={styles.controls} data-controls>
+        {/* Closed, the line under the cover says how to open it; the buttons and page box come with the open book. */}
+        {!closed && (
+          <>
+            <button type="button" className={`pill ${styles.prevButton}`} onClick={() => flipTo(stop - 1)}>
+              ◀ Previous
+            </button>
+            <form
+              className={styles.pageBox}
+              onSubmit={(event) => {
+                event.preventDefault()
+                goToPage()
+              }}
+            >
+              <label htmlFor={pageField}>Page</label>
+              <input
+                id={pageField}
+                className={styles.pageField}
+                inputMode="numeric"
+                autoComplete="off"
+                enterKeyHint="go"
+                size={3}
+                value={draft ?? numbers[0] ?? ''}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) => setDraft(event.currentTarget.value.replace(/\D/g, ''))}
+                onKeyDown={(event) => event.key === 'Escape' && setDraft(null)}
+                onBlur={goToPage}
+              />
+              <span>of {total}</span>
+            </form>
+          </>
+        )}
+        <span aria-live="polite" className={closed ? styles.position : 'visually-hidden'}>
           {position}
         </span>
-        <button type="button" className={`pill ${styles.nextButton}`} disabled={stop === last} onClick={() => flipTo(stop + 1)}>
-          {stop === 0 ? 'Open ▶' : 'Next ▶'}
-        </button>
+        {!closed && (
+          <button type="button" className={`pill ${styles.nextButton}`} onClick={() => flipTo(stop + 1)}>
+            Next ▶
+          </button>
+        )}
       </div>
     </div>
   )
