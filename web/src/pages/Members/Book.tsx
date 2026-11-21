@@ -296,7 +296,14 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          onPointerCancel={(event) => {
+            // A touch that became a scroll is canceled: no click-turn, though a drag already under way settles.
+            if (drag.current?.on) {
+              onPointerUp(event)
+            } else {
+              drag.current = null
+            }
+          }}
           onKeyDown={(event) => {
             if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
               event.preventDefault()
