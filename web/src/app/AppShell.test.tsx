@@ -52,7 +52,7 @@ describe('AppShell', () => {
 
     const menu = await screen.findByRole('navigation', { name: 'Main' })
     expect(within(menu).getAllByRole('link').map((link) => link.textContent)).toEqual([
-      'Pluviose-MonestimeFamily Hub',
+      'PluvioseFamily Hub',
       'Home',
       'Family tree',
       'Members',

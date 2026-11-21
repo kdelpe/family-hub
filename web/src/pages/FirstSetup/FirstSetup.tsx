@@ -10,7 +10,6 @@ import { type Tree, treeQuery, type TreePerson } from '../../api/tree'
 import { ContactSwitch, contactSwitchKey } from '../../components/ContactSwitch/ContactSwitch'
 import { byType, typeName } from '../../lib/contactTypes'
 import { errorMessage, refusedMessage } from '../../lib/errorMessage'
-import { familyLines } from '../../lib/familySides'
 import { fullName, initials } from '../../lib/names'
 import { useSignedIn } from '../../lib/useSignedIn'
 import page from '../../styles/signInForm.module.css'
@@ -31,7 +30,7 @@ export function FirstSetup() {
 
   return (
     <>
-      <title>Getting started — Pluviose-Monestime Family Hub</title>
+      <title>Getting started — Pluviose Family Hub</title>
       <main className={`${page.main} ${page.tallMain}`}>
         <div className={`${page.form} ${styles.column}`}>
           {person ? (
@@ -260,10 +259,7 @@ function cousinsLine(cousins: TreePerson[]) {
   }
   const shown = cousins.slice(0, 3).map((p) => p.first_name)
   const names = cousins.length > 3 ? `${shown.join(', ')} and ${cousins.length - 3} more` : listNames(shown)
-  const sides = new Set(cousins.map((p) => p.side))
-  const [side] = sides
-  const where = sides.size === 1 && (side === 'first' || side === 'second') ? `on the ${familyLines[side]} side` : 'here too'
-  return cousins.length === 1 ? `Your cousin ${names} is ${where}. ` : `Your cousins ${names} are ${where}. `
+  return cousins.length === 1 ? `Your cousin ${names} is here too. ` : `Your cousins ${names} are here too. `
 }
 
 // Parents, grandparents and living first cousins (children of a parent's siblings), by birth or adoption: foster

@@ -44,7 +44,7 @@ export function Login() {
 
   return (
     <>
-      <title>Sign in — Pluviose-Monestime Family Hub</title>
+      <title>Sign in — Pluviose Family Hub</title>
       <main className={page.main}>
         <form className={page.form} onSubmit={onSubmit}>
           <div className={page.heading}>

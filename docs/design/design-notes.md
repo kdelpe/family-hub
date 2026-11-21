@@ -1,6 +1,6 @@
 # Family Hub: Frontend Design Notes ("Heirloom")
 
-The agreed look and behaviour for the Pluviose-Monestime Family Hub frontend (Phase 4a/4b and later), from the design canvas of November 2026. The page files in `pages/` are the visual reference; this file is the spec to build from. Where the two disagree, this file wins.
+The agreed look and behaviour for the Pluviose Family Hub frontend (Phase 4a/4b and later), from the design canvas of November 2026. The page files in `pages/` are the visual reference; this file is the spec to build from. Where the two disagree, this file wins.
 
 All names, dates, stories, phone numbers and addresses in the mockups are **made up** sample data.
 
@@ -90,7 +90,7 @@ White text only ever sits on `--accent` (buttons, the focus avatar).
 
 ### 2.1 Left menu (signed-in pages)
 
-- Top: logo mark (52px circle, tree glyph) **centered above** "Pluviose-Monestime" (Fraunces 22px/600) and "FAMILY HUB" (13px small caps). The whole block links to Home.
+- Top: logo mark (52px circle, tree glyph) **centered above** "Pluviose" (Fraunces 22px/600) and "FAMILY HUB" (13px small caps). The whole block links to Home.
 - Items, in order: **Home · Family tree · Members · Events · Stories · My profile**.
 - **Admin** section (admins only), under a thin divider and small "ADMIN" label: **Members & invites**.
 - Bottom: "Signed in as Maya".
@@ -136,7 +136,7 @@ All five pages share a two-column layout: **left brand panel** (`--brand-panel`)
 ### 3.2 Request access
 - Intro: *"Tell us a little about yourself and an admin will take a look. If they approve, you'll get an invitation by email."* (No family surnames, since in-laws and married relatives may not carry them.)
 - Full name · Email.
-- **"How are you connected to the family?"**: Pluviose side · Monestime side · Married into the family. (No "family friend" option, on purpose.)
+- **"How are you connected to the family?"**: Pluviose family · Married into the family. (No "family friend" option, on purpose.) **Owner's call (2026-11-21):** the hub follows the Pluviose family only, so the Monestime side is no longer offered or shown anywhere: no Monestime option here, no side chip but **Married in**, and the family strip drops its *lines* chip. The data keeps the `second` side, so it could come back; people recorded on it count as family.
 - **"How are you related?"** as one sentence: *I'm the [daughter ▾] of [name] and [name]*, with **+ Add another name** (up to 4). Relationship list: daughter, son, grandchild, sister, brother, niece or nephew, cousin, wife/husband/partner, mother or father, other relative. Names are **typed**, never suggested from the tree (that would reveal family names to strangers). Hint: *"Name a parent, grandparent or sibling if you can — it helps us find your place in the tree."*
 - "Anything else? (optional)" textarea.
 - **Send my request** → thank-you state: *"Your request is with the admins. If they approve it, you'll get an invitation email… usually within a few days."* + *"Know one of the admins? A quick call or text can speed things up."* Always the same response, whatever the email.
@@ -156,7 +156,7 @@ All five pages share a two-column layout: **left brand panel** (`--brand-panel`)
 Not drawn in the mockup, proposed with the real data (November 2026):
 - It shows the signed-in person's own data. **Continue** on step 1 saves a changed story (an error keeps them on the step); **Skip for now** leaves it as it was. The switches save as soon as they're flipped, the same switch as My profile's.
 - Step 2 lists the rows already on file (an admin may have added some), in My profile's order. With none: *"Nothing here yet. You can add a phone, email or address on My profile."*
-- Step 3 leaves out a generation the tree doesn't have, and foster parents (architecture §3.4); with no parents it says *"Your parents aren't in the tree yet."* The family line names up to three living first cousins, as in the mockup: *"Your cousins Maya, Fritz and Sabine are on the Pluviose side."*, *"…and 4 more"* past three, *"are here too"* when they're on different sides, and nothing with no cousins.
+- Step 3 leaves out a generation the tree doesn't have, and foster parents (architecture §3.4); with no parents it says *"Your parents aren't in the tree yet."* The family line names up to three living first cousins: *"Your cousins Maya, Fritz and Sabine are here too."* (the mockup's *"are on the Pluviose side"* went with the sides, §3.2), *"…and 4 more"* past three, and nothing with no cousins.
 - Signed out, it goes to sign in; a login linked to nobody goes straight to Home.
 
 ### 3.5 Forgot password (side path from Sign in)
@@ -176,7 +176,7 @@ Not drawn in the mockup, proposed with the real data (November 2026):
 Built client-side from `/api/tree`.
 
 Look:
-- A **family strip** on the left of the search's row: *38 people · 5 generations · Pluviose & Monestime lines · Earliest record: c. 1900, Jacmel* (pill chips).
+- A **family strip** on the left of the search's row: *38 people · 5 generations · Earliest record: c. 1900, Jacmel* (pill chips).
 - The tree sits on a `--surface-soft` panel (radius 22px). The mockup's pale watermark tree behind the rows is left out (owner's call, 2026-11-20, after trying it in a prototype): names didn't sit on its branches.
 - **Even proportions:** every person, grandparents and grandchildren included, uses **the same card**: 190 wide (owner's call, 2026-11-21, so the tree fills its panel; 150 on phones), radius 14, a 50px framed portrait (cream + sand double ring) that fades between initials and a photo placeholder (6s, each person offset), name 15px/600 on one line (wrapping only on phones), relation 13px. Same gap (14px) between cards in every row and the same spacing between generations.
 - Each generation has a small uppercase label above it (*Grandparents · Your parents · Your household & siblings · Your children · Grandchildren*). Couples and parent groups sit in a soft rounded group (`rgba(255,253,248,.75)`, 1px border); your household uses `--accent-tint` with a 2px accent border.
@@ -212,11 +212,11 @@ Interaction:
 **One page for everyone.** Members replaces both the old People grid and the Directory/Address book, so there is no second list of people anywhere. It's a green clothbound book, **one person per page, two per spread**, with the living A to Z and an **In Memory** section at the back for those who have passed.
 
 **Page order** (index 0 is the empty space left of the closed cover):
-1. **Front cover** (closed book, centered on the page). Leather-look green with a soft highlight, a darker hinge strip on the spine side, a double gold border with corner flourishes, the gold tree mark, **Pluviose-Monestime**, a gold rule with a diamond, **FAMILY MEMBERS** in spaced capitals, and *Lakay se lakay* at the bottom. A light sheen sweeps across it every 7 s, and every 6 s the cover lifts slightly (rotateY −14°) to invite a click.
-2. **Inside front cover:** dotted green endpaper with a bookplate: tree mark, *This book belongs to the Pluviose-Monestime family*, *Kept by everyone, for everyone.*
+1. **Front cover** (closed book, centered on the page). Leather-look green with a soft highlight, a darker hinge strip on the spine side, a double gold border with corner flourishes, the gold tree mark, **Pluviose**, a gold rule with a diamond, **FAMILY MEMBERS** in spaced capitals, and *Lakay se lakay* at the bottom. A light sheen sweeps across it every 7 s, and every 6 s the cover lifts slightly (rotateY −14°) to invite a click.
+2. **Inside front cover:** dotted green endpaper with a bookplate: tree mark, *This book belongs to the Pluviose family*, *Kept by everyone, for everyone.*
 3. **Welcome** (page 1): *Everyone in our family, in one book*, a short intro, three notes (email/socials shown only when shared; phone, WhatsApp and address never printed, ask instead; click or drag to turn), and a link to My profile.
-4. **Inside** (page 2): contents with dotted leaders and page numbers (Welcome · Members, A to Z, with letter buttons · In Memory), every entry clickable, plus side counts (Pluviose side · 7, and so on).
-5. **Members A–Z**, one page each: big corner letter, portrait, name, relation, side chip, Email button, social pills, and the dashed **Request phone number / WhatsApp / address** buttons (become *"✓ … requested"*). Your own page shows *"This is your page"* + **Edit in My profile ›** instead of contact info. Someone without an account shows *"Not on the hub yet."* **Open profile ›** at the bottom. **No dates.**
+4. **Inside** (page 2): contents with dotted leaders and page numbers (Welcome · Members, A to Z, with letter buttons · In Memory), every entry clickable, plus a **Married in · N** count (the only side shown, §3.2).
+5. **Members A–Z**, one page each: big corner letter, portrait, name, relation, a **Married in** chip for those who married in, Email button, social pills, and the dashed **Request phone number / WhatsApp / address** buttons (become *"✓ … requested"*). Your own page shows *"This is your page"* + **Edit in My profile ›** instead of contact info. Someone without an account shows *"Not on the hub yet."* **Open profile ›** at the bottom. **No dates.**
 6. **In Memory** divider: an olive-branch drawing, *In Memory*, *Those who came before us…*, and the count.
 7. **Memorial pages**, one each: soft parchment wash at the top, portrait in grayscale with a hint of sepia, name, relation, side, a leaf + **IN LOVING MEMORY**, one remembered line in italic quotes, then **Open profile ›**. No contact details and no dates.
 8. A **Notes** page if needed to even out the pages, the **inside back cover** (endpaper with *Sa w plante, se li w rekòlte.* / *What you plant is what you harvest.*), then the **back cover** (closed, centered, small gold tree).
@@ -301,9 +301,9 @@ Back to the tree · portrait, relation, name, maiden name, birthday, place, stor
 
 ### 4.10 Members & invites (admins only)
 Tabs: **Requests (n)** · **Invite someone** · **Everyone (n)**.
-- **Requests:** name + email, side chip, source chip ("Asked on the sign-in page" / "Suggested by Stanley Jean-Louis"), **Related to** lines with a badge **✓ In the tree** or **Not found — check spelling**, their note, when. **Approve & invite** → Invite tab with that person preselected. **Not now** → quietly set aside (they're never told), with Undo for 90 days (declined requests are deleted after that).
+- **Requests:** name + email, a chip (*Pluviose family* or *Married into the family*; an older Monestime-side request shows as family), source chip ("Asked on the sign-in page" / "Suggested by Stanley Jean-Louis"), **Related to** lines with a badge **✓ In the tree** or **Not found — check spelling**, their note, when. **Approve & invite** → Invite tab with that person preselected. **Not now** → quietly set aside (they're never told), with Undo for 90 days (declined requests are deleted after that).
 - **Invite someone:** 1) pick the person **in the tree first** ("Not in the tree yet? Add them first") · 2) email + role (Member / Admin, each with a one-line description) · 3) **Who is the invitation from?** (defaults to the member who suggested them, otherwise you; other admins selectable) · 4) live email preview. **Send invitation** → *"Invitation sent to Kervens, from Stanley Jean-Louis."*
-- **Email copy:** subject *"<From first name> invited you to the family hub"*; body *"Bonjou Kervens, <From full name> invited you to the Pluviose-Monestime Family Hub — a private place for our family's tree, photos and stories."*; if the sender isn't the admin who approved it, add *"Approved by <admin>, admin."*; button **Set up my account**; small print about the 7 days and admins seeing everything.
+- **Email copy:** subject *"<From first name> invited you to the family hub"*; body *"Bonjou Kervens, <From full name> invited you to the Pluviose Family Hub — a private place for our family's tree, photos and stories."*; if the sender isn't the admin who approved it, add *"Approved by <admin>, admin."*; button **Set up my account**; small print about the 7 days and admins seeing everything.
 - **Everyone:** table (scrolls sideways on small screens): name, sign-in email (admins only), role, status (Active · Invited · expires in N days · Invited · expired · Disabled), and one action (**Send password reset** / **Resend invitation**).
 
 Wording rule everywhere: say **"admin"**, not "family admin".

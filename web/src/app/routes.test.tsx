@@ -55,7 +55,7 @@ it.each([
   { path: '/auth/request-access', heading: 'Request access' },
   { path: '/auth/forgot', heading: 'Forgot your password?' },
   { path: '/auth/set-password', heading: 'This link doesn’t work anymore' },
-  { path: '/no-such-page', heading: 'Pluviose-Monestime Family Hub' },
+  { path: '/no-such-page', heading: 'Pluviose Family Hub' },
 ])('$path shows the page with heading "$heading"', async ({ path, heading }) => {
   renderAt(path)
 

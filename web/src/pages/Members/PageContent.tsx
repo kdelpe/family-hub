@@ -10,23 +10,13 @@ import {
   type RequestKind,
   requestKinds,
 } from '../../api/contacts'
-import type { FamilySide } from '../../api/accessRequests'
 import { AskButton } from '../../components/AskButton/AskButton'
 import { CheckPill } from '../../components/CheckPill/CheckPill'
 import { PhotoFade } from '../../components/PhotoFade/PhotoFade'
-import { familyLines, sideTags } from '../../lib/familySides'
+import { familyName } from '../../lib/familySides'
 import { fullName, initials } from '../../lib/names'
 import { type Book, type BookPage, letterOf, nameOf, pageNumber } from './bookPages'
 import styles from './Members.module.css'
-
-const sideClass: Record<FamilySide | 'both', string> = {
-  first: styles.sideFirst!,
-  second: styles.sideSecond!,
-  both: styles.sideBoth!,
-  married_in: styles.sideMarriedIn!,
-}
-
-const sideOrder: (FamilySide | 'both')[] = ['first', 'second', 'both', 'married_in']
 
 export function TreeMark({ size, className }: { size: number; className: string }) {
   return (
@@ -148,7 +138,7 @@ function Body({ page, book, viewerId, paused, goTo }: { page: BookPage } & Omit<
           {flourish(styles.bottomRight!)}
           <div className={styles.coverWords}>
             <TreeMark size={120} className={styles.gold!} />
-            <span className={styles.coverTitle}>{`${familyLines.first}-${familyLines.second}`}</span>
+            <span className={styles.coverTitle}>{familyName}</span>
             <span aria-hidden="true" className={styles.coverRule}>
               <span />
               <span className={styles.diamond} />
@@ -174,7 +164,7 @@ function Body({ page, book, viewerId, paused, goTo }: { page: BookPage } & Omit<
           <div className={styles.bookplate}>
             <TreeMark size={70} className={styles.accentMark!} />
             <span className={styles.kicker}>This book belongs to</span>
-            <span className={styles.bookplateName}>{`the ${familyLines.first}-${familyLines.second} family`}</span>
+            <span className={styles.bookplateName}>{`the ${familyName} family`}</span>
             <span className={styles.bookplateNote}>Kept by everyone, for everyone.</span>
           </div>
         </div>
@@ -208,7 +198,9 @@ function Body({ page, book, viewerId, paused, goTo }: { page: BookPage } & Omit<
         </div>
       )
     case 'contents': {
-      const everyone = [...book.living.map((l) => l.entry.side), ...book.remembered.map((r) => r.person.side)]
+      const marriedIn = [...book.living.map((l) => l.entry.side), ...book.remembered.map((r) => r.person.side)].filter(
+        (side) => side === 'married_in',
+      ).length
       return (
         <div className={styles.textPage}>
           <h2 className={styles.contentsTitle}>Inside</h2>
@@ -237,13 +229,11 @@ function Body({ page, book, viewerId, paused, goTo }: { page: BookPage } & Omit<
               onGo={() => goTo(book.memoryStart)}
             />
           </div>
-          <div className={styles.sideCounts}>
-            {sideOrder.map((side) => (
-              <span key={side} className={`${styles.sideCount} ${sideClass[side]}`}>
-                {sideTags[side]} · {everyone.filter((s) => s === side).length}
-              </span>
-            ))}
-          </div>
+          {marriedIn > 0 && (
+            <div className={styles.sideCounts}>
+              <span className={`${styles.sideCount} ${styles.sideMarriedIn}`}>Married in · {marriedIn}</span>
+            </div>
+          )}
         </div>
       )
     }
@@ -330,9 +320,9 @@ function Head({
       </span>
       <h2 className={styles.name}>{fullName(person)}</h2>
       {relation && <span className={styles.relation}>{relation}</span>}
-      {side && (
+      {side === 'married_in' && (
         <span className={styles.chips}>
-          <span className={`${styles.chip} ${sideClass[side]}`}>{sideTags[side]}</span>
+          <span className={`${styles.chip} ${styles.sideMarriedIn}`}>Married in</span>
         </span>
       )}
     </div>

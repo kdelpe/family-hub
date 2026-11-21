@@ -97,7 +97,7 @@ export function Main() {
 
   return (
     <main className={styles.page}>
-      <title>Family tree — Pluviose-Monestime Family Hub</title>
+      <title>Family tree — Pluviose Family Hub</title>
       <h1 className="visually-hidden">Family tree</h1>
       <div className={styles.top}>
         <div className={styles.stats}>{summary.data && <FamilyStrip summary={summary.data} />}</div>

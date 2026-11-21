@@ -25,7 +25,7 @@ const tree: Tree = {
     person('maya', 'Maya', { side: 'both' }),
     person('fritz', 'Fritz', { side: 'both', gender: 'male' }),
     person('nadege', 'Nadège', { side: 'second' }),
-    person('naomie', 'Naomie', { last_name: 'Désir', side: 'both' }),
+    person('naomie', 'Naomie', { last_name: 'Désir', side: 'married_in' }),
     person('joseph', 'Joseph', { gender: 'male', is_deceased: true, bio_excerpt: 'Drove a yellow cab in New York.' }),
   ],
   relationships: [
@@ -70,7 +70,7 @@ const people: DirectoryEntry[] = [
       { kind: 'phone', requestable: true, my_request_status: 'requested' },
     ],
   },
-  { id: 'naomie', first_name: 'Naomie', last_name: 'Désir', side: 'both', has_account: false, contacts: [] },
+  { id: 'naomie', first_name: 'Naomie', last_name: 'Désir', side: 'married_in', has_account: false, contacts: [] },
 ]
 
 // Reduced motion turns pages at once, so the tests needn't wait out the animation.
@@ -132,12 +132,12 @@ describe('Members', () => {
     press('Open ▶')
 
     expect(position()).toBe('Welcome')
-    expect(within(book()).getByText('the Pluviose-Monestime family')).toBeInTheDocument()
+    expect(within(book()).getByText('the Pluviose family')).toBeInTheDocument()
     expect(within(book()).getByRole('heading', { name: 'Everyone in our family, in one book' })).toBeInTheDocument()
     expect(within(book()).getByRole('link', { name: 'My profile ›' })).toHaveAttribute('href', '/profile')
   })
 
-  it('lists what’s inside, with page numbers, letters and the family’s sides', async () => {
+  it('lists what’s inside, with page numbers and letters, and no family sides', async () => {
     await renderPage()
     press('Open ▶')
     press('Next ▶')
@@ -148,8 +148,8 @@ describe('Members', () => {
     expect(inside.getByText('4 people with us')).toBeInTheDocument()
     expect(inside.getByRole('button', { name: 'In Memory, page 7' })).toBeInTheDocument()
     expect(inside.getByText('1 remembered')).toBeInTheDocument()
-    expect(inside.getByText('Pluviose side · 1')).toBeInTheDocument()
-    expect(inside.getByText('Both sides · 3')).toBeInTheDocument()
+    expect(inside.queryByText(/\bsides?\b/i)).not.toBeInTheDocument()
+    expect(inside.getByText('Married in · 1')).toBeInTheDocument()
 
     fireEvent.click(inside.getByRole('button', { name: 'Go to N' }))
 
@@ -164,7 +164,7 @@ describe('Members', () => {
     const fritz = within(book())
     expect(fritz.getByRole('heading', { name: 'Fritz Pluviose' })).toBeInTheDocument()
     expect(fritz.getByText('Sibling')).toBeInTheDocument()
-    expect(fritz.getByText('Both sides')).toBeInTheDocument()
+    expect(fritz.queryByText(/\bsides?\b/i)).not.toBeInTheDocument()
     expect(fritz.getByRole('link', { name: 'Email Fritz' })).toHaveAttribute('href', 'mailto:fritz.p@example.com')
     expect(fritz.getByRole('link', { name: 'Fritz on YouTube' })).toHaveAttribute('href', 'https://www.youtube.com/@fritzpluviose')
     expect(fritz.getByRole('link', { name: /Phone number shared with you/ })).toHaveAttribute('href', '/people/fritz')
@@ -190,6 +190,7 @@ describe('Members', () => {
 
     expect(position()).toBe('Pages 6–7 · Naomie')
     expect(within(book()).getByText('Not on the hub yet, so there’s nothing to share here.')).toBeInTheDocument()
+    expect(within(book()).getByText('Married in')).toBeInTheDocument()
   })
 
   it('remembers those who have passed, with no contact details', async () => {
@@ -226,6 +227,16 @@ describe('Members', () => {
 
     fireEvent.keyDown(book(), { key: 'ArrowLeft' })
     expect(position()).toBe('Page 8 · Joseph')
+  })
+
+  it('doesn’t turn when a touch on the page becomes a scroll', async () => {
+    await renderPage()
+    press('Open ▶')
+
+    fireEvent.pointerDown(book(), { pointerId: 1, button: 0, clientX: 600, clientY: 300 })
+    fireEvent.pointerCancel(book(), { pointerId: 1 })
+
+    expect(position()).toBe('Welcome')
   })
 
   it('animates a turn, then lands on the next spread', async () => {

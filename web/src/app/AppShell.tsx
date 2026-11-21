@@ -41,10 +41,10 @@ export function AppShell() {
   return (
     <div className={styles.page}>
       <nav aria-label="Main" className={styles.menu}>
-        <Link to="/" aria-label="Pluviose-Monestime Family Hub, home" className={styles.identity}>
+        <Link to="/" aria-label="Pluviose Family Hub, home" className={styles.identity}>
           <Logo size={52} />
           <span className={styles.names}>
-            <span className={styles.familyName}>Pluviose-Monestime</span>
+            <span className={styles.familyName}>Pluviose</span>
             <span className={styles.hub}>Family Hub</span>
           </span>
         </Link>

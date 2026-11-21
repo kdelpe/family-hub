@@ -755,18 +755,6 @@
   color: var(--text-2);
 }
 
-.sideFirst {
-  background: var(--side-first);
-}
-
-.sideSecond {
-  background: var(--side-second);
-}
-
-.sideBoth {
-  background: var(--side-both);
-}
-
 .sideMarriedIn {
   background: var(--side-married-in);
 }

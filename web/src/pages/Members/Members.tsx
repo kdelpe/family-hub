@@ -45,7 +45,7 @@ export function Members() {
 
   return (
     <main className={styles.main}>
-      <title>Members — Pluviose-Monestime Family Hub</title>
+      <title>Members — Pluviose Family Hub</title>
       <h1 className="visually-hidden">Members</h1>
       {error && <p role="alert">{errorMessage(error)}</p>}
       {book && <Book book={book} single={single} at={at} onAt={setAt} viewerId={viewerId} paused={paused} reduced={reduced} />}

@@ -47,7 +47,7 @@ export function ManageAccess() {
 
   return (
     <main className={styles.page}>
-      <title>Members & invites — Pluviose-Monestime Family Hub</title>
+      <title>Members & invites — Pluviose Family Hub</title>
       <div className={styles.heading}>
         <h1 className={styles.title}>Family members &amp; invitations</h1>
         <span className={styles.muted}>Only admins see this page.</span>

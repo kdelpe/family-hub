@@ -28,7 +28,7 @@ export function ForgotPassword() {
 
   return (
     <>
-      <title>Forgot password — Pluviose-Monestime Family Hub</title>
+      <title>Forgot password — Pluviose Family Hub</title>
       <main className={page.main}>
         <div className={page.form}>
           <Link to="/auth/login" className={page.backLink}>

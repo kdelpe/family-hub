@@ -186,7 +186,7 @@ CREATE TABLE persons (
   middle_name           TEXT,
   last_name             TEXT,                           -- optional: older relatives' surnames are often unknown
   maiden_name           TEXT,
-  side                  TEXT CHECK (side IN ('first','second','both','married_in')),  -- People filter and card tint; labels from FAMILY_SIDES
+  side                  TEXT CHECK (side IN ('first','second','both','married_in')),  -- only married_in is shown (the Members chip); second is kept but not offered (design-notes §3.2)
   birth_place           TEXT,                           -- "Jacmel"; shown on profiles and the family strip
   gender                TEXT CHECK (gender IN ('male','female','other','unknown')),
   birth_date            DATE,
@@ -854,7 +854,7 @@ The binary has only the commands production needs; dev-only tasks live in the Ma
 | `MEMBERS_CAN_CONTRIBUTE` | `false` | Opens event creation, media upload and adding stories to members |
 | `APP_TIMEZONE` | `America/New_York` | Defines "today" for the upcoming-birthdays panel; the home page's "Good evening" follows each viewer's own clock, since the family lives in several timezones |
 | `FAMILY_NAME` | `Torres` | Shown in the menu, page titles, emails ("the <FAMILY_NAME> Family Hub"); kept out of code |
-| `FAMILY_SIDES` | `Torres,Ruiz` | Labels for the `first` and `second` family sides on the request form and the People filter |
+| `FAMILY_SIDES` | `Torres,Ruiz` | Labels for the `first` and `second` family sides. Since 2026-11-21 only the first is used: the hub follows one family (design-notes §3.2) |
 | `BACKUP_PING_URL` | `https://hc-ping.com/<uuid>` | Pinged after each successful backup (§11) |
 
 `S3_PUBLIC_ENDPOINT` matters because SigV4 includes the `Host` header: if the app runs in Docker and signs against `storage:9000`, the browser's request to `localhost:9000` fails signature validation.

@@ -195,7 +195,7 @@ describe('WelcomeInvite', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Set password and continue' }))
 
     expect(await screen.findByRole('heading', { name: 'This link doesn’t work anymore' })).toHaveFocus()
-    expect(document.title).toBe('This link doesn’t work anymore — Pluviose-Monestime Family Hub')
+    expect(document.title).toBe('This link doesn’t work anymore — Pluviose Family Hub')
   })
 
   it('keeps a half-typed password when someone signs in from another tab', async () => {

@@ -194,7 +194,7 @@ describe('ManageAccess', () => {
 
     const first = await screen.findByRole('article', { name: 'Kervens Pluviose' })
     expect(screen.getByRole('tab', { name: 'Requests (2)' })).toHaveAttribute('aria-selected', 'true')
-    expect(first).toHaveTextContent('Pluviose side')
+    expect(first).toHaveTextContent('Pluviose family')
     expect(first).toHaveTextContent('Asked on the sign-in page')
     expect(first).toHaveTextContent('Son of Fritz Pluviose✓ In the tree')
     expect(first).toHaveTextContent('Son of Fabiene PluviosNot found — check spelling')

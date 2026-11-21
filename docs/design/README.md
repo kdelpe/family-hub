@@ -1,6 +1,6 @@
 # docs/design
 
-The frontend design for the Pluviose-Monestime Family Hub, agreed in November 2026.
+The frontend design for the Pluviose Family Hub, agreed in November 2026.
 
 | File | What it is |
 |---|---|

@@ -18,7 +18,7 @@ import (
 const (
 	inviteSubject     = "You're invited to the family hub"
 	inviteFromSubject = "%s invited you to the family hub"
-	aboutTheHub       = "the Pluviose-Monestime Family Hub — a private place for our family's tree, photos and stories."
+	aboutTheHub       = "the Pluviose Family Hub — a private place for our family's tree, photos and stories."
 	inviteBody        = `Bonjou%s,
 
 %s
