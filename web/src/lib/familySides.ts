@@ -9,4 +9,5 @@ export const familySides: { value: FamilySide; label: string }[] = [
   { value: 'married_in', label: 'Married into the family' },
 ]
 
-export const sideLabel = (side: FamilySide) => (side === 'married_in' ? 'Married into the family' : `${familyName} family`)
+// Any side but married in, the kept-but-unoffered second one included, reads as the family.
+export const sideLabel = (side: FamilySide) => familySides.find((s) => s.value === (side === 'married_in' ? side : 'first'))!.label
