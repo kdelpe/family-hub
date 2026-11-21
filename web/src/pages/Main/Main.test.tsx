@@ -288,6 +288,18 @@ describe('Main', () => {
     expect(screen.queryByRole('link', { name: 'View profile ›' })).not.toBeInTheDocument()
   })
 
+  it('lands keyboard focus on the tree once a first relative is picked from the search', () => {
+    renderTree(null)
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Find a relative' }), { target: { value: 'maya' } })
+    const match = within(screen.getByRole('list', { name: 'Matching relatives' })).getByRole('button', { name: /Maya Pluviose/ })
+    act(() => match.focus())
+
+    // The pressed result goes away with the search it came from.
+    fireEvent.click(match)
+
+    expect(cardOf('Maya')).toHaveFocus()
+  })
+
   it.each([
     { name: 'a foster child who is also a grandchild', viewer: 'rose', card: 'Peterson', sub: 'Grandson · foster' },
     { name: 'a foster parent who is also a grandmother', viewer: 'peterson', card: 'Rose', sub: 'Grandmother · foster' },

@@ -58,6 +58,8 @@ export function Main() {
       setDirection(above ? 'up' : below ? 'down' : 'side')
       setStatus(`Family tree centered on ${to === viewerId ? 'you' : fullName(people.get(to)!)}`)
     } else if (to && !focus) {
+      // Sideways, as from nowhere in particular; it also lands keyboard focus on the tree once the search clears.
+      setDirection('side')
       setStatus(`Family tree centered on ${fullName(people.get(to)!)}`)
     }
     setPicked(next)
