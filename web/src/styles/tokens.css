@@ -19,6 +19,7 @@
   --accent: #2f5d50;
   --accent-hover: #1e3f36;
   --on-accent: #ffffff;
+  --on-accent-line: rgba(255, 255, 255, 0.25);
   --switch-off: #8a8070;
   --warning-tint: #f6e3d4;
   /* The account picture's request count, like an unread count. */

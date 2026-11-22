@@ -1,14 +1,23 @@
 import { useIsMutating, useQuery } from '@tanstack/react-query'
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import { createEventKey, eventsQuery, type FamilyEvent } from '../../api/events'
 import { bornOn, year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
+import { useReducedMotion } from '../../lib/motion'
 import { fullName } from '../../lib/names'
+import { useNarrow } from '../../lib/useNarrow'
 import { useSignedIn } from '../../lib/useSignedIn'
 import styles from './Events.module.css'
 import { NewEvent } from './NewEvent'
+import { undated, YearHandle } from './YearHandle'
+
+const yearOf = (event: FamilyEvent) => event.date?.match(/^\d{4}/)?.[0] ?? undated
+const anchorId = (year: string) => `events-year-${year}`
+// Matches the handle's sticky top in Events.module.css.
+const handleTop = () => window.innerHeight * 0.42
+const handleMiddle = 58
 
 // Events (design-notes §4.5): the timeline. Media, + Upload and each card's photos wait for Phase 5.
 export function Events() {
@@ -21,6 +30,48 @@ export function Events() {
   const close = () => {
     setAdding(false)
     requestAnimationFrame(() => newButton.current?.focus())
+  }
+
+  const list = events.data
+  const years = useMemo(() => [...new Set((list ?? []).map(yearOf))], [list])
+  const [picked, setPicked] = useState<string | null>(null)
+  const current = picked && years.includes(picked) ? picked : (years[0] ?? undated)
+  const reduced = useReducedMotion()
+  const narrow = useNarrow()
+  // Keeps a glide's own scroll events from moving the handle back.
+  const holdUntil = useRef(0)
+  useEffect(() => {
+    if (years.length < 2) {
+      return
+    }
+    const follow = () => {
+      if (Date.now() < holdUntil.current) {
+        return
+      }
+      const line = handleTop() + handleMiddle
+      let at = years[0]!
+      for (const y of years) {
+        const el = document.getElementById(anchorId(y))
+        if (el && el.getBoundingClientRect().top <= line) {
+          at = y
+        }
+      }
+      setPicked(at)
+    }
+    window.addEventListener('scroll', follow, { passive: true })
+    return () => window.removeEventListener('scroll', follow)
+  }, [years])
+  const pick = (year: string, glide: boolean) => {
+    const el = document.getElementById(anchorId(year))
+    if (!el) {
+      return
+    }
+    const smooth = glide && !reduced
+    setPicked(year)
+    holdUntil.current = Date.now() + (smooth ? 700 : 100)
+    // On phones the year sits above its card, so it stops above the handle.
+    const offset = handleTop() - (narrow ? 40 : 6)
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - offset, behavior: smooth ? 'smooth' : 'auto' })
   }
 
   return (
@@ -63,21 +114,26 @@ export function Events() {
       ) : events.data.length === 0 ? (
         <p className={styles.muted}>No events yet.</p>
       ) : (
-        <ol className={styles.timeline}>
-          {events.data.map((event) => (
-            <TimelineEntry key={event.id} event={event} />
-          ))}
-        </ol>
+        <div className={styles.timelineWrap}>
+          <ol className={styles.timeline}>
+            {events.data.map((event, i) => {
+              const y = yearOf(event)
+              const first = i === 0 || yearOf(events.data[i - 1]!) !== y
+              return <TimelineEntry key={event.id} event={event} anchor={first ? anchorId(y) : undefined} lit={years.length > 1 && y === current} />
+            })}
+          </ol>
+          {years.length > 1 && <YearHandle years={years} current={current} onPick={pick} />}
+        </div>
       )}
     </main>
   )
 }
 
-function TimelineEntry({ event }: { event: FamilyEvent }) {
+function TimelineEntry({ event, anchor, lit }: { event: FamilyEvent; anchor?: string; lit: boolean }) {
   const when = whenItHappened(event)
   return (
-    <li className={styles.entry}>
-      <span className={styles.year}>{year(event.date, event.date_precision)}</span>
+    <li id={anchor} className={styles.entry}>
+      <span className={lit ? `${styles.year} ${styles.yearLit}` : styles.year}>{year(event.date, event.date_precision)}</span>
       <span aria-hidden="true" className={styles.line}>
         <span className={styles.dot} />
       </span>
