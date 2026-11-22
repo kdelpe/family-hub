@@ -277,6 +277,44 @@ func (q *Queries) EarliestRecord(ctx context.Context) (EarliestRecordRow, error)
 	return i, err
 }
 
+const familyCounts = `-- name: FamilyCounts :one
+WITH RECURSIVE living AS (
+  SELECT id, created_at AS added_at FROM persons WHERE deleted_at IS NULL
+),
+line AS (
+  SELECT l.id, 1 AS depth
+  FROM living l
+  WHERE NOT EXISTS (
+    SELECT 1 FROM relationships r JOIN living p ON p.id = r.person_a
+    WHERE r.type = 'parent_child' AND r.person_b = l.id
+  )
+  UNION
+  SELECT r.person_b, line.depth + 1
+  FROM line
+  JOIN relationships r ON r.type = 'parent_child' AND r.person_a = line.id
+  JOIN living c ON c.id = r.person_b
+  WHERE line.depth < 64
+)
+SELECT
+  (SELECT count(*) FROM living)::int AS people,
+  (SELECT coalesce(max(depth), 0) FROM line)::int AS generations,
+  (SELECT count(*) FROM living WHERE added_at >= $1::timestamptz)::int AS added_since
+`
+
+type FamilyCountsRow struct {
+	People      int32
+	Generations int32
+	AddedSince  int32
+}
+
+// Generations is the longest parent line; the depth cap stops a cycle, which the service never stores.
+func (q *Queries) FamilyCounts(ctx context.Context, since time.Time) (FamilyCountsRow, error) {
+	row := q.db.QueryRow(ctx, familyCounts, since)
+	var i FamilyCountsRow
+	err := row.Scan(&i.People, &i.Generations, &i.AddedSince)
+	return i, err
+}
+
 const familyParentLinks = `-- name: FamilyParentLinks :many
 SELECT r.person_a AS parent_id, r.person_b AS child_id
 FROM relationships r

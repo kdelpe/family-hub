@@ -90,3 +90,27 @@ FROM persons
 WHERE deleted_at IS NULL AND created_at >= @since AND id IS DISTINCT FROM sqlc.narg(viewer_person_id)::uuid
 ORDER BY created_at DESC, id DESC
 LIMIT @max_people;
+
+-- name: FamilyCounts :one
+-- Generations is the longest parent line; the depth cap stops a cycle, which the service never stores.
+WITH RECURSIVE living AS (
+  SELECT id, created_at AS added_at FROM persons WHERE deleted_at IS NULL
+),
+line AS (
+  SELECT l.id, 1 AS depth
+  FROM living l
+  WHERE NOT EXISTS (
+    SELECT 1 FROM relationships r JOIN living p ON p.id = r.person_a
+    WHERE r.type = 'parent_child' AND r.person_b = l.id
+  )
+  UNION
+  SELECT r.person_b, line.depth + 1
+  FROM line
+  JOIN relationships r ON r.type = 'parent_child' AND r.person_a = line.id
+  JOIN living c ON c.id = r.person_b
+  WHERE line.depth < 64
+)
+SELECT
+  (SELECT count(*) FROM living)::int AS people,
+  (SELECT coalesce(max(depth), 0) FROM line)::int AS generations,
+  (SELECT count(*) FROM living WHERE added_at >= @since::timestamptz)::int AS added_since;

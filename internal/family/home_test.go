@@ -100,6 +100,48 @@ func TestHome(t *testing.T) {
 	require.Len(t, home.Newcomers, 2)
 	assert.Equal(t, []string{"Recent", "Two weeks"}, []string{home.Newcomers[0].FirstName, home.Newcomers[1].FirstName},
 		"added in the last 30 days, newest first, other than the viewer")
+	assert.Equal(t, Counts{People: 10, Generations: 1, NewThisMonth: 2}, home.Counts,
+		"living and deceased, not deleted; no parent links; added since November 1 in New York")
+}
+
+func TestHomeCountsGenerations(t *testing.T) {
+	tests := []struct {
+		name string
+		// Each pair is parent, child, by index into five people.
+		links [][2]int
+		// The person deleted, or -1.
+		deleted int
+		want    int
+	}{
+		{name: "nobody linked", deleted: -1, want: 1},
+		{name: "longest line, not the most people", links: [][2]int{{0, 1}, {1, 2}, {2, 3}, {0, 4}}, deleted: -1, want: 4},
+		{name: "two parents of one child count once", links: [][2]int{{0, 2}, {1, 2}, {2, 3}}, deleted: -1, want: 3},
+		{name: "a deleted person breaks no line and adds none", links: [][2]int{{0, 1}, {1, 2}, {2, 3}}, deleted: 3, want: 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := testdb.MigratedPool(t, database.MigrateUp)
+			svc, admin := NewService(pool), insertAdmin(t, pool)
+			ids := make([]uuid.UUID, 5)
+			for i := range ids {
+				p, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: fmt.Sprint("Person ", i)})
+				require.NoError(t, err)
+				ids[i] = p.ID
+			}
+			for _, l := range tt.links {
+				_, err := svc.CreateRelationship(t.Context(), RelationshipInput{Type: "parent_child", Subtype: new("biological"), ParentID: ids[l[0]], ChildID: ids[l[1]]})
+				require.NoError(t, err)
+			}
+			if tt.deleted >= 0 {
+				require.NoError(t, svc.DeletePerson(t.Context(), ids[tt.deleted]))
+			}
+
+			home, err := svc.Home(t.Context(), Viewer{}, time.Now(), time.UTC)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, home.Counts.Generations)
+		})
+	}
 }
 
 func TestHomeShowsAtMostTwentyNewcomers(t *testing.T) {

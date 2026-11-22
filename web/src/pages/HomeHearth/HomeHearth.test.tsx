@@ -12,7 +12,9 @@ import { HomeHearth } from './HomeHearth'
 
 const fridayEvening = new Date('2026-11-20T18:30')
 
-const nothing: Home = { birthdays: [], newcomers: [] }
+const counts = { people: 26, generations: 6, new_this_month: 1 }
+
+const nothing = { birthdays: [], newcomers: [] }
 
 const person = (id: string, first_name: string, last_name = 'Pluviose') => ({ id, first_name, last_name, side: 'first', gender: 'female', is_deceased: false })
 
@@ -27,11 +29,11 @@ const tree = {
   ],
 }
 
-function renderHome(personId: string | null, home: Home = nothing) {
+function renderHome(personId: string | null, home: Omit<Home, 'counts'> & Partial<Home> = nothing) {
   const client = new QueryClient()
   client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: personId })
   client.setQueryData(personKeys.one('p1'), { id: 'p1', first_name: 'Maya', last_name: 'Pluviose' })
-  client.setQueryData(homeKeys.all, home)
+  client.setQueryData(homeKeys.all, { counts, ...home })
   client.setQueryData(treeKeys.all, tree)
   render(
     <QueryClientProvider client={client}>
@@ -145,5 +147,15 @@ describe('HomeHearth', () => {
     expect(card.getByText('Cousin')).toBeInTheDocument()
     expect(card.getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/people/naomie')
     expect(inTree).toHaveAttribute('href', '/tree?person=naomie')
+  })
+
+  it('shows the family in numbers, one of each in the singular', () => {
+    renderHome('p1')
+
+    const stats = within(screen.getByRole('list', { name: 'The family in numbers' }))
+    const [people, generations, added] = stats.getAllByRole('listitem')
+    expect(people).toHaveTextContent(/26 people$/)
+    expect(generations).toHaveTextContent(/6 generations$/)
+    expect(added).toHaveTextContent(/1 new this month$/)
   })
 })
