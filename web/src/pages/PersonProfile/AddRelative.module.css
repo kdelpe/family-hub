@@ -2,27 +2,48 @@
   position: fixed;
   inset: 0;
   z-index: 40;
-  padding: 16px;
   background: var(--scrim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
+/* Fixed to the bottom with margins, not a transform, so Motion's slide and drag own the transform. */
 .sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 41;
   box-sizing: border-box;
-  width: min(500px, 100%);
-  max-height: calc(100% - 16px);
+  width: min(560px, 100%);
+  max-height: calc(100% - 24px);
+  margin: 0 auto;
   overflow: auto;
-  padding: 18px 24px 24px;
-  border-radius: 20px;
+  padding: 0 24px 28px;
+  border-radius: 24px 24px 0 0;
   background: var(--surface);
-  box-shadow: 0 20px 48px var(--shadow-lift);
+  box-shadow: 0 -12px 40px var(--shadow-lift);
   display: flex;
   flex-direction: column;
   gap: 16px;
   line-height: 1.45;
-  animation: rise 0.18s ease-out both;
+}
+
+.grab {
+  flex: none;
+  height: 28px;
+  margin-bottom: -12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.grab::before {
+  content: '';
+  width: 44px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--divider);
 }
 
 .bar {
@@ -277,16 +298,6 @@
   cursor: default;
 }
 
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
 
 @keyframes slide {
   from {
