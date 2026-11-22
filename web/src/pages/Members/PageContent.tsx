@@ -15,7 +15,7 @@ import { CheckPill } from '../../components/CheckPill/CheckPill'
 import { PhotoFade } from '../../components/PhotoFade/PhotoFade'
 import { familyName } from '../../lib/familySides'
 import { fullName, initials } from '../../lib/names'
-import { type Book, type BookPage, letterOf, nameOf, pageNumber } from './bookPages'
+import { type Book, type BookPage, letterOf, nameOf, pageNumber, pageTints } from './bookPages'
 import styles from './Members.module.css'
 
 export function TreeMark({ size, className }: { size: number; className: string }) {
@@ -85,12 +85,22 @@ type Props = {
   goTo: (index: number) => void
 }
 
+// The book's paper pages, as opposed to its covers and endpapers.
+const paper = new Set<BookPage['kind']>(['welcome', 'contents', 'person', 'divider', 'memorial', 'notes'])
+
 export function PageContent({ book, index, outer, viewerId, paused, goTo }: Props) {
   const page = book.pages[index]!
   const number = pageNumber(book, index)
   const person = nameOf(page)
   return (
     <>
+      {paper.has(page.kind) && (
+        <span
+          aria-hidden="true"
+          className={`${styles.sheet} ${page.kind === 'memorial' ? styles.sheetMemorial : page.kind === 'divider' ? styles.sheetDivider : ''}`}
+          style={page.kind === 'divider' ? undefined : { background: `var(--book-page-${(((index - book.welcome) % pageTints) + pageTints) % pageTints + 1})` }}
+        />
+      )}
       {person && (
         <span aria-hidden="true" className={`${styles.cornerLetter} ${outer === 'left' ? styles.atLeft : styles.atRight}`}>
           {letterOf(person.first_name)}
@@ -110,7 +120,12 @@ function Body({ page, book, viewerId, paused, goTo }: { page: BookPage } & Omit<
       const { person, relation } = page.remembered
       return (
         <div className={styles.memorialPage}>
-          <Head person={person} relation={relation} side={person.side} paused={paused} remembered />
+          <Head person={person} relation={relation} paused={paused} remembered />
+          <div className={styles.memorialLinks}>
+            <Link to={`/people/${person.id}`}>
+              Open profile <span className="visually-hidden">of {fullName(person)}</span>›
+            </Link>
+          </div>
           <span className={styles.inMemory}>
             <svg aria-hidden="true" width="12" height="14" viewBox="0 0 10 12">
               <path d="M5 11 C1 8 1 3 5 1 C9 3 9 8 5 11 Z" />
@@ -118,11 +133,6 @@ function Body({ page, book, viewerId, paused, goTo }: { page: BookPage } & Omit<
             In loving memory
           </span>
           {person.bio_excerpt && <p className={styles.remembered}>“{person.bio_excerpt}”</p>}
-          <div className={styles.memorialLinks}>
-            <Link to={`/people/${person.id}`}>
-              Open profile <span className="visually-hidden">of {fullName(person)}</span>›
-            </Link>
-          </div>
         </div>
       )
     }
@@ -164,8 +174,7 @@ function Body({ page, book, viewerId, paused, goTo }: { page: BookPage } & Omit<
           <div className={styles.bookplate}>
             <TreeMark size={70} className={styles.accentMark!} />
             <span className={styles.kicker}>This book belongs to</span>
-            <span className={styles.bookplateName}>{`the ${familyName} family`}</span>
-            <span className={styles.bookplateNote}>Kept by everyone, for everyone.</span>
+            <span className={styles.bookplateName}>{`The ${familyName} Family`}</span>
           </div>
         </div>
       )
@@ -183,57 +192,27 @@ function Body({ page, book, viewerId, paused, goTo }: { page: BookPage } & Omit<
         <div className={styles.textPage}>
           <span className={styles.kicker}>Welcome</span>
           <h2 className={styles.welcomeTitle}>Everyone in our family, in one book</h2>
-          <p className={styles.welcomeIntro}>
-            One page for each of us, A to Z, with how to reach the people who are with us. At the back, a section to
-            remember those who came before.
-          </p>
-          <div className={styles.notesList}>
-            <Note mark="@">Email and social accounts appear when someone chooses to share them.</Note>
-            <Note mark="?">Phone numbers, WhatsApp and addresses are never printed here. Ask, and they decide.</Note>
-            <Note mark="↻">Click or drag a page to turn it, or tap or slide along the tabs on the edge.</Note>
-          </div>
+          <ol className={styles.steps}>
+            <Step title="Turn the pages">Click or drag a page to turn it, or tap or slide along the tabs on the edge.</Step>
+            <Step title="Say hello">Email and social accounts appear when someone chooses to share them.</Step>
+            <Step title="Ask for the rest">Phone numbers, WhatsApp and addresses are never printed here. Ask, and they decide.</Step>
+          </ol>
           <div className={styles.ownPage}>
-            Your own page is filled in from <Link to="/profile">My profile ›</Link>
+            Your own page comes from <Link to="/profile">My profile ›</Link>
           </div>
         </div>
       )
     case 'contents': {
-      const marriedIn = [...book.living.map((l) => l.entry.side), ...book.remembered.map((r) => r.person.side)].filter(
-        (side) => side === 'married_in',
-      ).length
       return (
         <div className={styles.textPage}>
           <h2 className={styles.contentsTitle}>Inside</h2>
           <div className={styles.toc}>
             <Entry title="Welcome" page={pageNumber(book, book.welcome)!} onGo={() => goTo(book.welcome)} />
             {book.living.length > 0 && (
-              <Entry
-                title="Members, A to Z"
-                page={pageNumber(book, book.membersStart)!}
-                note={`${book.living.length} ${book.living.length === 1 ? 'person' : 'people'} with us`}
-                onGo={() => goTo(book.membersStart)}
-              >
-                <div className={styles.letters}>
-                  {book.letterStarts.map(({ letter, index }) => (
-                    <button key={letter} type="button" className={`pill ${styles.letter}`} aria-label={`Go to ${letter}`} onClick={() => goTo(index)}>
-                      {letter}
-                    </button>
-                  ))}
-                </div>
-              </Entry>
+              <Entry title="Members, A to Z" page={pageNumber(book, book.membersStart)!} onGo={() => goTo(book.membersStart)} />
             )}
-            <Entry
-              title="In Memory"
-              page={pageNumber(book, book.memoryStart)!}
-              note={`${book.remembered.length} remembered`}
-              onGo={() => goTo(book.memoryStart)}
-            />
+            <Entry title="In Memory" page={pageNumber(book, book.memoryStart)!} onGo={() => goTo(book.memoryStart)} />
           </div>
-          {marriedIn > 0 && (
-            <div className={styles.sideCounts}>
-              <span className={`${styles.sideCount} ${styles.sideMarriedIn}`}>Married in · {marriedIn}</span>
-            </div>
-          )}
         </div>
       )
     }
@@ -272,18 +251,16 @@ function Body({ page, book, viewerId, paused, goTo }: { page: BookPage } & Omit<
   }
 }
 
-function Note({ mark, children }: { mark: string; children: string }) {
+function Step({ title, children }: { title: string; children: string }) {
   return (
-    <div className={styles.note}>
-      <span aria-hidden="true" className={styles.noteMark}>
-        {mark}
-      </span>
-      <span>{children}</span>
-    </div>
+    <li className={styles.step}>
+      <span className={styles.stepTitle}>{title}</span>
+      <span className={styles.stepText}>{children}</span>
+    </li>
   )
 }
 
-function Entry({ title, page, note, onGo, children }: { title: string; page: string; note?: string; onGo: () => void; children?: React.ReactNode }) {
+function Entry({ title, page, onGo }: { title: string; page: string; onGo: () => void }) {
   return (
     <div className={styles.entry}>
       <button type="button" className={styles.entryButton} onClick={onGo}>
@@ -293,8 +270,6 @@ function Entry({ title, page, note, onGo, children }: { title: string; page: str
           <span className="visually-hidden">, page</span> {page}
         </span>
       </button>
-      {note && <span className={styles.entryNote}>{note}</span>}
-      {children}
     </div>
   )
 }
@@ -302,13 +277,11 @@ function Entry({ title, page, note, onGo, children }: { title: string; page: str
 function Head({
   person,
   relation,
-  side,
   paused,
   remembered = false,
 }: {
   person: { first_name: string; last_name: string | null }
   relation: string | null
-  side: DirectoryEntry['side']
   paused: boolean
   remembered?: boolean
 }) {
@@ -320,11 +293,6 @@ function Head({
       </span>
       <h2 className={styles.name}>{fullName(person)}</h2>
       {relation && <span className={styles.relation}>{relation}</span>}
-      {side === 'married_in' && (
-        <span className={styles.chips}>
-          <span className={`${styles.chip} ${styles.sideMarriedIn}`}>Married in</span>
-        </span>
-      )}
     </div>
   )
 }
@@ -352,7 +320,10 @@ function PersonPage({ entry, relation, self, paused }: { entry: DirectoryEntry; 
 
   return (
     <div className={styles.personPage}>
-      <Head person={entry} relation={self ? 'You' : relation} side={entry.side} paused={paused} />
+      <Head person={entry} relation={self ? 'You' : relation} paused={paused} />
+      <Link to={`/people/${entry.id}`} className={styles.openProfile}>
+        Open profile <span className="visually-hidden">of {fullName(entry)}</span>›
+      </Link>
       <div aria-hidden="true" className={styles.rule} />
       <div className={styles.reach}>
         {self ? (
@@ -425,9 +396,6 @@ function PersonPage({ entry, relation, self, paused }: { entry: DirectoryEntry; 
           </>
         )}
       </div>
-      <Link to={`/people/${entry.id}`} className={styles.openProfile}>
-        Open profile <span className="visually-hidden">of {fullName(entry)}</span>›
-      </Link>
     </div>
   )
 }

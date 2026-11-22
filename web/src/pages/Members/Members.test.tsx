@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { createMemoryRouter } from 'react-router'
+import { createMemoryRouter, Link } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -108,7 +108,22 @@ async function renderPage(directory: () => DirectoryEntry[] = () => people) {
   )
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   client.setQueryData(authKeys.me, { id: 'u', email: 'maya.pluviose@example.com', role: 'member', person_id: 'maya' })
-  const router = createMemoryRouter([{ path: '/members', element: <Members /> }], { initialEntries: ['/members'] })
+  // The menu's link, as the app shell has it.
+  const menu = <Link to="/members">Members in the menu</Link>
+  const router = createMemoryRouter(
+    [
+      {
+        path: '/members',
+        element: (
+          <>
+            {menu}
+            <Members />
+          </>
+        ),
+      },
+    ],
+    { initialEntries: ['/members'] },
+  )
   render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
@@ -153,14 +168,13 @@ describe('Members', () => {
     openBook()
 
     expect(position()).toBe('Welcome')
-    expect(within(book()).getByText('the Pluviose family')).toBeInTheDocument()
+    expect(within(book()).getByText('The Pluviose Family')).toBeInTheDocument()
     expect(within(book()).getByRole('heading', { name: 'Everyone in our family, in one book' })).toBeInTheDocument()
     expect(within(book()).getByRole('link', { name: 'My profile ›' })).toHaveAttribute('href', '/profile')
   })
 
   it.each([
     { name: 'on the front cover', steps: [], says: 'Click the cover, or drag it, to open the book' },
-    { name: 'on the back cover', steps: ['Jump to In Memory', 'Next ▶', 'Next ▶'], says: 'The end · click the back cover to go back' },
   ])('shows only how to open the book while it’s closed, $name', async ({ steps, says }) => {
     await renderPage()
     if (steps.length) {
@@ -242,7 +256,6 @@ describe('Members', () => {
       },
       says: 'Click the cover, or drag it, to open the book',
     },
-    { name: 'Next ▶ to the back cover', steps: ['Jump to In Memory', 'Next ▶'], close: () => press('Next ▶'), says: 'The end · click the back cover to go back' },
   ])('takes the buttons and page box away as the book starts to close, with $name', async ({ steps, close, says }) => {
     stubMedia({ reduced: false })
     await renderPage()
@@ -270,6 +283,140 @@ describe('Members', () => {
     }
   })
 
+  it('offers Previous and Start again at the back cover, and starts again from Welcome', async () => {
+    await renderPage()
+    openBook()
+    ;['Jump to In Memory', 'Next ▶', 'Next ▶'].forEach((step) => press(step))
+
+    expect(position()).toBe('The end · click the back cover to go back')
+    expect(screen.queryByRole('button', { name: 'Next ▶' })).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Page' })).toBeNull()
+    expect(screen.getByRole('button', { name: '◀ Previous' })).toBeInTheDocument()
+
+    press('↺ Start again')
+
+    expect(position()).toBe('Welcome')
+  })
+
+  it('starts again at Welcome on a phone, past the bookplate’s own page', async () => {
+    stubMedia({ narrow: true })
+    await renderPage()
+    openBook()
+    press('Jump to In Memory')
+    while (!screen.queryByRole('button', { name: '↺ Start again' })) {
+      press('Next ▶')
+    }
+
+    press('↺ Start again')
+
+    expect(within(book()).getByRole('heading', { name: 'Everyone in our family, in one book' })).toBeInTheDocument()
+    expect(within(book()).queryByText('The Pluviose Family')).toBeNull()
+    expect(book()).toHaveFocus()
+  })
+
+  it.each([
+    { name: 'queues a turn for a tap on the page during a turn', scroll: false, lands: 'Pages 4–5 · Maya & Nadège' },
+    { name: 'queues nothing for a scroll started during a turn', scroll: true, lands: 'Pages 2–3 · Fritz' },
+  ])('$name', async ({ scroll, lands }) => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const run = async (ms: number) => {
+      for (let t = 0; t < ms; t += 100) {
+        await act(() => vi.advanceTimersByTimeAsync(100))
+      }
+    }
+    try {
+      await renderPage()
+      await run(1150 + 1000)
+      sizeBook()
+
+      press('Next ▶')
+      fireEvent.pointerDown(book(), { pointerId: 1, button: 0, clientX: 300, clientY: 300 })
+      if (scroll) {
+        fireEvent.pointerMove(book(), { pointerId: 1, button: 0, clientX: 300, clientY: 340 })
+        fireEvent.pointerCancel(book(), { pointerId: 1, button: 0, clientX: 300, clientY: 340 })
+      } else {
+        fireEvent.pointerUp(book(), { pointerId: 1, button: 0, clientX: 300, clientY: 300 })
+      }
+      await run(3000)
+
+      expect(position()).toBe(lands)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rewinds every page back to Welcome, one quick turn after another, with Start again', async () => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    // In steps: React renders between them, as a browser would between turns.
+    const run = async (ms: number) => {
+      for (let t = 0; t < ms; t += 100) {
+        await act(() => vi.advanceTimersByTimeAsync(100))
+      }
+    }
+    try {
+      await renderPage()
+      await run(1150 + 1000)
+      for (const step of ['Jump to In Memory', 'Next ▶', 'Next ▶']) {
+        press(step)
+        await run(1000)
+      }
+      expect(position()).toBe('The end · click the back cover to go back')
+
+      press('↺ Start again')
+      await run(3500)
+
+      expect(position()).toBe('Welcome')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets nothing interrupt Start again, a tab pressed between its turns included', async () => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const run = async (ms: number) => {
+      for (let t = 0; t < ms; t += 100) {
+        await act(() => vi.advanceTimersByTimeAsync(100))
+      }
+    }
+    try {
+      await renderPage()
+      await run(1150 + 1000)
+      for (const step of ['Jump to In Memory', 'Next ▶', 'Next ▶']) {
+        press(step)
+        await run(1000)
+      }
+
+      press('↺ Start again')
+      // Pressed again and again until Welcome, so some land in the short gaps between the rewind's turns.
+      for (let t = 0; t < 3500 && position() !== 'Welcome'; t += 10) {
+        const tab = screen.queryByRole('button', { name: 'Jump to In Memory' })
+        if (tab) {
+          fireEvent.click(tab)
+        }
+        await act(() => vi.advanceTimersByTimeAsync(10))
+      }
+      await run(1000)
+
+      expect(position()).toBe('Welcome')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('starts again at the closed cover when Members in the menu is clicked while the book is open', async () => {
+    await renderPage()
+    openBook()
+    press('Next ▶')
+    expect(position()).toBe('Pages 2–3 · Fritz')
+
+    fireEvent.click(screen.getByRole('link', { name: 'Members in the menu' }))
+
+    expect(await screen.findByText('Click the cover, or drag it, to open the book')).toBeInTheDocument()
+  })
+
   // Three people and one memorial leave a Notes page at the end: two pages to a spread show it; a phone leaves it out.
   it.each([
     { name: 'counts the Notes page with two pages to a spread', narrow: false, total: 'of 8', typed8: 'Page 8' },
@@ -285,7 +432,7 @@ describe('Members', () => {
     expect(position()).toBe(typed8)
   })
 
-  it('lists what’s inside, with page numbers and letters, and no family sides', async () => {
+  it('lists what’s inside, with page numbers, and no letters or counts of the living or who married in', async () => {
     await renderPage()
     openBook()
     press('Next ▶')
@@ -293,15 +440,10 @@ describe('Members', () => {
     expect(position()).toBe('Pages 2–3 · Fritz')
     const inside = within(book())
     expect(inside.getByRole('button', { name: 'Members, A to Z, page 3' })).toBeInTheDocument()
-    expect(inside.getByText('4 people with us')).toBeInTheDocument()
     expect(inside.getByRole('button', { name: 'In Memory, page 7' })).toBeInTheDocument()
-    expect(inside.getByText('1 remembered')).toBeInTheDocument()
     expect(inside.queryByText(/\bsides?\b/i)).not.toBeInTheDocument()
-    expect(inside.getByText('Married in · 1')).toBeInTheDocument()
-
-    fireEvent.click(inside.getByRole('button', { name: 'Go to N' }))
-
-    expect(position()).toBe('Pages 4–5 · Maya & Nadège')
+    expect(inside.queryByText(/with us|married in|remembered/i)).not.toBeInTheDocument()
+    expect(inside.queryByRole('button', { name: /^Go to / })).not.toBeInTheDocument()
   })
 
   it('shows what each person shares, and never a phone number or address', async () => {
@@ -338,7 +480,8 @@ describe('Members', () => {
 
     expect(position()).toBe('Pages 6–7 · Naomie')
     expect(within(book()).getByText('Not on the hub yet, so there’s nothing to share here.')).toBeInTheDocument()
-    expect(within(book()).getByText('Married in')).toBeInTheDocument()
+    // Who married in shows only as a count on the Contents page, not on each person's page.
+    expect(within(book()).queryByText('Married in')).not.toBeInTheDocument()
   })
 
   it('remembers those who have passed, with no contact details', async () => {
@@ -384,6 +527,141 @@ describe('Members', () => {
     fireEvent.pointerCancel(book(), { pointerId: 1 })
 
     expect(position()).toBe('Welcome')
+  })
+
+  it.each([
+    { name: 'opens itself to the first pages on arrival, with no line on how to open it meanwhile', reduced: false, after: 'Welcome', hint: false },
+    { name: 'stays closed on arrival with reduced motion, saying how to open it', reduced: true, after: 'Click the cover, or drag it, to open the book', hint: true },
+  ])('$name', async ({ reduced, after, hint }) => {
+    stubMedia({ reduced })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await renderPage()
+      expect(position()).toBe('Click the cover, or drag it, to open the book')
+      if (hint) {
+        expect(screen.getByText('Click the cover, or drag it, to open the book')).toBeVisible()
+      } else {
+        expect(screen.getByText('Click the cover, or drag it, to open the book')).not.toBeVisible()
+      }
+
+      await act(() => vi.advanceTimersByTimeAsync(1150 + 920))
+
+      expect(position()).toBe(after)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops a click past the back cover, so a click back after it still turns', async () => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const run = async (ms: number) => {
+      for (let t = 0; t < ms; t += 100) {
+        await act(() => vi.advanceTimersByTimeAsync(100))
+      }
+    }
+    try {
+      await renderPage()
+      await run(1150 + 1000)
+      press('Jump to In Memory')
+      await run(1000)
+      while (screen.queryByRole('button', { name: 'Next ▶' })) {
+        press('Next ▶')
+        await run(1000)
+      }
+      press('◀ Previous')
+      await run(1000)
+      const lastSpread = position()
+
+      // Onto the back cover, then on (nowhere to go) and back, before it lands.
+      fireEvent.keyDown(book(), { key: 'ArrowRight' })
+      await act(() => vi.advanceTimersByTimeAsync(100))
+      fireEvent.keyDown(book(), { key: 'ArrowRight' })
+      fireEvent.keyDown(book(), { key: 'ArrowLeft' })
+      await run(3000)
+
+      expect(position()).toBe(lastSpread)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('neither opens itself nor lifts again later once reduced motion comes on before it would', async () => {
+    const setReduced = stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await renderPage()
+      const lifted = () => document.querySelector('[class*="pickUp"]')
+      expect(lifted()).not.toBeNull()
+      act(() => setReduced(true))
+
+      await act(() => vi.advanceTimersByTimeAsync(1150 + 920))
+
+      expect(position()).toBe('Click the cover, or drag it, to open the book')
+      act(() => setReduced(false))
+      expect(lifted()).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('leaves a press still down on the cover to open it, turning just once', async () => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await renderPage()
+      sizeBook()
+      fireEvent.pointerDown(book(), { pointerId: 1, button: 0, clientX: 700, clientY: 300 })
+
+      await act(() => vi.advanceTimersByTimeAsync(1150 + 920))
+      expect(position()).toBe('Click the cover, or drag it, to open the book')
+
+      fireEvent.pointerUp(book(), { pointerId: 1, button: 0, clientX: 700, clientY: 300 })
+      await act(() => vi.advanceTimersByTimeAsync(2000))
+      expect(position()).toBe('Welcome')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stays on the cover, saying how to open it, when Previous closes the book after it opened itself', async () => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await renderPage()
+      await act(() => vi.advanceTimersByTimeAsync(1150 + 1000))
+      expect(position()).toBe('Welcome')
+
+      press('◀ Previous')
+      await act(() => vi.advanceTimersByTimeAsync(3000))
+
+      expect(position()).toBe('Click the cover, or drag it, to open the book')
+      expect(screen.getByText('Click the cover, or drag it, to open the book')).toBeVisible()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps up with quick clicks, turning once for each', async () => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await renderPage()
+      await act(() => vi.advanceTimersByTimeAsync(1150 + 1000))
+      expect(position()).toBe('Welcome')
+
+      press('Next ▶')
+      press('Next ▶')
+      press('Next ▶')
+      // In steps: React renders between them, as a browser would between turns.
+      for (let i = 0; i < 40; i++) {
+        await act(() => vi.advanceTimersByTimeAsync(100))
+      }
+
+      expect(position()).toBe('Pages 6–7 · Naomie')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('animates a turn, then lands on the next spread', async () => {
@@ -469,7 +747,6 @@ describe('Members', () => {
   })
 
   it.each([
-    { name: 'a letter on the Contents page', before: ['Next ▶'], control: () => within(book()).getByRole('button', { name: 'Go to N' }), keeps: false },
     { name: 'an entry on the Contents page', before: ['Next ▶'], control: () => within(book()).getByRole('button', { name: 'In Memory, page 7' }), keeps: false },
     { name: 'the corner that closes the book', before: [], control: () => screen.getByRole('button', { name: 'Previous page' }), keeps: false },
     { name: 'the Previous button that closes the book', before: [], control: () => screen.getByRole('button', { name: '◀ Previous' }), keeps: false },
@@ -568,6 +845,32 @@ describe('Members', () => {
     expect(position()).toBe(shows)
   })
 
+  it.each([
+    { name: 'turning on', upAt: 30, shows: 'Pages 4–5 · Maya & Nadège' },
+    { name: 'falling back', upAt: 2030, shows: 'Pages 2–3 · Fritz' },
+  ])('queues a click made while a page let go is still $name', async ({ upAt, shows }) => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await renderPage()
+      await act(() => vi.advanceTimersByTimeAsync(1150 + 1000))
+      sizeBook()
+
+      pointerAt('pointerDown', 350, 1000)
+      pointerAt('pointerMove', 340, 1010)
+      pointerAt('pointerMove', 259, 1020)
+      pointerAt('pointerUp', 259, 1000 + upAt)
+      press('Next ▶')
+      for (let t = 0; t < 3000; t += 100) {
+        await act(() => vi.advanceTimersByTimeAsync(100))
+      }
+
+      expect(position()).toBe(shows)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('doesn’t pass a request made of one person to whoever takes their page after a refresh', async () => {
     let everyone = people
     const client = await renderPage(() => everyone)
@@ -610,7 +913,7 @@ describe('Members', () => {
   })
 
   it.each([
-    { name: 'opens the front cover tapped on its left half', toEnd: false, clientX: 100, shows: 'the Pluviose family' },
+    { name: 'opens the front cover tapped on its left half', toEnd: false, clientX: 100, shows: 'The Pluviose Family' },
     { name: 'turns back from the back cover tapped on its right half', toEnd: true, clientX: 300, shows: 'Sa w plante, se li w rekòlte.' },
   ])('on a phone, $name', async ({ toEnd, clientX, shows }) => {
     stubMedia({ narrow: true })

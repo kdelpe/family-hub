@@ -18,7 +18,6 @@
   --ink-32: color-mix(in srgb, var(--text) 32%, transparent);
   --ink-34: color-mix(in srgb, var(--text) 34%, transparent);
   --paper: var(--surface);
-  --paper-lines: repeating-linear-gradient(to bottom, transparent 0, transparent 31px, var(--paper-rule) 31px, var(--paper-rule) 32px);
   /* The page height: the book and its buttons fill the window without scrolling. */
   --page-h: clamp(440px, calc(100dvh - 160px), 820px);
   min-width: 0;
@@ -34,6 +33,8 @@
 
 /* Room on the right for the letter tabs, which stick out of the book. */
 .bookArea {
+  /* For the book being picked up off the table on arrival. */
+  perspective: 1600px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -42,10 +43,11 @@
 }
 
 .book {
+  --board-lip: 14px;
   position: relative;
   width: 100%;
   max-width: 940px;
-  padding: 14px;
+  padding: var(--board-lip);
   box-sizing: border-box;
   transform-origin: 50% 0;
   transition:
@@ -62,6 +64,26 @@
   transform: translateX(calc(25% - 7px));
 }
 
+/* Lying flat on the table, it tilts up to face you; the separate properties keep the closed book's shift. */
+.pickUp {
+  animation: pick-up 1s cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+@keyframes pick-up {
+  from {
+    opacity: 0;
+    translate: 0 40px;
+    rotate: x 62deg;
+    scale: 0.9;
+  }
+  to {
+    opacity: 1;
+    translate: none;
+    rotate: none;
+    scale: none;
+  }
+}
+
 .board {
   position: absolute;
   top: 0;
@@ -72,7 +94,7 @@
     0 22px 44px var(--ink-20),
     inset 0 0 0 2px color-mix(in srgb, var(--surface) 10%, transparent);
   /* The board is the inside of the cover that's turning: it arrives as the cover lands and leaves as it lifts. */
-  transition: opacity 0.15s ease 0.75s;
+  transition: opacity 0.15s ease var(--land, 0.75s);
 }
 
 .boardLeft {
@@ -158,8 +180,11 @@
   bottom: 0;
   width: 50%;
   background-color: var(--paper);
-  background-image: var(--paper-lines);
   overflow: hidden;
+  /* So a page's sheet (below) sits over the paper but under the words. */
+  isolation: isolate;
+  /* The site's light grey text is too faint on the tinted pages. */
+  --muted: var(--text-2);
 }
 
 .left {
@@ -193,7 +218,7 @@
   width: 2px;
   background: var(--border);
   z-index: 2;
-  transition: opacity 0.15s ease 0.75s;
+  transition: opacity 0.15s ease var(--land, 0.75s);
 }
 
 .board.gone,
@@ -302,7 +327,7 @@
   transform: rotateY(calc(sin(calc(var(--fa) * 1deg)) * 30deg));
 }
 
-/* A cover is board, not paper: it swings flat, its halves overlapping a pixel so no seam shows. */
+/* A cover is board, not paper: it swings flat, its halves overlapping a pixel so no seam shows (on a phone). */
 .rigid .sb {
   transform: none;
 }
@@ -327,6 +352,70 @@
   transform: rotateY(180deg);
 }
 
+/* A cover reaches the board's edge, past the pages at the top, bottom and outside, as a hardcover does. */
+.boardSized {
+  top: calc(-1 * var(--board-lip));
+  bottom: calc(-1 * var(--board-lip));
+  width: calc(50% + var(--board-lip));
+  box-shadow: none;
+}
+
+.boardSized.left {
+  left: calc(-1 * var(--board-lip));
+  border-radius: 18px 0 0 18px;
+}
+
+.boardSized.right {
+  right: calc(-1 * var(--board-lip));
+  border-radius: 0 18px 18px 0;
+}
+
+.boardLeaf {
+  top: calc(-1 * var(--board-lip));
+  bottom: calc(-1 * var(--board-lip));
+  width: calc(100% + var(--board-lip));
+  transform: rotateY(calc(var(--fa) * 1deg));
+}
+
+.leafNext .boardLeaf {
+  left: 0;
+  transform-origin: left center;
+}
+
+.leafPrev .boardLeaf {
+  right: 0;
+  transform-origin: right center;
+}
+
+.boardFaceRight {
+  border-radius: 0 18px 18px 0;
+}
+
+.boardFaceLeft {
+  border-radius: 18px 0 0 18px;
+}
+
+/* The inside of a cover: green board, the endpaper pasted down inside it. */
+.turnIn {
+  position: absolute;
+  inset: var(--board-lip) 0;
+  background: var(--paper);
+}
+
+.face:has(> .turnIn) {
+  background: var(--accent);
+}
+
+.turnInRight {
+  right: var(--board-lip);
+  border-radius: 0 10px 10px 0;
+}
+
+.turnInLeft {
+  left: var(--board-lip);
+  border-radius: 10px 0 0 10px;
+}
+
 .square {
   border-radius: 0;
 }
@@ -345,7 +434,44 @@
   top: 0;
   bottom: 0;
   background-color: var(--paper);
-  background-image: var(--paper-lines);
+  isolation: isolate;
+  --muted: var(--text-2);
+}
+
+/* Each paper page's thin double border, inset from the edge like a printed address book, with its tint inside. */
+.sheet {
+  position: absolute;
+  inset: 7px;
+  z-index: -1;
+  border-radius: 4px;
+}
+
+.sheet::before,
+.sheet::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+
+/* Ink, not a colour, so both lines show on every tint. */
+.sheet::before {
+  inset: 0;
+  border: 1px solid var(--ink-22);
+  border-radius: 4px;
+}
+
+.sheet::after {
+  inset: 2px;
+  border: 1px solid var(--ink-12);
+  border-radius: 2px;
+}
+
+.sheetMemorial::before {
+  border-color: var(--ink-34);
+}
+
+.sheetDivider {
+  background: var(--book-divider);
 }
 
 .innerRight {
@@ -500,54 +626,6 @@
   border-radius: 0 0 10px 0;
 }
 
-.ear {
-  position: absolute;
-  bottom: 0;
-  width: 30px;
-  height: 30px;
-  transition:
-    width 0.28s ease,
-    height 0.28s ease;
-}
-
-.earRight {
-  right: 0;
-  border-top-left-radius: 8px;
-  background: linear-gradient(to top left, var(--ear-back) 0 49%, var(--ink-28) 50%, var(--ear-fold) 53%, var(--surface) 92%);
-  box-shadow: -3px -3px 7px var(--ink-12);
-  animation: peek 7s ease-in-out 3.2s infinite;
-}
-
-.earLeft {
-  left: 0;
-  border-top-right-radius: 8px;
-  background: linear-gradient(to top right, var(--ear-back) 0 49%, var(--ink-28) 50%, var(--ear-fold) 53%, var(--surface) 92%);
-  box-shadow: 3px -3px 7px var(--ink-12);
-}
-
-.corner:not(:disabled):hover .ear {
-  animation: none;
-  width: 64px;
-  height: 64px;
-}
-
-@keyframes peek {
-  0%,
-  80%,
-  100% {
-    width: 30px;
-    height: 30px;
-  }
-  86% {
-    width: 50px;
-    height: 50px;
-  }
-  92% {
-    width: 34px;
-    height: 34px;
-  }
-}
-
 .tabs {
   position: absolute;
   top: 26px;
@@ -619,26 +697,18 @@
   gap: 14px;
 }
 
+/* A matching pair: same size and colours, whichever way they turn. */
 .prevButton,
 .nextButton {
   height: 46px;
   padding: 0 20px;
   border-radius: 23px;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.prevButton {
   border: 1px solid var(--input-border);
   background: var(--surface);
   color: var(--text);
-}
-
-.nextButton {
-  border: 0;
-  background: var(--accent);
-  color: var(--on-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .position {
@@ -669,10 +739,9 @@
   text-align: center;
 }
 
-/* Paused, or with reduced motion: no sheen, no cover lift, no peeking corner. */
+/* Paused, or with reduced motion: no sheen, no cover lift. */
 .still .coverHint,
-.still .sheen,
-.still .earRight {
+.still .sheen {
   animation: none;
 }
 
@@ -680,29 +749,29 @@
 
 .cornerLetter {
   position: absolute;
-  top: 18px;
+  top: 22px;
   font-family: var(--font-serif);
   font-size: 40px;
-  color: var(--border);
+  color: var(--ink-22);
   line-height: 1;
 }
 
 .atLeft {
-  left: 22px;
+  left: 26px;
 }
 
 .atRight {
-  right: 22px;
+  right: 26px;
 }
 
 .pageNumber {
   position: absolute;
-  bottom: 16px;
+  bottom: 18px;
   left: 0;
   right: 0;
   text-align: center;
   font-size: 13px;
-  color: var(--page-number);
+  color: var(--muted);
 }
 
 .personPage {
@@ -757,36 +826,25 @@
   color: var(--text-2);
 }
 
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.chip {
-  padding: 2px 10px;
-  border-radius: 12px;
-  color: var(--text-2);
-}
-
-.sideMarriedIn {
-  background: var(--side-married-in);
-}
-
+/* Lines on the tinted pages are ink, not a colour, so they show on every tint. */
 .rule {
   height: 1px;
-  background: var(--divider);
+  background: var(--ink-18);
 }
 
-/* Someone can share up to 50 contacts: past the page's height they scroll here, under the name and above Open profile. */
+/* Someone can share up to 50 contacts: past the page's height they scroll here, below the rule. */
 .reach {
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* The request buttons (AskButton) are see-through elsewhere; on a tinted page they get the social pills' fill. */
+.reach button:global(.pill) {
+  background: var(--surface-soft);
+  border-color: var(--ink-34);
 }
 
 .section {
@@ -894,14 +952,15 @@
   padding: 16px 18px;
   border-radius: 14px;
   background: var(--bg);
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--ink-22);
   font-size: 15px;
   color: var(--text-2);
   line-height: 1.45;
 }
 
 .openProfile {
-  margin-top: auto;
+  /* Just under the name and relation, closer than the page's other parts. */
+  margin-top: -12px;
   align-self: center;
   font-weight: 600;
   font-size: 15px;
@@ -917,7 +976,6 @@
   align-items: center;
   gap: 22px;
   text-align: center;
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--nav-active) 35%, transparent), transparent 50%);
 }
 
 .inMemory {
@@ -945,7 +1003,7 @@
 }
 
 .memorialLinks {
-  margin-top: auto;
+  margin-top: -12px;
   display: flex;
   gap: 18px;
   justify-content: center;
@@ -1176,7 +1234,6 @@
   line-height: 1.2;
 }
 
-.bookplateNote,
 .proverbEnglish {
   font-size: 14px;
   color: var(--muted);
@@ -1205,7 +1262,8 @@
   height: 100%;
   box-sizing: border-box;
   overflow-y: auto;
-  padding: 64px 44px 50px;
+  /* Clear of the page number. */
+  padding: 64px 44px 70px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -1219,47 +1277,45 @@
   line-height: 1.15;
 }
 
-.welcomeIntro {
-  margin: 0;
-  font-size: 17px;
-  line-height: 1.55;
-  color: var(--text-2);
-}
-
-.notesList {
+.steps {
+  list-style: none;
+  counter-reset: step;
+  margin: 8px 0 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-top: 6px;
+  gap: 20px;
 }
 
-.note {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  font-size: 15px;
-  line-height: 1.5;
+.step {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  row-gap: 2px;
 }
 
-.noteMark {
-  width: 30px;
-  height: 30px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--side-first);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.step::before {
+  content: counter(step);
+  grid-row: span 2;
+  font-family: var(--font-serif);
+  font-size: 26px;
+  line-height: 1;
   color: var(--accent);
-  font-weight: 600;
+}
+
+.stepTitle {
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.stepText {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 .ownPage {
   margin-top: auto;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: var(--surface-soft);
-  border: 1px dashed var(--border);
   font-size: 15px;
   line-height: 1.45;
 }
@@ -1313,50 +1369,13 @@
 
 .leader {
   flex: 1;
-  border-bottom: 2px dotted var(--input-border);
+  border-bottom: 2px dotted var(--ink-26);
   transform: translateY(-5px);
 }
 
 .entryPage {
   font-size: 16px;
   color: var(--muted);
-}
-
-.entryNote {
-  font-size: 14px;
-  color: var(--muted);
-}
-
-.letters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.letter {
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--input-border);
-  border-radius: 10px;
-  background: var(--surface-soft);
-  font: inherit;
-  font-weight: 600;
-  color: var(--accent);
-  cursor: pointer;
-}
-
-.sideCounts {
-  margin-top: auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.sideCount {
-  padding: 4px 12px;
-  border-radius: 14px;
-  font-size: 13px;
-  color: var(--text-2);
 }
 
 .divider {
@@ -1369,7 +1388,6 @@
   justify-content: center;
   gap: 20px;
   text-align: center;
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--nav-active) 50%, transparent), color-mix(in srgb, var(--nav-active) 10%, transparent));
 }
 
 .branch g {
@@ -1416,6 +1434,24 @@
 .notesTitle {
   font-family: var(--font-serif);
   font-size: 18px;
+}
+
+/* Tall windows leave room once the book stops growing: it sits in the middle, not at the top. Not on phones, where
+   the menu sits above the book. */
+@media (min-width: 601px) {
+  .main {
+    /* A little more room above the book than below it (owner's call): the page is 16px shorter to make it. */
+    --page-h: clamp(440px, calc(100dvh - 176px), 820px);
+    min-height: 100dvh;
+    justify-content: center;
+    padding-top: 44px;
+  }
+
+  /* The same width for the pair; a phone hides their words to fit the page box between them. */
+  .prevButton,
+  .nextButton {
+    min-width: 124px;
+  }
 }
 
 @media (max-width: 600px) {
