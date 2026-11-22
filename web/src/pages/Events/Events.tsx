@@ -95,14 +95,15 @@ export function Events() {
   const reduced = useReducedMotion()
   const [motionPaused] = useMotionPaused()
   const narrow = useNarrow()
-  // Keeps a glide's own scroll events from moving the handle back.
-  const holdUntil = useRef(0)
+  // A picked year holds until the reader scrolls or presses something themselves: the glide's own scroll events
+  // don't move it back, and nor does a page too short to bring a last year up to the handle.
+  const held = useRef(false)
   useEffect(() => {
     if (years.length < 2) {
       return
     }
     const follow = () => {
-      if (Date.now() < holdUntil.current) {
+      if (held.current) {
         return
       }
       const line = handleTop() + handleMiddle
@@ -115,25 +116,25 @@ export function Events() {
       }
       setPicked(at)
     }
-    // Scrolling by hand cuts a glide's hold short; the glide ending lets the handle follow again.
+    // Capture, so a press on the handle releases first and its own pick then holds again.
     const release = () => {
-      holdUntil.current = 0
-    }
-    const settle = () => {
-      release()
-      follow()
+      held.current = false
     }
     const first = requestAnimationFrame(follow)
-    window.addEventListener('scroll', follow, { passive: true })
-    window.addEventListener('scrollend', settle)
-    window.addEventListener('wheel', release, { passive: true })
-    window.addEventListener('touchstart', release, { passive: true })
+    const passive = { passive: true }
+    const capture = { capture: true, passive: true }
+    window.addEventListener('scroll', follow, passive)
+    window.addEventListener('wheel', release, passive)
+    window.addEventListener('touchstart', release, passive)
+    window.addEventListener('pointerdown', release, capture)
+    window.addEventListener('keydown', release, capture)
     return () => {
       cancelAnimationFrame(first)
       window.removeEventListener('scroll', follow)
-      window.removeEventListener('scrollend', settle)
       window.removeEventListener('wheel', release)
       window.removeEventListener('touchstart', release)
+      window.removeEventListener('pointerdown', release, capture)
+      window.removeEventListener('keydown', release, capture)
     }
   }, [years])
   const pick = (year: string, glide: boolean) => {
@@ -143,10 +144,7 @@ export function Events() {
     }
     const smooth = glide && !reduced
     setPicked(year)
-    const hold = smooth ? 700 : 100
-    holdUntil.current = Date.now() + hold
-    // Where scrollend isn't fired, this catches the handle up once the hold is over.
-    setTimeout(() => window.dispatchEvent(new Event('scroll')), hold + 50)
+    held.current = true
     // On phones the year sits above its card, so it stops above the handle.
     const offset = handleTop() - (narrow ? 40 : 6)
     window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - offset, behavior: smooth ? 'smooth' : 'auto' })
@@ -218,6 +216,7 @@ export function Events() {
                     event={event}
                     anchor={first ? anchorId(y) : undefined}
                     lit={years.length > 1 && y === current}
+                    viewerId={user?.person_id ?? null}
                     onRemove={
                       user?.role === 'admin'
                         ? () => {
@@ -254,7 +253,19 @@ export function Events() {
   )
 }
 
-function TimelineEntry({ event, anchor, lit, onRemove }: { event: FamilyEvent; anchor?: string; lit: boolean; onRemove?: () => void }) {
+function TimelineEntry({
+  event,
+  anchor,
+  lit,
+  viewerId,
+  onRemove,
+}: {
+  event: FamilyEvent
+  anchor?: string
+  lit: boolean
+  viewerId: string | null
+  onRemove?: () => void
+}) {
   const when = whenItHappened(event)
   return (
     <m.li
@@ -285,7 +296,7 @@ function TimelineEntry({ event, anchor, lit, onRemove }: { event: FamilyEvent; a
           <ul aria-label="Who was there" className={styles.people}>
             {event.people.map((p) => (
               <li key={p.id}>
-                <PersonHoverCard person={p}>
+                <PersonHoverCard person={p} viewerId={viewerId}>
                   <Link to={`/people/${p.id}`} className={styles.chip}>
                     {fullName(p)}
                   </Link>

@@ -52,7 +52,7 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
           empty="No birthdays in the next two weeks."
           items={home.data?.birthdays}
         >
-          {(b, i) => <BirthdayRow key={b.id} birthday={b} soonest={i === 0} />}
+          {(b, i) => <BirthdayRow key={b.id} birthday={b} soonest={i === 0} viewerId={user?.person_id ?? null} />}
         </Card>
         <Newcomers query={home} viewerId={user?.person_id ?? null} now={now} />
       </div>
@@ -84,8 +84,12 @@ function Stats({ counts }: { counts: Counts }) {
   const [paused] = useMotionPaused()
   const reduced = useReducedMotion()
   // Decided once as Home opens, so a later re-render can't cut the count short; Pause or reduced motion stops it.
-  const [eligible] = useState(() => !counted && !paused && !reduced)
-  const count = eligible && !paused && !reduced
+  const [eligible, setEligible] = useState(() => !counted && !paused && !reduced)
+  // Turned off for good: switching Pause or reduced motion back off doesn't start the count over.
+  if (eligible && (paused || reduced)) {
+    setEligible(false)
+  }
+  const count = eligible
   useEffect(() => {
     counted = true
   }, [])
@@ -109,8 +113,11 @@ function Stats({ counts }: { counts: Counts }) {
 // Counts up from zero once per visit; the number read aloud is the final one beside it.
 function CountUp({ to, count }: { to: number; count: boolean }) {
   const shown = useRef<HTMLElement>(null)
+  // Once the first count has finished or been stopped, a total that changes later just shows.
+  const [settled, setSettled] = useState(false)
+  const counting = count && !settled
   useEffect(() => {
-    if (!count) {
+    if (!counting) {
       return
     }
     const run = animate(0, to, {
@@ -121,15 +128,21 @@ function CountUp({ to, count }: { to: number; count: boolean }) {
           shown.current.textContent = Math.round(v).toLocaleString()
         }
       },
+      onComplete: () => setSettled(true),
     })
     return () => run.stop()
-  }, [to, count])
+  }, [to, counting])
   return (
     <b ref={shown} aria-hidden="true" className={styles.statNumber}>
-      {(count ? 0 : to).toLocaleString()}
+      {(counting ? 0 : to).toLocaleString()}
     </b>
   )
 }
+
+const branchDraw = 0.9
+const branchDelay = (i: number) => 0.15 + i * 0.12
+// The leaves bud once the last branch is drawn.
+const leavesStart = branchDelay(branches.length - 1) + branchDraw
 
 let grown = false
 
@@ -149,9 +162,13 @@ function HeroTree() {
           key={d}
           d={d}
           className={styles.branches}
-          initial={grow ? { pathLength: 0 } : false}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 0.9, delay: 0.15 + i * 0.12, ease: 'easeOut' }}
+          // Hidden until it starts: a round cap shows as a dot even at pathLength 0.
+          initial={grow ? { pathLength: 0, opacity: 0 } : false}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{
+            pathLength: { duration: branchDraw, delay: branchDelay(i), ease: 'easeOut' },
+            opacity: { duration: 0.01, delay: branchDelay(i) },
+          }}
         />
       ))}
       {leaves.map((leaf, i) => (
@@ -165,8 +182,8 @@ function HeroTree() {
           initial={grow ? { scale: 0 } : { scale: 1, y: 0 }}
           animate={still ? { scale: 1, y: 0 } : { scale: 1, y: [0, -2.5, 0] }}
           transition={{
-            scale: { type: 'spring', stiffness: 260, damping: 12, delay: grow ? 1 + i * 0.1 : 0 },
-            y: still ? { duration: 0.3 } : { duration: 5 + (i % 3), repeat: Infinity, ease: 'easeInOut', delay: (grow ? 2 : 0) + i * 0.3 },
+            scale: { type: 'spring', stiffness: 260, damping: 12, delay: grow ? leavesStart + i * 0.1 : 0 },
+            y: still ? { duration: 0.3 } : { duration: 5 + (i % 3), repeat: Infinity, ease: 'easeInOut', delay: (grow ? leavesStart + 1 : 0) + i * 0.3 },
           }}
         />
       ))}
@@ -245,7 +262,7 @@ function Card<T>({
   )
 }
 
-function BirthdayRow({ birthday, soonest }: { birthday: Birthday; soonest: boolean }) {
+function BirthdayRow({ birthday, soonest, viewerId }: { birthday: Birthday; soonest: boolean; viewerId: string | null }) {
   const { month, day } = monthAndDay(birthday.on)
   return (
     <div className={styles.row}>
@@ -254,7 +271,7 @@ function BirthdayRow({ birthday, soonest }: { birthday: Birthday; soonest: boole
         <span className={styles.tileDay}>{day}</span>
       </span>
       <div className={styles.rowWords}>
-        <PersonHoverCard person={birthday}>
+        <PersonHoverCard person={birthday} viewerId={viewerId}>
           <Link to={`/people/${birthday.id}`} className={styles.rowTitle}>
             {birthday.first_name}’s birthday
           </Link>
@@ -294,7 +311,7 @@ function Newcomers({ query, viewerId, now }: { query: UseQueryResult<Home>; view
               {initials(n)}
             </span>
             <div className={styles.rowWords}>
-              <PersonHoverCard person={n}>
+              <PersonHoverCard person={n} viewerId={viewerId}>
                 <Link to={`/people/${n.id}`} className={styles.rowTitle}>
                   {fullName(n)}
                 </Link>

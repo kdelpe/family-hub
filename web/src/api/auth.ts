@@ -33,6 +33,18 @@ let generation = 0
 export const sessionGeneration = () => generation
 export const sameSession = (since: number | undefined) => since === generation
 
+const sessionListeners = new Set<() => void>()
+// For what outlives the pages, like a toast, that belongs to whoever was signed in.
+export function onSessionChange(listener: () => void): () => void {
+  sessionListeners.add(listener)
+  return () => sessionListeners.delete(listener)
+}
+
+function nextSession() {
+  generation++
+  sessionListeners.forEach((listener) => listener())
+}
+
 // A link preview depends on its token, not on who's signed in, and a tab may be mid-way through setting a password
 // with it; everything else was fetched as someone.
 const fetchedAsSomeone = (query: Query) => query.queryKey[0] !== previewKey[0] || query.queryKey[1] !== previewKey[1]
@@ -48,7 +60,7 @@ export function startSession(queryClient: QueryClient, user: User) {
 export const endSession = (queryClient: QueryClient) => dropSessionData(queryClient)
 
 function dropSessionData(queryClient: QueryClient) {
-  generation++
+  nextSession()
   queryClient.removeQueries({ predicate: fetchedAsSomeone })
   try {
     // The cookie changed for every tab; writing this fires a storage event in the others (followSessionChanges).
@@ -67,7 +79,7 @@ export const onSessionEnded =
     if (!(error instanceof ApiError) || error.status !== 401 || !sameSession(since)) {
       return
     }
-    generation++
+    nextSession()
     // A reset, not a removal: queries a page is watching are fetched again instead of left empty.
     void queryClient.resetQueries({ predicate: fetchedAsSomeone })
   }
@@ -77,7 +89,7 @@ export const onSessionEnded =
 export function followSessionChanges(queryClient: QueryClient): () => void {
   const onStorage = (event: StorageEvent) => {
     if (event.key === sessionChangedKey) {
-      generation++
+      nextSession()
       void queryClient.resetQueries({ predicate: fetchedAsSomeone })
     }
   }

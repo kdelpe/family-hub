@@ -1,5 +1,6 @@
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { domMax, LazyMotion, MotionGlobalConfig } from 'motion/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -72,11 +73,14 @@ function renderPage({
   contacts = [{ kind: 'phone', requestable: true, my_request_status: 'none' }],
   answers = {},
   cached = {},
+  motion = false,
 }: {
   role?: 'member' | 'admin'
   contacts?: Contact[]
   answers?: Record<string, Answer | Answer[]>
   cached?: Record<string, { person: Person; contacts: Contact[] }>
+  // Motion's features loaded and animating, as in the app; otherwise m.* elements render plainly.
+  motion?: boolean
 } = {}) {
   const all: Record<string, Answer | Answer[]> = {
     'GET /api/persons/nadege': { status: 200, body: nadege },
@@ -107,15 +111,20 @@ function renderPage({
   const router = createMemoryRouter([{ path: '/people/:id', element: <PersonProfile /> }], {
     initialEntries: ['/people/nadege'],
   })
-  render(
+  const page = (
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  if (motion) {
+    MotionGlobalConfig.skipAnimations = false
+  }
+  render(motion ? <LazyMotion features={domMax}>{page}</LazyMotion> : page)
   return fetch
 }
 
 afterEach(() => {
+  MotionGlobalConfig.skipAnimations = true
   vi.unstubAllGlobals()
   focusManager.setFocused(undefined)
 })
@@ -592,6 +601,33 @@ describe('PersonProfile adding a relative', () => {
     expect(cancel).toHaveFocus()
     fireEvent.keyDown(cancel, { key: 'Tab', shiftKey: true })
     expect(search).toHaveFocus()
+  })
+
+  it.each([
+    // Steps of 10px every 30ms are slow, about 330px/s; 30px every 16ms is a flick, about 1,900px/s.
+    { name: 'a long slow drag closes it, giving focus back to its card', by: 200, step: 10, every: 30, closes: true },
+    { name: 'a short downward flick closes it', by: 60, step: 30, every: 16, closes: true },
+    { name: 'a short slow drag leaves it open', by: 60, step: 10, every: 30, closes: false },
+  ])('drags the sheet by its handle: $name', async ({ by, step, every, closes }) => {
+    renderPage({ role: 'admin', motion: true })
+    await open('Add a parent')
+    const grab = document.querySelector<HTMLElement>('[class*="grab"]')!
+    const at = (y: number) => ({ pointerId: 1, isPrimary: true, button: 0, buttons: 1, clientX: 100, clientY: y, pageX: 100, pageY: y })
+
+    fireEvent.pointerDown(grab, at(600))
+    for (let y = 600 + step; y <= 600 + by; y += step) {
+      fireEvent.pointerMove(window, at(y))
+      await act(() => new Promise((r) => setTimeout(r, every)))
+    }
+    fireEvent.pointerUp(window, at(600 + by))
+
+    if (closes) {
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 3000 })
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Add a parent' })).toHaveFocus())
+    } else {
+      await act(() => new Promise((r) => setTimeout(r, 700)))
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    }
   })
 
   it('clears a filled search box on Escape before closing', async () => {

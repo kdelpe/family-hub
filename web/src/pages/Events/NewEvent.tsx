@@ -73,7 +73,8 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
     return found
   }, [tree.data, people, typed])
 
-  const [done, setDone] = useState(false)
+  // The saved event's title, once saved.
+  const [done, setDone] = useState<string | null>(null)
   // Closed during the hold some other way, it no longer reports the save as closing it.
   const hold = useRef<ReturnType<typeof setTimeout>>(undefined)
   useEffect(() => () => clearTimeout(hold.current), [])
@@ -91,9 +92,7 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
     mutationFn: (body: NewEventBody) => createEvent(body),
     onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: eventKeys.all })
-      // The check on Save shows for a moment before the panel closes.
-      setDone(true)
-      hold.current = setTimeout(() => onSaved(saved.title), savedHold)
+      setDone(saved.title)
     },
   })
 
@@ -130,7 +129,7 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
   return (
     <section aria-labelledby="ev-new" aria-busy={save.isPending} inert={!present} className={styles.panel}>
       {/* Locked while saving: an edit made now would be lost when the saved panel closes. */}
-      <fieldset disabled={save.isPending || done} className={styles.locked}>
+      <fieldset disabled={save.isPending || done !== null} className={styles.locked}>
         <div className={styles.panelHead}>
           <h2 id="ev-new" className={styles.panelTitle}>
             New event
@@ -319,6 +318,12 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
           <AnimatePresence mode="wait" initial={false}>
             {done ? (
               <m.span key="done" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.saveFace}>
+                {/* The check shows for its full moment, counted from when it's on screen, before the panel closes. */}
+                <OnShown
+                  run={() => {
+                    hold.current = setTimeout(() => onSaved(done), savedHold)
+                  }}
+                />
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                   <m.path
                     d="M5 12l5 5 9-10"
@@ -358,4 +363,10 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
       </fieldset>
     </section>
   )
+}
+
+function OnShown({ run }: { run: () => void }) {
+  const once = useRef(run)
+  useEffect(() => once.current(), [])
+  return null
 }
