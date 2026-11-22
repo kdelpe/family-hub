@@ -603,7 +603,7 @@ describe('PersonProfile adding a relative', () => {
     fireEvent.keyDown(search, { key: 'Escape' })
     expect(search).toHaveValue('')
     fireEvent.keyDown(search, { key: 'Escape' })
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
   it('says why the server refused, and stays open to go back', async () => {
@@ -647,10 +647,10 @@ describe('PersonProfile adding a relative', () => {
     expect(screen.getByRole('heading', { name: 'Who is Nadège’s parent?' })).toBeInTheDocument()
 
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     await open('Add a parent')
     pick('Cancel')
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add a parent' })).toHaveFocus()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add a parent' })).toHaveFocus())
   })
 })
