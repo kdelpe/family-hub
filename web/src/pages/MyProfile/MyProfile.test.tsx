@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
@@ -7,6 +8,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { authKeys, type User } from '../../api/auth'
 import { type ContactMethod, contactKeys, contactRequestKeys } from '../../api/contacts'
 import { type Person, personKeys } from '../../api/persons'
+import { AccountMenu } from '../../app/AccountMenu'
+import { Account } from '../Account/Account'
+import { Requests } from '../Requests/Requests'
 import { MyProfile } from './MyProfile'
 
 const maya: Person = {
@@ -40,7 +44,7 @@ const contacts: ContactMethod[] = [
 
 type Answer = { status: number; body?: unknown }
 
-function renderPage(answers: Record<string, Answer> = {}, user: Partial<User> = {}, person: Person | null = maya) {
+function renderPage(answers: Record<string, Answer> = {}, user: Partial<User> = {}, person: Person | null = maya, page: ReactNode = <MyProfile />) {
   let rows = contacts
   const fetch = vi.fn((url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
@@ -76,7 +80,7 @@ function renderPage(answers: Record<string, Answer> = {}, user: Partial<User> = 
   }
   const router = createMemoryRouter(
     [
-      { path: '/profile', element: <MyProfile /> },
+      { path: '/profile', element: page },
       { path: '/auth/login', element: <p>Sign in page</p> },
     ],
     { initialEntries: ['/profile'] },
@@ -144,17 +148,14 @@ describe('MyProfile', () => {
     expect(screen.getByRole('switch', { name: 'Instagram' })).toBeInTheDocument()
   })
 
-  it('puts the side column in the mockup’s order', async () => {
+  it('keeps only See me in the tree in the side column', async () => {
     renderPage()
 
+    // Requests, sign-in and Suggest a relative live in the account menu now.
     const aside = within(screen.getByRole('complementary'))
-    expect(aside.getAllByRole('heading').map((h) => h.textContent)).toEqual([
-      'Requests for your details',
-      'Sign-in',
-      'Know someone who should be here?',
-    ])
+    expect(aside.queryAllByRole('heading')).toEqual([])
     expect(aside.getByRole('link', { name: 'See me in the tree' })).toBeInTheDocument()
-    expect(await aside.findByText('No requests right now.')).toBeInTheDocument()
+    expect(await screen.findAllByRole('switch')).not.toEqual([])
   })
 
   it('saves the story only once it changed', async () => {
@@ -251,7 +252,7 @@ describe('MyProfile', () => {
         body: { error: { code: 'wrong_password', message: 'current password is incorrect' } },
       },
     }
-    const { fetch } = renderPage(answers)
+    const { fetch } = renderPage(answers, {}, maya, <Account />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Change password' }))
     const savePassword = () => within(screen.getByRole('form', { name: 'Change password' })).getByRole('button', { name: 'Save' })
@@ -271,9 +272,10 @@ describe('MyProfile', () => {
     expect(screen.queryByLabelText('Current password')).not.toBeInTheDocument()
   })
 
-  it('signs out and forgets everything fetched', async () => {
-    const { client } = renderPage({ 'POST /api/auth/logout': { status: 204 } })
+  it('signs out from the account menu and forgets everything fetched', async () => {
+    const { client } = renderPage({ 'POST /api/auth/logout': { status: 204 } }, {}, maya, <AccountMenu initials="MP" name="Maya Pluviose" waiting={0} />)
 
+    fireEvent.click(screen.getByRole('button', { name: 'Your account' }))
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
 
     expect(await screen.findByText('Sign in page')).toBeInTheDocument()
@@ -315,8 +317,9 @@ describe('MyProfile', () => {
   })
 
   it('counts a failed sign-out answer as signed out, since the cookie is already gone', async () => {
-    renderPage({ 'POST /api/auth/logout': { status: 500, body: { error: { code: 'internal', message: 'x' } } } })
+    renderPage({ 'POST /api/auth/logout': { status: 500, body: { error: { code: 'internal', message: 'x' } } } }, {}, maya, <AccountMenu initials="MP" name="Maya Pluviose" waiting={0} />)
 
+    fireEvent.click(screen.getByRole('button', { name: 'Your account' }))
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
 
     expect(await screen.findByText('Sign in page')).toBeInTheDocument()
@@ -421,7 +424,7 @@ describe('MyProfile', () => {
   })
 
   it('asks for the current password before using up a try', () => {
-    const { fetch } = renderPage()
+    const { fetch } = renderPage({}, {}, maya, <Account />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Change password' }))
     fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'a long new phrase' } })
@@ -505,7 +508,7 @@ describe('MyProfile', () => {
       'GET /api/me/contact-requests': { status: 200, body: { person_id: 'maya', requests: [asked] } },
       'POST /api/me/contact-requests/r1/decline': { status: 204 },
     }
-    const { client } = renderPage(answers)
+    const { client } = renderPage(answers, {}, maya, <><Requests /><Account /></>)
     fireEvent.click(await screen.findByRole('button', { name: 'Don’t share' }))
     // From now on, no requests for whoever the login is linked to.
     delete answers['GET /api/me/contact-requests']
@@ -531,7 +534,7 @@ describe('MyProfile', () => {
     const signedIn = { id: 'u', email: 'maya@example.com', role: 'member', person_id: 'maya' }
     const asked = { id: 'r1', kind: 'phone', status: 'pending', created_at: '2026-11-01T10:00:00Z', decided_at: null, from: { person_id: 'darline', name: 'Darline Monestime' } }
     const answers: Record<string, Answer> = { 'GET /api/auth/me': { status: 200, body: signedIn } }
-    const { client } = renderPage(answers)
+    const { client } = renderPage(answers, {}, maya, <><MyProfile /><Requests /></>)
     await screen.findByRole('switch', { name: 'Mobile' })
     await settled(client)
     // An admin relinks the login to Fritz; the server knows at once, this page not yet.

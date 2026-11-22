@@ -7,14 +7,12 @@ import { PasswordInput } from '../../components/PasswordInput/PasswordInput'
 import { PasswordStrength } from '../../components/PasswordStrength/PasswordStrength'
 import { errorMessage } from '../../lib/errorMessage'
 import { lengthRefusal, passwordRule } from '../../lib/passwordStrength'
-import { signInKey, useSignInBusy, useSignOut } from '../../lib/useSignOut'
+import { signInKey, useSignInBusy } from '../../lib/useSignOut'
 import styles from './MyProfile.module.css'
 
 export function SignInCard({ email }: { email: string }) {
   const [changing, setChanging] = useState(false)
   const [changed, setChanged] = useState(false)
-  const signInBusy = useSignInBusy()
-  const signOut = useSignOut()
 
   return (
     <section aria-labelledby="mp-signin" className={styles.side}>
@@ -45,15 +43,6 @@ export function SignInCard({ email }: { email: string }) {
       <span role="status" className={styles.small}>
         {changed && 'Password changed. You’re signed out on your other devices.'}
       </span>
-      <button
-        type="button"
-        onClick={() => !signInBusy && signOut.mutate()}
-        aria-disabled={signInBusy || undefined}
-        className={styles.signOut}
-      >
-        Sign out
-      </button>
-      {signOut.isError && <p role="alert">{errorMessage(signOut.error)}</p>}
     </section>
   )
 }

@@ -25,7 +25,8 @@ export function Requests() {
       <h1 className={styles.title}>Requests</h1>
       <p className={styles.sub}>Family asking for your phone number, WhatsApp or address. They only see it if you say yes.</p>
       {personId ? (
-        <RequestTabs personId={personId} />
+        // Keyed by person: answers given for one person never stay for another after a relink.
+        <RequestTabs key={personId} personId={personId} />
       ) : (
         <p className={styles.muted}>Your login isn’t linked to you in the tree yet, so nobody can ask for your details.</p>
       )}
@@ -40,7 +41,10 @@ function RequestTabs({ personId }: { personId: string }) {
   const [answered, setAnswered] = useState<{ request: ContactRequest; answer: Answer }[]>([])
   const rows = requests.error instanceof NotYoursError ? [] : (requests.data ?? [])
   const justAnswered = (r: ContactRequest) => answered.find((a) => a.request.id === r.id)
-  const waiting = rows.filter((r) => r.status === 'pending' || justAnswered(r))
+  // Kept from this visit's answers, not the list, so a reread that fails or drops one doesn't take it away.
+  const waiting = [...rows.filter((r) => r.status === 'pending' && !justAnswered(r)), ...answered.map((a) => a.request)].sort(
+    (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at),
+  )
   const past = rows.filter((r) => r.status !== 'pending' && !justAnswered(r)).reverse()
   const shared = rows.filter((r) => r.status === 'shared')
   const count = rows.filter((r) => r.status === 'pending').length
@@ -54,7 +58,8 @@ function RequestTabs({ personId }: { personId: string }) {
   let body
   if (requests.isPending || requests.error instanceof RelinkedError) {
     body = <p className={styles.muted}>Loading…</p>
-  } else if (requests.isError) {
+  } else if (requests.isError && !requests.data) {
+    // A failed reread keeps the list it had.
     body = <p role="alert">{errorMessage(requests.error)}</p>
   } else if (tab === 'waiting') {
     body = waiting.length ? (
