@@ -118,6 +118,11 @@ An answer that can't be undone asks first in one shared dialog (`components/Conf
 ### 2.4b Toast
 One note at a time, bottom centre (`components/Toaster`, Radix Toast + Motion, 2026-11-22): `--text` background, `--surface` text, an optional **Undo**, and a `--gold` bar that drains over 5 seconds. It springs up from below; hovering or focusing it pauses the countdown; it can be swiped down. A new note ends the one before as if it had run out. Radix announces it to screen readers.
 
+
+### 2.4c Name card (owner's pick, 2026-11-22)
+
+Pointing at a person's name with a mouse, after a quarter second, opens a small card (Radix Hover Card) under it: their initials, full name, how they're related to you (*You* for yourself; nothing when there's no link), and two chips, *Profile* and *In the tree* (the tree centered on them). Used on Events' *Who was there* chips and Home's *Coming up* and *New in the family* names. Touch and keyboard don't open it: the name itself is still the link to their profile.
+
 ### 2.5 Buttons
 
 Primary: pill, `--accent` background, white 600 text. Secondary: pill, transparent with `--input-border`. Quiet: underlined text link in `--accent`.
