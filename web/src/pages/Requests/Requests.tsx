@@ -159,6 +159,19 @@ function RequestTabs({ personId, now = new Date() }: { personId: string; now?: D
             role="tab"
             id={`requests-tab-${t.id}`}
             aria-selected={tab === t.id}
+            // One stop on Tab; the arrow keys, Home and End move between the tabs.
+            tabIndex={tab === t.id ? 0 : -1}
+            onKeyDown={(event) => {
+              const i = tabs.findIndex((x) => x.id === t.id)
+              const to = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[event.key]
+              if (to === undefined) {
+                return
+              }
+              event.preventDefault()
+              const next = tabs[(to + tabs.length) % tabs.length]!
+              setTab(next.id)
+              document.getElementById(`requests-tab-${next.id}`)?.focus()
+            }}
             aria-controls="requests-panel"
             aria-label={t.id === 'waiting' && count > 0 ? `Waiting, ${count} ${count === 1 ? 'request' : 'requests'}` : undefined}
             onClick={() => setTab(t.id)}

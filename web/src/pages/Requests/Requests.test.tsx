@@ -135,6 +135,22 @@ describe('Requests', () => {
     expect(panel().getByText('Stanley Jean-Louis')).toBeInTheDocument()
   })
 
+  it('moves between tabs with the arrow keys, Home and End, keeping one in the Tab order', async () => {
+    renderPage(all)
+    await panel().findByText('Stanley Jean-Louis')
+    const tab = (name: RegExp) => screen.getByRole('tab', { name })
+
+    fireEvent.keyDown(tab(/^Waiting/), { key: 'ArrowRight' })
+    expect(tab(/^Answered/)).toHaveFocus()
+    expect(tab(/^Answered/)).toHaveAttribute('aria-selected', 'true')
+    expect(tab(/^Waiting/)).toHaveAttribute('tabindex', '-1')
+
+    fireEvent.keyDown(tab(/^Answered/), { key: 'End' })
+    expect(tab(/^Shared with/)).toHaveFocus()
+    fireEvent.keyDown(tab(/^Shared with/), { key: 'ArrowRight' })
+    expect(tab(/^Waiting/)).toHaveFocus()
+  })
+
   it('tells a login linked to nobody that nobody can ask yet', () => {
     renderPage([], null)
 

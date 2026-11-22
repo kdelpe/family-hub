@@ -151,7 +151,17 @@ describe('AppShell', () => {
     expect(panel.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
     expect(panel.getByRole('link', { name: 'View my profile ›' })).toHaveFocus()
 
+    const app = document.createElement('div')
+    app.id = 'root'
+    document.body.append(app)
+    fireEvent.click(picture)
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    fireEvent.click(picture)
+    expect(app.inert).toBe(true)
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    expect(app.inert).toBe(false)
+    app.remove()
 
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(picture).toHaveFocus()

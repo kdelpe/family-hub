@@ -15,8 +15,19 @@ export function AccountMenu({ initials, name, waiting, linked }: { initials: str
   const busy = useSignInBusy()
 
   useEffect(() => {
-    if (open) {
-      panel.current?.querySelector<HTMLElement>('a, button')?.focus()
+    if (!open) {
+      return
+    }
+    // The rest of the app can't take focus or clicks while it's open, so nothing behind the scrim is reached.
+    const app = document.getElementById('root')
+    if (app) {
+      app.inert = true
+    }
+    panel.current?.querySelector<HTMLElement>('a, button')?.focus()
+    return () => {
+      if (app) {
+        app.inert = false
+      }
     }
   }, [open])
   const close = () => {
