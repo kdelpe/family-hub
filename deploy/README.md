@@ -15,9 +15,10 @@ One server runs everything with Docker Compose: Caddy (HTTPS), the app and Postg
    docker login ghcr.io -u <github-username>   # paste the token as the password
    ```
 
-5. **Copy the files** from this folder to `~/family-hub` on the server: `compose.yaml`, `Caddyfile`, and the two templates, saved as `.env` and `app.env`:
+5. **Copy the files** from this folder to `~/family-hub` on the server: `compose.yaml`, `Caddyfile`, `env.example` and `app.env.example`. Then, in `~/family-hub`, make the real settings files from the templates:
 
    ```sh
+   cd ~/family-hub
    cp env.example .env && cp app.env.example app.env && chmod 600 .env app.env
    ```
 
