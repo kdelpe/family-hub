@@ -27,7 +27,11 @@ const all = [
 function renderPage(requests: ContactRequest[], personId: string | null = 'maya') {
   vi.stubGlobal(
     'fetch',
-    vi.fn(() => Promise.resolve(new Response(JSON.stringify({ person_id: 'maya', requests }), { status: 200 }))),
+    vi.fn((url: string) =>
+      Promise.resolve(
+        Response.json(url === '/api/tree' ? { persons: [], relationships: [] } : { person_id: 'maya', requests }),
+      ),
+    ),
   )
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role: 'member', person_id: personId })
@@ -50,6 +54,8 @@ describe('Requests', () => {
     expect(await panel().findByText('Stanley Jean-Louis')).toBeInTheDocument()
     expect(panel().getByText('Nadège Pluviose')).toBeInTheDocument()
     expect(panel().getAllByRole('button', { name: 'Share' })).toHaveLength(2)
+    // No relation in an empty tree: just when they asked.
+    expect(panel().getAllByText(/^Asked /)).toHaveLength(2)
     expect(screen.getByRole('tab', { name: 'Waiting, 2 requests' })).toHaveAttribute('aria-selected', 'true')
   })
 

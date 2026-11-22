@@ -1,8 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { type ContactRequest, myRequestsQuery, NotYoursError, RelinkedError } from '../../api/contacts'
+import { treeQuery } from '../../api/tree'
+import { addedOn } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
+import { initials } from '../../lib/names'
+import { relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
 import { type Answer, RequestRow, SharedLine, yourDetail } from '../MyProfile/RequestsCard'
 import styles from './Requests.module.css'
@@ -34,8 +38,21 @@ export function Requests() {
   )
 }
 
-function RequestTabs({ personId }: { personId: string }) {
+// Their initials, from the name the request carries.
+const face = (name: string) => {
+  const [first = '', ...rest] = name.split(' ')
+  return initials({ first_name: first, last_name: rest.at(-1) ?? null })
+}
+
+function RequestTabs({ personId, now = new Date() }: { personId: string; now?: Date }) {
   const requests = useQuery(myRequestsQuery(personId))
+  const tree = useQuery(treeQuery)
+  const relations = useMemo(() => (tree.data ? relationsTo(tree.data, personId) : null), [tree.data, personId])
+  const meta = (r: ContactRequest) => {
+    const asked = `asked ${addedOn(r.created_at, now)}`
+    const relation = relations?.get(r.from.person_id)
+    return relation ? `${relation} · ${asked}` : asked[0]!.toUpperCase() + asked.slice(1)
+  }
   const [tab, setTab] = useState<Tab>('waiting')
   // Answered on this visit: each stays in Waiting, saying what happened, until the page is left.
   const [answered, setAnswered] = useState<{ request: ContactRequest; answer: Answer }[]>([])
@@ -65,13 +82,18 @@ function RequestTabs({ personId }: { personId: string }) {
     body = waiting.length ? (
       <div className={styles.list}>
         {waiting.map((request) => (
-          <RequestRow
-            key={request.id}
-            personId={personId}
-            request={request}
-            answer={justAnswered(request)?.answer}
-            onAnswered={(a) => setAnswered((list) => [...list, { request, answer: a }])}
-          />
+          <div key={request.id} className={styles.withFace}>
+            <span aria-hidden="true" className={styles.face}>
+              {face(request.from.name)}
+            </span>
+            <RequestRow
+              personId={personId}
+              request={request}
+              answer={justAnswered(request)?.answer}
+              onAnswered={(a) => setAnswered((list) => [...list, { request, answer: a }])}
+              meta={meta(request)}
+            />
+          </div>
         ))}
       </div>
     ) : (

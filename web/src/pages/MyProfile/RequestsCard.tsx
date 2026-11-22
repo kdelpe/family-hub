@@ -175,11 +175,13 @@ export function RequestRow({
   request,
   answer,
   onAnswered,
+  meta,
 }: {
   personId: string
   request: ContactRequest
   answer: Answer | undefined
   onAnswered: (answer: Answer) => void
+  meta?: string
 }) {
   // Both ask first: a decline can't be taken back, and a share shows the detail at once (owner's call).
   const [confirming, setConfirming] = useState<'share' | 'decline' | null>(null)
@@ -206,6 +208,7 @@ export function RequestRow({
     <div className={styles.request}>
       <span>
         <strong>{request.from.name}</strong> asked for your {detail}.
+        {meta && <span className={styles.requestMeta}>{meta}</span>}
       </span>
       {!answer &&
         (confirming ? (
