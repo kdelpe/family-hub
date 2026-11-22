@@ -25,6 +25,7 @@ type Handlers struct {
 	Contacts *handler.Contacts
 	Access   *handler.Access
 	Home     *handler.Home
+	Events   *handler.Events
 }
 
 type Middleware struct {
@@ -83,6 +84,8 @@ func New(h Handlers, mw Middleware) http.Handler {
 			r.Get("/tree", h.Family.Tree)
 			r.Get("/family/summary", h.Family.Summary)
 			r.Get("/home", h.Home.Show)
+			r.Get("/events", h.Events.List)
+			r.Get("/events/{id}", h.Events.Get)
 			// Members may change their own bio; the service checks (§4).
 			r.Patch("/persons/{id}", h.Family.UpdatePerson)
 			r.Get("/persons/{id}/contacts", h.Contacts.ListFor)
@@ -117,6 +120,9 @@ func New(h Handlers, mw Middleware) http.Handler {
 				r.Post("/persons/{id}/contacts", h.Contacts.CreateFor)
 				r.Patch("/persons/{id}/contacts/{cid}", h.Contacts.UpdateFor)
 				r.Delete("/persons/{id}/contacts/{cid}", h.Contacts.DeleteFor)
+				r.Post("/events", h.Events.Create)
+				r.Patch("/events/{id}", h.Events.Update)
+				r.Delete("/events/{id}", h.Events.Delete)
 			})
 		})
 	})

@@ -187,6 +187,13 @@ func TestFamilyWritesAreAdminOnly(t *testing.T) {
 		{name: "an admin can delete a link", method: http.MethodDelete, path: "/api/relationships/42", role: auth.RoleAdmin, wantStatus: http.StatusNotFound},
 		{name: "a member can't add a relative", method: http.MethodPost, path: "/api/persons/" + testID + "/relatives", role: auth.RoleMember, wantStatus: http.StatusForbidden},
 		{name: "an admin can add a relative", method: http.MethodPost, path: "/api/persons/" + testID + "/relatives", role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "a member can read an event", method: http.MethodGet, path: "/api/events/42", role: auth.RoleMember, wantStatus: http.StatusNotFound},
+		{name: "a member can't add an event", method: http.MethodPost, path: "/api/events", role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "a member can't edit an event", method: http.MethodPatch, path: "/api/events/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "a member can't delete an event", method: http.MethodDelete, path: "/api/events/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "an admin can add an event", method: http.MethodPost, path: "/api/events", role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "an admin can edit an event", method: http.MethodPatch, path: "/api/events/" + testID, role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "an admin can delete an event", method: http.MethodDelete, path: "/api/events/42", role: auth.RoleAdmin, wantStatus: http.StatusNotFound},
 	}
 
 	for _, tt := range tests {
@@ -223,6 +230,7 @@ func newRoutesWith(t *testing.T, sessions handler.SessionAuthenticator, perHour 
 			Contacts: handler.NewContacts(mocks.NewContactsService(t)),
 			Access:   handler.NewAccess(mocks.NewAccessService(t)),
 			Home:     handler.NewHome(mocks.NewHomeService(t), time.UTC),
+			Events:   handler.NewEvents(mocks.NewEventService(t)),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(sessions, cookie).Require,

@@ -16,6 +16,7 @@ import (
 	"github.com/kdelpe/family-hub/internal/config"
 	"github.com/kdelpe/family-hub/internal/contacts"
 	"github.com/kdelpe/family-hub/internal/database"
+	"github.com/kdelpe/family-hub/internal/event"
 	"github.com/kdelpe/family-hub/internal/family"
 	"github.com/kdelpe/family-hub/internal/handler"
 	"github.com/kdelpe/family-hub/internal/httpx"
@@ -105,6 +106,7 @@ func newServer(pool *pgxpool.Pool, cfg config.Config) (*http.Server, *auth.Reset
 			Contacts: handler.NewContacts(contacts.NewService(pool)),
 			Access:   handler.NewAccess(admin.NewAccessRequests(pool)),
 			Home:     handler.NewHome(familySvc, cfg.Timezone),
+			Events:   handler.NewEvents(event.NewService(pool)),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(auth.NewSessions(pool), cookie).Require,
