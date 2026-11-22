@@ -93,7 +93,6 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
   const [married, setMarried] = useState(true)
   const [ended, setEnded] = useState(false)
   const [shared, setShared] = useState<string | null>(null)
-  const sheet = useRef<HTMLDivElement>(null)
   const question = useRef<HTMLHeadingElement>(null)
   const search = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
@@ -406,7 +405,6 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
           }}
         >
           <m.div
-            ref={sheet}
             className={styles.sheet}
             aria-labelledby="add-relative-question"
             initial={{ y: '100%' }}
