@@ -134,6 +134,10 @@ func (s *Service) Create(ctx context.Context, createdBy uuid.UUID, in Input) (Ev
 
 // Update is admin-only; the router checks the role.
 func (s *Service) Update(ctx context.Context, id uuid.UUID, patch Patch) (Event, error) {
+	// One alone would be read against the other's stored value: "1984-11-13" can't be read as a year.
+	if patch.Date.Set != patch.DatePrecision.Set {
+		return Event{}, fmt.Errorf("%w: give the date and its precision together", ErrInvalidEvent)
+	}
 	var event Event
 	err := s.write(ctx, "update event", func(q *gen.Queries) error {
 		row, err := q.LockEvent(ctx, id)
