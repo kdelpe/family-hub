@@ -136,3 +136,19 @@
   display: grid;
   place-items: center;
 }
+
+.stopped {
+  display: block;
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+/* Empty, it stays in the accessibility tree out of sight, so the message that fills it is read out. */
+.stopped:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}

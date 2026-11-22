@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { authKeys } from '../../api/auth'
@@ -24,16 +24,25 @@ const all = [
   request('r5', 'Esther Pluviose', 'revoked'),
 ]
 
-function renderPage(requests: ContactRequest[], personId: string | null = 'maya') {
+// Answers the tree, the list (or fails it once listFails is set) and every decision, which it remembers.
+function renderPage(requests: ContactRequest[], personId: string | null = 'maya', server = { listFails: false }) {
   vi.stubGlobal(
     'fetch',
-    vi.fn((url: string) =>
-      Promise.resolve(
-        Response.json(url === '/api/tree' ? { persons: [], relationships: [] } : { person_id: 'maya', requests }),
-      ),
-    ),
+    vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        const [, id, decision] = /contact-requests\/([^/]+)\/(\w+)$/.exec(url) ?? []
+        const status = ({ share: 'shared', decline: 'declined', revoke: 'revoked' } as const)[decision as 'share']
+        requests = requests.map((r) => (r.id === id ? { ...r, status } : r))
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
+      if (url === '/api/tree') {
+        return Promise.resolve(Response.json({ persons: [], relationships: [] }))
+      }
+      return server.listFails ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve(Response.json({ person_id: 'maya', requests }))
+    }),
   )
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  lastClient = client
   client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role: 'member', person_id: personId })
   client.setQueryData(personKeys.one('maya'), { id: 'maya', first_name: 'Maya', last_name: 'Pluviose' })
   render(
@@ -44,6 +53,8 @@ function renderPage(requests: ContactRequest[], personId: string | null = 'maya'
 }
 
 const panel = () => within(screen.getByRole('tabpanel'))
+let lastClient: QueryClient
+const client = () => lastClient
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -85,6 +96,43 @@ describe('Requests', () => {
     fireEvent.click(screen.getByRole('tab', { name: tab }))
 
     expect(panel().getByText(empty)).toBeInTheDocument()
+  })
+
+  it('lists answers newest answered first, not newest asked', async () => {
+    const asked = (id: string, name: string, created: string, decided: string) => ({ ...request(id, name, 'declined'), created_at: created, decided_at: decided })
+    renderPage([asked('old', 'Asked Long Ago', '2026-10-01T10:00:00Z', '2026-11-20T10:00:00Z'), asked('new', 'Asked Lately', '2026-11-10T10:00:00Z', '2026-11-11T10:00:00Z')])
+    await panel().findByText('No requests right now.')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Answered' }))
+
+    expect(panel().getAllByRole('listitem').map((li) => li.querySelector('strong')?.textContent)).toEqual(['Asked Long Ago', 'Asked Lately'])
+  })
+
+  it('takes back a share given on this visit, saying so where focus lands', async () => {
+    renderPage([request('r1', 'Stanley Jean-Louis', 'pending')])
+    fireEvent.click(await panel().findByRole('button', { name: 'Share' }))
+    fireEvent.click(panel().getByRole('button', { name: 'Yes, share' }))
+    await panel().findByText('Shared with Stanley.')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Shared with' }))
+    fireEvent.click(panel().getByRole('button', { name: 'Stop sharing' }))
+    fireEvent.click(panel().getByRole('button', { name: 'Yes, stop' }))
+
+    expect(await panel().findByText('Stopped sharing your phone number with Stanley.')).toHaveFocus()
+    fireEvent.click(screen.getByRole('tab', { name: 'Waiting' }))
+    expect(panel().queryByText('Shared with Stanley.')).toBeNull()
+  })
+
+  it('keeps the list when a reread fails, saying so', async () => {
+    const server = { listFails: false }
+    renderPage([request('r1', 'Stanley Jean-Louis', 'pending')], 'maya', server)
+    await panel().findByText('Stanley Jean-Louis')
+    server.listFails = true
+
+    await act(() => client().refetchQueries())
+
+    expect(await panel().findByRole('alert')).toBeInTheDocument()
+    expect(panel().getByText('Stanley Jean-Louis')).toBeInTheDocument()
   })
 
   it('tells a login linked to nobody that nobody can ask yet', () => {

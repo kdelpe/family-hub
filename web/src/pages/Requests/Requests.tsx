@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { type ContactRequest, myRequestsQuery, NotYoursError, RelinkedError } from '../../api/contacts'
 import { treeQuery } from '../../api/tree'
@@ -8,7 +8,7 @@ import { errorMessage } from '../../lib/errorMessage'
 import { initials } from '../../lib/names'
 import { relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
-import { type Answer, RequestRow, SharedLine, yourDetail } from '../MyProfile/RequestsCard'
+import { type Answer, firstName, RequestRow, SharedLine, yourDetail } from '../MyProfile/RequestsCard'
 import styles from './Requests.module.css'
 
 type Tab = 'waiting' | 'answered' | 'shared'
@@ -56,13 +56,23 @@ function RequestTabs({ personId, now = new Date() }: { personId: string; now?: D
   const [tab, setTab] = useState<Tab>('waiting')
   // Answered on this visit: each stays in Waiting, saying what happened, until the page is left.
   const [answered, setAnswered] = useState<{ request: ContactRequest; answer: Answer }[]>([])
+  const [stopped, setStopped] = useState<ContactRequest | null>(null)
+  // The shared line it was on is gone, so keyboard focus lands on what happened.
+  const stoppedRef = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (stopped) {
+      stoppedRef.current?.focus()
+    }
+  }, [stopped])
   const rows = requests.error instanceof NotYoursError ? [] : (requests.data ?? [])
   const justAnswered = (r: ContactRequest) => answered.find((a) => a.request.id === r.id)
   // Kept from this visit's answers, not the list, so a reread that fails or drops one doesn't take it away.
   const waiting = [...rows.filter((r) => r.status === 'pending' && !justAnswered(r)), ...answered.map((a) => a.request)].sort(
     (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at),
   )
-  const past = rows.filter((r) => r.status !== 'pending' && !justAnswered(r)).reverse()
+  // Newest answer first.
+  const decided = (r: ContactRequest) => Date.parse(r.decided_at ?? r.created_at)
+  const past = rows.filter((r) => r.status !== 'pending' && !justAnswered(r)).sort((a, b) => decided(b) - decided(a))
   const shared = rows.filter((r) => r.status === 'shared')
   const count = rows.filter((r) => r.status === 'pending').length
 
@@ -73,7 +83,8 @@ function RequestTabs({ personId, now = new Date() }: { personId: string; now?: D
   ]
 
   let body
-  if (requests.isPending || requests.error instanceof RelinkedError) {
+  // Rows kept from before a relink are someone else's: nothing shows, this visit's answers included, until it's settled.
+  if (requests.isPending || requests.error instanceof RelinkedError || requests.error instanceof NotYoursError) {
     body = <p className={styles.muted}>Loading…</p>
   } else if (requests.isError && !requests.data) {
     // A failed reread keeps the list it had.
@@ -118,7 +129,16 @@ function RequestTabs({ personId, now = new Date() }: { personId: string; now?: D
     body = shared.length ? (
       <ul className={styles.list}>
         {shared.map((request) => (
-          <SharedLine key={request.id} personId={personId} request={request} onStopped={() => {}} />
+          <SharedLine
+            key={request.id}
+            personId={personId}
+            request={request}
+            onStopped={() => {
+              setStopped(request)
+              // A share given on this visit and then taken back no longer says "Shared with".
+              setAnswered((list) => list.filter((a) => a.request.id !== request.id))
+            }}
+          />
         ))}
       </ul>
     ) : (
@@ -151,7 +171,14 @@ function RequestTabs({ personId, now = new Date() }: { personId: string; now?: D
         ))}
       </div>
       <div role="tabpanel" id="requests-panel" aria-labelledby={`requests-tab-${tab}`} className={styles.panel}>
+        {/* A failed reread keeps the rows it had, saying so. */}
+        {requests.isError && requests.data && !(requests.error instanceof NotYoursError) && !(requests.error instanceof RelinkedError) && (
+          <p role="alert">{errorMessage(requests.error)}</p>
+        )}
         {body}
+        <span ref={stoppedRef} tabIndex={-1} role="status" className={styles.stopped}>
+          {stopped && `Stopped sharing your ${yourDetail[stopped.kind]} with ${firstName(stopped.from.name)}.`}
+        </span>
       </div>
       <p className={styles.note}>
         Sharing shows that one person every detail of that kind you’ve set to “Family can ask”, including ones you add
