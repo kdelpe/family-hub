@@ -84,8 +84,11 @@ function RequestTabs({ personId, now = new Date() }: { personId: string; now?: D
 
   let body
   // Rows kept from before a relink are someone else's: nothing shows, this visit's answers included, until it's settled.
-  if (requests.isPending || requests.error instanceof RelinkedError || requests.error instanceof NotYoursError) {
+  const notYours = requests.error instanceof NotYoursError || requests.error instanceof RelinkedError
+  if (requests.isPending || requests.error instanceof RelinkedError) {
     body = <p className={styles.muted}>Loading…</p>
+  } else if (requests.error instanceof NotYoursError) {
+    body = <p role="alert">{errorMessage(requests.error)}</p>
   } else if (requests.isError && !requests.data) {
     // A failed reread keeps the list it had.
     body = <p role="alert">{errorMessage(requests.error)}</p>
@@ -177,7 +180,7 @@ function RequestTabs({ personId, now = new Date() }: { personId: string; now?: D
         )}
         {body}
         <span ref={stoppedRef} tabIndex={-1} role="status" className={styles.stopped}>
-          {stopped && `Stopped sharing your ${yourDetail[stopped.kind]} with ${firstName(stopped.from.name)}.`}
+          {stopped && !notYours && `Stopped sharing your ${yourDetail[stopped.kind]} with ${firstName(stopped.from.name)}.`}
         </span>
       </div>
       <p className={styles.note}>

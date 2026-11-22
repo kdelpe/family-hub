@@ -74,7 +74,10 @@ describe('AppShell', () => {
     const picture = await screen.findByRole('button', { name: 'Your account' })
     expect(picture).toHaveTextContent(initials)
     fireEvent.click(picture)
-    expect(within(screen.getByRole('dialog', { name: 'Your account' })).getByText(named)).toBeInTheDocument()
+    const panel = within(screen.getByRole('dialog', { name: 'Your account' }))
+    expect(panel.getByText(named)).toBeInTheDocument()
+    // Only someone in the tree can suggest a relative.
+    expect(panel.queryByRole('link', { name: 'Suggest a relative' }) !== null).toBe(me.person_id !== null)
     if (absent) {
       expect(screen.queryByRole('link', { name: absent })).not.toBeInTheDocument()
     }

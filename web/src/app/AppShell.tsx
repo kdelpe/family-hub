@@ -74,6 +74,7 @@ export function AppShell() {
             initials={person ? initials(person) : (user.email[0] ?? '?').toUpperCase()}
             name={person ? `${person.first_name} ${person.last_name ?? ''}`.trim() : user.email}
             waiting={waiting}
+            linked={person !== null && person !== undefined}
           />
         </div>
         <Outlet />

@@ -273,7 +273,7 @@ describe('MyProfile', () => {
   })
 
   it('signs out from the account menu and forgets everything fetched', async () => {
-    const { client } = renderPage({ 'POST /api/auth/logout': { status: 204 } }, {}, maya, <AccountMenu initials="MP" name="Maya Pluviose" waiting={0} />)
+    const { client } = renderPage({ 'POST /api/auth/logout': { status: 204 } }, {}, maya, <AccountMenu initials="MP" name="Maya Pluviose" waiting={0} linked />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Your account' }))
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
@@ -317,7 +317,7 @@ describe('MyProfile', () => {
   })
 
   it('counts a failed sign-out answer as signed out, since the cookie is already gone', async () => {
-    renderPage({ 'POST /api/auth/logout': { status: 500, body: { error: { code: 'internal', message: 'x' } } } }, {}, maya, <AccountMenu initials="MP" name="Maya Pluviose" waiting={0} />)
+    renderPage({ 'POST /api/auth/logout': { status: 500, body: { error: { code: 'internal', message: 'x' } } } }, {}, maya, <AccountMenu initials="MP" name="Maya Pluviose" waiting={0} linked />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Your account' }))
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))

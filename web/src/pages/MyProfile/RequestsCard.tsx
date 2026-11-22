@@ -105,7 +105,9 @@ function useDecision(personId: string, request: ContactRequest, onDecided: (deci
       onDecided(decision)
       // Answered, it moves to Shared with or Answered.
       const status = ({ share: 'shared', decline: 'declined', revoke: 'revoked' } as const)[decision]
-      queryClient.setQueryData<ContactRequest[]>(queryKey, (rows) => rows?.map((r) => (r.id === request.id ? { ...r, status } : r)))
+      // Dated now, so Answered sorts it newest first even if the reread that follows fails.
+      const decided_at = new Date().toISOString()
+      queryClient.setQueryData<ContactRequest[]>(queryKey, (rows) => rows?.map((r) => (r.id === request.id ? { ...r, status, decided_at } : r)))
       void queryClient.invalidateQueries({ queryKey })
     },
     onError: (error, decision, since) => {

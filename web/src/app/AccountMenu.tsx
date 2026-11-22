@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
 
 import { errorMessage } from '../lib/errorMessage'
@@ -6,7 +7,7 @@ import { useSignInBusy, useSignOut } from '../lib/useSignOut'
 import styles from './AccountMenu.module.css'
 
 // design-notes §2.1: your picture at the top right, opening a panel from the right (owner's pick A, 2026-11-21).
-export function AccountMenu({ initials, name, waiting }: { initials: string; name: string; waiting: number }) {
+export function AccountMenu({ initials, name, waiting, linked }: { initials: string; name: string; waiting: number; linked: boolean }) {
   const [open, setOpen] = useState(false)
   const button = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
@@ -55,7 +56,9 @@ export function AccountMenu({ initials, name, waiting }: { initials: string; nam
           </span>
         )}
       </button>
-      {open && (
+      {/* On the page's body, above every page's own overlays (the tree's search results, the profile's undo note). */}
+      {open &&
+        createPortal(
         <>
           <div className={styles.scrim} onClick={close} />
           <div ref={panel} role="dialog" aria-modal="true" aria-label="Your account" onKeyDown={onKeyDown} className={styles.panel}>
@@ -81,9 +84,12 @@ export function AccountMenu({ initials, name, waiting }: { initials: string; nam
                 </span>
               )}
             </Link>
-            <Link to="/account#suggest" onClick={() => setOpen(false)} className={styles.item}>
-              Suggest a relative
-            </Link>
+            {/* A login linked to nobody can't suggest anyone, as on the Account page. */}
+            {linked && (
+              <Link to="/account#suggest" onClick={() => setOpen(false)} className={styles.item}>
+                Suggest a relative
+              </Link>
+            )}
             <Link to="/account#password" onClick={() => setOpen(false)} className={styles.item}>
               Change password
             </Link>
@@ -93,8 +99,9 @@ export function AccountMenu({ initials, name, waiting }: { initials: string; nam
             </button>
             {signOut.isError && <p role="alert">{errorMessage(signOut.error)}</p>}
           </div>
-        </>
-      )}
+        </>,
+          document.body,
+        )}
     </>
   )
 }
