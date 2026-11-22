@@ -61,6 +61,24 @@ type ContactRequest struct {
 	DecidedAt   *time.Time
 }
 
+type Event struct {
+	ID                 uuid.UUID
+	Title              string
+	EventDate          *time.Time
+	EventDatePrecision *string
+	Location           *string
+	Description        *string
+	CreatedBy          *uuid.UUID
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	DeletedAt          *time.Time
+}
+
+type EventPerson struct {
+	EventID  uuid.UUID
+	PersonID uuid.UUID
+}
+
 type Person struct {
 	ID                 uuid.UUID
 	FirstName          string
