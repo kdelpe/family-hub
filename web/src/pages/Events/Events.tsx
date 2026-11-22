@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import { useIsMutating, useQuery } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import { Link } from 'react-router'
 
-import { eventsQuery, type FamilyEvent } from '../../api/events'
+import { createEventKey, eventsQuery, type FamilyEvent } from '../../api/events'
 import { bornOn, year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
 import { fullName } from '../../lib/names'
@@ -15,6 +15,7 @@ export function Events() {
   const events = useQuery(eventsQuery)
   const { user } = useSignedIn()
   const [adding, setAdding] = useState(false)
+  const saving = useIsMutating({ mutationKey: createEventKey }) > 0
   const [saved, setSaved] = useState<string | null>(null)
   const newButton = useRef<HTMLButtonElement>(null)
   const close = () => {
@@ -32,6 +33,7 @@ export function Events() {
             ref={newButton}
             type="button"
             aria-expanded={adding}
+            disabled={saving}
             onClick={() => {
               setSaved(null)
               setAdding((open) => !open)

@@ -211,8 +211,68 @@ describe('New event', () => {
     type('What happened?', 'Wedding')
     fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
 
-    expect(await panel().findByRole('alert')).toBeInTheDocument()
+    expect(await panel().findByRole('alert')).toHaveTextContent('Someone tagged isn’t in the tree.')
     expect(panel().getByLabelText('What happened?')).toHaveValue('Wedding')
+  })
+
+  it('locks the panel and + New event while saving', async () => {
+    let answer: (r: Response) => void = () => {}
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) =>
+        init?.method === 'POST'
+          ? new Promise<Response>((resolve) => (answer = resolve))
+          : Promise.resolve(Response.json(url === '/api/events' ? { events: [] } : { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: null })),
+      ),
+    )
+    renderPage([], 'admin')
+    open()
+    type('What happened?', 'Wedding')
+    fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
+
+    await vi.waitFor(() => expect(panel().getByLabelText('What happened?')).toBeDisabled())
+    expect(panel().getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    expect(panel().getByRole('button', { name: 'Close' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '+ New event' })).toBeDisabled()
+
+    answer(Response.json(event({ id: 'new', title: 'Wedding' }), { status: 201 }))
+    expect(await screen.findByText('Saved “Wedding”.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ New event' })).toBeEnabled()
+  })
+
+  it('keeps focus in the picker when a person is removed', async () => {
+    serve()
+    renderPage([], 'admin')
+    open()
+    fireEvent.click(panel().getByRole('button', { name: '+ Add person' }))
+    type('Find a relative', 'rose')
+    fireEvent.click(panel().getByRole('button', { name: 'Rose Monestime' }))
+
+    // The pick hands focus back to + Add person on the next frame; the × is focused after that, as a keyboard would.
+    await vi.waitFor(() => expect(panel().getByRole('button', { name: '+ Add person' })).toHaveFocus())
+    const remove = panel().getByRole('button', { name: 'Remove Rose Monestime' })
+    remove.focus()
+    fireEvent.click(remove)
+
+    await vi.waitFor(() => expect(panel().getByRole('button', { name: '+ Add person' })).toHaveFocus())
+  })
+
+  it('says the search failed when the tree can’t be read', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => (url === '/api/tree' ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve(Response.json({ events: [] })))))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: null })
+    client.setQueryData(eventKeys.all, [])
+    render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={createMemoryRouter([{ path: '/', element: <Events /> }])} />
+      </QueryClientProvider>,
+    )
+    open()
+    fireEvent.click(panel().getByRole('button', { name: '+ Add person' }))
+    type('Find a relative', 'rose')
+
+    expect(await panel().findByRole('alert')).toHaveTextContent('Can’t search the family tree right now.')
+    expect(panel().queryByText('No one by that name.')).toBeNull()
   })
 
   it('closes from Cancel and ×, handing focus back to + New event', async () => {

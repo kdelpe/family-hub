@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { createEvent, type DatePrecision, eventKeys, type NewEvent as NewEventBody } from '../../api/events'
+import { createEvent, createEventKey, type DatePrecision, eventKeys, type NewEvent as NewEventBody } from '../../api/events'
 import { treeQuery } from '../../api/tree'
-import { errorMessage } from '../../lib/errorMessage'
+import { errorMessage, refusedMessage } from '../../lib/errorMessage'
 import { fullName, nameMatches } from '../../lib/names'
 import styles from './Events.module.css'
 
@@ -69,6 +69,7 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
   }, [tree.data, people, typed])
 
   const save = useMutation({
+    mutationKey: createEventKey,
     mutationFn: (body: NewEventBody) => createEvent(body),
     onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: eventKeys.all })
@@ -92,6 +93,12 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
     })
   }
 
+  // The chip's own × goes away with it, so focus stays in the picker.
+  const unpick = (id: string) => {
+    setPeople((list) => list.filter((x) => x.id !== id))
+    requestAnimationFrame(() => (search.current ?? addButton.current)?.focus())
+  }
+
   const pick = (id: string, name: string) => {
     setPeople((list) => [...list, { id, name }])
     setQuery('')
@@ -101,99 +108,101 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
   }
 
   return (
-    <section aria-labelledby="ev-new" className={styles.panel}>
-      <div className={styles.panelHead}>
-        <h2 id="ev-new" className={styles.panelTitle}>
-          New event
-        </h2>
-        <button type="button" onClick={onClose} aria-label="Close" className={`pill ${styles.close}`}>
-          ×
-        </button>
-      </div>
-      <div className={styles.pair}>
-        <div className={styles.field}>
-          <label htmlFor="ev-title" className={styles.label}>
-            What happened?
-          </label>
-          <input
-            ref={first}
-            id="ev-title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Rose’s 90th birthday"
-            maxLength={200}
-            className={styles.input}
-          />
+    <section aria-labelledby="ev-new" aria-busy={save.isPending} className={styles.panel}>
+      {/* Locked while saving: an edit made now would be lost when the saved panel closes. */}
+      <fieldset disabled={save.isPending} className={styles.locked}>
+        <div className={styles.panelHead}>
+          <h2 id="ev-new" className={styles.panelTitle}>
+            New event
+          </h2>
+          <button type="button" onClick={onClose} aria-label="Close" className={`pill ${styles.close}`}>
+            ×
+          </button>
         </div>
-        <div className={styles.field}>
-          <label htmlFor="ev-place" className={styles.label}>
-            Where?
-          </label>
-          <input id="ev-place" type="text" value={place} onChange={(e) => setPlace(e.target.value)} maxLength={200} className={styles.input} />
-        </div>
-      </div>
-      <fieldset className={styles.when}>
-        <legend className={styles.label}>When?</legend>
-        <div className={styles.whenRow}>
-          <div role="group" aria-label="How exact is the date?" className={styles.switch}>
-            {precisions.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                aria-pressed={draft.precision === p.id}
-                onClick={() => setDraft((d) => ({ ...d, precision: p.id }))}
-                className={draft.precision === p.id ? `${styles.switchOption} ${styles.switchOn}` : styles.switchOption}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          {draft.precision === 'day' ? (
+        <div className={styles.pair}>
+          <div className={styles.field}>
+            <label htmlFor="ev-title" className={styles.label}>
+              What happened?
+            </label>
             <input
-              type="date"
-              aria-label="Date"
-              value={draft.day}
-              onChange={(e) => setDraft((d) => ({ ...d, day: e.target.value }))}
-              className={`${styles.input} ${styles.dateInput}`}
+              ref={first}
+              id="ev-title"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Rose’s 90th birthday"
+              maxLength={200}
+              className={styles.input}
             />
-          ) : (
-            <>
-              {draft.precision === 'month' && (
-                <select
-                  aria-label="Month"
-                  value={draft.month}
-                  onChange={(e) => setDraft((d) => ({ ...d, month: e.target.value }))}
-                  className={`${styles.input} ${styles.monthInput}`}
-                >
-                  <option value="">Month</option>
-                  {months.map((m, i) => (
-                    <option key={m} value={String(i + 1).padStart(2, '0')}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <input
-                type="text"
-                inputMode="numeric"
-                aria-label={draft.precision === 'circa' ? 'About which year' : 'Year'}
-                placeholder={draft.precision === 'circa' ? 'e.g. 1965' : 'Year'}
-                maxLength={4}
-                value={draft.year}
-                onChange={(e) => setDraft((d) => ({ ...d, year: e.target.value.replace(/\D/g, '') }))}
-                aria-invalid={date === 'invalid'}
-                aria-describedby={date === 'invalid' ? 'ev-date-hint' : undefined}
-                className={`${styles.input} ${styles.yearInput}`}
-              />
-            </>
-          )}
+          </div>
+          <div className={styles.field}>
+            <label htmlFor="ev-place" className={styles.label}>
+              Where?
+            </label>
+            <input id="ev-place" type="text" value={place} onChange={(e) => setPlace(e.target.value)} maxLength={200} className={styles.input} />
+          </div>
         </div>
-        {date === 'invalid' && (
-          <span id="ev-date-hint" className={styles.hint}>
-            {draft.precision === 'month' && draft.month === '' ? 'Pick the month too.' : 'Write the year with four digits, like 1965.'}
-          </span>
-        )}
+        <fieldset className={styles.when}>
+          <legend className={styles.label}>When?</legend>
+          <div className={styles.whenRow}>
+            <div role="group" aria-label="How exact is the date?" className={styles.switch}>
+              {precisions.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-pressed={draft.precision === p.id}
+                  onClick={() => setDraft((d) => ({ ...d, precision: p.id }))}
+                  className={draft.precision === p.id ? `${styles.switchOption} ${styles.switchOn}` : styles.switchOption}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {draft.precision === 'day' ? (
+              <input
+                type="date"
+                aria-label="Date"
+                value={draft.day}
+                onChange={(e) => setDraft((d) => ({ ...d, day: e.target.value }))}
+                className={`${styles.input} ${styles.dateInput}`}
+              />
+            ) : (
+              <>
+                {draft.precision === 'month' && (
+                  <select
+                    aria-label="Month"
+                    value={draft.month}
+                    onChange={(e) => setDraft((d) => ({ ...d, month: e.target.value }))}
+                    className={`${styles.input} ${styles.monthInput}`}
+                  >
+                    <option value="">Month</option>
+                    {months.map((m, i) => (
+                      <option key={m} value={String(i + 1).padStart(2, '0')}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  aria-label={draft.precision === 'circa' ? 'About which year' : 'Year'}
+                  placeholder={draft.precision === 'circa' ? 'e.g. 1965' : 'Year'}
+                  maxLength={4}
+                  value={draft.year}
+                  onChange={(e) => setDraft((d) => ({ ...d, year: e.target.value.replace(/\D/g, '') }))}
+                  aria-invalid={date === 'invalid'}
+                  aria-describedby={date === 'invalid' ? 'ev-date-hint' : undefined}
+                  className={`${styles.input} ${styles.yearInput}`}
+                />
+              </>
+            )}
+          </div>
+          {date === 'invalid' && (
+            <span id="ev-date-hint" className={styles.hint}>
+              {draft.precision === 'month' && draft.month === '' ? 'Pick the month too.' : 'Write the year with four digits, like 1965.'}
+            </span>
+          )}
       </fieldset>
       <div className={styles.field}>
         <label htmlFor="ev-text" className={styles.label}>
@@ -212,7 +221,7 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
               <button
                 type="button"
                 aria-label={`Remove ${p.name}`}
-                onClick={() => setPeople((list) => list.filter((x) => x.id !== p.id))}
+                onClick={() => unpick(p.id)}
                 className={styles.remove}
               >
                 ×
@@ -255,12 +264,17 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
                   </button>
                 </li>
               ))}
-              {matches.length === 0 && <li className={styles.muted}>{tree.isPending ? 'Loading…' : 'No one by that name.'}</li>}
+              {matches.length === 0 && !tree.isError && <li className={styles.muted}>{tree.isPending ? 'Loading…' : 'No one by that name.'}</li>}
+              {tree.isError && !tree.data && (
+                <li role="alert" className={styles.muted}>
+                  Can’t search the family tree right now. {errorMessage(tree.error)}
+                </li>
+              )}
             </ul>
           )}
         </div>
       )}
-      {save.isError && <p role="alert">{errorMessage(save.error)}</p>}
+      {save.isError && <p role="alert">{refusedMessage(save.error)}</p>}
       <div className={styles.actions}>
         <button type="button" onClick={onClose} className={`pill ${styles.cancel}`}>
           Cancel
@@ -269,6 +283,7 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
           {save.isPending ? 'Saving…' : 'Save event'}
         </button>
       </div>
+      </fieldset>
     </section>
   )
 }
