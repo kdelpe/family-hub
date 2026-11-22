@@ -2,6 +2,7 @@ import * as Toast from '@radix-ui/react-toast'
 import { AnimatePresence, m } from 'motion/react'
 import { createContext, type ReactNode, useCallback, useContext, useRef, useState } from 'react'
 
+import { useMotionPaused } from '../../lib/motion'
 import styles from './Toaster.module.css'
 
 export type Note = {
@@ -22,11 +23,16 @@ export function Toaster({ children }: { children: ReactNode }) {
   const [shown, setShown] = useState<(Note & { id: number }) | null>(null)
   const [paused, setPaused] = useState(false)
   // A ref, so a late close or a second close for the same note does nothing.
-  const current = useRef<Note | null>(null)
+  const current = useRef<(Note & { id: number }) | null>(null)
   const count = useRef(0)
+  const [motionPaused] = useMotionPaused()
 
-  const finish = useCallback((undo: boolean) => {
+  // By id: a note fading out after a newer one replaced it keeps its handlers, which mustn't act on the new one.
+  const finish = useCallback((id: number | undefined, undo: boolean) => {
     const note = current.current
+    if (!note || (id !== undefined && note.id !== id)) {
+      return
+    }
     current.current = null
     setShown(null)
     if (undo) {
@@ -38,11 +44,11 @@ export function Toaster({ children }: { children: ReactNode }) {
 
   const show = useCallback(
     (note: Note) => {
-      finish(false)
-      current.current = note
+      finish(undefined, false)
       count.current += 1
+      current.current = { ...note, id: count.current }
       setPaused(false)
-      setShown({ ...note, id: count.current })
+      setShown(current.current)
     },
     [finish],
   )
@@ -57,7 +63,7 @@ export function Toaster({ children }: { children: ReactNode }) {
               key={shown.id}
               forceMount
               open
-              onOpenChange={(open) => !open && finish(false)}
+              onOpenChange={(open) => !open && finish(shown.id, false)}
               onPause={() => setPaused(true)}
               onResume={() => setPaused(false)}
               asChild
@@ -72,16 +78,18 @@ export function Toaster({ children }: { children: ReactNode }) {
                 <Toast.Description>{shown.text}</Toast.Description>
                 {shown.undo && (
                   <Toast.Action altText="Undo" asChild>
-                    <button type="button" onClick={() => finish(true)} className={styles.undo}>
+                    <button type="button" onClick={() => finish(shown.id, true)} className={styles.undo}>
                       Undo
                     </button>
                   </Toast.Action>
                 )}
-                <span
-                  aria-hidden="true"
-                  className={styles.bar}
-                  style={{ animationDuration: `${showDuration}ms`, animationPlayState: paused ? 'paused' : 'running' }}
-                />
+                {!motionPaused && (
+                  <span
+                    aria-hidden="true"
+                    className={styles.bar}
+                    style={{ animationDuration: `${showDuration}ms`, animationPlayState: paused ? 'paused' : 'running' }}
+                  />
+                )}
               </m.li>
             </Toast.Root>
           )}
