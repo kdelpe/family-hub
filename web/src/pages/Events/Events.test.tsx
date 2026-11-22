@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { authKeys } from '../../api/auth'
 import { eventKeys, type FamilyEvent } from '../../api/events'
 import { treeKeys } from '../../api/tree'
+import { Toaster } from '../../components/Toaster/Toaster'
 import { Events } from './Events'
 
 const event = (over: Partial<FamilyEvent>): FamilyEvent => ({
@@ -36,7 +37,9 @@ function renderPage(events?: FamilyEvent[], role = 'member') {
   }
   render(
     <QueryClientProvider client={client}>
-      <RouterProvider router={createMemoryRouter([{ path: '/', element: <Events /> }])} />
+      <Toaster>
+        <RouterProvider router={createMemoryRouter([{ path: '/', element: <Events /> }])} />
+      </Toaster>
     </QueryClientProvider>,
   )
 }
@@ -71,6 +74,75 @@ describe('Events', () => {
       ['Jean-Robert Pluviose', '/people/jr'],
       ['Nadège Pluviose', '/people/n'],
     ])
+  })
+
+  describe('removing an event', () => {
+    const wedding = event({ id: 'w', title: 'Wedding', date: '1984', date_precision: 'year' })
+    const picnic = event({ id: 'p', title: 'Picnic', date: '2025', date_precision: 'year' })
+
+    function serveEvents(deleteStatus = 204) {
+      const deleted: string[] = []
+      const fetch = vi.fn((url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          deleted.push(url)
+          return Promise.resolve(deleteStatus === 204 ? new Response(null, { status: 204 }) : Response.json({ error: { code: 'x', message: 'x' } }, { status: deleteStatus }))
+        }
+        const gone = deleteStatus === 204 && deleted.length > 0
+        return Promise.resolve(Response.json({ events: gone ? [picnic] : [picnic, wedding] }))
+      })
+      vi.stubGlobal('fetch', fetch)
+      return deleted
+    }
+    const titles = () => screen.queryAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+    const removeWedding = () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove “Wedding”' }))
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Remove “Wedding”?' })).getByRole('button', { name: 'Remove' }))
+    }
+    // Radix closes a toast on Escape, as it would when its 5 seconds run out.
+    const letToastRunOut = () => fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+
+    it('shows the × to admins only', () => {
+      renderPage([picnic, wedding], 'member')
+
+      expect(screen.queryByRole('button', { name: 'Remove “Wedding”' })).toBeNull()
+    })
+
+    it('takes it off the timeline at once and keeps it on the server while Undo is offered', async () => {
+      const deleted = serveEvents()
+      renderPage([picnic, wedding], 'admin')
+
+      removeWedding()
+
+      await waitFor(() => expect(titles()).toEqual(['Picnic']))
+      expect(screen.getByText('Removed “Wedding”.')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+      expect(await screen.findByRole('heading', { level: 2, name: 'Wedding' })).toBeInTheDocument()
+      expect(deleted).toEqual([])
+    })
+
+    it('removes it on the server once Undo has run out', async () => {
+      const deleted = serveEvents()
+      renderPage([picnic, wedding], 'admin')
+      removeWedding()
+      await screen.findByText('Removed “Wedding”.')
+
+      letToastRunOut()
+
+      await waitFor(() => expect(deleted).toEqual(['/api/events/w']))
+      expect(titles()).toEqual(['Picnic'])
+    })
+
+    it('brings it back and says why when the server won’t remove it', async () => {
+      serveEvents(503)
+      renderPage([picnic, wedding], 'admin')
+      removeWedding()
+      await screen.findByText('Removed “Wedding”.')
+
+      letToastRunOut()
+
+      expect(await screen.findByText(/^Couldn’t remove “Wedding”\./)).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { level: 2, name: 'Wedding' })).toBeInTheDocument()
+    })
   })
 
   describe('the year handle', () => {
@@ -368,7 +440,9 @@ describe('New event', () => {
     client.setQueryData(eventKeys.all, [])
     render(
       <QueryClientProvider client={client}>
+        <Toaster>
         <RouterProvider router={createMemoryRouter([{ path: '/', element: <Events /> }])} />
+      </Toaster>
       </QueryClientProvider>,
     )
     open()

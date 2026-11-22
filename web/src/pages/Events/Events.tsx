@@ -1,8 +1,12 @@
-import { useIsMutating, useQuery } from '@tanstack/react-query'
+import { useIsMutating, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AnimatePresence, m } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
-import { createEventKey, eventsQuery, type FamilyEvent } from '../../api/events'
+import { ApiError } from '../../api/client'
+import { createEventKey, deleteEvent, eventKeys, eventsQuery, type FamilyEvent } from '../../api/events'
+import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
+import { useToast } from '../../components/Toaster/Toaster'
 import { bornOn, year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
 import { useReducedMotion } from '../../lib/motion'
@@ -30,6 +34,30 @@ export function Events() {
   const close = () => {
     setAdding(false)
     requestAnimationFrame(() => newButton.current?.focus())
+  }
+
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const [removing, setRemoving] = useState<FamilyEvent | null>(null)
+  // Its × is gone once removed, so focus goes to + New event instead.
+  const removed = useRef(false)
+  // It leaves the timeline at once; the server is only told once Undo has run out.
+  const remove = (event: FamilyEvent) => {
+    void queryClient.cancelQueries({ queryKey: eventKeys.all })
+    queryClient.setQueryData<FamilyEvent[]>(eventKeys.all, (list) => list?.filter((e) => e.id !== event.id))
+    const reread = () => void queryClient.invalidateQueries({ queryKey: eventKeys.all })
+    toast({
+      text: `Removed “${event.title}”.`,
+      undo: reread,
+      onDone: () =>
+        deleteEvent(event.id)
+          .catch((error: unknown) => {
+            if (error instanceof Error && !(error instanceof ApiError && error.status === 404)) {
+              toast({ text: `Couldn’t remove “${event.title}”. ${errorMessage(error)}` })
+            }
+          })
+          .finally(reread),
+    })
   }
 
   const list = events.data
@@ -137,23 +165,63 @@ export function Events() {
       ) : (
         <div className={styles.timelineWrap}>
           <ol className={styles.timeline}>
-            {events.data.map((event, i) => {
-              const y = yearOf(event)
-              const first = i === 0 || yearOf(events.data[i - 1]!) !== y
-              return <TimelineEntry key={event.id} event={event} anchor={first ? anchorId(y) : undefined} lit={years.length > 1 && y === current} />
-            })}
+            <AnimatePresence initial={false}>
+              {events.data.map((event, i) => {
+                const y = yearOf(event)
+                const first = i === 0 || yearOf(events.data[i - 1]!) !== y
+                return (
+                  <TimelineEntry
+                    key={event.id}
+                    event={event}
+                    anchor={first ? anchorId(y) : undefined}
+                    lit={years.length > 1 && y === current}
+                    onRemove={
+                      user?.role === 'admin'
+                        ? () => {
+                            removed.current = false
+                            setRemoving(event)
+                          }
+                        : undefined
+                    }
+                  />
+                )
+              })}
+            </AnimatePresence>
           </ol>
           {years.length > 1 && <YearHandle years={years} current={current} onPick={pick} />}
         </div>
       )}
+      <ConfirmDialog
+        open={removing !== null}
+        question={`Remove “${removing?.title ?? ''}”?`}
+        note="It leaves the timeline for everyone. You’ll have a few seconds to undo."
+        yes="Remove"
+        no="Keep it"
+        busy={false}
+        onYes={() => {
+          removed.current = true
+          remove(removing!)
+          setRemoving(null)
+        }}
+        onCancel={() => setRemoving(null)}
+        focusAfterClose={() => (removed.current ? newButton.current : null)}
+      />
     </main>
   )
 }
 
-function TimelineEntry({ event, anchor, lit }: { event: FamilyEvent; anchor?: string; lit: boolean }) {
+function TimelineEntry({ event, anchor, lit, onRemove }: { event: FamilyEvent; anchor?: string; lit: boolean; onRemove?: () => void }) {
   const when = whenItHappened(event)
   return (
-    <li id={anchor} className={styles.entry}>
+    <m.li
+      id={anchor}
+      layout="position"
+      initial={{ opacity: 0, y: -14 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: 40, transition: { duration: 0.2 } }}
+      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+      className={styles.entry}
+    >
       <span className={lit ? `${styles.year} ${styles.yearLit}` : styles.year}>{year(event.date, event.date_precision)}</span>
       <span aria-hidden="true" className={styles.line}>
         <span className={styles.dot} />
@@ -161,6 +229,11 @@ function TimelineEntry({ event, anchor, lit }: { event: FamilyEvent; anchor?: st
       <article className={styles.card}>
         <div className={styles.cardHead}>
           <h2 className={styles.cardTitle}>{event.title}</h2>
+          {onRemove && (
+            <button type="button" aria-label={`Remove “${event.title}”`} onClick={onRemove} className={styles.removeEvent}>
+              ×
+            </button>
+          )}
           {(when || event.location) && <span className={styles.when}>{[when, event.location].filter(Boolean).join(' · ')}</span>}
         </div>
         {event.description && <p className={styles.story}>{event.description}</p>}
@@ -176,7 +249,7 @@ function TimelineEntry({ event, anchor, lit }: { event: FamilyEvent; anchor?: st
           </ul>
         )}
       </article>
-    </li>
+    </m.li>
   )
 }
 

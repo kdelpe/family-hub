@@ -1,0 +1,63 @@
+.viewport {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 60;
+  translate: -50% 0;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  outline: none;
+}
+
+.toast {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px 14px 18px;
+  border-radius: 16px;
+  background: var(--text);
+  color: var(--surface);
+  box-shadow: 0 14px 30px var(--shadow-lift);
+  overflow-wrap: anywhere;
+}
+
+.undo {
+  flex: none;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--on-accent-line);
+  border-radius: 22px;
+  background: transparent;
+  color: var(--surface);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 5px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--gold);
+  transform-origin: left;
+  animation: drain linear forwards;
+}
+
+@keyframes drain {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    display: none;
+  }
+}
