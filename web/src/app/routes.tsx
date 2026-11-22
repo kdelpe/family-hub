@@ -5,6 +5,7 @@ import { SignInLayout } from '../components/SignInLayout/SignInLayout'
 import { FirstSetup } from '../pages/FirstSetup/FirstSetup'
 import { ForgotPassword } from '../pages/ForgotPassword/ForgotPassword'
 import { Account } from '../pages/Account/Account'
+import { Events } from '../pages/Events/Events'
 import { HomeHearth } from '../pages/HomeHearth/HomeHearth'
 import { Login } from '../pages/Login/Login'
 import { Main } from '../pages/Main/Main'
@@ -23,6 +24,7 @@ const built: Record<string, ReactNode> = {
   '/': <HomeHearth />,
   '/tree': <Main />,
   '/members': <Members />,
+  '/events': <Events />,
   '/admin/members': <ManageAccess />,
 }
 
