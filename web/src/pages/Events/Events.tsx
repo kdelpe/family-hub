@@ -170,15 +170,26 @@ export function Events() {
           </button>
         )}
       </div>
-      {adding && (
-        <NewEvent
-          onClose={close}
-          onSaved={(title) => {
-            setSaved(title)
-            close()
-          }}
-        />
-      )}
+      <AnimatePresence initial={false}>
+        {adding && (
+          <m.div
+            key="new-event"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+            className={styles.panelOpening}
+          >
+            <NewEvent
+              onClose={close}
+              onSaved={(title) => {
+                setSaved(title)
+                close()
+              }}
+            />
+          </m.div>
+        )}
+      </AnimatePresence>
       <p role="status" className={saved ? styles.saved : 'visually-hidden'}>
         {saved && `Saved “${saved}”.`}
       </p>

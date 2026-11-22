@@ -301,15 +301,15 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  animation: fade 0.2s ease-out both;
 }
 
-@keyframes fade {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
+/* Clips the panel while its height grows and shrinks; the margin keeps its focus rings and border in view. */
+.panelOpening {
+  overflow: hidden;
+  margin: -4px;
+  padding: 4px;
 }
+
 
 .locked {
   min-width: 0;
@@ -434,8 +434,15 @@
   cursor: pointer;
 }
 
-.switchOn {
+.switchPill {
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
   background: var(--surface);
+}
+
+.switchLabel {
+  position: relative;
 }
 
 .dateInput,
@@ -610,6 +617,28 @@
 .save:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+/* Saving and saved aren't unavailable, just busy: full colour. */
+.saveDone:disabled,
+.save:disabled:has(.saveDot) {
+  opacity: 1;
+}
+
+.saveFace {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 92px;
+}
+
+.saveDot {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  background: currentColor;
 }
 
 /* Phones: the year sits above each card, and the line runs down the left edge. */
