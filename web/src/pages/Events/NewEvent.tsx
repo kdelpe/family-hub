@@ -16,12 +16,13 @@ const precisions: { id: DatePrecision; label: string }[] = [
 
 const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-type Draft = { precision: DatePrecision; day: string; month: string; year: string }
+// dayUnfinished: the date picker holds part of a date, which it reports as an empty value.
+type Draft = { precision: DatePrecision; day: string; dayUnfinished: boolean; month: string; year: string }
 
 // The date as the API takes it, null when none was given, or 'invalid' when what's typed isn't one yet.
-function dateOf({ precision, day, month, year }: Draft): string | null | 'invalid' {
+function dateOf({ precision, day, dayUnfinished, month, year }: Draft): string | null | 'invalid' {
   if (precision === 'day') {
-    return day || null
+    return dayUnfinished ? 'invalid' : day || null
   }
   if (year === '' && (precision !== 'month' || month === '')) {
     return null
@@ -41,7 +42,7 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
   const tree = useQuery(treeQuery)
   const [title, setTitle] = useState('')
   const [place, setPlace] = useState('')
-  const [draft, setDraft] = useState<Draft>({ precision: 'day', day: '', month: '', year: '' })
+  const [draft, setDraft] = useState<Draft>({ precision: 'day', day: '', dayUnfinished: false, month: '', year: '' })
   const [story, setStory] = useState('')
   const [people, setPeople] = useState<{ id: string; name: string }[]>([])
   const [adding, setAdding] = useState(false)
@@ -163,7 +164,14 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
                 type="date"
                 aria-label="Date"
                 value={draft.day}
-                onChange={(e) => setDraft((d) => ({ ...d, day: e.target.value }))}
+                onChange={(e) => setDraft((d) => ({ ...d, day: e.target.value, dayUnfinished: e.target.validity.badInput }))}
+              // A half-typed date fires no change event, only input.
+              onInput={(e) => {
+                const { value, validity } = e.currentTarget
+                setDraft((d) => ({ ...d, day: value, dayUnfinished: validity.badInput }))
+              }}
+              aria-invalid={date === 'invalid'}
+              aria-describedby={date === 'invalid' ? 'ev-date-hint' : undefined}
                 className={`${styles.input} ${styles.dateInput}`}
               />
             ) : (
@@ -200,7 +208,11 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
           </div>
           {date === 'invalid' && (
             <span id="ev-date-hint" className={styles.hint}>
-              {draft.precision === 'month' && draft.month === '' ? 'Pick the month too.' : 'Write the year with four digits, like 1965.'}
+              {draft.precision === 'day'
+              ? 'Finish the date, or clear it.'
+              : draft.precision === 'month' && draft.month === ''
+                ? 'Pick the month too.'
+                : 'Write the year with four digits, like 1965.'}
             </span>
           )}
       </fieldset>
@@ -264,7 +276,8 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
                   </button>
                 </li>
               ))}
-              {matches.length === 0 && !tree.isError && <li className={styles.muted}>{tree.isPending ? 'Loading…' : 'No one by that name.'}</li>}
+              {matches.length === 0 && tree.data && <li className={styles.muted}>No one by that name.</li>}
+              {tree.isPending && <li className={styles.muted}>Loading…</li>}
               {tree.isError && !tree.data && (
                 <li role="alert" className={styles.muted}>
                   Can’t search the family tree right now. {errorMessage(tree.error)}

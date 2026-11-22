@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -24,8 +24,11 @@ const event = (over: Partial<FamilyEvent>): FamilyEvent => ({
 const person = (id: string, first_name: string, last_name: string) => ({ id, first_name, last_name, side: 'first', gender: 'female', is_deceased: false })
 const tree = { persons: [person('rose', 'Rose', 'Monestime'), person('fritz', 'Fritz', 'Pluviose'), person('frantz', 'Frantz', 'Pluviose')], relationships: [] }
 
+let lastClient: QueryClient
+
 function renderPage(events?: FamilyEvent[], role = 'member') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  lastClient = client
   client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role, person_id: null })
   client.setQueryData(treeKeys.all, tree)
   if (events) {
@@ -204,6 +207,26 @@ describe('New event', () => {
     expect(panel().getByText('Pick the month too.')).toBeInTheDocument()
   })
 
+  it('waits for a half-typed date to be finished or cleared', () => {
+    serve()
+    renderPage([], 'admin')
+    open()
+    type('What happened?', 'Wedding')
+    const date = panel().getByLabelText('Date')
+    // A date picker holding part of a date reports an empty value and badInput.
+    const halfTyped = (bad: boolean) => {
+      Object.defineProperty(date, 'validity', { configurable: true, value: { badInput: bad } })
+      fireEvent.input(date, { target: { value: '' } })
+    }
+
+    halfTyped(true)
+    expect(panel().getByRole('button', { name: 'Save event' })).toBeDisabled()
+    expect(panel().getByText('Finish the date, or clear it.')).toBeInTheDocument()
+
+    halfTyped(false)
+    expect(panel().getByRole('button', { name: 'Save event' })).toBeEnabled()
+  })
+
   it('keeps what was typed and says why when saving fails', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(Response.json({ error: { code: 'validation_error', message: 'invalid event: someone tagged isn’t in the tree' } }, { status: 400 }))))
     renderPage([], 'admin')
@@ -255,6 +278,18 @@ describe('New event', () => {
     fireEvent.click(remove)
 
     await vi.waitFor(() => expect(panel().getByRole('button', { name: '+ Add person' })).toHaveFocus())
+  })
+
+  it('still says no one matched when a reread of the tree fails', async () => {
+    serve()
+    renderPage([], 'admin')
+    open()
+    fireEvent.click(panel().getByRole('button', { name: '+ Add person' }))
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
+    await act(() => lastClient.refetchQueries({ queryKey: treeKeys.all }))
+    type('Find a relative', 'zzz')
+
+    expect(panel().getByText('No one by that name.')).toBeInTheDocument()
   })
 
   it('says the search failed when the tree can’t be read', async () => {

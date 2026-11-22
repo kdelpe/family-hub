@@ -225,6 +225,7 @@
 }
 
 .close {
+  position: relative;
   width: 40px;
   height: 40px;
   border: 1px solid var(--border);
@@ -309,6 +310,7 @@
 }
 
 .switchOption {
+  position: relative;
   height: 36px;
   padding: 0 14px;
   border: 0;
@@ -370,6 +372,7 @@
 }
 
 .remove {
+  position: relative;
   width: 24px;
   height: 24px;
   border: 0;
@@ -386,6 +389,7 @@
 }
 
 .addPerson {
+  position: relative;
   height: 32px;
   padding: 0 12px;
   border: 1px dashed var(--line);
@@ -427,6 +431,32 @@
 .match:hover,
 .match:focus-visible {
   background: var(--chip);
+}
+
+/* Every small control here still takes a 44px tap (§1.3), without looking bigger. */
+.close::after,
+.switchOption::after,
+.remove::after,
+.addPerson::after {
+  content: '';
+  position: absolute;
+}
+
+.close::after {
+  inset: -2px;
+}
+
+.switchOption::after {
+  inset: -4px 0;
+}
+
+/* Wider too, but not past the chip's own edge into the next one. */
+.remove::after {
+  inset: -10px -4px;
+}
+
+.addPerson::after {
+  inset: -6px 0;
 }
 
 .actions {
