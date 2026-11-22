@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { authKeys } from '../../api/auth'
@@ -111,14 +111,16 @@ describe('Requests', () => {
   it('takes back a share given on this visit, saying so where focus lands', async () => {
     renderPage([request('r1', 'Stanley Jean-Louis', 'pending')])
     fireEvent.click(await panel().findByRole('button', { name: 'Share' }))
-    fireEvent.click(panel().getByRole('button', { name: 'Yes, share' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, share' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     await panel().findByText('Shared with Stanley.')
 
     fireEvent.click(screen.getByRole('tab', { name: 'Shared with' }))
     fireEvent.click(panel().getByRole('button', { name: 'Stop sharing' }))
-    fireEvent.click(panel().getByRole('button', { name: 'Yes, stop' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, stop' }))
 
-    expect(await panel().findByText('Stopped sharing your phone number with Stanley.')).toHaveFocus()
+    const said = await screen.findByText('Stopped sharing your phone number with Stanley.')
+    await waitFor(() => expect(said).toHaveFocus())
     fireEvent.click(screen.getByRole('tab', { name: 'Waiting' }))
     expect(panel().queryByText('Shared with Stanley.')).toBeNull()
   })
