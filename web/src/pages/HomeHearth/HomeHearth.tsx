@@ -12,12 +12,13 @@ import { relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
 import styles from './HomeHearth.module.css'
 
-// Home (design-notes §4.1): the hero's words and buttons, Coming up and New in the family. The hero's personal
-// line, its small tree, On this day and Story of the week wait for photos and stories (Phase 5).
+// Home (design-notes §4.1): the hero, Coming up and New in the family. On this day and Story of the week wait for
+// photos and stories (Phase 5).
 export function HomeHearth({ now = new Date() }: { now?: Date }) {
   const { user, person } = useSignedIn()
   const hello = greeting(now)
   const home = useQuery(homeQuery)
+  const next = home.data?.birthdays[0]
 
   return (
     <main className={styles.page}>
@@ -26,6 +27,7 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
         <div className={styles.words}>
           <span className={styles.dayPart}>{dayPartLabel(now)}</span>
           <h1 className={styles.title}>{person ? `${hello}, ${person.first_name}` : hello}</h1>
+          {next && <p className={styles.line}>{birthdayLine(next, user?.person_id ?? null)}</p>}
           <div className={styles.actions}>
             <Link to="/tree" className={`pill ${styles.primary}`}>
               Open the family tree
@@ -35,35 +37,69 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
             </Link>
           </div>
         </div>
+        <HeroTree />
       </section>
       <div className={styles.cards}>
-        <section aria-labelledby="home-coming-up" className={`${styles.card} ${styles.first}`}>
-          <h2 id="home-coming-up" className={styles.cardTitle}>
-            Coming up
-          </h2>
-          <Cards query={home} empty="No birthdays in the next two weeks." items={home.data?.birthdays}>
-            {(b, i) => <BirthdayRow key={b.id} birthday={b} soonest={i === 0} />}
-          </Cards>
-        </section>
-        <section aria-labelledby="home-new" className={`${styles.card} ${styles.second}`}>
-          <h2 id="home-new" className={styles.cardTitle}>
-            New in the family
-          </h2>
-          <Newcomers query={home} viewerId={user?.person_id ?? null} now={now} />
-        </section>
+        <Card
+          id="home-coming-up"
+          title="Coming up"
+          more="See all"
+          className={styles.first}
+          query={home}
+          empty="No birthdays in the next two weeks."
+          items={home.data?.birthdays}
+        >
+          {(b, i) => <BirthdayRow key={b.id} birthday={b} soonest={i === 0} />}
+        </Card>
+        <Newcomers query={home} viewerId={user?.person_id ?? null} now={now} />
       </div>
     </main>
   )
 }
 
+// The soonest birthday, said in the hero (owner's call, 2026-11-21).
+function birthdayLine(b: Birthday, viewerId: string | null) {
+  const whose = b.id === viewerId ? 'Your' : `${b.first_name}’s`
+  const when = b.in_days === 0 ? 'today' : b.in_days === 1 ? 'tomorrow' : `in ${b.in_days} days`
+  return `${whose} birthday is ${when}.`
+}
+
+function HeroTree() {
+  return (
+    <svg aria-hidden="true" className={styles.tree} viewBox="0 0 200 150">
+      <path d="M100 145V70M100 100L60 60M100 90l42-38M100 75L78 35M100 72l20-42" className={styles.branches} />
+      <g className={styles.leaves}>
+        <circle cx="60" cy="58" r="13" />
+        <circle cx="143" cy="50" r="15" />
+        <circle cx="78" cy="32" r="12" />
+        <circle cx="121" cy="28" r="13" />
+        <circle cx="100" cy="20" r="11" />
+      </g>
+      <g className={styles.lightLeaves}>
+        <circle cx="44" cy="74" r="8" />
+        <circle cx="160" cy="68" r="9" />
+      </g>
+    </svg>
+  )
+}
+
 const shownAtFirst = 3
 
-function Cards<T>({
+// A card with its title, and the button that shows the rest of its rows beside it.
+function Card<T>({
+  id,
+  title,
+  more,
+  className,
   query,
   items,
   empty,
   children,
 }: {
+  id: string
+  title: string
+  more: string
+  className?: string
   query: UseQueryResult<Home>
   items: T[] | undefined
   empty: string
@@ -79,34 +115,42 @@ function Cards<T>({
     }
   }, [open])
 
+  let body: ReactNode
   if (query.isError && !items) {
-    return <p role="alert">{errorMessage(query.error)}</p>
-  }
-  if (!items) {
-    return <p className={styles.muted}>Loading…</p>
-  }
-  if (items.length === 0) {
-    return <p className={styles.muted}>{empty}</p>
-  }
-  return (
-    <>
+    body = <p role="alert">{errorMessage(query.error)}</p>
+  } else if (!items) {
+    body = <p className={styles.muted}>Loading…</p>
+  } else if (items.length === 0) {
+    body = <p className={styles.muted}>{empty}</p>
+  } else {
+    body = (
       <div ref={rows} className={styles.rows}>
         {(open ? items : items.slice(0, shownAtFirst)).map(children)}
       </div>
-      {!open && items.length > shownAtFirst && (
-        <button
-          type="button"
-          onClick={(event) => {
-            // detail is 0 for a keyboard press; a mouse click keeps focus where it is.
-            byKeyboard.current = event.detail === 0
-            setOpen(true)
-          }}
-          className={styles.more}
-        >
-          See more
-        </button>
-      )}
-    </>
+    )
+  }
+  return (
+    <section aria-labelledby={id} className={`${styles.card} ${className ?? ''}`}>
+      <div className={styles.cardHead}>
+        <h2 id={id} className={styles.cardTitle}>
+          {title}
+        </h2>
+        {!open && items && items.length > shownAtFirst && (
+          <button
+            type="button"
+            onClick={(event) => {
+              // detail is 0 for a keyboard press; a mouse click keeps focus where it is.
+              byKeyboard.current = event.detail === 0
+              setOpen(true)
+            }}
+            className={styles.more}
+          >
+            {more}
+          </button>
+        )}
+      </div>
+      {body}
+    </section>
   )
 }
 
@@ -140,7 +184,15 @@ function Newcomers({ query, viewerId, now }: { query: UseQueryResult<Home>; view
   // Held until the tree is read, so a row's line doesn't change under the reader; without it, just when.
   const ready = !needsTree || !tree.isPending
   return (
-    <Cards query={query} empty="Nobody new in the last month." items={ready ? newcomers : undefined}>
+    <Card
+      id="home-new"
+      title="New in the family"
+      more="See more"
+      className={styles.second}
+      query={query}
+      empty="Nobody new in the last month."
+      items={ready ? newcomers : undefined}
+    >
       {(n: Newcomer) => {
         const relation = relations?.get(n.id)
         const added = `added ${addedOn(n.added_at, now)}`
@@ -158,6 +210,6 @@ function Newcomers({ query, viewerId, now }: { query: UseQueryResult<Home>; view
           </div>
         )
       }}
-    </Cards>
+    </Card>
   )
 }
