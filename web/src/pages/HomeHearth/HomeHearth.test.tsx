@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { describe, expect, it } from 'vitest'
@@ -149,7 +149,7 @@ describe('HomeHearth', () => {
     expect(inTree).toHaveAttribute('href', '/tree?person=naomie')
   })
 
-  it('shows the family in numbers, one of each in the singular', () => {
+  it('shows the family in numbers', () => {
     renderHome('p1')
 
     const stats = within(screen.getByRole('list', { name: 'The family in numbers' }))
@@ -157,5 +157,19 @@ describe('HomeHearth', () => {
     expect(people).toHaveTextContent(/26 people$/)
     expect(generations).toHaveTextContent(/6 generations$/)
     expect(added).toHaveTextContent(/1 new this month$/)
+  })
+
+  it('doesn’t open a name’s card on keyboard focus', async () => {
+    renderHome('p1', {
+      birthdays: [],
+      newcomers: [{ id: 'naomie', first_name: 'Naomie', last_name: 'Désir', added_at: new Date('2026-11-17T12:00').toISOString() }],
+    })
+    const name = await screen.findByRole('link', { name: 'Naomie Désir' })
+
+    act(() => name.focus())
+    await new Promise((r) => setTimeout(r, 400))
+
+    expect(name).toHaveFocus()
+    expect(screen.queryByRole('link', { name: 'In the tree' })).toBeNull()
   })
 })

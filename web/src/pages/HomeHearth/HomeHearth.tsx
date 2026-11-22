@@ -159,7 +159,8 @@ function HeroTree() {
           cy={leaf.cy}
           r={leaf.r}
           className={leaf.light ? styles.lightLeaf : styles.leaf}
-          initial={grow ? { scale: 0 } : false}
+          // Not `false` on a return visit: that would skip the sway too.
+          initial={grow ? { scale: 0 } : { scale: 1, y: 0 }}
           animate={still ? { scale: 1, y: 0 } : { scale: 1, y: [0, -2.5, 0] }}
           transition={{
             scale: { type: 'spring', stiffness: 260, damping: 12, delay: grow ? 1 + i * 0.1 : 0 },
