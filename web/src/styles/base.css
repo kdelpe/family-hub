@@ -74,3 +74,8 @@ a:hover {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Radix's scroll lock injects an inline <style> the CSP blocks; the attribute it sets still arrives. */
+body[data-scroll-locked] {
+  overflow: hidden !important;
+}

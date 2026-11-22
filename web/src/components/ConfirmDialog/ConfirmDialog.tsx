@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { AnimatePresence, m } from 'motion/react'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 
 import styles from './ConfirmDialog.module.css'
 
@@ -22,6 +22,20 @@ export function ConfirmDialog({ open, question, note, yes, no, busy, error, onYe
   const yesRef = useRef<HTMLButtonElement>(null)
   // Radix only returns focus to its own Trigger, which this doesn't use.
   const opener = useRef<Element | null>(null)
+  // Safari doesn't focus a button on click, so the last one pressed stands in for the opener.
+  const pressed = useRef<Element | null>(null)
+  useEffect(() => {
+    const press = (event: PointerEvent) => {
+      pressed.current = event.target instanceof Element ? event.target.closest('button, a') : null
+    }
+    document.addEventListener('pointerdown', press, true)
+    return () => document.removeEventListener('pointerdown', press, true)
+  }, [])
+  // The fading copy keeps its old handlers, so a choice checks this instead of the open it was given.
+  const live = useRef(open)
+  useEffect(() => {
+    live.current = open
+  }, [open])
 
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && !busy && onCancel()}>
@@ -38,7 +52,8 @@ export function ConfirmDialog({ open, question, note, yes, no, busy, error, onYe
               {...(note ? {} : { 'aria-describedby': undefined })}
               onOpenAutoFocus={(event) => {
                 event.preventDefault()
-                opener.current = document.activeElement
+                const focused = document.activeElement
+                opener.current = focused && focused !== document.body ? focused : pressed.current
                 yesRef.current?.focus()
               }}
               onCloseAutoFocus={(event) => {
@@ -66,13 +81,13 @@ export function ConfirmDialog({ open, question, note, yes, no, busy, error, onYe
                   </p>
                 )}
                 <div className={styles.choices}>
-                  <button type="button" onClick={() => !busy && onCancel()} aria-disabled={busy || undefined} className={`pill ${styles.no}`}>
+                  <button type="button" onClick={() => live.current && !busy && onCancel()} aria-disabled={busy || undefined} className={`pill ${styles.no}`}>
                     {no}
                   </button>
                   <button
                     ref={yesRef}
                     type="button"
-                    onClick={() => !busy && onYes()}
+                    onClick={() => live.current && !busy && onYes()}
                     aria-disabled={busy || undefined}
                     className={`pill ${styles.yes}`}
                   >

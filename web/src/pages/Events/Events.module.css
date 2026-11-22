@@ -60,7 +60,8 @@
     transition:
       color 0.2s ease,
       scale 0.2s ease;
-    transform-origin: right center;
+    /* The top, not the middle: the year's box stretches with its card, and a long story would lift it. */
+    transform-origin: right top;
   }
 
   .yearLit {

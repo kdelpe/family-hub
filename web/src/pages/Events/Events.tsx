@@ -98,8 +98,26 @@ export function Events() {
       }
       setPicked(at)
     }
+    // Scrolling by hand cuts a glide's hold short; the glide ending lets the handle follow again.
+    const release = () => {
+      holdUntil.current = 0
+    }
+    const settle = () => {
+      release()
+      follow()
+    }
+    const first = requestAnimationFrame(follow)
     window.addEventListener('scroll', follow, { passive: true })
-    return () => window.removeEventListener('scroll', follow)
+    window.addEventListener('scrollend', settle)
+    window.addEventListener('wheel', release, { passive: true })
+    window.addEventListener('touchstart', release, { passive: true })
+    return () => {
+      cancelAnimationFrame(first)
+      window.removeEventListener('scroll', follow)
+      window.removeEventListener('scrollend', settle)
+      window.removeEventListener('wheel', release)
+      window.removeEventListener('touchstart', release)
+    }
   }, [years])
   const pick = (year: string, glide: boolean) => {
     const el = document.getElementById(anchorId(year))
@@ -108,7 +126,10 @@ export function Events() {
     }
     const smooth = glide && !reduced
     setPicked(year)
-    holdUntil.current = Date.now() + (smooth ? 700 : 100)
+    const hold = smooth ? 700 : 100
+    holdUntil.current = Date.now() + hold
+    // Where scrollend isn't fired, this catches the handle up once the hold is over.
+    setTimeout(() => window.dispatchEvent(new Event('scroll')), hold + 50)
     // On phones the year sits above its card, so it stops above the handle.
     const offset = handleTop() - (narrow ? 40 : 6)
     window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - offset, behavior: smooth ? 'smooth' : 'auto' })
