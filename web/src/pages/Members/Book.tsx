@@ -30,6 +30,9 @@ const turnMs = 920
 const fastMs = 470
 // On arrival the book is picked up off the table (Members.module.css, 1 s), then opens itself.
 const arrivalMs = 1150
+// Start again rewinds the whole book in about this long, however many pages it has, at no more than this a turn.
+const rewindTotalMs = 700
+const rewindMinMs = 50
 // A flick is measured over this last stretch of the drag, so a page held still before letting go isn't flicked.
 const flickMs = 100
 // The page edges grow as pages pile up, up to this: a big family has thousands of pages.
@@ -68,8 +71,9 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   const justDragged = useRef(-Infinity)
   const tabDrag = useRef<TabDrag | null>(null)
   const tabHandled = useRef(-Infinity)
-  // Turns queued by clicks during a turn: - back, + on.
+  // Turns queued by clicks during a turn (- back, + on), and while Start again rewinds, its turns' speed.
   const queued = useRef(0)
+  const rewindMs = useRef<number | null>(null)
   // A press on the page mid-turn: it queues a turn once let go, unless it moved (a scroll) or was canceled.
   const tapDuringTurn = useRef<{ id: number; x0: number; y0: number; dir: 1 | -1 } | null>(null)
   useEffect(() => () => window.clearTimeout(timer.current), [])
@@ -77,6 +81,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     window.clearTimeout(timer.current)
     // What was queued was for the old pages.
     queued.current = 0
+    rewindMs.current = null
     const el = pagesRef.current
     if (el) {
       el.style.transition = 'none'
@@ -127,6 +132,9 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   // One page on or back (buttons, corners, keys, a click on the page). Clicked again mid-turn, the turns queue up
   // rather than being dropped; a click the other way takes one back.
   const step = (dir: 1 | -1) => {
+    if (rewindMs.current !== null) {
+      return
+    }
     if (!turn) {
       flipTo(stop + dir)
     } else if (turn.mode === 'anim') {
@@ -139,7 +147,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
       const dir = Math.sign(queued.current)
       queued.current -= dir
       if (dir !== 0 && stop + dir >= 0 && stop + dir <= last) {
-        flipTo(stop + dir, undefined, fastMs)
+        flipTo(stop + dir, undefined, rewindMs.current ?? fastMs)
       } else {
         queued.current = 0
       }
@@ -148,10 +156,16 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   // Once a turn has landed and rendered, so the next turn's animation starts afresh. On the stop too: with reduced
   // motion a turn lands at once, with no turn to wait for.
   useEffect(() => {
-    if (turn || queued.current === 0) {
+    if (turn) {
       return
     }
-    const wait = window.setTimeout(() => nextQueued.current(), 30)
+    if (queued.current === 0) {
+      // Start again is done only once its last turn has landed.
+      rewindMs.current = null
+      return
+    }
+    // Start again's turns follow straight on, so it's a quick riffle back rather than something to read.
+    const wait = window.setTimeout(() => nextQueued.current(), rewindMs.current === null ? 30 : 0)
     return () => window.clearTimeout(wait)
   }, [turn, stop])
 
@@ -184,18 +198,36 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     // Once, on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const goTo = (index: number) => flipTo(stopOf(stops, index), index)
-  // From the back cover, the whole book turns back to Welcome in one quick sweep, as a hand would flip it, not page by
-  // page (owner's call), so it can be read again.
+  // Start again's rewind isn't interrupted: in the gaps between its turns no turn is under way to stop a reader.
+  const rewinding = () => rewindMs.current !== null
+  const goTo = (index: number) => {
+    if (!rewinding()) {
+      flipTo(stopOf(stops, index), index)
+    }
+  }
+  // From the back cover, every page turns back quickly to Welcome (owner's call), so the book can be read again.
   const startAgain = () => {
+    if (turn) {
+      return
+    }
     // The button goes as the cover opens: the book takes focus, so the arrow keys still turn.
     pagesRef.current?.focus({ preventScroll: true })
-    flipTo(stopOf(stops, book.welcome), book.welcome, fastMs)
+    // On a phone the bookplate has a stop of its own, before Welcome.
+    const welcome = stopOf(stops, book.welcome)
+    const turns = stop - welcome
+    // One turn away (a very small book) is an ordinary turn: there's nothing to rewind.
+    if (reduced || turns <= 1) {
+      goTo(book.welcome)
+      return
+    }
+    rewindMs.current = Math.max(rewindMinMs, Math.min(fastMs, rewindTotalMs / turns))
+    queued.current = 1 - turns
+    flipTo(stop - 1, undefined, rewindMs.current)
   }
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     const target = event.target as Element
-    if (event.button > 0 || target.closest('a, input, select, textarea, button:not([data-corner])')) {
+    if (event.button > 0 || rewinding() || target.closest('a, input, select, textarea, button:not([data-corner])')) {
       return
     }
     if (turn) {
@@ -593,7 +625,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
             aria-label="Jump to a letter"
             className={styles.tabs}
             onPointerDown={(event) => {
-              if (turn) {
+              if (turn || rewinding()) {
                 return
               }
               const t = tabAt(event.currentTarget, event.clientY)
