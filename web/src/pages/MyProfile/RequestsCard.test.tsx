@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ContactRequest } from '../../api/contacts'
@@ -120,7 +120,7 @@ describe('RequestsCard', () => {
     fireEvent.click(await screen.findByRole('button', { name: button }))
     expect(posted(fetch, `/api/me/contact-requests/r1/${decision}`)).toBe(false)
     answers['GET /api/me/contact-requests'] = listed(after)
-    fireEvent.click(within(screen.getByRole('group', { name: question })).getByRole('button', { name: yes }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: question })).getByRole('button', { name: yes }))
 
     expect(await screen.findByText(says)).toBeInTheDocument()
     expect(posted(fetch, `/api/me/contact-requests/r1/${decision}`)).toBe(true)
@@ -146,10 +146,11 @@ describe('RequestsCard', () => {
     const { fetch } = renderCard({ 'GET /api/me/contact-requests': listed([darline]) })
 
     fireEvent.click(await screen.findByRole('button', { name: button }))
-    const confirm = screen.getByRole('group', { name: question })
+    const confirm = screen.getByRole('dialog', { name: question })
     expect(confirm).toHaveAccessibleDescription(note)
     fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
 
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Don’t share' })).toBeInTheDocument()
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
@@ -162,15 +163,18 @@ describe('RequestsCard', () => {
     }
     renderCard(answers)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Don’t share' }))
+    const decline = await screen.findByRole('button', { name: 'Don’t share' })
+    decline.focus()
+    fireEvent.click(decline)
     expect(screen.getByRole('button', { name: 'Yes, don’t share' })).toHaveFocus()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.getByRole('button', { name: 'Don’t share' })).toHaveFocus()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Don’t share' })).toHaveFocus())
 
     fireEvent.click(screen.getByRole('button', { name: 'Don’t share' }))
     answers['GET /api/me/contact-requests'] = listed([])
     fireEvent.click(screen.getByRole('button', { name: 'Yes, don’t share' }))
-    expect(await screen.findByText('Not shared. Darline won’t be told.')).toHaveFocus()
+    const said = await screen.findByText('Not shared. Darline won’t be told.')
+    await waitFor(() => expect(said).toHaveFocus())
   })
 
   it('keeps keyboard focus in place when you stop sharing or keep sharing', async () => {
@@ -180,15 +184,18 @@ describe('RequestsCard', () => {
     }
     renderCard(answers)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Stop sharing' }))
+    const stop = await screen.findByRole('button', { name: 'Stop sharing' })
+    stop.focus()
+    fireEvent.click(stop)
     expect(screen.getByRole('button', { name: 'Yes, stop' })).toHaveFocus()
     fireEvent.click(screen.getByRole('button', { name: 'Keep sharing' }))
-    expect(screen.getByRole('button', { name: 'Stop sharing' })).toHaveFocus()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Stop sharing' })).toHaveFocus())
 
     fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }))
     answers['GET /api/me/contact-requests'] = listed([])
     fireEvent.click(screen.getByRole('button', { name: 'Yes, stop' }))
-    expect(await screen.findByText('Stopped sharing your WhatsApp number with Naïka.')).toHaveFocus()
+    const said = await screen.findByText('Stopped sharing your WhatsApp number with Naïka.')
+    await waitFor(() => expect(said).toHaveFocus())
   })
 
   it('asks before it stops sharing, then takes the share back', async () => {
@@ -197,11 +204,12 @@ describe('RequestsCard', () => {
       'POST /api/me/contact-requests/r3/revoke': { status: 204 },
     }
     const { fetch } = renderCard(answers)
-    const confirm = () => within(screen.getByRole('group', { name: 'Stop sharing your WhatsApp number with Naïka?' }))
+    const confirm = () => within(screen.getByRole('dialog', { name: 'Stop sharing your WhatsApp number with Naïka?' }))
 
     fireEvent.click(await screen.findByRole('button', { name: 'Stop sharing' }))
     fireEvent.click(confirm().getByRole('button', { name: 'Keep sharing' }))
     expect(posted(fetch, '/api/me/contact-requests/r3/revoke')).toBe(false)
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }))
     answers['GET /api/me/contact-requests'] = listed([])

@@ -1,0 +1,89 @@
+import * as Dialog from '@radix-ui/react-dialog'
+import { AnimatePresence, m } from 'motion/react'
+import { useRef } from 'react'
+
+import styles from './ConfirmDialog.module.css'
+
+type Props = {
+  open: boolean
+  question: string
+  note?: string
+  yes: string
+  no: string
+  busy: boolean
+  error?: string
+  onYes: () => void
+  onCancel: () => void
+  // Where focus lands once it has closed; null goes back to what had focus when it opened.
+  // Read when it closes, after the fade, so it should read refs rather than props.
+  focusAfterClose?: () => HTMLElement | null
+}
+
+// design-notes §2.4: the one second step before an answer that can't be undone.
+export function ConfirmDialog({ open, question, note, yes, no, busy, error, onYes, onCancel, focusAfterClose }: Props) {
+  const yesRef = useRef<HTMLButtonElement>(null)
+  // Radix only returns focus to its own Trigger; this opens from the caller's buttons instead.
+  const opener = useRef<Element | null>(null)
+
+  return (
+    <Dialog.Root open={open} onOpenChange={(next) => !next && !busy && onCancel()}>
+      <AnimatePresence>
+        {open && (
+          <Dialog.Portal forceMount>
+            <Dialog.Overlay asChild forceMount>
+              <m.div className={styles.scrim} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+            </Dialog.Overlay>
+            <Dialog.Content
+              asChild
+              forceMount
+              // Radix links a description itself; without a note, it's told there is none.
+              {...(note ? {} : { 'aria-describedby': undefined })}
+              onOpenAutoFocus={(event) => {
+                event.preventDefault()
+                opener.current = document.activeElement
+                yesRef.current?.focus()
+              }}
+              onCloseAutoFocus={(event) => {
+                event.preventDefault()
+                const target = focusAfterClose?.() ?? opener.current
+                if (target instanceof HTMLElement && target.isConnected) {
+                  target.focus()
+                }
+              }}
+            >
+              <m.div
+                className={styles.dialog}
+                initial={{ opacity: 0, scale: 0.92, y: 14 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+              >
+                <Dialog.Title className={styles.question}>{question}</Dialog.Title>
+                {note ? <Dialog.Description className={styles.note}>{note}</Dialog.Description> : null}
+                {error && (
+                  <p role="alert" className={styles.error}>
+                    {error}
+                  </p>
+                )}
+                <div className={styles.choices}>
+                  <button type="button" onClick={() => !busy && onCancel()} aria-disabled={busy || undefined} className={`pill ${styles.no}`}>
+                    {no}
+                  </button>
+                  <button
+                    ref={yesRef}
+                    type="button"
+                    onClick={() => !busy && onYes()}
+                    aria-disabled={busy || undefined}
+                    className={`pill ${styles.yes}`}
+                  >
+                    {yes}
+                  </button>
+                </div>
+              </m.div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        )}
+      </AnimatePresence>
+    </Dialog.Root>
+  )
+}
