@@ -373,6 +373,39 @@ describe('Members', () => {
     }
   })
 
+  it('lets nothing interrupt Start again, a tab pressed between its turns included', async () => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const run = async (ms: number) => {
+      for (let t = 0; t < ms; t += 100) {
+        await act(() => vi.advanceTimersByTimeAsync(100))
+      }
+    }
+    try {
+      await renderPage()
+      await run(1150 + 1000)
+      for (const step of ['Jump to In Memory', 'Next ▶', 'Next ▶']) {
+        press(step)
+        await run(1000)
+      }
+
+      press('↺ Start again')
+      // Pressed again and again until Welcome, so some land in the short gaps between the rewind's turns.
+      for (let t = 0; t < 3500 && position() !== 'Welcome'; t += 10) {
+        const tab = screen.queryByRole('button', { name: 'Jump to In Memory' })
+        if (tab) {
+          fireEvent.click(tab)
+        }
+        await act(() => vi.advanceTimersByTimeAsync(10))
+      }
+      await run(1000)
+
+      expect(position()).toBe('Welcome')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('starts again at the closed cover when Members in the menu is clicked while the book is open', async () => {
     await renderPage()
     openBook()

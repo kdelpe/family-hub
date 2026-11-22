@@ -197,7 +197,13 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     // Once, on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const goTo = (index: number) => flipTo(stopOf(stops, index), index)
+  // Start again's rewind isn't interrupted: in the gaps between its turns no turn is under way to stop a reader.
+  const rewinding = () => rewindMs.current !== null
+  const goTo = (index: number) => {
+    if (!rewinding()) {
+      flipTo(stopOf(stops, index), index)
+    }
+  }
   // From the back cover, every page turns back quickly to Welcome (owner's call), so the book can be read again.
   const startAgain = () => {
     if (turn) {
@@ -220,7 +226,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     const target = event.target as Element
-    if (event.button > 0 || target.closest('a, input, select, textarea, button:not([data-corner])')) {
+    if (event.button > 0 || rewinding() || target.closest('a, input, select, textarea, button:not([data-corner])')) {
       return
     }
     if (turn) {
@@ -618,7 +624,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
             aria-label="Jump to a letter"
             className={styles.tabs}
             onPointerDown={(event) => {
-              if (turn) {
+              if (turn || rewinding()) {
                 return
               }
               const t = tabAt(event.currentTarget, event.clientY)
