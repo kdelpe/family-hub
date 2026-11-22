@@ -6,6 +6,7 @@ import { RouterProvider } from 'react-router/dom'
 
 import { followSessionChanges } from './api/auth'
 import { createQueryClient } from './api/queryClient'
+import { MotionPreferences } from './app/MotionPreferences'
 import { routes } from './app/routes'
 import './styles/fonts.css'
 import './styles/tokens.css'
@@ -18,7 +19,9 @@ const router = createBrowserRouter(routes)
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <MotionPreferences>
+        <RouterProvider router={router} />
+      </MotionPreferences>
     </QueryClientProvider>
   </StrictMode>,
 )
