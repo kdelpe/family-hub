@@ -321,6 +321,23 @@ describe('New event', () => {
   const panel = () => within(screen.getByRole('region', { name: 'New event' }))
   const type = (label: string, value: string) => fireEvent.change(panel().getByLabelText(label), { target: { value } })
 
+  it('drops a save’s closing when the panel is closed during the Saved moment and opened afresh', async () => {
+    serve()
+    renderPage([], 'admin')
+    open()
+    type('What happened?', 'Picnic')
+    fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
+    await panel().findByRole('button', { name: 'Saved' })
+
+    open()
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'New event' })).toBeNull())
+    open()
+    await act(() => new Promise((r) => setTimeout(r, 1000)))
+
+    expect(panel().getByLabelText('What happened?')).toHaveValue('')
+    expect(screen.queryByText('Saved “Picnic”.')).toBeNull()
+  })
+
   it('saves what was typed, the date at its precision and who was there', async () => {
     const sent = serve()
     renderPage([], 'admin')
