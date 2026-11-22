@@ -51,7 +51,7 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
           empty="No birthdays in the next two weeks."
           items={home.data?.birthdays}
         >
-          {(b, i) => <BirthdayRow key={b.id} birthday={b} soonest={i === 0} />}
+          {(b, i) => <BirthdayRow key={b.id} birthday={b} soonest={i === 0} viewerId={user?.person_id ?? null} />}
         </Card>
         <Newcomers query={home} viewerId={user?.person_id ?? null} now={now} />
       </div>
@@ -207,7 +207,7 @@ function Card<T>({
   )
 }
 
-function BirthdayRow({ birthday, soonest }: { birthday: Birthday; soonest: boolean }) {
+function BirthdayRow({ birthday, soonest, viewerId }: { birthday: Birthday; soonest: boolean; viewerId: string | null }) {
   const { month, day } = monthAndDay(birthday.on)
   return (
     <div className={styles.row}>
@@ -216,7 +216,7 @@ function BirthdayRow({ birthday, soonest }: { birthday: Birthday; soonest: boole
         <span className={styles.tileDay}>{day}</span>
       </span>
       <div className={styles.rowWords}>
-        <PersonHoverCard person={birthday}>
+        <PersonHoverCard person={birthday} viewerId={viewerId}>
           <Link to={`/people/${birthday.id}`} className={styles.rowTitle}>
             {birthday.first_name}’s birthday
           </Link>
@@ -256,7 +256,7 @@ function Newcomers({ query, viewerId, now }: { query: UseQueryResult<Home>; view
               {initials(n)}
             </span>
             <div className={styles.rowWords}>
-              <PersonHoverCard person={n}>
+              <PersonHoverCard person={n} viewerId={viewerId}>
                 <Link to={`/people/${n.id}`} className={styles.rowTitle}>
                   {fullName(n)}
                 </Link>
