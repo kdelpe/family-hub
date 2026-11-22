@@ -109,7 +109,7 @@ family-hub/
 │       ├── styles/               # tokens.css (design-notes §1.1 variables), base.css, fonts.css
 │       ├── assets/fonts/         # the bundled woff2 files (their OFL licenses ship from public/licenses/)
 │       └── lib/                  # small pure helpers (e.g. date + precision formatting)
-├── deploy/                       # Caddyfile, compose.prod.yaml, backup + restore scripts (Phase 4c)
+├── deploy/                       # compose.yaml (production), Caddyfile, settings templates, first-deploy steps; backup + restore scripts (Phase 4c)
 ├── docs/
 │   └── architecture-v3.md        # the design; kept current as decisions change
 ├── CLAUDE.md                     # working rules (branches, commits, approach)
@@ -1155,11 +1155,14 @@ For a "multi-decade" archive, this section matters more than any other.
 
 **Repository settings (not in files):** `main` requires a PR (0 approvals, since the owner reviews their own PRs), the `go`, `generated`, `web`, `docker` and `e2e` CI checks must pass on a branch that is up to date with `main` (add each new CI job here as it lands), no direct pushes or force-pushes (enforced for admins too), no deletion. Squash merge is the only merge method enabled.
 
-## 14. Deployment (Phase 4c options)
+## 14. Deployment
+
+**Chosen (2026-11-21): option A on AWS Lightsail**, the $12/month plan (2 GB, 2 vCPU, 60 GB disk, 3 TB transfer) with a public IPv4 and a static IP, Ubuntu 24.04 LTS. The files are in `deploy/` and the first-deploy steps in `deploy/README.md`. Lightsail's automatic snapshots are an extra layer, not the §11 backups: those go to another provider, so losing the AWS account can't take the database and its backups together. Weighed and passed over: Heroku (Postgres 18 support unclear, the cheap database allows hours of downtime a month), Oracle's free tier (halved in 2026, and idle servers can be reclaimed) and Hetzner in the US (about $20/month after its 2026 price rises); Vultr, DigitalOcean and Akamai are like-for-like fallbacks.
+
 
 | Option | Shape | Pros | Cons |
 |---|---|---|---|
-| **A. Single VPS (recommended start)** | Docker Compose: app + Postgres (volume) + Caddy (automatic TLS); media on R2 | Cheapest, simplest, no cold starts; you own backups | You patch the box |
+| **A. Single VPS (chosen)** | Docker Compose: app + Postgres (volume) + Caddy (automatic TLS); media on R2 | Cheapest, simplest, no cold starts; you own backups | You patch the box |
 | B. Managed | App on Fly.io/Cloud Run + Neon/Cloud SQL/RDS (must offer Postgres 18) + R2 | Less ops | Cost, cold starts (Neon scale-to-zero), more moving parts |
 
 **Health checks stay internal:** Caddy answers `404` for `/health` and `/ready` from the internet; Docker's `HEALTHCHECK` and any monitoring call them on the server itself (`127.0.0.1:8080`). The app also never serves them under `/api`.
@@ -1196,7 +1199,7 @@ Real family data gets entered from Phase 4 onward, so Phase 4c deploys with back
 3. **No birthday emails.** Birthdays appear only in the app (§5.3). The app emails nothing but invites and password resets.
 4. **Access:** invite-only, but relatives can **request access** and members can **suggest a relative** (reversed in November 2026 by the frontend design, §5). Sending invites stays admin-only. Still no "suggest a correction" feature; relatives who spot a mistake message the admin.
 5. **Video:** one 720p H.264 variant, built only when you hit a playback problem (Phase 6).
-6. **Hosting:** Option A, a single VPS (§14).
+6. **Hosting:** Option A, a single VPS, on AWS Lightsail (§14).
 7. **GEDCOM import/export:** later. Move it up only if you already have a tree file from another service.
 8. **Stories are in the MVP** (Phase 5b), with transcripts typed by hand; machine transcription is a later decision (§9.6).
 9. **Frontend design:** `docs/design/` is the agreed look and behaviour, and the build matches the mockups (§7).
