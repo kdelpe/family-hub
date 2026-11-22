@@ -27,6 +27,17 @@
   line-height: 1.45;
 }
 
+.rise {
+  animation: rise 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* translate, not transform: Motion's drag and slide-away own the transform. */
+@keyframes rise {
+  from {
+    translate: 0 100%;
+  }
+}
+
 .grab {
   flex: none;
   height: 28px;
