@@ -19,6 +19,8 @@ export function YearHandle({ years, current, onPick }: { years: string[]; curren
       return
     }
     event.preventDefault()
+    // Preventing the press's default also skips its focus, so the arrow keys would still go elsewhere.
+    event.currentTarget.focus({ preventScroll: true })
     event.currentTarget.setPointerCapture?.(event.pointerId)
     drag.current = { id: event.pointerId, y0: event.clientY, from: at }
   }
@@ -36,10 +38,10 @@ export function YearHandle({ years, current, onPick }: { years: string[]; curren
     drag.current = null
   }
   const onKeyDown = (event: KeyboardEvent) => {
-    const by = { ArrowUp: -1, ArrowDown: 1 }[event.key]
-    if (by) {
+    const to = { ArrowUp: at - 1, ArrowDown: at + 1, Home: 0, End: years.length - 1 }[event.key]
+    if (to !== undefined) {
       event.preventDefault()
-      step(by)
+      step(to - at)
     }
   }
 
