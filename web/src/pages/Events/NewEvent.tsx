@@ -73,6 +73,9 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
   }, [tree.data, people, typed])
 
   const [done, setDone] = useState(false)
+  // Closed during the hold some other way, it no longer reports the save as closing it.
+  const hold = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(hold.current), [])
   const save = useMutation({
     mutationKey: createEventKey,
     mutationFn: (body: NewEventBody) => createEvent(body),
@@ -80,7 +83,7 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
       void queryClient.invalidateQueries({ queryKey: eventKeys.all })
       // The check on Save shows for a moment before the panel closes.
       setDone(true)
-      setTimeout(() => onSaved(saved.title), savedHold)
+      hold.current = setTimeout(() => onSaved(saved.title), savedHold)
     },
   })
 
