@@ -77,11 +77,11 @@ export const askFor = (personId: string, kind: RequestKind) =>
     { body: { kind } },
   )
 
-// Someone asking for one of my details: waiting for my answer, or shared with them.
+// Someone asking for one of my details: waiting for my answer, or answered.
 export type ContactRequest = {
   id: string
   kind: RequestKind
-  status: 'pending' | 'shared'
+  status: 'pending' | 'shared' | 'declined' | 'revoked'
   created_at: string
   decided_at: string | null
   from: { person_id: string; name: string }
@@ -92,7 +92,7 @@ export const contactRequestKeys = {
   mine: (personId: string) => ['contact-requests', personId] as const,
 }
 
-// Pending ones first, then those shared, each oldest first.
+// Pending ones first, then the answered ones, each oldest first.
 export const myRequestsQuery = (personId: string) => ({
   queryKey: contactRequestKeys.mine(personId),
   queryFn: async ({ signal, client }: MineContext) => {

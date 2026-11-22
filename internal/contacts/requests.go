@@ -105,7 +105,7 @@ func (s *Service) Ask(ctx context.Context, viewer family.Viewer, personID uuid.U
 	return status, nil
 }
 
-// Requests lists the asks for the viewer's own details: pending first, then what they've shared.
+// Requests lists the asks for the viewer's own details, answered ones too: pending first, then the rest.
 func (s *Service) Requests(ctx context.Context, viewer family.Viewer) ([]Request, error) {
 	personID, err := Mine(viewer)
 	if err != nil {

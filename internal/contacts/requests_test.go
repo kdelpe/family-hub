@@ -64,7 +64,8 @@ func TestAskShareRevoke(t *testing.T) {
 	assert.Equal(t, Listing{Contacts: []Contact{}, Requestable: []Requestable{{"address", "none"}, {"phone", "requested"}}}, seen(), "a revoke reads as requested")
 	requests, err = svc.Requests(t.Context(), maya)
 	require.NoError(t, err)
-	assert.Empty(t, requests, "a revoked request leaves the list")
+	require.Len(t, requests, 1, "a revoked request stays listed, as answered")
+	assert.Equal(t, "revoked", requests[0].Status)
 	status, err = svc.Ask(t.Context(), darline, *maya.PersonID, "phone")
 	require.NoError(t, err)
 	assert.Equal(t, "requested", status, "and asking again doesn't reopen it")
@@ -249,4 +250,29 @@ func TestRequestsFromSomeoneWhoCantSignInLeaveTheList(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Empty(t, requests)
+}
+
+func TestRequestsListsWaitingFirstThenAnswered(t *testing.T) {
+	svc, pool := newService(t)
+	maya, darline, rosa := member(t, pool, "Maya", "Pluviose"), member(t, pool, "Darline", "Monestime"), member(t, pool, "Rosa", "Pierre")
+	for _, kind := range []string{"phone", "address"} {
+		_, err := svc.Create(t.Context(), maya, *maya.PersonID, ContactInput{Kind: kind, Value: "on file", Visibility: new("on_request")})
+		require.NoError(t, err)
+	}
+	_, err := svc.Ask(t.Context(), darline, *maya.PersonID, "phone")
+	require.NoError(t, err)
+	_, err = svc.Ask(t.Context(), rosa, *maya.PersonID, "address")
+	require.NoError(t, err)
+	requests, err := svc.Requests(t.Context(), maya)
+	require.NoError(t, err)
+	require.NoError(t, svc.Decide(t.Context(), maya, requests[0].ID, Decline))
+
+	requests, err = svc.Requests(t.Context(), maya)
+	require.NoError(t, err)
+
+	got := make([]string, 0, len(requests))
+	for _, r := range requests {
+		got = append(got, r.From.Name+" "+r.Status)
+	}
+	assert.Equal(t, []string{"Rosa Pierre pending", "Darline Monestime declined"}, got)
 }

@@ -90,8 +90,8 @@ SELECT r.id, r.kind, r.status, r.created_at, r.decided_at, p.id AS requester_per
 FROM contact_requests r
 JOIN users u ON u.id = r.requester_id AND u.disabled_at IS NULL
 JOIN persons p ON p.id = u.person_id AND p.deleted_at IS NULL
-WHERE r.person_id = $1 AND r.status IN ('pending', 'shared')
-ORDER BY r.status = 'shared', r.created_at, r.id
+WHERE r.person_id = $1
+ORDER BY r.status <> 'pending', r.created_at, r.id
 `
 
 type ListRequestsForRow struct {
