@@ -255,8 +255,8 @@ func TestRequestsFromSomeoneWhoCantSignInLeaveTheList(t *testing.T) {
 func TestRequestsListsWaitingFirstThenAnswered(t *testing.T) {
 	svc, pool := newService(t)
 	maya, darline, rosa := member(t, pool, "Maya", "Pluviose"), member(t, pool, "Darline", "Monestime"), member(t, pool, "Rosa", "Pierre")
-	for _, kind := range []string{"phone", "address"} {
-		_, err := svc.Create(t.Context(), maya, *maya.PersonID, ContactInput{Kind: kind, Value: "on file", Visibility: new("on_request")})
+	for kind, value := range map[string]string{"phone": "+1 555 010 0000", "address": "Jacmel"} {
+		_, err := svc.Create(t.Context(), maya, *maya.PersonID, ContactInput{Kind: kind, Value: value, Visibility: new("on_request")})
 		require.NoError(t, err)
 	}
 	_, err := svc.Ask(t.Context(), darline, *maya.PersonID, "phone")
