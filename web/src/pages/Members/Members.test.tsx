@@ -346,7 +346,7 @@ describe('Members', () => {
     }
   })
 
-  it('rewinds every page back to Welcome, one quick turn after another, with Start again', async () => {
+  it('turns the whole book back to Welcome in one quick sweep with Start again', async () => {
     stubMedia({ reduced: false })
     vi.useFakeTimers({ shouldAdvanceTime: true })
     // In steps: React renders between them, as a browser would between turns.
@@ -365,7 +365,7 @@ describe('Members', () => {
       expect(position()).toBe('The end · click the back cover to go back')
 
       press('↺ Start again')
-      await run(3500)
+      await run(600)
 
       expect(position()).toBe('Welcome')
     } finally {
@@ -373,7 +373,7 @@ describe('Members', () => {
     }
   })
 
-  it('lets nothing interrupt Start again, a tab pressed between its turns included', async () => {
+  it('lets nothing interrupt Start again, a tab pressed during it included', async () => {
     stubMedia({ reduced: false })
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const run = async (ms: number) => {
@@ -390,7 +390,7 @@ describe('Members', () => {
       }
 
       press('↺ Start again')
-      // Pressed again and again until Welcome, so some land in the short gaps between the rewind's turns.
+      // Pressed again and again until Welcome.
       for (let t = 0; t < 3500 && position() !== 'Welcome'; t += 10) {
         const tab = screen.queryByRole('button', { name: 'Jump to In Memory' })
         if (tab) {
