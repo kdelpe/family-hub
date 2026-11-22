@@ -1,7 +1,8 @@
 import * as Toast from '@radix-ui/react-toast'
 import { AnimatePresence, m } from 'motion/react'
-import { createContext, type ReactNode, useCallback, useContext, useRef, useState } from 'react'
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react'
 
+import { onSessionChange } from '../../api/auth'
 import { useMotionPaused } from '../../lib/motion'
 import styles from './Toaster.module.css'
 
@@ -41,6 +42,10 @@ export function Toaster({ children }: { children: ReactNode }) {
       note?.onDone?.()
     }
   }, [])
+
+  // A note is the signed-in person's: it goes the moment they sign out or someone else signs in, its action
+  // (a removal's DELETE) checking sameSession and so sending nothing.
+  useEffect(() => onSessionChange(() => finish(undefined, false)), [finish])
 
   const show = useCallback(
     (note: Note) => {
