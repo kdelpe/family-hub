@@ -181,6 +181,7 @@ describe('Events', () => {
       const grip = handle().getByRole('slider')
 
       fireEvent.pointerDown(grip, { button: 0, pointerId: 1, clientY: 100 })
+      expect(grip).toHaveFocus()
       fireEvent.pointerMove(grip, { pointerId: 1, clientY: 152 })
       expect(grip).toHaveAttribute('aria-valuetext', '1984')
       fireEvent.pointerMove(grip, { pointerId: 1, clientY: 400 })
@@ -188,6 +189,31 @@ describe('Events', () => {
 
       expect(grip).toHaveAttribute('aria-valuetext', 'Undated')
       expect(handle().getByRole('button', { name: 'Older year' })).toBeDisabled()
+    })
+
+    it('goes to the oldest with End and the newest with Home', () => {
+      vi.stubGlobal('scrollTo', vi.fn())
+      renderPage(spread)
+      const grip = handle().getByRole('slider')
+
+      fireEvent.keyDown(grip, { key: 'End' })
+      expect(grip).toHaveAttribute('aria-valuetext', 'Undated')
+      fireEvent.keyDown(grip, { key: 'Home' })
+      expect(grip).toHaveAttribute('aria-valuetext', '2026')
+    })
+
+    it('keeps a picked year through the page’s scrolling until the reader scrolls', () => {
+      vi.stubGlobal('scrollTo', vi.fn())
+      renderPage(spread)
+      fireEvent.click(handle().getByRole('button', { name: 'Older year' }))
+
+      // jsdom lays nothing out, so following the scroll would land on the last year.
+      fireEvent.scroll(window)
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', '2025')
+
+      fireEvent.wheel(window)
+      fireEvent.scroll(window)
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', 'Undated')
     })
 
     it('isn’t there when every event falls in one year', () => {
