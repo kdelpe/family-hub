@@ -3,6 +3,7 @@ import { AnimatePresence, m } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
+import { sameSession, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { createEventKey, deleteEvent, eventKeys, eventsQuery, type FamilyEvent } from '../../api/events'
 import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
@@ -49,17 +50,26 @@ export function Events() {
   const hidden = usePendingRemovals()
   // It leaves the timeline at once; the server is only told once Undo has run out.
   const remove = (event: FamilyEvent) => {
+    // Signed out or in as someone else during Undo: nothing is sent, and no answer is shown to them.
+    const since = sessionGeneration()
     hideEvent(event.id)
     toast({
       text: `Removed “${event.title}”.`,
       undo: () => unhideEvent(event.id),
-      onDone: () =>
-        deleteEvent(event.id)
+      onDone: () => {
+        if (!sameSession(since)) {
+          unhideEvent(event.id)
+          return
+        }
+        void deleteEvent(event.id)
           .then(
             () => true,
             (error: unknown) => {
               if (error instanceof ApiError && error.status === 404) {
                 return true
+              }
+              if (!sameSession(since)) {
+                return false
               }
               toast({ text: `Couldn’t remove “${event.title}”. ${error instanceof Error ? errorMessage(error) : ''}`.trimEnd() })
               return false
@@ -70,8 +80,11 @@ export function Events() {
               queryClient.setQueryData<FamilyEvent[]>(eventKeys.all, (all) => all?.filter((e) => e.id !== event.id))
             }
             unhideEvent(event.id)
-            void queryClient.invalidateQueries({ queryKey: eventKeys.all })
-          }),
+            if (sameSession(since)) {
+              void queryClient.invalidateQueries({ queryKey: eventKeys.all })
+            }
+          })
+      },
     })
   }
 
@@ -102,8 +115,26 @@ export function Events() {
       }
       setPicked(at)
     }
+    // Scrolling by hand cuts a glide's hold short; the glide ending lets the handle follow again.
+    const release = () => {
+      holdUntil.current = 0
+    }
+    const settle = () => {
+      release()
+      follow()
+    }
+    const first = requestAnimationFrame(follow)
     window.addEventListener('scroll', follow, { passive: true })
-    return () => window.removeEventListener('scroll', follow)
+    window.addEventListener('scrollend', settle)
+    window.addEventListener('wheel', release, { passive: true })
+    window.addEventListener('touchstart', release, { passive: true })
+    return () => {
+      cancelAnimationFrame(first)
+      window.removeEventListener('scroll', follow)
+      window.removeEventListener('scrollend', settle)
+      window.removeEventListener('wheel', release)
+      window.removeEventListener('touchstart', release)
+    }
   }, [years])
   const pick = (year: string, glide: boolean) => {
     const el = document.getElementById(anchorId(year))
@@ -112,7 +143,10 @@ export function Events() {
     }
     const smooth = glide && !reduced
     setPicked(year)
-    holdUntil.current = Date.now() + (smooth ? 700 : 100)
+    const hold = smooth ? 700 : 100
+    holdUntil.current = Date.now() + hold
+    // Where scrollend isn't fired, this catches the handle up once the hold is over.
+    setTimeout(() => window.dispatchEvent(new Event('scroll')), hold + 50)
     // On phones the year sits above its card, so it stops above the handle.
     const offset = handleTop() - (narrow ? 40 : 6)
     window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - offset, behavior: smooth ? 'smooth' : 'auto' })

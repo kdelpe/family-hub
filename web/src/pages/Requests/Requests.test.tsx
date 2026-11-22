@@ -154,6 +154,14 @@ describe('Requests', () => {
     await waitFor(() => expect(tab(/^Waiting/)).toHaveFocus())
   })
 
+  it('points every tab at the one panel there is', async () => {
+    renderPage(all)
+    await panel().findByText('Stanley Jean-Louis')
+
+    const id = screen.getByRole('tabpanel').id
+    expect(screen.getAllByRole('tab').map((t) => t.getAttribute('aria-controls'))).toEqual([id, id, id])
+  })
+
   it('tells a login linked to nobody that nobody can ask yet', () => {
     renderPage([], null)
 
