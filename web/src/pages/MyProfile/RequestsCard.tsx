@@ -140,7 +140,7 @@ export function RequestRow({
   // Both ask first: a decline can't be taken back, and a share shows the detail at once (owner's call).
   const [confirming, setConfirming] = useState<'share' | 'decline' | null>(null)
   const answerRef = useRef<HTMLSpanElement>(null)
-  // Once answered, the buttons that opened the question are gone: focus goes to the line saying what happened.
+  // Once answered, the buttons that opened it are gone.
   const answered = useRef(false)
   const decide = useDecision(personId, request, (d) => {
     answered.current = true
