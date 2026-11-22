@@ -281,11 +281,12 @@ describe('New event', () => {
     fireEvent.click(panel().getByRole('button', { name: 'Remove Rose Monestime' }))
     fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Saved “Rose’s kitchen”.')
+    expect(await panel().findByRole('button', { name: 'Saved' })).toBeDisabled()
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved “Rose’s kitchen”.'))
     expect(sent).toEqual([
       { title: 'Rose’s kitchen', date: '1962', date_precision: 'circa', location: 'Jacmel', description: 'The earliest photos we have.', person_ids: ['fritz'] },
     ])
-    expect(screen.queryByRole('region', { name: 'New event' })).toBeNull()
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'New event' })).toBeNull())
     expect(await screen.findByRole('heading', { level: 2, name: 'Rose’s kitchen' })).toBeInTheDocument()
   })
 
