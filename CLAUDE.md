@@ -15,14 +15,13 @@ Planned order:
 
 **Essentials first.** Prefer cutting scope over adding it. Mark nice-to-haves as optional and leave them out unless the owner asks for them. No new dependency, service or feature without the owner agreeing first.
 
-## Private repository
+## Public repository
 
-The repo is private (since 2026-11-14), so the design's sample data (made-up people under the family's surnames) can stay as drawn. Security still relies on auth, server-side checks and secrets in env vars, never on the code being hidden, and the repo could go public again. Therefore:
+The repo is public (since 2026-11-21, so CI runs on GitHub's free minutes). The owner chose to keep the design's sample data (made-up people under the family's surnames) as drawn. Security relies on auth, server-side checks and secrets in env vars, never on the code being hidden. Therefore:
 
 - **No real family data in the repo**: seed data, fixtures and examples use made-up people and dates. The family surnames in the design's sample data are fine.
 - **No real domain, emails or personal details**: use placeholders such as `family.example.com` and `@example.com`; real values live only in server env vars.
-- **No secrets or `.env` files**: `.env.example` with safe local values only. GitHub's secret push protection doesn't cover private repos on this plan, so check each diff for secrets before committing.
-- **Before going public again**, scrub the surnames from the files *and* the history.
+- **No secrets or `.env` files**: `.env.example` with safe local values only. Secret scanning with push protection is on, but still check each diff for secrets before committing: anything pushed is public at once.
 
 ## Branches
 

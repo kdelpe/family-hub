@@ -18,4 +18,4 @@ The page files were made on a design canvas and use that canvas's small runtime 
 
 Page order: before signing in → `Login`, `Request-Access`, `Welcome-Invite`, `First-Setup`, `Forgot-Password`. Signed in → `Home-Hearth`, `Main` (family tree), `Members` (replaces People and Directory), `Events`, `Stories`, `Story-Detail`, `Add-Story`, `My-Profile`, `Person-Profile`, `Manage-Access` (admins).
 
-All people and details in them are made-up sample data. The repo is private, so they keep the family's surnames; if it ever goes public, scrub them first (see `CLAUDE.md`).
+All people and details in them are made-up sample data. They keep the family's surnames, which the owner chose to leave as drawn when the repo went public (see `CLAUDE.md`).
