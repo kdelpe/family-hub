@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AnimatePresence, m } from 'motion/react'
+import { AnimatePresence, m, useIsPresent } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { createEvent, createEventKey, type DatePrecision, eventKeys, type NewEvent as NewEventBody } from '../../api/events'
 import { treeQuery } from '../../api/tree'
 import { errorMessage, refusedMessage } from '../../lib/errorMessage'
+import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, nameMatches } from '../../lib/names'
 import styles from './Events.module.css'
 
@@ -76,6 +77,15 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
   // Closed during the hold some other way, it no longer reports the save as closing it.
   const hold = useRef<ReturnType<typeof setTimeout>>(undefined)
   useEffect(() => () => clearTimeout(hold.current), [])
+  // Closing, it stays mounted for the slide away: the hold ends now, and its controls take no more input.
+  const present = useIsPresent()
+  useEffect(() => {
+    if (!present) {
+      clearTimeout(hold.current)
+    }
+  }, [present])
+  const reduced = useReducedMotion()
+  const [motionPaused] = useMotionPaused()
   const save = useMutation({
     mutationKey: createEventKey,
     mutationFn: (body: NewEventBody) => createEvent(body),
@@ -118,7 +128,7 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
   }
 
   return (
-    <section aria-labelledby="ev-new" aria-busy={save.isPending} className={styles.panel}>
+    <section aria-labelledby="ev-new" aria-busy={save.isPending} inert={!present} className={styles.panel}>
       {/* Locked while saving: an edit made now would be lost when the saved panel closes. */}
       <fieldset disabled={save.isPending || done} className={styles.locked}>
         <div className={styles.panelHead}>
@@ -319,7 +329,7 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
                     strokeLinejoin="round"
                     initial={{ pathLength: 0 }}
                     animate={{ pathLength: 1 }}
-                    transition={{ duration: 0.35 }}
+                    transition={{ duration: reduced || motionPaused ? 0 : 0.35 }}
                   />
                 </svg>
                 Saved
