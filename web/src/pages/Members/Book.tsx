@@ -31,8 +31,8 @@ const fastMs = 470
 // On arrival the book is picked up off the table (Members.module.css, 1 s), then opens itself.
 const arrivalMs = 1150
 // Start again rewinds the whole book in about this long, however many pages it has, at no more than this a turn.
-const rewindTotalMs = 2400
-const rewindMinMs = 160
+const rewindTotalMs = 800
+const rewindMinMs = 60
 // A flick is measured over this last stretch of the drag, so a page held still before letting go isn't flicked.
 const flickMs = 100
 // The page edges grow as pages pile up, up to this: a big family has thousands of pages.
