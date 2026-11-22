@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
+import * as Tabs from '@radix-ui/react-tabs'
+import { m } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { type ContactRequest, myRequestsQuery, NotYoursError, RelinkedError } from '../../api/contacts'
@@ -151,42 +153,26 @@ function RequestTabs({ personId, now = new Date() }: { personId: string; now?: D
 
   return (
     <>
-      <div role="tablist" aria-label="Requests" className={styles.tabs}>
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            id={`requests-tab-${t.id}`}
-            aria-selected={tab === t.id}
-            // One stop on Tab; the arrow keys, Home and End move between the tabs.
-            tabIndex={tab === t.id ? 0 : -1}
-            onKeyDown={(event) => {
-              const i = tabs.findIndex((x) => x.id === t.id)
-              const to = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[event.key]
-              if (to === undefined) {
-                return
-              }
-              event.preventDefault()
-              const next = tabs[(to + tabs.length) % tabs.length]!
-              setTab(next.id)
-              document.getElementById(`requests-tab-${next.id}`)?.focus()
-            }}
-            aria-controls="requests-panel"
-            aria-label={t.id === 'waiting' && count > 0 ? `Waiting, ${count} ${count === 1 ? 'request' : 'requests'}` : undefined}
-            onClick={() => setTab(t.id)}
-            className={tab === t.id ? `${styles.tab} ${styles.on}` : styles.tab}
-          >
-            {t.label}
-            {t.id === 'waiting' && count > 0 && (
-              <span aria-hidden="true" className={styles.count}>
-                {count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-      <div role="tabpanel" id="requests-panel" aria-labelledby={`requests-tab-${tab}`} className={styles.panel}>
+      <Tabs.Root value={tab} onValueChange={(v) => setTab(v as Tab)}>
+        <Tabs.List aria-label="Requests" className={styles.tabs}>
+          {tabs.map((t) => (
+            <Tabs.Trigger
+              key={t.id}
+              value={t.id}
+              aria-label={t.id === 'waiting' && count > 0 ? `Waiting, ${count} ${count === 1 ? 'request' : 'requests'}` : undefined}
+              className={styles.tab}
+            >
+              {t.label}
+              {t.id === 'waiting' && count > 0 && (
+                <span aria-hidden="true" className={styles.count}>
+                  {count}
+                </span>
+              )}
+              {tab === t.id && <m.span layoutId="requests-tab-line" className={styles.tabLine} transition={{ type: 'spring', stiffness: 380, damping: 32 }} />}
+            </Tabs.Trigger>
+          ))}
+        </Tabs.List>
+        <Tabs.Content value={tab} className={styles.panel}>
         {/* A failed reread keeps the rows it had, saying so. */}
         {requests.isError && requests.data && !(requests.error instanceof NotYoursError) && !(requests.error instanceof RelinkedError) && (
           <p role="alert">{errorMessage(requests.error)}</p>
@@ -195,7 +181,8 @@ function RequestTabs({ personId, now = new Date() }: { personId: string; now?: D
         <span ref={stoppedRef} tabIndex={-1} role="status" className={styles.stopped}>
           {stopped && !notYours && `Stopped sharing your ${yourDetail[stopped.kind]} with ${firstName(stopped.from.name)}.`}
         </span>
-      </div>
+        </Tabs.Content>
+      </Tabs.Root>
       <p className={styles.note}>
         Sharing shows that one person every detail of that kind you’ve set to “Family can ask”, including ones you add
         later. You can stop sharing any time.

@@ -34,7 +34,7 @@
   margin-bottom: -1px;
   padding: 0 14px;
   border: 0;
-  border-bottom: 2.5px solid transparent;
+  position: relative;
   background: none;
   font: inherit;
   color: var(--text-2);
@@ -48,10 +48,19 @@
   color: var(--text);
 }
 
-.on {
+.tab[data-state='active'] {
   color: var(--text);
   font-weight: 600;
-  border-bottom-color: var(--accent);
+}
+
+.tabLine {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2.5px;
+  border-radius: 2px;
+  background: var(--accent);
 }
 
 .count {
