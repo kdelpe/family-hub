@@ -8,6 +8,7 @@ import { type AddedRelative, addRelative, type NewRelative, type ParentKind, typ
 import { type Tree, treeKeys, type TreePerson } from '../../api/tree'
 import { errorMessage } from '../../lib/errorMessage'
 import type { FamilyLinks } from '../../lib/familyLinks'
+import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, initials, nameMatches } from '../../lib/names'
 import { gendered } from '../../lib/relation'
 import styles from './AddRelative.module.css'
@@ -217,6 +218,8 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
     }
   }
   const drag = useDragControls()
+  const [motionPaused] = useMotionPaused()
+  const still = useReducedMotion() || motionPaused
   const firstOf = (id: string) => (opened.people.get(id) ?? byId.get(id))?.first_name ?? ''
   const avatar = (p: Named | undefined) =>
     p && (
@@ -413,11 +416,12 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
           }}
         >
           <m.div
-            className={styles.sheet}
+            // The rise is CSS, so the sheet is on screen even if Motion's features never load.
+            className={still ? styles.sheet : `${styles.sheet} ${styles.rise}`}
             // Sliding away, its controls can't start anything, like a save no one would see the answer to.
             inert={leaving}
             aria-labelledby="add-relative-question"
-            initial={{ y: '100%' }}
+            initial={false}
             animate={{ y: leaving ? '100%' : 0 }}
             transition={{ type: 'spring', stiffness: 340, damping: 34 }}
             onAnimationComplete={() => leaving && finish()}
