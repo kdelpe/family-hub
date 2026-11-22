@@ -1,0 +1,60 @@
+# The production stack on one server (architecture §14): docker compose up -d, in the folder holding this file.
+# Not "family-hub", the dev stack's name, so the two never share a database volume.
+name: family-hub-prod
+
+x-logging: &logging
+  # Capped, so logs can't fill the disk.
+  driver: json-file
+  options: { max-size: 10m, max-file: "5" }
+
+services:
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+    logging: *logging
+
+  app:
+    image: ghcr.io/kdelpe/family-hub:${APP_VERSION:?set APP_VERSION in .env}
+    restart: unless-stopped
+    env_file: app.env
+    # On the server only, for checks like curl 127.0.0.1:8080/ready; the internet reaches the app through Caddy.
+    ports: ["127.0.0.1:8080:8080"]
+    environment:
+      # The password goes into a URL, so it must be URL-safe (openssl rand -hex 24).
+      DATABASE_URL: postgres://app:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/familyhub?sslmode=disable
+      BASE_URL: https://${DOMAIN}
+      AUTO_MIGRATE: "true"
+      COOKIE_SECURE: "true"
+      TRUSTED_PROXY: "true"
+    depends_on:
+      postgres: { condition: service_healthy }
+    logging: *logging
+
+  postgres:
+    image: postgres:18.6
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: familyhub
+    # Postgres 18 images keep data under /var/lib/postgresql/18/docker, so mount the parent.
+    volumes: [pgdata:/var/lib/postgresql]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U app -d familyhub"]
+      start_period: 30s
+      interval: 5s
+      retries: 10
+    logging: *logging
+
+volumes:
+  pgdata: {}
+  caddy_data: {}
+  caddy_config: {}
