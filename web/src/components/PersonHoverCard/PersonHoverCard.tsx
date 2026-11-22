@@ -14,7 +14,10 @@ type Named = { id: string; first_name: string; last_name: string | null }
 export function PersonHoverCard({ person, children }: { person: Named; children: ReactNode }) {
   return (
     <HoverCard.Root openDelay={250} closeDelay={120}>
-      <HoverCard.Trigger asChild>{children}</HoverCard.Trigger>
+      {/* Radix also opens it on focus; preventing that keeps it mouse-only, and the link still takes focus. */}
+      <HoverCard.Trigger asChild onFocus={(e) => e.preventDefault()}>
+        {children}
+      </HoverCard.Trigger>
       <HoverCard.Portal>
         <HoverCard.Content sideOffset={8} collisionPadding={16} asChild>
           <m.div className={styles.card} initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.16 }}>
