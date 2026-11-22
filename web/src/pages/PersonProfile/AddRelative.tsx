@@ -200,6 +200,9 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
   // It slides away before it closes. Not while saving: the answer, a refusal included, needs the sheet to show on.
   const [leaving, setLeaving] = useState(false)
   const closed = useRef(false)
+  const fallback = useRef<ReturnType<typeof setTimeout>>(undefined)
+  // Unmounted another way (a relation change mounts a new sheet), the old fallback mustn't close the new one.
+  useEffect(() => () => clearTimeout(fallback.current), [])
   const finish = () => {
     if (!closed.current) {
       closed.current = true
@@ -210,7 +213,7 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
     if (!save.isPending && !leaving) {
       setLeaving(true)
       // Motion's features load after the page, so the slide may never run; it closes regardless.
-      setTimeout(finish, 500)
+      fallback.current = setTimeout(finish, 500)
     }
   }
   const drag = useDragControls()
@@ -393,7 +396,12 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
         <Dialog.Content
           asChild
           aria-describedby={undefined}
-          onOpenAutoFocus={(e) => e.preventDefault()}
+          // Radix's portal mounts after the step effect ran, so the first screen's focus is set here.
+          onOpenAutoFocus={(e) => {
+            e.preventDefault()
+            const start = step === 'who' ? (search.current ?? question.current) : question.current
+            start?.focus()
+          }}
           // The profile puts focus back on the Add card itself.
           onCloseAutoFocus={(e) => e.preventDefault()}
           // Escape in a filled search box clears it, as the browser's own clear would; otherwise it closes.
@@ -406,6 +414,8 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
         >
           <m.div
             className={styles.sheet}
+            // Sliding away, its controls can't start anything, like a save no one would see the answer to.
+            inert={leaving}
             aria-labelledby="add-relative-question"
             initial={{ y: '100%' }}
             animate={{ y: leaving ? '100%' : 0 }}
