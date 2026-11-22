@@ -262,6 +262,15 @@ Title **Events**. Segmented **Timeline / Media**, plus two buttons shown to admi
   - Dates are written "November 13, 1984", "July 2025", "1984" and "Around 1962", with "c. 1962" in the year column.
   - An undated event has an empty year column. Undated events come last.
   - On phones, the year sits above each card and the line runs down the left edge.
+- **+ New event, as built:** shown to admins only, since members can't add events yet.
+  - The date control follows the precision picked:
+    - **Exact day:** the browser's date picker, as for birthdays.
+    - **Month:** a month menu beside a year box. Safari has no month picker.
+    - **Year** and **About:** a year box.
+    - Save waits for a title, and for a four-digit year and a month when they're asked for. The date is optional.
+  - **+ Add person** opens a name search of the tree (five matches at a time). Each pick becomes a chip with a remove ×.
+  - Saving closes the panel, says *Saved "…"*, and the event takes its place on the timeline by date.
+  - A refused save keeps the panel and what was typed, and says why.
 
 ### 4.6 Stories (own menu item)
 - **Story of the week** hero: large video still with play button and duration, title, storyteller (avatar, relation, recorded date), short summary, people/topic chips, **Watch the story**.
