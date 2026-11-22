@@ -841,6 +841,32 @@ describe('Members', () => {
     expect(position()).toBe(shows)
   })
 
+  it.each([
+    { name: 'turning on', upAt: 30, shows: 'Pages 4–5 · Maya & Nadège' },
+    { name: 'falling back', upAt: 2030, shows: 'Pages 2–3 · Fritz' },
+  ])('queues a click made while a page let go is still $name', async ({ upAt, shows }) => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await renderPage()
+      await act(() => vi.advanceTimersByTimeAsync(1150 + 1000))
+      sizeBook()
+
+      pointerAt('pointerDown', 350, 1000)
+      pointerAt('pointerMove', 340, 1010)
+      pointerAt('pointerMove', 259, 1020)
+      pointerAt('pointerUp', 259, 1000 + upAt)
+      press('Next ▶')
+      for (let t = 0; t < 3000; t += 100) {
+        await act(() => vi.advanceTimersByTimeAsync(100))
+      }
+
+      expect(position()).toBe(shows)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('doesn’t pass a request made of one person to whoever takes their page after a refresh', async () => {
     let everyone = people
     const client = await renderPage(() => everyone)

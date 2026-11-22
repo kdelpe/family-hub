@@ -137,10 +137,12 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     }
     if (!turn) {
       flipTo(stop + dir)
-    } else if (turn.mode === 'anim') {
-      // A click past either cover is dropped, so it can't cancel out a later click back.
+    } else if (turn.mode !== 'drag') {
+      // A page let go goes on settling, onto its next spread or back where it was: clicks then queue from there. A
+      // click past either cover is dropped, so it can't cancel out a later click back.
+      const from = turn.land === undefined ? stop : turn.to
       const next = Math.max(-8, Math.min(8, queued.current + dir))
-      if (turn.to + next >= 0 && turn.to + next <= last) {
+      if (from + next >= 0 && from + next <= last) {
         queued.current = next
       }
     }
@@ -235,16 +237,16 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     if (event.button > 0 || rewinding() || target.closest('a, input, select, textarea, button:not([data-corner])')) {
       return
     }
+    // A press on a scrollbar (a long list of contacts) scrolls; it doesn't turn the page, mid-turn or not.
+    if (target instanceof HTMLElement && target.scrollHeight > target.clientHeight && event.nativeEvent.offsetX > target.clientWidth) {
+      return
+    }
     if (turn) {
       // Mid-turn, a click on the page queues the next turn once let go; the corners queue by their own click.
       if (!target.closest('[data-corner]')) {
         const box = event.currentTarget.getBoundingClientRect()
         tapDuringTurn.current = { id: event.pointerId, x0: event.clientX, y0: event.clientY, dir: event.clientX >= box.left + box.width / 2 ? 1 : -1 }
       }
-      return
-    }
-    // A press on a scrollbar (a long list of contacts) scrolls; it doesn't turn the page.
-    if (target instanceof HTMLElement && target.scrollHeight > target.clientHeight && event.nativeEvent.offsetX > target.clientWidth) {
       return
     }
     const el = event.currentTarget
@@ -516,7 +518,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   return (
     <div className={`${styles.bookArea} ${paused || reduced ? styles.still : ''} ${single ? styles.single : ''}`}>
       <div
-        className={`${styles.book} ${!single && tgtStop === 0 ? styles.closedStart : ''} ${!single && tgtStop === last ? styles.closedEnd : ''} ${pickUp ? styles.pickUp : ''}`}
+        className={`${styles.book} ${!single && tgtStop === 0 ? styles.closedStart : ''} ${!single && tgtStop === last ? styles.closedEnd : ''} ${pickUp && !reduced ? styles.pickUp : ''}`}
         // The board arrives as a cover lands, which is sooner on a quick turn.
         style={{ '--land': `${Math.round(((turn?.ms ?? turnMs) - 20) * 0.82)}ms` } as CSSProperties}
         onAnimationEnd={(event) => event.target === event.currentTarget && setPickUp(false)}
