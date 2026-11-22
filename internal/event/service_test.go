@@ -190,6 +190,14 @@ func TestUpdate(t *testing.T) {
 			check: func(t *testing.T, got Event) { assert.Empty(t, got.People) },
 		},
 		{
+			name:  "the date cleared with its precision",
+			patch: Patch{Date: family.Opt[*string]{Set: true}, DatePrecision: family.Opt[*string]{Set: true}},
+			check: func(t *testing.T, got Event) {
+				assert.Nil(t, got.Date)
+				assert.Nil(t, got.DatePrecision)
+			},
+		},
+		{
 			name:  "the place cleared",
 			patch: Patch{Location: family.Opt[*string]{Set: true}},
 			check: func(t *testing.T, got Event) { assert.Nil(t, got.Location) },
@@ -226,6 +234,10 @@ func TestUpdateRefusesAndKeepsTheEvent(t *testing.T) {
 	}{
 		{name: "a blank title", patch: Patch{Title: family.Opt[string]{Set: true, Value: " "}}, want: "invalid event: a title is required"},
 		{name: "a date without a precision", patch: Patch{Date: family.Opt[*string]{Set: true, Value: new("1962")}},
+			want: "invalid event: give the date and its precision together"},
+		{name: "a precision without a date", patch: Patch{DatePrecision: family.Opt[*string]{Set: true, Value: new("year")}},
+			want: "invalid event: give the date and its precision together"},
+		{name: "clearing the date but not its precision", patch: Patch{Date: family.Opt[*string]{Set: true}},
 			want: "invalid event: give the date and its precision together"},
 		{name: "someone not in the tree", patch: Patch{PersonIDs: family.Opt[[]uuid.UUID]{Set: true, Value: []uuid.UUID{uuid.New()}}},
 			want: "invalid event: someone tagged isn't in the tree"},
