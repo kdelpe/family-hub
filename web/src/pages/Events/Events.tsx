@@ -10,7 +10,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
 import { useToast } from '../../components/Toaster/Toaster'
 import { bornOn, year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
-import { useReducedMotion } from '../../lib/motion'
+import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName } from '../../lib/names'
 import { useNarrow } from '../../lib/useNarrow'
 import { useSignedIn } from '../../lib/useSignedIn'
@@ -98,6 +98,7 @@ export function Events() {
   const [picked, setPicked] = useState<string | null>(null)
   const current = picked && years.includes(picked) ? picked : (years[0] ?? undated)
   const reduced = useReducedMotion()
+  const [motionPaused] = useMotionPaused()
   const narrow = useNarrow()
   // A picked year holds until the reader scrolls or presses something themselves: the glide's own scroll events
   // don't move it back, and nor does a page too short to bring a last year up to the handle.
@@ -176,14 +177,16 @@ export function Events() {
           </button>
         )}
       </div>
-      <AnimatePresence initial={false}>
+      {/* One panel at a time: the next mounts once the last has gone, so their field ids never meet. */}
+      <AnimatePresence mode="wait" initial={false}>
         {adding && (
           <m.div
             key={opened}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+            // A height change isn't a transform, so MotionConfig doesn't skip it for reduced motion or Pause.
+            transition={reduced || motionPaused ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 32 }}
             className={styles.panelOpening}
           >
             <NewEvent
