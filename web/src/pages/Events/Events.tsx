@@ -15,6 +15,7 @@ import { useNarrow } from '../../lib/useNarrow'
 import { useSignedIn } from '../../lib/useSignedIn'
 import styles from './Events.module.css'
 import { NewEvent } from './NewEvent'
+import { hideEvent, unhideEvent, usePendingRemovals } from './pendingRemovals'
 import { undated, YearHandle } from './YearHandle'
 
 const yearOf = (event: FamilyEvent) => event.date?.match(/^\d{4}/)?.[0] ?? undated
@@ -39,29 +40,40 @@ export function Events() {
   const queryClient = useQueryClient()
   const toast = useToast()
   const [removing, setRemoving] = useState<FamilyEvent | null>(null)
+  const [asking, setAsking] = useState(false)
   // Its × is gone once removed, so focus goes to + New event instead.
   const removed = useRef(false)
+  const hidden = usePendingRemovals()
   // It leaves the timeline at once; the server is only told once Undo has run out.
   const remove = (event: FamilyEvent) => {
-    void queryClient.cancelQueries({ queryKey: eventKeys.all })
-    queryClient.setQueryData<FamilyEvent[]>(eventKeys.all, (list) => list?.filter((e) => e.id !== event.id))
-    const reread = () => void queryClient.invalidateQueries({ queryKey: eventKeys.all })
+    hideEvent(event.id)
     toast({
       text: `Removed “${event.title}”.`,
-      undo: reread,
+      undo: () => unhideEvent(event.id),
       onDone: () =>
         deleteEvent(event.id)
-          .catch((error: unknown) => {
-            if (error instanceof Error && !(error instanceof ApiError && error.status === 404)) {
-              toast({ text: `Couldn’t remove “${event.title}”. ${errorMessage(error)}` })
+          .then(
+            () => true,
+            (error: unknown) => {
+              if (error instanceof ApiError && error.status === 404) {
+                return true
+              }
+              toast({ text: `Couldn’t remove “${event.title}”. ${error instanceof Error ? errorMessage(error) : ''}`.trimEnd() })
+              return false
+            },
+          )
+          .then((gone) => {
+            if (gone) {
+              queryClient.setQueryData<FamilyEvent[]>(eventKeys.all, (all) => all?.filter((e) => e.id !== event.id))
             }
-          })
-          .finally(reread),
+            unhideEvent(event.id)
+            void queryClient.invalidateQueries({ queryKey: eventKeys.all })
+          }),
     })
   }
 
-  const list = events.data
-  const years = useMemo(() => [...new Set((list ?? []).map(yearOf))], [list])
+  const list = useMemo(() => (events.data ?? []).filter((e) => !hidden.has(e.id)), [events.data, hidden])
+  const years = useMemo(() => [...new Set(list.map(yearOf))], [list])
   const [picked, setPicked] = useState<string | null>(null)
   const current = picked && years.includes(picked) ? picked : (years[0] ?? undated)
   const reduced = useReducedMotion()
@@ -139,15 +151,15 @@ export function Events() {
         <p className={styles.muted}>Loading…</p>
       ) : events.isError ? (
         <p role="alert">{errorMessage(events.error)}</p>
-      ) : events.data.length === 0 ? (
+      ) : list.length === 0 ? (
         <p className={styles.muted}>No events yet.</p>
       ) : (
         <div className={styles.timelineWrap}>
           <ol className={styles.timeline}>
             <AnimatePresence initial={false}>
-              {events.data.map((event, i) => {
+              {list.map((event, i) => {
                 const y = yearOf(event)
-                const first = i === 0 || yearOf(events.data[i - 1]!) !== y
+                const first = i === 0 || yearOf(list[i - 1]!) !== y
                 return (
                   <TimelineEntry
                     key={event.id}
@@ -159,6 +171,7 @@ export function Events() {
                         ? () => {
                             removed.current = false
                             setRemoving(event)
+                            setAsking(true)
                           }
                         : undefined
                     }
@@ -171,7 +184,7 @@ export function Events() {
         </div>
       )}
       <ConfirmDialog
-        open={removing !== null}
+        open={asking}
         question={`Remove “${removing?.title ?? ''}”?`}
         note="It leaves the timeline for everyone. You’ll have a few seconds to undo."
         yes="Remove"
@@ -180,9 +193,9 @@ export function Events() {
         onYes={() => {
           removed.current = true
           remove(removing!)
-          setRemoving(null)
+          setAsking(false)
         }}
-        onCancel={() => setRemoving(null)}
+        onCancel={() => setAsking(false)}
         focusAfterClose={() => (removed.current ? newButton.current : null)}
       />
     </main>
