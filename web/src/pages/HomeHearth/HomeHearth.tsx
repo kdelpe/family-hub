@@ -77,6 +77,11 @@ const leaves = [
   { cx: 160, cy: 68, r: 9, light: true },
 ]
 // It grows once per visit; coming back to Home shows it grown.
+const branchDraw = 0.9
+const branchDelay = (i: number) => 0.15 + i * 0.12
+// The leaves bud once the last branch is drawn.
+const leavesStart = branchDelay(branches.length - 1) + branchDraw
+
 let grown = false
 
 function HeroTree() {
@@ -95,9 +100,13 @@ function HeroTree() {
           key={d}
           d={d}
           className={styles.branches}
-          initial={grow ? { pathLength: 0 } : false}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 0.9, delay: 0.15 + i * 0.12, ease: 'easeOut' }}
+          // Hidden until it starts: a round cap shows as a dot even at pathLength 0.
+          initial={grow ? { pathLength: 0, opacity: 0 } : false}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{
+            pathLength: { duration: branchDraw, delay: branchDelay(i), ease: 'easeOut' },
+            opacity: { duration: 0.01, delay: branchDelay(i) },
+          }}
         />
       ))}
       {leaves.map((leaf, i) => (
@@ -111,8 +120,8 @@ function HeroTree() {
           initial={grow ? { scale: 0 } : { scale: 1, y: 0 }}
           animate={still ? { scale: 1, y: 0 } : { scale: 1, y: [0, -2.5, 0] }}
           transition={{
-            scale: { type: 'spring', stiffness: 260, damping: 12, delay: grow ? 1 + i * 0.1 : 0 },
-            y: still ? { duration: 0.3 } : { duration: 5 + (i % 3), repeat: Infinity, ease: 'easeInOut', delay: (grow ? 2 : 0) + i * 0.3 },
+            scale: { type: 'spring', stiffness: 260, damping: 12, delay: grow ? leavesStart + i * 0.1 : 0 },
+            y: still ? { duration: 0.3 } : { duration: 5 + (i % 3), repeat: Infinity, ease: 'easeInOut', delay: (grow ? leavesStart + 1 : 0) + i * 0.3 },
           }}
         />
       ))}
