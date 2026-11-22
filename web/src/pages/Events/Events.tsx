@@ -1,22 +1,61 @@
-import { useQuery } from '@tanstack/react-query'
+import { useIsMutating, useQuery } from '@tanstack/react-query'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router'
 
-import { eventsQuery, type FamilyEvent } from '../../api/events'
+import { createEventKey, eventsQuery, type FamilyEvent } from '../../api/events'
 import { bornOn, year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
 import { fullName } from '../../lib/names'
+import { useSignedIn } from '../../lib/useSignedIn'
 import styles from './Events.module.css'
+import { NewEvent } from './NewEvent'
 
 // Events (design-notes §4.5): the timeline. Media, + Upload and each card's photos wait for Phase 5.
 export function Events() {
   const events = useQuery(eventsQuery)
+  const { user } = useSignedIn()
+  const [adding, setAdding] = useState(false)
+  const saving = useIsMutating({ mutationKey: createEventKey }) > 0
+  const [saved, setSaved] = useState<string | null>(null)
+  const newButton = useRef<HTMLButtonElement>(null)
+  const close = () => {
+    setAdding(false)
+    requestAnimationFrame(() => newButton.current?.focus())
+  }
 
   return (
     <main className={styles.page}>
       <title>Events — Pluviose Family Hub</title>
       <div className={styles.head}>
         <h1 className={styles.title}>Events</h1>
+        {user?.role === 'admin' && (
+          <button
+            ref={newButton}
+            type="button"
+            aria-expanded={adding}
+            disabled={saving}
+            onClick={() => {
+              setSaved(null)
+              setAdding((open) => !open)
+            }}
+            className={`pill ${styles.newEvent}`}
+          >
+            + New event
+          </button>
+        )}
       </div>
+      {adding && (
+        <NewEvent
+          onClose={close}
+          onSaved={(title) => {
+            setSaved(title)
+            close()
+          }}
+        />
+      )}
+      <p role="status" className={saved ? styles.saved : 'visually-hidden'}>
+        {saved && `Saved “${saved}”.`}
+      </p>
       {events.isPending ? (
         <p className={styles.muted}>Loading…</p>
       ) : events.isError ? (

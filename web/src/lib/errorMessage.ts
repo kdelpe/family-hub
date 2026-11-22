@@ -23,7 +23,7 @@ export function errorMessage(error: Error): string {
   }
 }
 
-const serverPrefix = /^invalid (?:contact method|contact request|person|access request): /
+const serverPrefix = /^invalid (?:contact method|contact request|person|access request|event): /
 
 // A refused save's own reason, minus the server's "invalid contact method: " prefix; otherwise errorMessage.
 export function refusedMessage(error: Error): string {
