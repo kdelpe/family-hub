@@ -14,15 +14,13 @@ type Props = {
   error?: string
   onYes: () => void
   onCancel: () => void
-  // Where focus lands once it has closed; null goes back to what had focus when it opened.
-  // Read when it closes, after the fade, so it should read refs rather than props.
+  // Called after the fade-out, so it should read refs, not props.
   focusAfterClose?: () => HTMLElement | null
 }
 
-// design-notes §2.4: the one second step before an answer that can't be undone.
 export function ConfirmDialog({ open, question, note, yes, no, busy, error, onYes, onCancel, focusAfterClose }: Props) {
   const yesRef = useRef<HTMLButtonElement>(null)
-  // Radix only returns focus to its own Trigger; this opens from the caller's buttons instead.
+  // Radix only returns focus to its own Trigger, which this doesn't use.
   const opener = useRef<Element | null>(null)
 
   return (
@@ -36,7 +34,7 @@ export function ConfirmDialog({ open, question, note, yes, no, busy, error, onYe
             <Dialog.Content
               asChild
               forceMount
-              // Radix links a description itself; without a note, it's told there is none.
+              // Without a note, tells Radix there's no description.
               {...(note ? {} : { 'aria-describedby': undefined })}
               onOpenAutoFocus={(event) => {
                 event.preventDefault()
