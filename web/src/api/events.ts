@@ -27,3 +27,14 @@ export const eventsQuery = {
   queryFn: ({ signal }: { signal?: AbortSignal }) =>
     api<{ events: FamilyEvent[] }>('GET', '/events', { signal }).then((r) => r.events),
 }
+
+export type NewEvent = {
+  title: string
+  date?: string
+  date_precision?: DatePrecision
+  location?: string
+  description?: string
+  person_ids: string[]
+}
+
+export const createEvent = (body: NewEvent) => api<FamilyEvent>('POST', '/events', { body })

@@ -1,0 +1,274 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useRef, useState } from 'react'
+
+import { createEvent, type DatePrecision, eventKeys, type NewEvent as NewEventBody } from '../../api/events'
+import { treeQuery } from '../../api/tree'
+import { errorMessage } from '../../lib/errorMessage'
+import { fullName, nameMatches } from '../../lib/names'
+import styles from './Events.module.css'
+
+const precisions: { id: DatePrecision; label: string }[] = [
+  { id: 'day', label: 'Exact day' },
+  { id: 'month', label: 'Month' },
+  { id: 'year', label: 'Year' },
+  { id: 'circa', label: 'About' },
+]
+
+const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+type Draft = { precision: DatePrecision; day: string; month: string; year: string }
+
+// The date as the API takes it, null when none was given, or 'invalid' when what's typed isn't one yet.
+function dateOf({ precision, day, month, year }: Draft): string | null | 'invalid' {
+  if (precision === 'day') {
+    return day || null
+  }
+  if (year === '' && (precision !== 'month' || month === '')) {
+    return null
+  }
+  if (!/^\d{4}$/.test(year) || year === '0000') {
+    return 'invalid'
+  }
+  if (precision === 'month') {
+    return month ? `${year}-${month}` : 'invalid'
+  }
+  return year
+}
+
+// The + New event panel (design-notes §4.5): admins only, inline above the timeline.
+export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (title: string) => void }) {
+  const queryClient = useQueryClient()
+  const tree = useQuery(treeQuery)
+  const [title, setTitle] = useState('')
+  const [place, setPlace] = useState('')
+  const [draft, setDraft] = useState<Draft>({ precision: 'day', day: '', month: '', year: '' })
+  const [story, setStory] = useState('')
+  const [people, setPeople] = useState<{ id: string; name: string }[]>([])
+  const [adding, setAdding] = useState(false)
+  const [query, setQuery] = useState('')
+  const first = useRef<HTMLInputElement>(null)
+  const search = useRef<HTMLInputElement>(null)
+  const addButton = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => first.current?.focus(), [])
+  useEffect(() => {
+    if (adding) {
+      search.current?.focus()
+    }
+  }, [adding])
+
+  const typed = query.trim().replace(/\s+/g, ' ')
+  const matches = useMemo(() => {
+    const found = []
+    for (const p of typed ? (tree.data?.persons ?? []) : []) {
+      if (!people.some((x) => x.id === p.id) && nameMatches(fullName(p), typed) && found.push(p) === 5) {
+        break
+      }
+    }
+    return found
+  }, [tree.data, people, typed])
+
+  const save = useMutation({
+    mutationFn: (body: NewEventBody) => createEvent(body),
+    onSuccess: (saved) => {
+      void queryClient.invalidateQueries({ queryKey: eventKeys.all })
+      onSaved(saved.title)
+    },
+  })
+
+  const date = dateOf(draft)
+  const canSave = title.trim() !== '' && date !== 'invalid' && !save.isPending
+
+  const submit = () => {
+    if (!canSave) {
+      return
+    }
+    save.mutate({
+      title: title.trim(),
+      ...(date && { date, date_precision: draft.precision }),
+      ...(place.trim() && { location: place.trim() }),
+      ...(story.trim() && { description: story.trim() }),
+      person_ids: people.map((p) => p.id),
+    })
+  }
+
+  const pick = (id: string, name: string) => {
+    setPeople((list) => [...list, { id, name }])
+    setQuery('')
+    setAdding(false)
+    // The search box goes away, so focus goes back to where another can be added.
+    requestAnimationFrame(() => addButton.current?.focus())
+  }
+
+  return (
+    <section aria-labelledby="ev-new" className={styles.panel}>
+      <div className={styles.panelHead}>
+        <h2 id="ev-new" className={styles.panelTitle}>
+          New event
+        </h2>
+        <button type="button" onClick={onClose} aria-label="Close" className={`pill ${styles.close}`}>
+          ×
+        </button>
+      </div>
+      <div className={styles.pair}>
+        <div className={styles.field}>
+          <label htmlFor="ev-title" className={styles.label}>
+            What happened?
+          </label>
+          <input
+            ref={first}
+            id="ev-title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Rose’s 90th birthday"
+            maxLength={200}
+            className={styles.input}
+          />
+        </div>
+        <div className={styles.field}>
+          <label htmlFor="ev-place" className={styles.label}>
+            Where?
+          </label>
+          <input id="ev-place" type="text" value={place} onChange={(e) => setPlace(e.target.value)} maxLength={200} className={styles.input} />
+        </div>
+      </div>
+      <fieldset className={styles.when}>
+        <legend className={styles.label}>When?</legend>
+        <div className={styles.whenRow}>
+          <div role="group" aria-label="How exact is the date?" className={styles.switch}>
+            {precisions.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                aria-pressed={draft.precision === p.id}
+                onClick={() => setDraft((d) => ({ ...d, precision: p.id }))}
+                className={draft.precision === p.id ? `${styles.switchOption} ${styles.switchOn}` : styles.switchOption}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {draft.precision === 'day' ? (
+            <input
+              type="date"
+              aria-label="Date"
+              value={draft.day}
+              onChange={(e) => setDraft((d) => ({ ...d, day: e.target.value }))}
+              className={`${styles.input} ${styles.dateInput}`}
+            />
+          ) : (
+            <>
+              {draft.precision === 'month' && (
+                <select
+                  aria-label="Month"
+                  value={draft.month}
+                  onChange={(e) => setDraft((d) => ({ ...d, month: e.target.value }))}
+                  className={`${styles.input} ${styles.monthInput}`}
+                >
+                  <option value="">Month</option>
+                  {months.map((m, i) => (
+                    <option key={m} value={String(i + 1).padStart(2, '0')}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <input
+                type="text"
+                inputMode="numeric"
+                aria-label={draft.precision === 'circa' ? 'About which year' : 'Year'}
+                placeholder={draft.precision === 'circa' ? 'e.g. 1965' : 'Year'}
+                maxLength={4}
+                value={draft.year}
+                onChange={(e) => setDraft((d) => ({ ...d, year: e.target.value.replace(/\D/g, '') }))}
+                aria-invalid={date === 'invalid'}
+                aria-describedby={date === 'invalid' ? 'ev-date-hint' : undefined}
+                className={`${styles.input} ${styles.yearInput}`}
+              />
+            </>
+          )}
+        </div>
+        {date === 'invalid' && (
+          <span id="ev-date-hint" className={styles.hint}>
+            {draft.precision === 'month' && draft.month === '' ? 'Pick the month too.' : 'Write the year with four digits, like 1965.'}
+          </span>
+        )}
+      </fieldset>
+      <div className={styles.field}>
+        <label htmlFor="ev-text" className={styles.label}>
+          Tell the story <span className={styles.optional}>(optional)</span>
+        </label>
+        <textarea id="ev-text" rows={2} value={story} onChange={(e) => setStory(e.target.value)} maxLength={5000} className={styles.textarea} />
+      </div>
+      <div className={styles.who}>
+        <span id="ev-who" className={styles.label}>
+          Who was there?
+        </span>
+        <ul aria-labelledby="ev-who" className={styles.chips}>
+          {people.map((p) => (
+            <li key={p.id} className={styles.chosen}>
+              {p.name}
+              <button
+                type="button"
+                aria-label={`Remove ${p.name}`}
+                onClick={() => setPeople((list) => list.filter((x) => x.id !== p.id))}
+                className={styles.remove}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+        {!adding && (
+          <button ref={addButton} type="button" onClick={() => setAdding(true)} className={`pill ${styles.addPerson}`}>
+            + Add person
+          </button>
+        )}
+      </div>
+      {adding && (
+        <div className={styles.find}>
+          <input
+            ref={search}
+            type="search"
+            aria-label="Find a relative"
+            placeholder="Type a name"
+            autoComplete="off"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setQuery('')
+                setAdding(false)
+                requestAnimationFrame(() => addButton.current?.focus())
+              }
+            }}
+            className={styles.input}
+          />
+          {typed && (
+            <ul className={styles.matches}>
+              {matches.map((p) => (
+                <li key={p.id}>
+                  <button type="button" onClick={() => pick(p.id, fullName(p))} className={styles.match}>
+                    {fullName(p)}
+                  </button>
+                </li>
+              ))}
+              {matches.length === 0 && <li className={styles.muted}>{tree.isPending ? 'Loading…' : 'No one by that name.'}</li>}
+            </ul>
+          )}
+        </div>
+      )}
+      {save.isError && <p role="alert">{errorMessage(save.error)}</p>}
+      <div className={styles.actions}>
+        <button type="button" onClick={onClose} className={`pill ${styles.cancel}`}>
+          Cancel
+        </button>
+        <button type="button" onClick={submit} disabled={!canSave} className={`pill ${styles.save}`}>
+          {save.isPending ? 'Saving…' : 'Save event'}
+        </button>
+      </div>
+    </section>
+  )
+}
