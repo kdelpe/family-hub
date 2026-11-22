@@ -1,0 +1,13 @@
+# Caddy gets and renews the TLS certificate for DOMAIN by itself; ports 80 and 443 must be open.
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Health checks are for Docker on the server only (architecture §14).
+	@internal path /health /ready
+	respond @internal 404
+
+	# The app sends the other security headers; HSTS belongs here, where HTTPS is.
+	header Strict-Transport-Security "max-age=31536000"
+
+	reverse_proxy app:8080
+}

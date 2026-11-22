@@ -19,7 +19,8 @@ updates:
       interval: weekly
 
   - package-ecosystem: docker-compose
-    directory: /
+    # Dev and production run the same Postgres, so one grouped PR moves both.
+    directories: ["/", "/deploy"]
     schedule:
       interval: weekly
     groups:
