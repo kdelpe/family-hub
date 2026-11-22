@@ -25,7 +25,7 @@ One server runs everything with Docker Compose: Caddy (HTTPS), the app and Postg
 6. **Start it**, then create your admin login (it asks for the password):
 
    ```sh
-   docker compose up -d
+   docker compose up -d --wait   # returns once the app is healthy, after its migrations
    docker compose exec app ./family-hub admin create --email <you@example.com>
    ```
 
@@ -36,7 +36,7 @@ One server runs everything with Docker Compose: Caddy (HTTPS), the app and Postg
 Set `APP_VERSION` in `.env` to the new tag, then:
 
 ```sh
-docker compose pull app && docker compose up -d
+docker compose pull app && docker compose up -d --wait
 ```
 
 The app runs any new database migrations as it starts.
