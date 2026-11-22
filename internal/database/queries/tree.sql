@@ -92,7 +92,8 @@ ORDER BY created_at DESC, id DESC
 LIMIT @max_people;
 
 -- name: FamilyCounts :one
--- Generations is the longest parent line; the depth cap stops a cycle, which the service never stores.
+-- Generations is the longest parent line, birth and adoptive links only as the tree summary counts them;
+-- the depth cap stops a cycle, which the service never stores.
 WITH RECURSIVE living AS (
   SELECT id, created_at AS added_at FROM persons WHERE deleted_at IS NULL
 ),
@@ -101,12 +102,12 @@ line AS (
   FROM living l
   WHERE NOT EXISTS (
     SELECT 1 FROM relationships r JOIN living p ON p.id = r.person_a
-    WHERE r.type = 'parent_child' AND r.person_b = l.id
+    WHERE r.type = 'parent_child' AND r.subtype IN ('biological', 'adoptive') AND r.person_b = l.id
   )
   UNION
   SELECT r.person_b, line.depth + 1
   FROM line
-  JOIN relationships r ON r.type = 'parent_child' AND r.person_a = line.id
+  JOIN relationships r ON r.type = 'parent_child' AND r.subtype IN ('biological', 'adoptive') AND r.person_a = line.id
   JOIN living c ON c.id = r.person_b
   WHERE line.depth < 64
 )

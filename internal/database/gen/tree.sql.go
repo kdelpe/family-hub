@@ -286,12 +286,12 @@ line AS (
   FROM living l
   WHERE NOT EXISTS (
     SELECT 1 FROM relationships r JOIN living p ON p.id = r.person_a
-    WHERE r.type = 'parent_child' AND r.person_b = l.id
+    WHERE r.type = 'parent_child' AND r.subtype IN ('biological', 'adoptive') AND r.person_b = l.id
   )
   UNION
   SELECT r.person_b, line.depth + 1
   FROM line
-  JOIN relationships r ON r.type = 'parent_child' AND r.person_a = line.id
+  JOIN relationships r ON r.type = 'parent_child' AND r.subtype IN ('biological', 'adoptive') AND r.person_a = line.id
   JOIN living c ON c.id = r.person_b
   WHERE line.depth < 64
 )
@@ -307,7 +307,8 @@ type FamilyCountsRow struct {
 	AddedSince  int32
 }
 
-// Generations is the longest parent line; the depth cap stops a cycle, which the service never stores.
+// Generations is the longest parent line, birth and adoptive links only as the tree summary counts them;
+// the depth cap stops a cycle, which the service never stores.
 func (q *Queries) FamilyCounts(ctx context.Context, since time.Time) (FamilyCountsRow, error) {
 	row := q.db.QueryRow(ctx, familyCounts, since)
 	var i FamilyCountsRow

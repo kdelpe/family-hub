@@ -83,7 +83,9 @@ let counted = false
 function Stats({ counts }: { counts: Counts }) {
   const [paused] = useMotionPaused()
   const reduced = useReducedMotion()
-  const count = !counted && !paused && !reduced
+  // Decided once as Home opens, so a later re-render can't cut the count short; Pause or reduced motion stops it.
+  const [eligible] = useState(() => !counted && !paused && !reduced)
+  const count = eligible && !paused && !reduced
   useEffect(() => {
     counted = true
   }, [])

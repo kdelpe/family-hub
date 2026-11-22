@@ -109,6 +109,8 @@ func TestHomeCountsGenerations(t *testing.T) {
 		name string
 		// Each pair is parent, child, by index into five people.
 		links [][2]int
+		// Foster links, which the tree's summary doesn't count as a generation either.
+		fostered [][2]int
 		// The person deleted, or -1.
 		deleted int
 		want    int
@@ -117,6 +119,7 @@ func TestHomeCountsGenerations(t *testing.T) {
 		{name: "longest line, not the most people", links: [][2]int{{0, 1}, {1, 2}, {2, 3}, {0, 4}}, deleted: -1, want: 4},
 		{name: "two parents of one child count once", links: [][2]int{{0, 2}, {1, 2}, {2, 3}}, deleted: -1, want: 3},
 		{name: "a deleted person breaks no line and adds none", links: [][2]int{{0, 1}, {1, 2}, {2, 3}}, deleted: 3, want: 3},
+		{name: "foster links aren't a generation", links: [][2]int{{0, 1}, {1, 2}}, fostered: [][2]int{{2, 3}}, deleted: -1, want: 3},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -130,6 +133,10 @@ func TestHomeCountsGenerations(t *testing.T) {
 			}
 			for _, l := range tt.links {
 				_, err := svc.CreateRelationship(t.Context(), RelationshipInput{Type: "parent_child", Subtype: new("biological"), ParentID: ids[l[0]], ChildID: ids[l[1]]})
+				require.NoError(t, err)
+			}
+			for _, l := range tt.fostered {
+				_, err := svc.CreateRelationship(t.Context(), RelationshipInput{Type: "parent_child", Subtype: new("foster"), ParentID: ids[l[0]], ChildID: ids[l[1]]})
 				require.NoError(t, err)
 			}
 			if tt.deleted >= 0 {
