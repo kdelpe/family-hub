@@ -115,6 +115,8 @@ describe('Events', () => {
 
       await waitFor(() => expect(titles()).toEqual(['Picnic']))
       expect(screen.getByText('Removed “Wedding”.')).toBeInTheDocument()
+      await act(() => lastClient.refetchQueries({ queryKey: eventKeys.all }))
+      expect(titles()).toEqual(['Picnic'])
       fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
       expect(await screen.findByRole('heading', { level: 2, name: 'Wedding' })).toBeInTheDocument()
       expect(deleted).toEqual([])
