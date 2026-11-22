@@ -14,6 +14,7 @@ import { useReducedMotion } from '../../lib/motion'
 import { fullName } from '../../lib/names'
 import { useNarrow } from '../../lib/useNarrow'
 import { useSignedIn } from '../../lib/useSignedIn'
+import { PersonHoverCard } from '../../components/PersonHoverCard/PersonHoverCard'
 import styles from './Events.module.css'
 import { NewEvent } from './NewEvent'
 import { hideEvent, unhideEvent, usePendingRemovals } from './pendingRemovals'
@@ -270,9 +271,11 @@ function TimelineEntry({ event, anchor, lit, onRemove }: { event: FamilyEvent; a
           <ul aria-label="Who was there" className={styles.people}>
             {event.people.map((p) => (
               <li key={p.id}>
-                <Link to={`/people/${p.id}`} className={styles.chip}>
-                  {fullName(p)}
-                </Link>
+                <PersonHoverCard person={p}>
+                  <Link to={`/people/${p.id}`} className={styles.chip}>
+                    {fullName(p)}
+                  </Link>
+                </PersonHoverCard>
               </li>
             ))}
           </ul>
