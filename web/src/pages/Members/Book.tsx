@@ -138,7 +138,11 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
     if (!turn) {
       flipTo(stop + dir)
     } else if (turn.mode === 'anim') {
-      queued.current = Math.max(-8, Math.min(8, queued.current + dir))
+      // A click past either cover is dropped, so it can't cancel out a later click back.
+      const next = Math.max(-8, Math.min(8, queued.current + dir))
+      if (turn.to + next >= 0 && turn.to + next <= last) {
+        queued.current = next
+      }
     }
   }
   const nextQueued = useRef(() => {})
@@ -183,7 +187,8 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   const openOnArrival = useRef(() => {})
   useLayoutEffect(() => {
     openOnArrival.current = () => {
-      if (arriving && stop === 0 && !turn) {
+      // A press on the cover still down is the reader opening it themselves; reduced motion may have come on since.
+      if (arriving && stop === 0 && !turn && !drag.current && !reduced) {
         flipTo(1)
       }
       setArriving(false)

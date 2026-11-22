@@ -552,6 +552,74 @@ describe('Members', () => {
     }
   })
 
+  it('drops a click past the back cover, so a click back after it still turns', async () => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const run = async (ms: number) => {
+      for (let t = 0; t < ms; t += 100) {
+        await act(() => vi.advanceTimersByTimeAsync(100))
+      }
+    }
+    try {
+      await renderPage()
+      await run(1150 + 1000)
+      press('Jump to In Memory')
+      await run(1000)
+      while (screen.queryByRole('button', { name: 'Next ▶' })) {
+        press('Next ▶')
+        await run(1000)
+      }
+      press('◀ Previous')
+      await run(1000)
+      const lastSpread = position()
+
+      // Onto the back cover, then on (nowhere to go) and back, before it lands.
+      fireEvent.keyDown(book(), { key: 'ArrowRight' })
+      await act(() => vi.advanceTimersByTimeAsync(100))
+      fireEvent.keyDown(book(), { key: 'ArrowRight' })
+      fireEvent.keyDown(book(), { key: 'ArrowLeft' })
+      await run(3000)
+
+      expect(position()).toBe(lastSpread)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('doesn’t open itself once reduced motion comes on before it would', async () => {
+    const setReduced = stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await renderPage()
+      act(() => setReduced(true))
+
+      await act(() => vi.advanceTimersByTimeAsync(1150 + 920))
+
+      expect(position()).toBe('Click the cover, or drag it, to open the book')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('leaves a press still down on the cover to open it, turning just once', async () => {
+    stubMedia({ reduced: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await renderPage()
+      sizeBook()
+      fireEvent.pointerDown(book(), { pointerId: 1, button: 0, clientX: 700, clientY: 300 })
+
+      await act(() => vi.advanceTimersByTimeAsync(1150 + 920))
+      expect(position()).toBe('Click the cover, or drag it, to open the book')
+
+      fireEvent.pointerUp(book(), { pointerId: 1, button: 0, clientX: 700, clientY: 300 })
+      await act(() => vi.advanceTimersByTimeAsync(2000))
+      expect(position()).toBe('Welcome')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('stays on the cover, saying how to open it, when Previous closes the book after it opened itself', async () => {
     stubMedia({ reduced: false })
     vi.useFakeTimers({ shouldAdvanceTime: true })
