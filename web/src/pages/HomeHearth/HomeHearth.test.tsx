@@ -72,7 +72,7 @@ describe('HomeHearth', () => {
     expect(within(screen.getByRole('region', { name: 'New in the family' })).getByText('Nobody new in the last month.')).toBeInTheDocument()
   })
 
-  it('shows three birthdays, then the rest on See more', () => {
+  it('shows three birthdays, then the rest on See all', () => {
     const names = ['Ana', 'Bruno', 'Carla', 'Didier', 'Elise']
     renderHome('p1', {
       newcomers: [],
@@ -81,11 +81,34 @@ describe('HomeHearth', () => {
     const card = within(screen.getByRole('region', { name: 'Coming up' }))
     expect(card.getAllByRole('link').map((a) => a.textContent)).toEqual(['Ana’s birthday', 'Bruno’s birthday', 'Carla’s birthday'])
 
-    fireEvent.click(card.getByRole('button', { name: 'See more' }), { detail: 0 })
+    fireEvent.click(card.getByRole('button', { name: 'See all' }), { detail: 0 })
 
     expect(card.getAllByRole('link')).toHaveLength(5)
     expect(card.getByRole('link', { name: 'Didier’s birthday' })).toHaveFocus()
-    expect(card.queryByRole('button', { name: 'See more' })).not.toBeInTheDocument()
+    expect(card.queryByRole('button', { name: 'See all' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    { name: 'today', id: 'mack', in_days: 0, line: 'Mackenson’s birthday is today.' },
+    { name: 'tomorrow', id: 'mack', in_days: 1, line: 'Mackenson’s birthday is tomorrow.' },
+    { name: 'in a few days', id: 'mack', in_days: 3, line: 'Mackenson’s birthday is in 3 days.' },
+    { name: 'the viewer’s own', id: 'p1', in_days: 3, line: 'Your birthday is in 3 days.' },
+  ])('says in the hero when the next birthday is: $name', ({ id, in_days, line }) => {
+    renderHome('p1', {
+      newcomers: [],
+      birthdays: [
+        { id, first_name: 'Mackenson', last_name: 'Pluviose', on: '2026-11-23', in_days },
+        { id: 'later', first_name: 'Later', last_name: null, on: '2026-11-30', in_days: 10 },
+      ],
+    })
+
+    expect(within(screen.getByRole('region', { name: 'Welcome' })).getByText(line)).toBeInTheDocument()
+  })
+
+  it('says nothing about birthdays in the hero when none is coming up', () => {
+    renderHome('p1')
+
+    expect(within(screen.getByRole('region', { name: 'Welcome' })).queryByText(/birthday/)).toBeNull()
   })
 
   it('says so when no birthday is coming up', () => {
