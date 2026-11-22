@@ -79,7 +79,7 @@ family-hub/
 │   ├── admin/                    # `admin create` command; invites, roles (Phase 2); person linking, access requests (Phase 3)
 │   ├── family/                   # persons, relationships, tree, ancestors, cycles   (Phase 3)
 │   ├── contacts/                 # contact methods, visibility, directory            (Phase 3)
-│   ├── event/                    #                                                   (Phase 5)
+│   ├── event/                    # timeline events and who was there; built ahead of Phase 5, media join later
 │   ├── media/                    # upload/confirm/view; worker in Phase 6            (Phase 5)
 │   ├── story/                    # stories, chapters, transcripts, captions          (Phase 5b)
 │   ├── mail/                     # Mailer interface + net/smtp impl
@@ -1170,7 +1170,7 @@ Either way: `TRUSTED_PROXY=true` only when behind Caddy/the platform proxy, `COO
 
 **MVP = Phases 1 through 5b**: a working tree, logins, access requests, contact visibility and upcoming birthdays, events with photos and video, and family stories, **deployed with backups and in the family's hands**. The transcoding worker (Phase 6) comes only once you've actually hit a playback problem.
 
-**Order (changed November 2026):** after Phase 2, Phase 4a starts with the shell and the five pages before sign-in (Login, Request access, Welcome, First setup, Forgot password), which need only the auth API, so the design can be seen early. Request access already sends to `POST /api/access-requests`; until Phase 3 adds the endpoint, sending shows the general error. Its side labels are the sample family's until the frontend can read `FAMILY_SIDES`. First setup (`/setup`) showed the mockup's made-up sample until Phase 3; it now shows and saves the signed-in person's own story, contact visibility and place in the tree, and its photo button waits for Phase 5. Then Phase 3, then the rest of 4a.
+**Order (changed November 2026):** after Phase 2, Phase 4a starts with the shell and the five pages before sign-in (Login, Request access, Welcome, First setup, Forgot password), which need only the auth API, so the design can be seen early. Request access already sends to `POST /api/access-requests`; until Phase 3 adds the endpoint, sending shows the general error. Its side labels are the sample family's until the frontend can read `FAMILY_SIDES`. First setup (`/setup`) showed the mockup's made-up sample until Phase 3; it now shows and saves the signed-in person's own story, contact visibility and place in the tree, and its photo button waits for Phase 5. Then Phase 3, then the rest of 4a. **Events ahead of media (2026-11-21):** while the server account was being set up, the events API and the Events timeline (no Media tab, no uploads) were built before Phase 4c's backups; photos join events in Phase 5 as planned.
 
 Real family data gets entered from Phase 4 onward, so Phase 4c deploys with backups before any media work starts, and the family can start using it then. Nothing precious should live only on a laptop. Phases 5 and 5b complete the MVP on that deployment.
 
