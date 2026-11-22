@@ -85,23 +85,35 @@ type Patch struct {
 }
 
 func (s *Service) List(ctx context.Context) ([]Event, error) {
-	q := gen.New(s.pool)
-	rows, err := q.ListEvents(ctx)
+	var events []Event
+	err := s.read(ctx, "list events", func(q *gen.Queries) error {
+		rows, err := q.ListEvents(ctx)
+		if err != nil {
+			return fmt.Errorf("list events: %w", err)
+		}
+		events = make([]Event, 0, len(rows))
+		for _, row := range rows {
+			events = append(events, toEvent(gen.GetEventRow(row)))
+		}
+		return withPeople(ctx, q, events)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("list events: %w", err)
-	}
-	events := make([]Event, 0, len(rows))
-	for _, row := range rows {
-		events = append(events, toEvent(gen.GetEventRow(row)))
-	}
-	if err := withPeople(ctx, q, events); err != nil {
 		return nil, err
 	}
 	return events, nil
 }
 
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (Event, error) {
-	return get(ctx, gen.New(s.pool), id)
+	var event Event
+	err := s.read(ctx, "get event", func(q *gen.Queries) error {
+		var err error
+		event, err = get(ctx, q, id)
+		return err
+	})
+	if err != nil {
+		return Event{}, err
+	}
+	return event, nil
 }
 
 // Create is admin-only; the router checks the role.
@@ -211,6 +223,22 @@ func (s *Service) write(ctx context.Context, what string, fn func(q *gen.Queries
 	return nil
 }
 
+// read runs fn's queries on one snapshot, so an event's details and its people come from the same moment.
+func (s *Service) read(ctx context.Context, what string, fn func(q *gen.Queries) error) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return fmt.Errorf("begin %s: %w", what, err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if err := fn(gen.New(tx)); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit %s: %w", what, err)
+	}
+	return nil
+}
+
 func get(ctx context.Context, q *gen.Queries, id uuid.UUID) (Event, error) {
 	row, err := q.GetEvent(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -248,11 +276,11 @@ func setPeople(ctx context.Context, q *gen.Queries, id uuid.UUID, people []uuid.
 	if len(people) == 0 {
 		return nil
 	}
-	found, err := q.CountPersonsInTree(ctx, people)
+	found, err := q.LockPersonsToTag(ctx, people)
 	if err != nil {
-		return fmt.Errorf("check event people: %w", err)
+		return fmt.Errorf("lock event people: %w", err)
 	}
-	if found != int64(len(people)) {
+	if len(found) != len(people) {
 		return fmt.Errorf("%w: someone tagged isn't in the tree", ErrInvalidEvent)
 	}
 	if err := q.AddEventPeople(ctx, gen.AddEventPeopleParams{EventID: id, PersonIds: people}); err != nil {
@@ -331,13 +359,18 @@ func normalize(in Input) (fields, error) {
 
 // checkText refuses what Postgres can't store (NUL, invalid UTF-8) and, in a one-line field, line breaks.
 func checkText(name, value string, maxLength int, multiline bool) error {
-	if !utf8.ValidString(value) || strings.ContainsRune(value, 0) || (!multiline && strings.ContainsFunc(value, unicode.IsControl)) {
+	if !utf8.ValidString(value) || strings.ContainsRune(value, 0) || (!multiline && strings.ContainsFunc(value, breaksLine)) {
 		return fmt.Errorf("%w: the %s contains a character that isn't allowed", ErrInvalidEvent, name)
 	}
 	if utf8.RuneCountInString(value) > maxLength {
 		return fmt.Errorf("%w: the %s is longer than %d characters", ErrInvalidEvent, name, maxLength)
 	}
 	return nil
+}
+
+// breaksLine is a control character or Unicode's own line and paragraph separators, which IsControl leaves out.
+func breaksLine(r rune) bool {
+	return unicode.IsControl(r) || r == '\u2028' || r == '\u2029'
 }
 
 // parseDate allows future dates: a reunion can be planned ahead.
