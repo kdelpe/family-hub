@@ -227,6 +227,24 @@ describe('New event', () => {
     expect(panel().getByRole('button', { name: 'Save event' })).toBeEnabled()
   })
 
+  it('forgets a half-typed date once another precision is picked', () => {
+    serve()
+    renderPage([], 'admin')
+    open()
+    type('What happened?', 'Wedding')
+    const date = panel().getByLabelText('Date')
+    Object.defineProperty(date, 'validity', { configurable: true, value: { badInput: true } })
+    fireEvent.input(date, { target: { value: '' } })
+    fireEvent.click(panel().getByRole('button', { name: 'Exact day' }))
+    expect(panel().getByRole('button', { name: 'Save event' })).toBeDisabled()
+
+    fireEvent.click(panel().getByRole('button', { name: 'Year' }))
+    fireEvent.click(panel().getByRole('button', { name: 'Exact day' }))
+
+    expect(panel().getByRole('button', { name: 'Save event' })).toBeEnabled()
+    expect(panel().queryByText('Finish the date, or clear it.')).toBeNull()
+  })
+
   it('keeps what was typed and says why when saving fails', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(Response.json({ error: { code: 'validation_error', message: 'invalid event: someone tagged isn’t in the tree' } }, { status: 400 }))))
     renderPage([], 'admin')

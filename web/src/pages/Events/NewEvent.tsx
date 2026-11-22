@@ -152,7 +152,8 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
                   key={p.id}
                   type="button"
                   aria-pressed={draft.precision === p.id}
-                  onClick={() => setDraft((d) => ({ ...d, precision: p.id }))}
+                  // Switching away drops a half-typed day the picker never reported, so its flag goes too.
+                onClick={() => setDraft((d) => ({ ...d, precision: p.id, dayUnfinished: d.precision === p.id && d.dayUnfinished }))}
                   className={draft.precision === p.id ? `${styles.switchOption} ${styles.switchOn}` : styles.switchOption}
                 >
                   {p.label}
