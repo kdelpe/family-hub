@@ -5,13 +5,13 @@ import { Link } from 'react-router'
 
 import { fullName, initials } from '../../lib/names'
 import { useRelations } from '../../lib/useRelations'
-import { useSignedIn } from '../../lib/useSignedIn'
 import styles from './PersonHoverCard.module.css'
 
 type Named = { id: string; first_name: string; last_name: string | null }
 
 // Mouse only, as Radix has it: the name it wraps is still the link to their profile for touch and keyboard.
-export function PersonHoverCard({ person, children }: { person: Named; children: ReactNode }) {
+// The viewer comes from the page, which has already read it: a card mounted per hover shouldn't read it again.
+export function PersonHoverCard({ person, viewerId, children }: { person: Named; viewerId: string | null; children: ReactNode }) {
   return (
     <HoverCard.Root openDelay={250} closeDelay={120}>
       {/* Radix also opens it on focus; preventing that keeps it mouse-only, and the link still takes focus. */}
@@ -21,7 +21,7 @@ export function PersonHoverCard({ person, children }: { person: Named; children:
       <HoverCard.Portal>
         <HoverCard.Content sideOffset={8} collisionPadding={16} asChild>
           <m.div className={styles.card} initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.16 }}>
-            <Card person={person} />
+            <Card person={person} viewerId={viewerId} />
           </m.div>
         </HoverCard.Content>
       </HoverCard.Portal>
@@ -29,9 +29,7 @@ export function PersonHoverCard({ person, children }: { person: Named; children:
   )
 }
 
-function Card({ person }: { person: Named }) {
-  const { user } = useSignedIn()
-  const viewerId = user?.person_id ?? null
+function Card({ person, viewerId }: { person: Named; viewerId: string | null }) {
   const { relations } = useRelations(viewerId)
   const relation = person.id === viewerId ? 'You' : relations?.get(person.id)
   return (
