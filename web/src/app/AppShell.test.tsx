@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -58,41 +58,32 @@ describe('AppShell', () => {
       'Members',
       'Events',
       'Stories',
-      'My profile',
       'Members & invites',
     ])
     expect(within(menu).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
-    expect(within(menu).getByText('Signed in as Maya')).toBeInTheDocument()
     expect(screen.getByText('Home page')).toBeInTheDocument()
   })
 
   it.each([
-    {
-      name: 'a member sees no admin section',
-      me: { ...maya, role: 'member' },
-      absent: 'Members & invites',
-      signedInAs: 'Signed in as Maya',
-    },
-    {
-      name: 'a login linked to nobody shows its email',
-      me: { ...maya, person_id: null },
-      absent: undefined,
-      signedInAs: 'Signed in as maya.pluviose@example.com',
-    },
-  ])('$name', async ({ me, absent, signedInAs }) => {
+    { name: 'a member sees no admin section', me: { ...maya, role: 'member' }, absent: 'Members & invites', initials: 'MP', named: 'Maya Pluviose' },
+    { name: 'a login linked to nobody is named by its email', me: { ...maya, person_id: null }, absent: undefined, initials: 'M', named: 'maya.pluviose@example.com' },
+  ])('$name', async ({ me, absent, initials, named }) => {
     stubApi({ '/api/auth/me': { status: 200, body: me }, '/api/persons/p1': { status: 200, body: mayaPerson } })
     renderShell()
 
-    expect(await screen.findByText(signedInAs)).toBeInTheDocument()
+    const picture = await screen.findByRole('button', { name: 'Your account' })
+    expect(picture).toHaveTextContent(initials)
+    fireEvent.click(picture)
+    expect(within(screen.getByRole('dialog', { name: 'Your account' })).getByText(named)).toBeInTheDocument()
     if (absent) {
       expect(screen.queryByRole('link', { name: absent })).not.toBeInTheDocument()
     }
   })
 
   it.each([
-    { name: 'counts only the requests waiting for an answer', statuses: ['pending', 'shared', 'pending'], link: 'My profile, 2 requests for your details' },
-    { name: 'says one in the singular', statuses: ['pending'], link: 'My profile, 1 request for your details' },
-  ])('badge on My profile: $name', async ({ statuses, link }) => {
+    { name: 'counts only the requests waiting for an answer', statuses: ['pending', 'shared', 'pending'], label: 'Your account, 2 requests waiting' },
+    { name: 'says one in the singular', statuses: ['pending'], label: 'Your account, 1 request waiting' },
+  ])('count on the account picture: $name', async ({ statuses, label }) => {
     const requests = statuses.map((status, i) => ({
       id: `r${i}`,
       kind: 'phone',
@@ -108,10 +99,12 @@ describe('AppShell', () => {
     })
     renderShell()
 
-    expect(await screen.findByRole('link', { name: link })).toHaveAttribute('href', '/profile')
+    fireEvent.click(await screen.findByRole('button', { name: label }))
+
+    expect(screen.getByRole('link', { name: `Requests, ${label.replace('Your account, ', '')}` })).toHaveAttribute('href', '/requests')
   })
 
-  it('shows a new request on the badge within a minute, without a reload', async () => {
+  it('shows a new request on the picture within a minute, without a reload', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const asked = (id: string) => ({
       id,
@@ -128,27 +121,37 @@ describe('AppShell', () => {
     }
     stubApi(answers)
     renderShell()
-    await screen.findByRole('link', { name: 'My profile, 1 request for your details' })
+    await screen.findByRole('button', { name: 'Your account, 1 request waiting' })
 
     answers['/api/me/contact-requests'] = { status: 200, body: { person_id: 'p1', requests: [asked('r1'), asked('r2')] } }
     await act(() => vi.advanceTimersByTimeAsync(60_000))
 
-    expect(await screen.findByRole('link', { name: 'My profile, 2 requests for your details' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Your account, 2 requests waiting' })).toBeInTheDocument()
   })
 
   it('asks for no requests for a login linked to nobody', async () => {
     stubApi({ '/api/auth/me': { status: 200, body: { ...maya, person_id: null } } })
     renderShell()
 
-    expect(await screen.findByText('Signed in as maya.pluviose@example.com')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Your account' })).toBeInTheDocument()
     expect(fetch).not.toHaveBeenCalledWith('/api/me/contact-requests', expect.anything())
   })
 
-  it('names the login by its email when the person can’t be read', async () => {
-    stubApi({ '/api/auth/me': { status: 200, body: maya }, '/api/persons/p1': { status: 500 } })
+  it('opens the account panel with its items, and Esc closes it back onto the picture', async () => {
+    stubApi({ '/api/auth/me': { status: 200, body: maya }, '/api/persons/p1': { status: 200, body: mayaPerson } })
     renderShell()
+    const picture = await screen.findByRole('button', { name: 'Your account' })
 
-    expect(await screen.findByText('Signed in as maya.pluviose@example.com')).toBeInTheDocument()
+    fireEvent.click(picture)
+    const panel = within(screen.getByRole('dialog', { name: 'Your account' }))
+    expect(panel.getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/profile', '/requests', '/account#suggest', '/account#password'])
+    expect(panel.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    expect(panel.getByRole('link', { name: 'View my profile ›' })).toHaveFocus()
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(picture).toHaveFocus()
   })
 
   it('sends someone signed out to sign in', async () => {

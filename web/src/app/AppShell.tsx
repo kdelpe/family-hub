@@ -4,8 +4,10 @@ import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router'
 import { ApiError } from '../api/client'
 import { myRequestsQuery } from '../api/contacts'
 import { Logo } from '../components/Logo/Logo'
+import { initials } from '../lib/names'
 import { errorMessage } from '../lib/errorMessage'
 import { useSignedIn } from '../lib/useSignedIn'
+import { AccountMenu } from './AccountMenu'
 import styles from './AppShell.module.css'
 import { adminPages, menuPages } from './signedInPages'
 
@@ -16,7 +18,7 @@ const item = ({ isActive }: { isActive: boolean }) => (isActive ? `${styles.item
 export function AppShell() {
   const { user, person, personSettled, error } = useSignedIn()
   const location = useLocation()
-  // My profile's badge: requests for your details waiting for an answer (§5.2). Only a linked login gets any.
+  // The account picture's count: requests for your details waiting for an answer (§5.2). Only a linked login gets any.
   // Reread each minute, so a new request shows without a reload; not while the tab is hidden.
   const personId = user?.person_id ?? null
   const requests = useQuery({ ...myRequestsQuery(personId ?? ''), enabled: personId !== null, refetchInterval: 60_000 })
@@ -49,25 +51,11 @@ export function AppShell() {
           </span>
         </Link>
         <div className={styles.items}>
-          {menuPages.map(({ path, label }) => {
-            const badge = path === '/profile' && waiting > 0
-            return (
-              <NavLink
-                key={path}
-                to={path}
-                end
-                className={item}
-                aria-label={badge ? `${label}, ${waiting} ${waiting === 1 ? 'request' : 'requests'} for your details` : undefined}
-              >
-                {label}
-                {badge && (
-                  <span aria-hidden="true" className={styles.badge}>
-                    {waiting}
-                  </span>
-                )}
-              </NavLink>
-            )
-          })}
+          {menuPages.map(({ path, label }) => (
+            <NavLink key={path} to={path} end className={item}>
+              {label}
+            </NavLink>
+          ))}
         </div>
         {user.role === 'admin' && (
           <div className={`${styles.items} ${styles.admin}`}>
@@ -79,9 +67,15 @@ export function AppShell() {
             ))}
           </div>
         )}
-        <div className={styles.signedIn}>Signed in as {person?.first_name ?? user.email}</div>
       </nav>
       <div className={styles.content}>
+        <div className={styles.account}>
+          <AccountMenu
+            initials={person ? initials(person) : (user.email[0] ?? '?').toUpperCase()}
+            name={person ? `${person.first_name} ${person.last_name ?? ''}`.trim() : user.email}
+            waiting={waiting}
+          />
+        </div>
         <Outlet />
       </div>
     </div>

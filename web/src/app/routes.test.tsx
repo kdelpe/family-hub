@@ -88,7 +88,7 @@ it('Home stays up, greeting without a name, when the person can’t be read', as
   stubApi({ personFails: true }).signIn()
   renderAt('/')
 
-  expect(await screen.findByText('Signed in as maya.pluviose@example.com')).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: 'Your account' })).toHaveTextContent('M')
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(screen.getByRole('heading', { level: 1, name: /^Good (morning|afternoon|evening)$/ })).toBeInTheDocument()
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === '/api/persons/p1')).toHaveLength(1)

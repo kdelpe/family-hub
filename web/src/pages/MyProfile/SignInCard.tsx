@@ -1,42 +1,20 @@
-import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
-import { useNavigate } from 'react-router'
 
-import { changePassword, endSession, logout, onSessionEnded, sessionGeneration } from '../../api/auth'
+import { changePassword, onSessionEnded, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { PasswordInput } from '../../components/PasswordInput/PasswordInput'
 import { PasswordStrength } from '../../components/PasswordStrength/PasswordStrength'
 import { errorMessage } from '../../lib/errorMessage'
 import { lengthRefusal, passwordRule } from '../../lib/passwordStrength'
+import { signInKey, useSignInBusy, useSignOut } from '../../lib/useSignOut'
 import styles from './MyProfile.module.css'
 
-const signInKey = ['sign-in'] as const
-
 export function SignInCard({ email }: { email: string }) {
-  const queryClient = useQueryClient()
-  const navigate = useNavigate()
   const [changing, setChanging] = useState(false)
   const [changed, setChanged] = useState(false)
-
-  // One at a time: a password change answering after sign-out would set a fresh cookie and sign them back in.
-  const signInBusy = useIsMutating({ mutationKey: signInKey }) > 0
-  const signOut = useMutation({
-    mutationKey: signInKey,
-    mutationFn: logout,
-    // Off this page first, so the shell isn't left to refetch with the ended session.
-    onSuccess: async () => {
-      await navigate('/auth/login', { replace: true })
-      endSession(queryClient)
-    },
-    // The server clears the cookie before ending the session, so its own failure still signed them out. A
-    // proxy's or the cross-origin check's refusal never reached it.
-    onError: async (error) => {
-      if (error instanceof ApiError && error.status === 500 && error.code === 'internal') {
-        await navigate('/auth/login', { replace: true })
-        endSession(queryClient)
-      }
-    },
-  })
+  const signInBusy = useSignInBusy()
+  const signOut = useSignOut()
 
   return (
     <section aria-labelledby="mp-signin" className={styles.side}>
@@ -89,7 +67,7 @@ function PasswordForm({ email, onDone }: { email: string; onDone: (changed: bool
   const [noCurrent, setNoCurrent] = useState(false)
   // Remounts the error each try, so the same refusal is announced again.
   const [attempt, setAttempt] = useState(0)
-  const signInBusy = useIsMutating({ mutationKey: signInKey }) > 0
+  const signInBusy = useSignInBusy()
   const save = useMutation({
     mutationKey: signInKey,
     mutationFn: () => changePassword(current, next),

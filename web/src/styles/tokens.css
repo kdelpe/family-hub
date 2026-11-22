@@ -21,6 +21,8 @@
   --on-accent: #ffffff;
   --switch-off: #8a8070;
   --warning-tint: #f6e3d4;
+  /* The account picture's request count, like an unread count. */
+  --notice: #b5532f;
   --shadow-lift: rgba(43, 38, 32, 0.16);
   --shadow-press: rgba(43, 38, 32, 0.12);
   --scrim: rgba(43, 38, 32, 0.38);
