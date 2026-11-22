@@ -15,6 +15,7 @@ packages:
       ContactsService: {}
       AccessService: {}
       HomeService: {}
+      EventService: {}
   github.com/kdelpe/family-hub/internal/admin:
     interfaces:
       Terminal: {}
