@@ -22,3 +22,6 @@ web/playwright-report/
 
 # Embedded UI build output (stubbed by `make ui-stub`)
 internal/webui/dist/
+
+# Production settings copied from deploy/*.example
+deploy/app.env
