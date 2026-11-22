@@ -4,7 +4,7 @@ import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { authKeys } from '../../api/auth'
+import { authKeys, endSession } from '../../api/auth'
 import { eventKeys, type FamilyEvent } from '../../api/events'
 import { treeKeys } from '../../api/tree'
 import { Toaster } from '../../components/Toaster/Toaster'
@@ -132,6 +132,18 @@ describe('Events', () => {
 
       await waitFor(() => expect(deleted).toEqual(['/api/events/w']))
       expect(titles()).toEqual(['Picnic'])
+    })
+
+    it('clears the note and sends nothing when the session ends during Undo', async () => {
+      const deleted = serveEvents()
+      renderPage([picnic, wedding], 'admin')
+      removeWedding()
+      await screen.findByText('Removed “Wedding”.')
+
+      act(() => endSession(new QueryClient()))
+
+      await waitFor(() => expect(screen.queryByText('Removed “Wedding”.')).toBeNull())
+      expect(deleted).toEqual([])
     })
 
     it('brings it back and says why when the server won’t remove it', async () => {
