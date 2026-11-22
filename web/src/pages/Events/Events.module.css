@@ -143,6 +143,7 @@
 }
 
 .card {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   margin: 8px 0 20px;
@@ -178,6 +179,38 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px 16px;
+}
+
+.card:has(.removeEvent) .cardHead {
+  padding-right: 44px;
+}
+
+.removeEvent {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--chip);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 20px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.card:hover .removeEvent,
+.removeEvent:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .removeEvent {
+    opacity: 1;
+  }
 }
 
 .cardTitle {

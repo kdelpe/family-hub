@@ -39,5 +39,7 @@ export type NewEvent = {
 
 export const createEvent = (body: NewEvent) => api<FamilyEvent>('POST', '/events', { body })
 
+export const deleteEvent = (id: string) => api<void>('DELETE', `/events/${encodeURIComponent(id)}`)
+
 // Saving one; Events holds + New event while it runs.
 export const createEventKey = ['events', 'create'] as const

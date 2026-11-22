@@ -8,6 +8,7 @@ import { followSessionChanges } from './api/auth'
 import { createQueryClient } from './api/queryClient'
 import { MotionPreferences } from './app/MotionPreferences'
 import { routes } from './app/routes'
+import { Toaster } from './components/Toaster/Toaster'
 import './styles/fonts.css'
 import './styles/tokens.css'
 import './styles/base.css'
@@ -20,7 +21,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <MotionPreferences>
-        <RouterProvider router={router} />
+        <Toaster>
+          <RouterProvider router={router} />
+        </Toaster>
       </MotionPreferences>
     </QueryClientProvider>
   </StrictMode>,
