@@ -257,6 +257,11 @@ Title **Events**. Segmented **Timeline / Media**, plus two buttons shown to admi
 - **+ Upload** opens an inline panel: drop zone (*"Drag photos and videos here"* + **Choose files**), the cap in plain words (*"Photos and videos up to 2 GB each. Recording a longer interview? Add it as a story instead."*), **Add to event** picker (or *No event — just add to Media*), then a progress row per file (thumbnail tile, name, bar, "64% · 1.1 of 1.7 GB").
 - **Timeline:** year column, a dot on a vertical line, event cards with title, date (precision-aware: "c. 1962"), story, photo strip, tagged-people chips.
 - **Media:** 5-column grid of photos **and videos**; videos show a play button and their length. Captions under each.
+- **Built ahead of media (2026-11-21):** the timeline only. Each card shows its title, the date and place on one line, the story and who was there, with each name linking to their profile.
+  - Hidden until Phase 5 brings media: the Timeline / Media switch, **+ Upload**, the photo strip and the photo count.
+  - Dates are written "November 13, 1984", "July 2025", "1984" and "Around 1962", with "c. 1962" in the year column.
+  - An undated event has an empty year column. Undated events come last.
+  - On phones, the year sits above each card and the line runs down the left edge.
 
 ### 4.6 Stories (own menu item)
 - **Story of the week** hero: large video still with play button and duration, title, storyteller (avatar, relation, recorded date), short summary, people/topic chips, **Watch the story**.
