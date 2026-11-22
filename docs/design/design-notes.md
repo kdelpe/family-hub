@@ -265,6 +265,11 @@ Title **Events**. Segmented **Timeline / Media**, plus two buttons shown to admi
   - Dates are written "November 13, 1984", "July 2025", "1984" and "Around 1962", with "c. 1962" in the year column.
   - An undated event has an empty year column. Undated events come last.
   - On phones, the year sits above each card and the line runs down the left edge.
+- **Year handle (owner's pick, 2026-11-22):** when the timeline spans two years or more, a green handle sits on the line and stays in view while you scroll (42% down the window).
+  - It shows the year it's on (*’84*; *—* for undated), between **▲** (newer) and **▼** (older), which glide there.
+  - Dragging its middle scrubs a year per 26px; the up and down arrow keys step too.
+  - The year labels it's on turn `--accent` and grow slightly; scrolling moves it along.
+  - On phones the line moves in 21px to make room, and the year stops just above the handle instead of beside it.
 - **+ New event, as built:** shown to admins only, since members can't add events yet.
   - The date control follows the precision picked:
     - **Exact day:** the browser's date picker, as for birthdays.

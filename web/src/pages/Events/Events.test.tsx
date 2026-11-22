@@ -73,6 +73,57 @@ describe('Events', () => {
     ])
   })
 
+  describe('the year handle', () => {
+    const spread = [
+      event({ id: 'a', title: 'Thanksgiving', date: '2026-11-26', date_precision: 'day' }),
+      event({ id: 'b', title: 'Graduation', date: '2025-05-30', date_precision: 'day' }),
+      event({ id: 'c', title: 'Reunion', date: '2025-07', date_precision: 'month' }),
+      event({ id: 'd', title: 'Wedding', date: '1984', date_precision: 'year' }),
+      event({ id: 'e', title: 'Picnic' }),
+    ]
+    const handle = () => within(screen.getByRole('group', { name: 'Move through the years' }))
+    const lit = () => [...document.querySelectorAll('[class*="yearLit"]')].map((el) => el.textContent)
+
+    it.each([
+      { name: 'the ▼ button', go: () => fireEvent.click(handle().getByRole('button', { name: 'Older year' })) },
+      { name: 'the down arrow key', go: () => fireEvent.keyDown(handle().getByRole('slider', { name: 'Year' }), { key: 'ArrowDown' }) },
+    ])('steps to the next older year with $name, lighting every event of that year', ({ go }) => {
+      const scrollTo = vi.fn()
+      vi.stubGlobal('scrollTo', scrollTo)
+      renderPage(spread)
+      expect(handle().getByRole('button', { name: 'Newer year' })).toBeDisabled()
+      expect(lit()).toEqual(['2026'])
+
+      go()
+
+      expect(scrollTo).toHaveBeenCalledTimes(1)
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', '2025')
+      expect(lit()).toEqual(['2025', '2025'])
+    })
+
+    it('scrubs a year for every 26px dragged, and reaches the undated events last', () => {
+      vi.stubGlobal('scrollTo', vi.fn())
+      renderPage(spread)
+      const grip = handle().getByRole('slider')
+
+      fireEvent.pointerDown(grip, { button: 0, pointerId: 1, clientY: 100 })
+      fireEvent.pointerMove(grip, { pointerId: 1, clientY: 152 })
+      expect(grip).toHaveAttribute('aria-valuetext', '1984')
+      fireEvent.pointerMove(grip, { pointerId: 1, clientY: 400 })
+      fireEvent.pointerUp(grip, { pointerId: 1 })
+
+      expect(grip).toHaveAttribute('aria-valuetext', 'Undated')
+      expect(handle().getByRole('button', { name: 'Older year' })).toBeDisabled()
+    })
+
+    it('isn’t there when every event falls in one year', () => {
+      renderPage([spread[1]!, spread[2]!])
+
+      expect(screen.queryByRole('group', { name: 'Move through the years' })).toBeNull()
+      expect(lit()).toEqual([])
+    })
+  })
+
   it('writes each kind of date as the design does', () => {
     renderPage([
       event({ id: 'a', title: 'A month', date: '2025-07', date_precision: 'month' }),
