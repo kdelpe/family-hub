@@ -15,12 +15,12 @@ import {
 import { errorMessage } from '../../lib/errorMessage'
 import styles from './MyProfile.module.css'
 
-const yourDetail: Record<RequestKind, string> = { phone: 'phone number', whatsapp: 'WhatsApp number', address: 'address' }
+export const yourDetail: Record<RequestKind, string> = { phone: 'phone number', whatsapp: 'WhatsApp number', address: 'address' }
 
 // As in the mockup: a request names them in full, its answer by first name.
-const firstName = (name: string) => name.split(' ')[0] ?? name
+export const firstName = (name: string) => name.split(' ')[0] ?? name
 
-type Answer = 'shared' | 'declined'
+export type Answer = 'shared' | 'declined'
 
 const oldestFirst = (a: { request: ContactRequest }, b: { request: ContactRequest }) =>
   Date.parse(a.request.created_at) - Date.parse(b.request.created_at)
@@ -103,10 +103,9 @@ function useDecision(personId: string, request: ContactRequest, onDecided: (deci
         return
       }
       onDecided(decision)
-      // A share moves under Shared with; a decline or a revoke is gone for good.
-      queryClient.setQueryData<ContactRequest[]>(queryKey, (rows) =>
-        rows?.flatMap((r) => (r.id !== request.id ? [r] : decision === 'share' ? [{ ...r, status: 'shared' as const }] : [])),
-      )
+      // Answered, it moves to Shared with or Answered.
+      const status = ({ share: 'shared', decline: 'declined', revoke: 'revoked' } as const)[decision]
+      queryClient.setQueryData<ContactRequest[]>(queryKey, (rows) => rows?.map((r) => (r.id === request.id ? { ...r, status } : r)))
       void queryClient.invalidateQueries({ queryKey })
     },
     onError: (error, decision, since) => {
@@ -171,7 +170,7 @@ function Confirm({
   )
 }
 
-function RequestRow({
+export function RequestRow({
   personId,
   request,
   answer,
@@ -267,7 +266,7 @@ function RequestRow({
   )
 }
 
-function SharedLine({ personId, request, onStopped }: { personId: string; request: ContactRequest; onStopped: () => void }) {
+export function SharedLine({ personId, request, onStopped }: { personId: string; request: ContactRequest; onStopped: () => void }) {
   // A second step: once taken back, a share can't be given again, and they can't ask twice.
   const [confirming, setConfirming] = useState(false)
   const [kept, setKept] = useState(false)
