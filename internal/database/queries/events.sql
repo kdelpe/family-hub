@@ -41,3 +41,8 @@ DELETE FROM event_persons WHERE event_id = @event_id;
 
 -- name: AddEventPeople :exec
 INSERT INTO event_persons (event_id, person_id) SELECT @event_id, unnest(@person_ids::uuid[]);
+
+-- The people to tag, locked until commit, in id order so two writes can't deadlock. FOR KEY SHARE waits for a
+-- delete in progress (LockPersonToDelete's FOR UPDATE), then sees whether it happened.
+-- name: LockPersonsToTag :many
+SELECT id FROM persons WHERE id = ANY(@ids::uuid[]) AND deleted_at IS NULL ORDER BY id FOR KEY SHARE;

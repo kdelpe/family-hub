@@ -211,6 +211,32 @@ func (q *Queries) LockEvent(ctx context.Context, id uuid.UUID) (LockEventRow, er
 	return i, err
 }
 
+const lockPersonsToTag = `-- name: LockPersonsToTag :many
+SELECT id FROM persons WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL ORDER BY id FOR KEY SHARE
+`
+
+// The people to tag, locked until commit, in id order so two writes can't deadlock. FOR KEY SHARE waits for a
+// delete in progress (LockPersonToDelete's FOR UPDATE), then sees whether it happened.
+func (q *Queries) LockPersonsToTag(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, lockPersonsToTag, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const softDeleteEvent = `-- name: SoftDeleteEvent :execrows
 UPDATE events SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL
 `

@@ -1,6 +1,7 @@
 package event
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +25,9 @@ func TestCreateRefusesAnInvalidEvent(t *testing.T) {
 		{name: "no title", in: Input{Title: "  "}, wantErrMsg: "a title is required"},
 		{name: "title too long", in: Input{Title: strings.Repeat("é", maxTitleLength+1)}, wantErrMsg: "the title is longer than 200 characters"},
 		{name: "a line break in the title", in: Input{Title: "Wedding\nday"}, wantErrMsg: "the title contains a character that isn't allowed"},
+		{name: "a line separator in the title", in: Input{Title: "Wedding\u2028day"}, wantErrMsg: "the title contains a character that isn't allowed"},
+		{name: "a paragraph separator in the location", in: Input{Title: "Wedding", Location: new("Jac\u2029mel")},
+			wantErrMsg: "the location contains a character that isn't allowed"},
 		{name: "a tab in the location", in: Input{Title: "Wedding", Location: new("Jac\tmel")}, wantErrMsg: "the location contains a character that isn't allowed"},
 		{name: "a NUL in the description", in: Input{Title: "Wedding", Description: new("A\x00day")}, wantErrMsg: "the description contains a character that isn't allowed"},
 		{name: "description too long", in: Input{Title: "Wedding", Description: new(strings.Repeat("a", maxDescriptionLength+1))},
@@ -114,6 +118,36 @@ func TestCreateRefusesSomeoneNotInTheTree(t *testing.T) {
 	events, err := svc.List(t.Context())
 	require.NoError(t, err)
 	assert.Empty(t, events)
+}
+
+func TestTaggingWaitsForADeleteInProgress(t *testing.T) {
+	svc, pool, admin := newService(t)
+	rosa := insertPerson(t, pool, "Rosa", "Pierre")
+	deleting, err := pool.Begin(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = deleting.Rollback(context.Background()) })
+	// As DeletePerson does: lock the row, then hide it.
+	_, err = deleting.Exec(t.Context(), `SELECT 1 FROM persons WHERE id = $1 FOR UPDATE`, rosa)
+	require.NoError(t, err)
+	_, err = deleting.Exec(t.Context(), `UPDATE persons SET deleted_at = now() WHERE id = $1`, rosa)
+	require.NoError(t, err)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := svc.Create(t.Context(), admin, Input{Title: "Wedding", PersonIDs: []uuid.UUID{rosa}})
+		done <- err
+	}()
+	require.Eventually(t, func() bool {
+		var waiting bool
+		err := pool.QueryRow(context.Background(), `SELECT EXISTS (SELECT FROM pg_stat_activity
+			WHERE wait_event_type = 'Lock' AND query LIKE '-- name: LockPersonsToTag %')`).Scan(&waiting)
+		return err == nil && waiting
+	}, 10*time.Second, 10*time.Millisecond, "tagging waits on the delete's row lock")
+	require.NoError(t, deleting.Commit(t.Context()))
+
+	err = <-done
+	require.ErrorIs(t, err, ErrInvalidEvent)
+	assert.EqualError(t, err, "invalid event: someone tagged isn't in the tree")
 }
 
 func TestListNewestFirstUndatedLast(t *testing.T) {
