@@ -19,7 +19,7 @@
   --ink-34: color-mix(in srgb, var(--text) 34%, transparent);
   --paper: var(--surface);
   /* The page height: the book and its buttons fill the window without scrolling. */
-  --page-h: clamp(440px, calc(100dvh - 160px), 820px);
+  --page-h: clamp(440px, calc(100dvh - var(--account-bar, 0px) - 160px), 820px);
   min-width: 0;
   box-sizing: border-box;
   padding: 30px 40px 36px;
@@ -1441,8 +1441,8 @@
 @media (min-width: 601px) {
   .main {
     /* A little more room above the book than below it (owner's call): the page is 16px shorter to make it. */
-    --page-h: clamp(440px, calc(100dvh - 176px), 820px);
-    min-height: 100dvh;
+    --page-h: clamp(440px, calc(100dvh - var(--account-bar, 0px) - 176px), 820px);
+    min-height: calc(100dvh - var(--account-bar, 0px));
     justify-content: center;
     padding-top: 44px;
   }
@@ -1456,7 +1456,7 @@
 
 @media (max-width: 600px) {
   .main {
-    --page-h: clamp(440px, calc(100dvh - 110px), 700px);
+    --page-h: clamp(440px, calc(100dvh - var(--account-bar, 0px) - 110px), 700px);
     padding: 16px 16px 24px;
   }
 

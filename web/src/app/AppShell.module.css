@@ -98,7 +98,7 @@
 
 
 .content {
-  position: relative;
+  --account-bar: 32px;
   flex: 999 1 560px;
   min-width: 0;
   display: flex;
@@ -115,10 +115,14 @@
   text-align: center;
 }
 
-/* Over the page's top right corner, in its padding, so no page moves down to make room. */
+/* A row of its own, so it never sits on a page's top cards; it overlaps the page's top padding, so pages move down
+   only --account-bar, which pages sized to the window take off their height. */
 .account {
-  position: absolute;
-  top: 12px;
-  right: 14px;
+  height: 56px;
+  margin-bottom: -24px;
+  padding: 12px 16px 0;
+  display: flex;
+  justify-content: flex-end;
+  position: relative;
   z-index: 5;
 }
