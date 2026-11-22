@@ -3,6 +3,7 @@ import { AnimatePresence, m } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
+import { sameSession, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { createEventKey, deleteEvent, eventKeys, eventsQuery, type FamilyEvent } from '../../api/events'
 import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
@@ -46,17 +47,26 @@ export function Events() {
   const hidden = usePendingRemovals()
   // It leaves the timeline at once; the server is only told once Undo has run out.
   const remove = (event: FamilyEvent) => {
+    // Signed out or in as someone else during Undo: nothing is sent, and no answer is shown to them.
+    const since = sessionGeneration()
     hideEvent(event.id)
     toast({
       text: `Removed “${event.title}”.`,
       undo: () => unhideEvent(event.id),
-      onDone: () =>
-        deleteEvent(event.id)
+      onDone: () => {
+        if (!sameSession(since)) {
+          unhideEvent(event.id)
+          return
+        }
+        void deleteEvent(event.id)
           .then(
             () => true,
             (error: unknown) => {
               if (error instanceof ApiError && error.status === 404) {
                 return true
+              }
+              if (!sameSession(since)) {
+                return false
               }
               toast({ text: `Couldn’t remove “${event.title}”. ${error instanceof Error ? errorMessage(error) : ''}`.trimEnd() })
               return false
@@ -67,8 +77,11 @@ export function Events() {
               queryClient.setQueryData<FamilyEvent[]>(eventKeys.all, (all) => all?.filter((e) => e.id !== event.id))
             }
             unhideEvent(event.id)
-            void queryClient.invalidateQueries({ queryKey: eventKeys.all })
-          }),
+            if (sameSession(since)) {
+              void queryClient.invalidateQueries({ queryKey: eventKeys.all })
+            }
+          })
+      },
     })
   }
 
