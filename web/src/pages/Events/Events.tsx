@@ -31,6 +31,8 @@ export function Events() {
   const events = useQuery(eventsQuery)
   const { user } = useSignedIn()
   const [adding, setAdding] = useState(false)
+  // A fresh panel each time: reopened while the last one is still closing, it must not bring that one back.
+  const [opened, setOpened] = useState(0)
   const saving = useIsMutating({ mutationKey: createEventKey }) > 0
   const [saved, setSaved] = useState<string | null>(null)
   const newButton = useRef<HTMLButtonElement>(null)
@@ -162,6 +164,7 @@ export function Events() {
             disabled={saving}
             onClick={() => {
               setSaved(null)
+              setOpened((n) => (adding ? n : n + 1))
               setAdding((open) => !open)
             }}
             className={`pill ${styles.newEvent}`}
@@ -173,7 +176,7 @@ export function Events() {
       <AnimatePresence initial={false}>
         {adding && (
           <m.div
-            key="new-event"
+            key={opened}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
