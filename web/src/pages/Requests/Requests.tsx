@@ -159,6 +159,8 @@ function RequestTabs({ personId, now = new Date() }: { personId: string; now?: D
             <Tabs.Trigger
               key={t.id}
               value={t.id}
+              // One panel serves all three tabs, so each points at it rather than at a panel per tab.
+              aria-controls="requests-panel"
               aria-label={t.id === 'waiting' && count > 0 ? `Waiting, ${count} ${count === 1 ? 'request' : 'requests'}` : undefined}
               className={styles.tab}
             >
@@ -172,7 +174,7 @@ function RequestTabs({ personId, now = new Date() }: { personId: string; now?: D
             </Tabs.Trigger>
           ))}
         </Tabs.List>
-        <Tabs.Content value={tab} className={styles.panel}>
+        <Tabs.Content value={tab} id="requests-panel" className={styles.panel}>
         {/* A failed reread keeps the rows it had, saying so. */}
         {requests.isError && requests.data && !(requests.error instanceof NotYoursError) && !(requests.error instanceof RelinkedError) && (
           <p role="alert">{errorMessage(requests.error)}</p>
