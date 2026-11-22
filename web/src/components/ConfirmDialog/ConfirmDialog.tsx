@@ -43,7 +43,9 @@ export function ConfirmDialog({ open, question, note, yes, no, busy, error, onYe
               }}
               onCloseAutoFocus={(event) => {
                 event.preventDefault()
-                const target = focusAfterClose?.() ?? opener.current
+                // Lost focus goes back to the opener; focus the page has moved on purpose stays put.
+                const lost = !document.activeElement || document.activeElement === document.body
+                const target = focusAfterClose?.() ?? (lost ? opener.current : null)
                 if (target instanceof HTMLElement && target.isConnected) {
                   target.focus()
                 }
