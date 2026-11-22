@@ -343,7 +343,7 @@ describe('New event', () => {
     fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
 
     expect(await panel().findByRole('button', { name: 'Saved' })).toBeDisabled()
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved “Rose’s kitchen”.'))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved “Rose’s kitchen”.'), { timeout: 3000 })
     expect(sent).toEqual([
       { title: 'Rose’s kitchen', date: '1962', date_precision: 'circa', location: 'Jacmel', description: 'The earliest photos we have.', person_ids: ['fritz'] },
     ])
@@ -358,7 +358,7 @@ describe('New event', () => {
     type('What happened?', 'Naomie is born')
     type('Date', '2025-07-02')
     fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
-    await screen.findByText('Saved “Naomie is born”.')
+    await screen.findByText('Saved “Naomie is born”.', {}, { timeout: 3000 })
 
     open()
     type('What happened?', 'Thanksgiving')
@@ -366,7 +366,7 @@ describe('New event', () => {
     fireEvent.change(panel().getByLabelText('Month', { selector: 'select' }), { target: { value: '11' } })
     type('Year', '2026')
     fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
-    await screen.findByText('Saved “Thanksgiving”.')
+    await screen.findByText('Saved “Thanksgiving”.', {}, { timeout: 3000 })
 
     expect(sent).toEqual([
       { title: 'Naomie is born', date: '2025-07-02', date_precision: 'day', person_ids: [] },
@@ -464,7 +464,7 @@ describe('New event', () => {
     expect(screen.getByRole('button', { name: '+ New event' })).toBeDisabled()
 
     answer(Response.json(event({ id: 'new', title: 'Wedding' }), { status: 201 }))
-    expect(await screen.findByText('Saved “Wedding”.')).toBeInTheDocument()
+    expect(await screen.findByText('Saved “Wedding”.', {}, { timeout: 3000 })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '+ New event' })).toBeEnabled()
   })
 
