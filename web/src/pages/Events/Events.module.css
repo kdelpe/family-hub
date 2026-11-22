@@ -1,0 +1,179 @@
+.page {
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.title {
+  margin: 0;
+  flex: 1 1 auto;
+  font-family: var(--font-serif);
+  font-size: 40px;
+  font-weight: 500;
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+}
+
+.timeline {
+  margin: 0;
+  padding: 0 0 0 8px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.entry {
+  display: flex;
+  gap: 24px;
+}
+
+.year {
+  width: 88px;
+  flex: none;
+  padding-top: 18px;
+  text-align: right;
+  font-family: var(--font-serif);
+  font-size: 22px;
+}
+
+.line {
+  width: 2px;
+  flex: none;
+  position: relative;
+  background: var(--input-border);
+}
+
+.dot {
+  position: absolute;
+  top: 24px;
+  left: -6px;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--bg);
+}
+
+.card {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 8px 0 20px;
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition:
+    translate 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.card:hover,
+.card:focus-within {
+  translate: 0 -4px;
+  box-shadow: 0 12px 26px var(--shadow-press);
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.when {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.story {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text-2);
+  white-space: pre-line;
+}
+
+.people {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 14px;
+  background: var(--chip);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.chip:hover,
+.chip:focus-visible {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+/* Phones: the year sits above each card, and the line runs down the left edge. */
+@media (max-width: 600px) {
+  .page {
+    padding: 24px 16px;
+  }
+
+  .timeline {
+    padding-left: 0;
+  }
+
+  .entry {
+    display: grid;
+    grid-template-columns: 2px minmax(0, 1fr);
+    column-gap: 16px;
+  }
+
+  .year {
+    grid-column: 2;
+    width: auto;
+    padding-top: 12px;
+    text-align: left;
+    font-size: 18px;
+  }
+
+  .line {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .dot {
+    top: 18px;
+  }
+
+  .card {
+    grid-column: 2;
+    margin-top: 6px;
+  }
+}
