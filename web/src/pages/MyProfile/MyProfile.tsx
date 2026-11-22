@@ -15,9 +15,6 @@ import { fullName, initials } from '../../lib/names'
 import { useSignedIn } from '../../lib/useSignedIn'
 import { ContactDetails } from './ContactDetails'
 import styles from './MyProfile.module.css'
-import { RequestsCard } from './RequestsCard'
-import { SignInCard } from './SignInCard'
-import { SuggestCard } from './SuggestCard'
 
 // design-notes §4.8. Photo uploads arrive in Phase 5.
 export function MyProfile() {
@@ -49,19 +46,14 @@ export function MyProfile() {
           </p>
         )}
       </div>
-      <aside className={styles.aside}>
-        {/* Keyed by person too: answers given and names typed for one person never stay for another. */}
-        {person && <RequestsCard key={person.id} personId={person.id} />}
-        <SignInCard email={user.email} />
-        {person && (
-          <>
-            <SuggestCard key={person.id} personId={person.id} yourName={fullName(person)} />
-            <Link to="/tree" className={`pill ${styles.seeMe}`}>
-              See me in the tree
-            </Link>
-          </>
-        )}
-      </aside>
+      {/* Requests, sign-in and Suggest a relative moved to the account menu (owner's call, 2026-11-21). */}
+      {person && (
+        <aside className={styles.aside}>
+          <Link to="/tree" className={`pill ${styles.seeMe}`}>
+            See me in the tree
+          </Link>
+        </aside>
+      )}
     </main>
   )
 }

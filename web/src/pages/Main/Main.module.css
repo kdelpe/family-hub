@@ -2,7 +2,7 @@
   --card-width: 190px;
   /* The page fits the window and the tree's panel takes what's left, so the page itself never scrolls; on a window
      too short for a useful panel, it does. */
-  height: 100dvh;
+  height: calc(100dvh - var(--account-bar, 0px));
   min-height: 520px;
   box-sizing: border-box;
   padding: 32px 40px;
@@ -623,7 +623,7 @@
 
   .panel {
     flex: none;
-    height: clamp(440px, calc(100dvh - 140px), 900px);
+    height: clamp(440px, calc(100dvh - var(--account-bar, 0px) - 140px), 900px);
   }
 }
 

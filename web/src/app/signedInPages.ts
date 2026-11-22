@@ -6,7 +6,6 @@ export const menuPages = [
   { path: '/members', label: 'Members' },
   { path: '/events', label: 'Events' },
   { path: '/stories', label: 'Stories' },
-  { path: '/profile', label: 'My profile' },
 ]
 
 export const adminPages = [{ path: '/admin/members', label: 'Members & invites' }]

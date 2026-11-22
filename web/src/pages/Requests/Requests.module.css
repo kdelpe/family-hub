@@ -1,0 +1,154 @@
+.page {
+  max-width: 820px;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 40px;
+  font-weight: 500;
+}
+
+.sub,
+.muted {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.muted {
+  padding: 18px 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  min-height: 44px;
+  margin-bottom: -1px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2.5px solid transparent;
+  background: none;
+  font: inherit;
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.on {
+  color: var(--text);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
+.count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+.panel {
+  padding-top: 6px;
+}
+
+.list {
+  margin: 0;
+  padding: 4px 20px 18px;
+  list-style: none;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.row {
+  padding-top: 14px;
+  border-top: 1px solid var(--divider);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 620px;
+}
+
+.withFace {
+  padding-top: 14px;
+  border-top: 1px solid var(--divider);
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.withFace:first-child {
+  border-top: 0;
+}
+
+/* The row brings its own top rule from My profile's card; here the wrapper draws it. */
+.withFace > div {
+  flex: 1;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.face {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--avatar-soft);
+  font-family: var(--font-serif);
+  display: grid;
+  place-items: center;
+}
+
+.stopped {
+  display: block;
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+/* Empty, it stays in the accessibility tree out of sight, so the message that fills it is read out. */
+.stopped:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
