@@ -586,16 +586,20 @@ describe('Members', () => {
     }
   })
 
-  it('doesn’t open itself once reduced motion comes on before it would', async () => {
+  it('neither opens itself nor lifts again later once reduced motion comes on before it would', async () => {
     const setReduced = stubMedia({ reduced: false })
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       await renderPage()
+      const lifted = () => document.querySelector('[class*="pickUp"]')
+      expect(lifted()).not.toBeNull()
       act(() => setReduced(true))
 
       await act(() => vi.advanceTimersByTimeAsync(1150 + 920))
 
       expect(position()).toBe('Click the cover, or drag it, to open the book')
+      act(() => setReduced(false))
+      expect(lifted()).toBeNull()
     } finally {
       vi.useRealTimers()
     }

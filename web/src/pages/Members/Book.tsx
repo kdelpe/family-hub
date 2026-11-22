@@ -177,6 +177,10 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
 
   // Arriving, the closed book is picked up off the table before it opens (owner's call).
   const [pickUp, setPickUp] = useState(!reduced && stop === 0)
+  // Reduced motion coming on cancels it for good, so turning it off later can't replay it on another page.
+  if (pickUp && reduced) {
+    setPickUp(false)
+  }
   // Until it opens itself, the line saying how to open it is kept out of sight (owner's call); it's there for a cover
   // turned back to, and with reduced motion, when the book stays closed.
   const [arriving, setArriving] = useState(!reduced && stop === 0)
@@ -518,7 +522,7 @@ export function Book({ book, single, at, onAt, viewerId, paused, reduced }: Prop
   return (
     <div className={`${styles.bookArea} ${paused || reduced ? styles.still : ''} ${single ? styles.single : ''}`}>
       <div
-        className={`${styles.book} ${!single && tgtStop === 0 ? styles.closedStart : ''} ${!single && tgtStop === last ? styles.closedEnd : ''} ${pickUp && !reduced ? styles.pickUp : ''}`}
+        className={`${styles.book} ${!single && tgtStop === 0 ? styles.closedStart : ''} ${!single && tgtStop === last ? styles.closedEnd : ''} ${pickUp ? styles.pickUp : ''}`}
         // The board arrives as a cover lands, which is sooner on a quick turn.
         style={{ '--land': `${Math.round(((turn?.ms ?? turnMs) - 20) * 0.82)}ms` } as CSSProperties}
         onAnimationEnd={(event) => event.target === event.currentTarget && setPickUp(false)}
