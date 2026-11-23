@@ -630,6 +630,33 @@ describe('PersonProfile adding a relative', () => {
     }
   })
 
+  it('stays open when dragged down while it saves, the answer still to show', async () => {
+    const fetch = renderPage({ role: 'admin', motion: true })
+    const answered = fetch.getMockImplementation()!
+    fetch.mockImplementation((url: string, init?: RequestInit) =>
+      init?.method === 'POST' ? new Promise<Response>(() => {}) : answered(url, init),
+    )
+    await open('Add a child')
+    type('Sabine')
+    pick(/^Sabine Pluviose/)
+    pick('Adopted by Nadège')
+    pick(/^Jean-Robert Pluviose/)
+    pick('Add Sabine')
+    expect(await within(screen.getByRole('dialog')).findByRole('button', { name: 'Adding…' })).toBeDisabled()
+    const grab = document.querySelector<HTMLElement>('[class*="grab"]')!
+    const at = (y: number) => ({ pointerId: 1, isPrimary: true, button: 0, buttons: 1, clientX: 100, clientY: y, pageX: 100, pageY: y })
+
+    fireEvent.pointerDown(grab, at(600))
+    for (let y = 610; y <= 800; y += 10) {
+      fireEvent.pointerMove(window, at(y))
+      await act(() => new Promise((r) => setTimeout(r, 30)))
+    }
+    fireEvent.pointerUp(window, at(800))
+    await act(() => new Promise((r) => setTimeout(r, 700)))
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
   it('clears a filled search box on Escape before closing', async () => {
     renderPage({ role: 'admin' })
     await open('Add a parent')
