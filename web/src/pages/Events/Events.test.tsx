@@ -321,18 +321,21 @@ describe('New event', () => {
   const panel = () => within(screen.getByRole('region', { name: 'New event' }))
   const type = (label: string, value: string) => fireEvent.change(panel().getByLabelText(label), { target: { value } })
 
+  // Closed 500ms into the 700ms Saved moment and opened again at once: the old panel is still sliding away when its
+  // moment would have run out, so its hold must end as it starts to leave, not when it unmounts.
   it('drops a save’s closing when the panel is closed during the Saved moment and opened afresh', async () => {
     serve()
-    renderPage([], 'admin')
+    renderPage([], 'admin', { motion: true })
     open()
     type('What happened?', 'Picnic')
     fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
-    await panel().findByRole('button', { name: 'Saved' })
+    await panel().findByRole('button', { name: 'Saved' }, { timeout: 3000 })
+    await act(() => new Promise((r) => setTimeout(r, 500)))
 
     open()
-    await waitFor(() => expect(screen.queryByRole('region', { name: 'New event' })).toBeNull())
+    expect(screen.getByRole('region', { name: 'New event', hidden: true })).toHaveAttribute('inert')
     open()
-    await act(() => new Promise((r) => setTimeout(r, 1000)))
+    await act(() => new Promise((r) => setTimeout(r, 1500)))
 
     expect(panel().getByLabelText('What happened?')).toHaveValue('')
     expect(screen.queryByText('Saved “Picnic”.')).toBeNull()
