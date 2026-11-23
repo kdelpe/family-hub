@@ -120,17 +120,23 @@ function CountUp({ to, count }: { to: number; count: boolean }) {
     if (!counting) {
       return
     }
+    // Stopping the run writes one last frame: cut short (Pause, reduced motion), it would land over the total React
+    // has just shown.
+    let live = true
     const run = animate(0, to, {
       duration: 1.2,
       ease: 'easeOut',
       onUpdate: (v) => {
-        if (shown.current) {
+        if (live && shown.current) {
           shown.current.textContent = Math.round(v).toLocaleString()
         }
       },
       onComplete: () => setSettled(true),
     })
-    return () => run.stop()
+    return () => {
+      live = false
+      run.stop()
+    }
   }, [to, counting])
   return (
     <b ref={shown} aria-hidden="true" className={styles.statNumber}>
