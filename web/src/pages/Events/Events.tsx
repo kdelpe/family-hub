@@ -17,7 +17,8 @@ const yearOf = (event: FamilyEvent) => event.date?.match(/^\d{4}/)?.[0] ?? undat
 const anchorId = (year: string) => `events-year-${year}`
 // Matches the handle's sticky top in Events.module.css.
 const handleTop = () => window.innerHeight * 0.42
-const handleMiddle = 58
+// About the grip's middle, down the handle: past the 44px ▲ button, halfway down the 44px grip.
+const handleMiddle = 64
 
 // Events (design-notes §4.5): the timeline. Media, + Upload and each card's photos wait for Phase 5.
 export function Events() {
@@ -141,7 +142,7 @@ export function Events() {
               return <TimelineEntry key={event.id} event={event} anchor={first ? anchorId(y) : undefined} lit={years.length > 1 && y === current} />
             })}
           </ol>
-          {years.length > 1 && <YearHandle years={years} current={current} onPick={pick} />}
+          {years.length > 1 && <YearHandle years={years} current={current} still={reduced} onPick={pick} />}
         </div>
       )}
     </main>

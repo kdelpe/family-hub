@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { domMax, LazyMotion, MotionGlobalConfig } from 'motion/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -26,7 +27,8 @@ const tree = { persons: [person('rose', 'Rose', 'Monestime'), person('fritz', 'F
 
 let lastClient: QueryClient
 
-function renderPage(events?: FamilyEvent[], role = 'member') {
+// motion: with Motion's features and animations on, so a closing panel stays mounted while it leaves.
+function renderPage(events?: FamilyEvent[], role = 'member', { motion = false } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   lastClient = client
   client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role, person_id: null })
@@ -34,14 +36,19 @@ function renderPage(events?: FamilyEvent[], role = 'member') {
   if (events) {
     client.setQueryData(eventKeys.all, events)
   }
-  render(
+  const page = (
     <QueryClientProvider client={client}>
       <RouterProvider router={createMemoryRouter([{ path: '/', element: <Events /> }])} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  if (motion) {
+    MotionGlobalConfig.skipAnimations = false
+  }
+  render(motion ? <LazyMotion features={domMax}>{page}</LazyMotion> : page)
 }
 
 afterEach(() => {
+  MotionGlobalConfig.skipAnimations = true
   vi.unstubAllGlobals()
 })
 
@@ -140,6 +147,22 @@ describe('Events', () => {
       fireEvent.wheel(window)
       fireEvent.scroll(window)
       expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', 'Undated')
+    })
+
+    it('changes the year without its fade with reduced motion', () => {
+      vi.stubGlobal('scrollTo', vi.fn())
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query.includes('reduce'),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }))
+      renderPage(spread, 'member', { motion: true })
+
+      fireEvent.click(handle().getByRole('button', { name: 'Older year' }))
+
+      // A fading year would still be there, leaving.
+      expect(handle().getByRole('slider').textContent).toBe('’25')
     })
 
     it('isn’t there when every event falls in one year', () => {

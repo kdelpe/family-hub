@@ -111,10 +111,11 @@
 }
 
 .grip {
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* A whole touch target (design-notes §1.3), between the two 44px buttons. */
+  height: 44px;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
   overflow: hidden;
   border-block: 1px solid var(--on-accent-line);
   font-size: 12px;
@@ -122,6 +123,10 @@
   font-variant-numeric: tabular-nums;
   cursor: ns-resize;
   touch-action: none;
+}
+
+.gripLabel {
+  grid-area: 1 / 1;
 }
 
 .line {
