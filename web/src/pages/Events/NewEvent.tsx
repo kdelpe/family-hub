@@ -321,6 +321,8 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
                 {/* The check shows for its full moment, counted from when it's on screen, before the panel closes. */}
                 <OnShown
                   run={() => {
+                    // StrictMode runs this twice in development; only one hold may be left to close the panel.
+                    clearTimeout(hold.current)
                     hold.current = setTimeout(() => onSaved(done), savedHold)
                   }}
                 />
