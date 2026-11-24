@@ -3,7 +3,7 @@ import { AnimatePresence, m } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
-import { sameSession, sessionGeneration } from '../../api/auth'
+import { onSessionEnded, sameSession, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { createEventKey, deleteEvent, eventKeys, eventsQuery, type FamilyEvent } from '../../api/events'
 import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
@@ -66,6 +66,10 @@ export function Events() {
             (error: unknown) => {
               if (error instanceof ApiError && error.status === 404) {
                 return true
+              }
+              // A 401 means the session ended on the server: what was fetched as them goes, as for any save.
+              if (error instanceof Error) {
+                onSessionEnded(queryClient)(error, undefined, since)
               }
               if (!sameSession(since)) {
                 return false
