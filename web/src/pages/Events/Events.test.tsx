@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { domMax, LazyMotion, MotionGlobalConfig } from 'motion/react'
+import { StrictMode } from 'react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -29,7 +30,8 @@ const tree = { persons: [person('rose', 'Rose', 'Monestime'), person('fritz', 'F
 let lastClient: QueryClient
 
 // motion: with Motion's features and animations on, so a closing panel stays mounted while it leaves.
-function renderPage(events?: FamilyEvent[], role = 'member', { motion = false } = {}) {
+// strict: under StrictMode, as the app runs, which runs effects twice in development.
+function renderPage(events?: FamilyEvent[], role = 'member', { motion = false, strict = false } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   lastClient = client
   client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role, person_id: null })
@@ -47,7 +49,8 @@ function renderPage(events?: FamilyEvent[], role = 'member', { motion = false } 
   if (motion) {
     MotionGlobalConfig.skipAnimations = false
   }
-  render(motion ? <LazyMotion features={domMax}>{page}</LazyMotion> : page)
+  const app = motion ? <LazyMotion features={domMax}>{page}</LazyMotion> : page
+  render(strict ? <StrictMode>{app}</StrictMode> : app)
 }
 
 afterEach(() => {
@@ -325,7 +328,7 @@ describe('New event', () => {
   // moment would have run out, so its hold must end as it starts to leave, not when it unmounts.
   it('drops a save’s closing when the panel is closed during the Saved moment and opened afresh', async () => {
     serve()
-    renderPage([], 'admin', { motion: true })
+    renderPage([], 'admin', { motion: true, strict: true })
     open()
     type('What happened?', 'Picnic')
     fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
