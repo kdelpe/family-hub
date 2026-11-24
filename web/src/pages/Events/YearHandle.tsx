@@ -5,7 +5,18 @@ import styles from './Events.module.css'
 
 const dragPxPerYear = 26
 
-export function YearHandle({ years, current, onPick }: { years: string[]; current: string; onPick: (year: string, glide: boolean) => void }) {
+// still: with reduced motion, the year changes without its fade.
+export function YearHandle({
+  years,
+  current,
+  still,
+  onPick,
+}: {
+  years: string[]
+  current: string
+  still: boolean
+  onPick: (year: string, glide: boolean) => void
+}) {
   const at = Math.max(0, years.indexOf(current))
   const drag = useRef<{ id: number; y0: number; from: number } | null>(null)
   const step = (by: number) => {
@@ -38,7 +49,8 @@ export function YearHandle({ years, current, onPick }: { years: string[]; curren
     drag.current = null
   }
   const onKeyDown = (event: KeyboardEvent) => {
-    const to = { ArrowUp: at - 1, ArrowDown: at + 1, Home: 0, End: years.length - 1 }[event.key]
+    const keys: Record<string, number> = { ArrowUp: at - 1, ArrowDown: at + 1, Home: 0, End: years.length - 1 }
+    const to = keys[event.key]
     if (to !== undefined) {
       event.preventDefault()
       step(to - at)
@@ -67,11 +79,24 @@ export function YearHandle({ years, current, onPick }: { years: string[]; curren
           onKeyDown={onKeyDown}
           className={styles.grip}
         >
-          <AnimatePresence mode="popLayout" initial={false}>
-            <m.span key={current} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.14 }}>
-              {labelOf(current, false)}
-            </m.span>
-          </AnimatePresence>
+          {still ? (
+            <span className={styles.gripLabel}>{labelOf(current, false)}</span>
+          ) : (
+            // The leaving and arriving years share one grid cell (Events.module.css), not popLayout's injected
+            // styles, which the site's CSP blocks.
+            <AnimatePresence initial={false}>
+              <m.span
+                key={current}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.14 }}
+                className={styles.gripLabel}
+              >
+                {labelOf(current, false)}
+              </m.span>
+            </AnimatePresence>
+          )}
         </div>
         <button
           type="button"
