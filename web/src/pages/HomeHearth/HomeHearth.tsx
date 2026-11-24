@@ -152,7 +152,20 @@ const leavesStart = branchDelay(branches.length - 1) + branchDraw
 
 let grown = false
 
-function HeroTree() {
+// A leaf buds (when the tree grows) and then sways, unless still.
+export function leafMotion(i: number, grow: boolean, still: boolean) {
+  return {
+    // Not `false` on a return visit: that would skip the sway too.
+    initial: grow ? { scale: 0 } : { scale: 1, y: 0 },
+    animate: still ? { scale: 1, y: 0 } : { scale: 1, y: [0, -2.5, 0] },
+    transition: {
+      scale: { type: 'spring' as const, stiffness: 260, damping: 12, delay: grow ? leavesStart + i * 0.1 : 0 },
+      y: still ? { duration: 0.3 } : { duration: 5 + (i % 3), repeat: Infinity, ease: 'easeInOut' as const, delay: (grow ? leavesStart + 1 : 0) + i * 0.3 },
+    },
+  }
+}
+
+export function HeroTree() {
   const [paused] = useMotionPaused()
   const reduced = useReducedMotion()
   const [grow] = useState(() => !grown && !reduced)
@@ -184,13 +197,7 @@ function HeroTree() {
           cy={leaf.cy}
           r={leaf.r}
           className={leaf.light ? styles.lightLeaf : styles.leaf}
-          // Not `false` on a return visit: that would skip the sway too.
-          initial={grow ? { scale: 0 } : { scale: 1, y: 0 }}
-          animate={still ? { scale: 1, y: 0 } : { scale: 1, y: [0, -2.5, 0] }}
-          transition={{
-            scale: { type: 'spring', stiffness: 260, damping: 12, delay: grow ? leavesStart + i * 0.1 : 0 },
-            y: still ? { duration: 0.3 } : { duration: 5 + (i % 3), repeat: Infinity, ease: 'easeInOut', delay: (grow ? leavesStart + 1 : 0) + i * 0.3 },
-          }}
+          {...leafMotion(i, grow, still)}
         />
       ))}
     </svg>

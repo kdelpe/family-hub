@@ -394,7 +394,8 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
     <Dialog.Root open onOpenChange={(open) => !open && dismiss()}>
       <Dialog.Portal>
         <Dialog.Overlay asChild>
-          <m.div className={styles.scrim} initial={{ opacity: 0 }} animate={{ opacity: leaving ? 0 : 1 }} />
+          {/* Like the sheet, it fades in with CSS, so the page behind is dimmed even if Motion never loads. */}
+          <m.div className={still ? styles.scrim : `${styles.scrim} ${styles.fadeIn}`} initial={false} animate={{ opacity: leaving ? 0 : 1 }} />
         </Dialog.Overlay>
         <Dialog.Content
           asChild
