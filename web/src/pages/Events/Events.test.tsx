@@ -235,6 +235,22 @@ describe('Events', () => {
       expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', 'Undated')
     })
 
+    it('changes the year without its fade with reduced motion', () => {
+      vi.stubGlobal('scrollTo', vi.fn())
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query.includes('reduce'),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }))
+      renderPage(spread, 'member', { motion: true })
+
+      fireEvent.click(handle().getByRole('button', { name: 'Older year' }))
+
+      // A fading year would still be there, leaving.
+      expect(handle().getByRole('slider').textContent).toBe('’25')
+    })
+
     it('isn’t there when every event falls in one year', () => {
       renderPage([spread[1]!, spread[2]!])
 
