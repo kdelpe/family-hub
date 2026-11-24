@@ -104,6 +104,53 @@ func TestHome(t *testing.T) {
 		"living and deceased, not deleted; no parent links; added since November 1 in New York")
 }
 
+func TestHomeCountsNewThisMonth(t *testing.T) {
+	newYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+	at := func(value string) time.Time {
+		v, err := time.ParseInLocation(time.DateTime, value, newYork)
+		require.NoError(t, err)
+		return v
+	}
+	tests := []struct {
+		name  string
+		now   time.Time
+		added []time.Time
+		want  int
+	}{
+		{
+			name:  "from the family's midnight on the 1st, not a second before",
+			now:   at("2026-12-01 01:00:00"),
+			added: []time.Time{at("2026-11-30 23:59:59"), at("2026-12-01 00:00:00")},
+			want:  1,
+		},
+		{
+			// 10pm on November 30 in New York is already December in UTC.
+			name:  "the family's month when UTC has moved on",
+			now:   at("2026-11-30 22:00:00"),
+			added: []time.Time{at("2026-11-15 12:00:00")},
+			want:  1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := testdb.MigratedPool(t, database.MigrateUp)
+			svc, admin := NewService(pool), insertAdmin(t, pool)
+			for i, when := range tt.added {
+				p, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: fmt.Sprint("Added ", i)})
+				require.NoError(t, err)
+				_, err = pool.Exec(t.Context(), `UPDATE persons SET created_at = $1 WHERE id = $2`, when, p.ID)
+				require.NoError(t, err)
+			}
+
+			home, err := svc.Home(t.Context(), Viewer{}, tt.now, newYork)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, home.Counts.NewThisMonth)
+		})
+	}
+}
+
 func TestHomeCountsGenerations(t *testing.T) {
 	tests := []struct {
 		name string
