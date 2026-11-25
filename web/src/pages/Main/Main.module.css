@@ -207,12 +207,11 @@
   clip-path: inset(11px round 11px);
 }
 
-/* The Members book's endpaper dots (owner's pick, 2026-11-25), only inside the frame below. --dots and --dots-at are
-   set from Main.tsx, so the dots move and scale with the tree. */
+/* The Members book's endpaper dots (owner's pick, 2026-11-25), moved and scaled with the tree from Main.tsx. At the
+   stage's origin, so a zoom doesn't slide them; .inside clips them to the frame. */
 .paper {
   position: absolute;
-  inset: 11px;
-  border-radius: 11px;
+  inset: 0;
   background-image:
     radial-gradient(circle at 25% 25%, color-mix(in srgb, var(--accent) 20%, transparent) 2.2px, transparent 2.8px),
     radial-gradient(circle at 75% 75%, color-mix(in srgb, var(--accent) 12%, transparent) 2.2px, transparent 2.8px);
@@ -328,9 +327,8 @@
   gap: 34px;
 }
 
-/* Opening the page, the generations arrive one after another, top to bottom; centering, the cards fly instead
-   (Main.tsx). Delays are set inline; the duration is --row-landed, set on .rows from Main.tsx's rowLanded, which also
-   times the lines drawn into them. */
+/* Opening the page, the generations arrive in turn (centering, the cards fly instead). Delays are set inline; the
+   duration is --row-landed, from Main.tsx's rowLanded, which also times the lines. */
 .arrive .generation {
   animation: side var(--row-landed) ease-out both;
 }

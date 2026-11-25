@@ -831,6 +831,17 @@ describe('Main', () => {
     expect(document.querySelector<SVGElement>('[data-chain="sib:fritz"]')!.style.animationDelay).toBe(`${560 + 180}ms`)
   })
 
+  it('runs the green afresh when the lift moves to a card sharing a line', () => {
+    renderTree('fritz')
+    fireEvent.pointerEnter(personOf('Jean-Robert'), { pointerType: 'mouse' })
+    const before = document.querySelector('[data-chain="sib:fritz"]')
+
+    fireEvent.pointerLeave(personOf('Jean-Robert'), { pointerType: 'mouse' })
+    fireEvent.pointerEnter(personOf('Joseph'), { pointerType: 'mouse' })
+
+    expect(document.querySelector('[data-chain="sib:fritz"]')).not.toBe(before)
+  })
+
   it('fades back everyone off the green while a card is lifted', () => {
     renderTree('fritz')
     const dimmed = () => [...document.querySelectorAll('[data-person]')].filter((p) => p.querySelector(`.${styles.dim}`)).map((p) => p.getAttribute('data-person'))
@@ -911,6 +922,29 @@ describe('Main', () => {
         expect(shownX()).toBeCloseTo(540 + (2000 - 540) * 0.35, 0)
 
         letGo()
+        act(() => vi.advanceTimersByTime(3000))
+        expect(shownX()).toBeCloseTo(540, 0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('holds a tree caught as it springs back, and lets it spring back once let go', () => {
+      vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+      try {
+        layOut({ tree: 600 })
+        renderTree('fritz')
+        dragFar()()
+        act(() => vi.advanceTimersByTime(50))
+        const caught = shownX()
+        expect(caught).toBeGreaterThan(540)
+
+        const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+        fireEvent.pointerDown(panel, { pointerId: 2, pointerType: 'mouse', button: 0, clientX: 0, clientY: 0 })
+        act(() => vi.advanceTimersByTime(500))
+        expect(shownX()).toBe(caught)
+
+        fireEvent.pointerUp(window, { pointerId: 2 })
         act(() => vi.advanceTimersByTime(3000))
         expect(shownX()).toBeCloseTo(540, 0)
       } finally {
