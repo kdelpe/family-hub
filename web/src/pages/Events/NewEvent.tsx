@@ -1,12 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, m, useIsPresent } from 'motion/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { createEvent, createEventKey, type DatePrecision, eventKeys, type NewEvent as NewEventBody } from '../../api/events'
-import { treeQuery } from '../../api/tree'
-import { errorMessage, refusedMessage } from '../../lib/errorMessage'
+import { refusedMessage } from '../../lib/errorMessage'
 import { useMotionPaused, useReducedMotion } from '../../lib/motion'
-import { fullName, nameMatches } from '../../lib/names'
 import styles from './Events.module.css'
 
 const precisions: { id: DatePrecision; label: string }[] = [
@@ -43,35 +41,13 @@ function dateOf({ precision, day, dayUnfinished, month, year }: Draft): string |
 // The + New event panel (design-notes §4.5): admins only, inline above the timeline.
 export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (title: string) => void }) {
   const queryClient = useQueryClient()
-  const tree = useQuery(treeQuery)
   const [title, setTitle] = useState('')
   const [place, setPlace] = useState('')
   const [draft, setDraft] = useState<Draft>({ precision: 'day', day: '', dayUnfinished: false, month: '', year: '' })
   const [story, setStory] = useState('')
-  const [people, setPeople] = useState<{ id: string; name: string }[]>([])
-  const [adding, setAdding] = useState(false)
-  const [query, setQuery] = useState('')
   const first = useRef<HTMLInputElement>(null)
-  const search = useRef<HTMLInputElement>(null)
-  const addButton = useRef<HTMLButtonElement>(null)
 
   useEffect(() => first.current?.focus(), [])
-  useEffect(() => {
-    if (adding) {
-      search.current?.focus()
-    }
-  }, [adding])
-
-  const typed = query.trim().replace(/\s+/g, ' ')
-  const matches = useMemo(() => {
-    const found = []
-    for (const p of typed ? (tree.data?.persons ?? []) : []) {
-      if (!people.some((x) => x.id === p.id) && nameMatches(fullName(p), typed) && found.push(p) === 5) {
-        break
-      }
-    }
-    return found
-  }, [tree.data, people, typed])
 
   // The saved event's title, once saved.
   const [done, setDone] = useState<string | null>(null)
@@ -108,22 +84,9 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
       ...(date && { date, date_precision: draft.precision }),
       ...(place.trim() && { location: place.trim() }),
       ...(story.trim() && { description: story.trim() }),
-      person_ids: people.map((p) => p.id),
+      // People are tagged on photos instead, once they arrive (owner's call, 2026-11-25).
+      person_ids: [],
     })
-  }
-
-  // The chip's own × goes away with it, so focus stays in the picker.
-  const unpick = (id: string) => {
-    setPeople((list) => list.filter((x) => x.id !== id))
-    requestAnimationFrame(() => (search.current ?? addButton.current)?.focus())
-  }
-
-  const pick = (id: string, name: string) => {
-    setPeople((list) => [...list, { id, name }])
-    setQuery('')
-    setAdding(false)
-    // The search box goes away, so focus goes back to where another can be added.
-    requestAnimationFrame(() => addButton.current?.focus())
   }
 
   return (
@@ -244,71 +207,6 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
         </label>
         <textarea id="ev-text" rows={2} value={story} onChange={(e) => setStory(e.target.value)} maxLength={5000} className={styles.textarea} />
       </div>
-      <div className={styles.who}>
-        <span id="ev-who" className={styles.label}>
-          Who was there?
-        </span>
-        <ul aria-labelledby="ev-who" className={styles.chips}>
-          {people.map((p) => (
-            <li key={p.id} className={styles.chosen}>
-              {p.name}
-              <button
-                type="button"
-                aria-label={`Remove ${p.name}`}
-                onClick={() => unpick(p.id)}
-                className={styles.remove}
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
-        {!adding && (
-          <button ref={addButton} type="button" onClick={() => setAdding(true)} className={`pill ${styles.addPerson}`}>
-            + Add person
-          </button>
-        )}
-      </div>
-      {adding && (
-        <div className={styles.find}>
-          <input
-            ref={search}
-            type="search"
-            aria-label="Find a relative"
-            placeholder="Type a name"
-            autoComplete="off"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault()
-                setQuery('')
-                setAdding(false)
-                requestAnimationFrame(() => addButton.current?.focus())
-              }
-            }}
-            className={styles.input}
-          />
-          {typed && (
-            <ul className={styles.matches}>
-              {matches.map((p) => (
-                <li key={p.id}>
-                  <button type="button" onClick={() => pick(p.id, fullName(p))} className={styles.match}>
-                    {fullName(p)}
-                  </button>
-                </li>
-              ))}
-              {matches.length === 0 && tree.data && <li className={styles.muted}>No one by that name.</li>}
-              {tree.isPending && <li className={styles.muted}>Loading…</li>}
-              {tree.isError && !tree.data && (
-                <li role="alert" className={styles.muted}>
-                  Can’t search the family tree right now. {errorMessage(tree.error)}
-                </li>
-              )}
-            </ul>
-          )}
-        </div>
-      )}
       {save.isError && <p role="alert">{refusedMessage(save.error)}</p>}
       <div className={styles.actions}>
         <button type="button" onClick={onClose} className={`pill ${styles.cancel}`}>
