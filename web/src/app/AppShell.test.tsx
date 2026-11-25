@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { resetMenuFolded } from '../lib/menuFolded'
 import { AppShell } from './AppShell'
 
 const maya = { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: 'p1' }
@@ -165,6 +166,127 @@ describe('AppShell', () => {
 
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(picture).toHaveFocus()
+  })
+
+  describe('folding the menu', () => {
+    afterEach(() => {
+      localStorage.clear()
+      resetMenuFolded()
+    })
+    const signedIn = () => stubApi({ '/api/auth/me': { status: 200, body: maya }, '/api/persons/p1': { status: 200, body: mayaPerson } })
+
+    it('folds to a rail that names each page as you reach it, and stays folded next time', async () => {
+      signedIn()
+      renderShell()
+      fireEvent.click(await screen.findByRole('button', { name: 'Fold the menu' }))
+
+      const menu = screen.getByRole('navigation', { name: 'Main' })
+      expect(within(menu).getByRole('button', { name: 'Unfold the menu' })).toHaveAttribute('aria-expanded', 'false')
+      const events = within(menu).getByRole('link', { name: 'Events' })
+      fireEvent.focus(events)
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Events')
+      // Tied to the link itself, for a screen reader.
+      expect(events).toHaveAccessibleDescription('Events')
+
+      cleanup()
+      signedIn()
+      renderShell()
+      expect(await screen.findByRole('button', { name: 'Unfold the menu' })).toBeInTheDocument()
+    })
+
+    it('opens no tooltip by itself when the menu folds again', async () => {
+      signedIn()
+      renderShell()
+      fireEvent.click(await screen.findByRole('button', { name: 'Fold the menu' }))
+      const menu = screen.getByRole('navigation', { name: 'Main' })
+      fireEvent.focus(within(menu).getByRole('link', { name: 'Events' }))
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+
+      fireEvent.click(within(menu).getByRole('button', { name: 'Unfold the menu' }))
+      fireEvent.click(within(menu).getByRole('button', { name: 'Fold the menu' }))
+
+      expect(screen.queryByRole('tooltip')).toBeNull()
+    })
+
+    it.each([
+      { name: 'moves an icon for a mouse', pointerType: 'mouse', pointed: true },
+      { name: 'leaves an icon still for a tap', pointerType: 'touch', pointed: false },
+    ])('$name', async ({ pointerType, pointed }) => {
+      signedIn()
+      renderShell()
+      const events = await within(await screen.findByRole('navigation', { name: 'Main' })).findByRole('link', { name: 'Events' })
+
+      fireEvent.pointerEnter(events, { pointerType })
+
+      expect(events.hasAttribute('data-pointed')).toBe(pointed)
+    })
+
+    it('keeps the tab bar on a phone, with short labels that keep their full names', async () => {
+      localStorage.setItem('fh-menu-folded', '1')
+      resetMenuFolded()
+      vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+      signedIn()
+      renderShell()
+
+      const tree = await within(await screen.findByRole('navigation', { name: 'Main' })).findByRole('link', { name: 'Family tree' })
+      expect(tree).toHaveTextContent('Tree')
+      fireEvent.focus(tree)
+      expect(screen.queryByRole('tooltip')).toBeNull()
+    })
+  })
+
+  it.each([
+    { name: 'opens the admin pages from the drawer for an admin', role: 'admin' },
+    { name: 'offers no admin drawer to a member', role: 'member' },
+  ])('$name', async ({ role }) => {
+    // A phone: the drawer is only there while the screen is narrow.
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    stubApi({ '/api/auth/me': { status: 200, body: { ...maya, role } }, '/api/persons/p1': { status: 200, body: mayaPerson } })
+    renderShell()
+    await screen.findByRole('button', { name: 'Your account' })
+
+    const drawer = screen.queryByRole('button', { name: 'Admin menu' })
+    if (role !== 'admin') {
+      expect(drawer).toBeNull()
+      return
+    }
+    fireEvent.click(drawer!)
+    const panel = within(screen.getByRole('dialog', { name: 'Admin' }))
+    fireEvent.click(panel.getByRole('link', { name: 'Members & invites' }))
+    expect(screen.queryByRole('dialog', { name: 'Admin' })).toBeNull()
+  })
+
+  it('puts the admin drawer away when the screen widens', async () => {
+    const listeners = new Set<() => void>()
+    let narrow = true
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      get matches() {
+        return narrow && query.includes('max-width')
+      },
+      media: query,
+      addEventListener: (_: string, l: () => void) => listeners.add(l),
+      removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+    }))
+    stubApi({ '/api/auth/me': { status: 200, body: maya }, '/api/persons/p1': { status: 200, body: mayaPerson } })
+    renderShell()
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin menu' }))
+    expect(screen.getByRole('dialog', { name: 'Admin' })).toBeInTheDocument()
+
+    narrow = false
+    act(() => listeners.forEach((l) => l()))
+
+    expect(screen.queryByRole('dialog', { name: 'Admin' })).toBeNull()
+  })
+
+  it('closes the admin drawer from its own button, staying on the page', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    stubApi({ '/api/auth/me': { status: 200, body: maya }, '/api/persons/p1': { status: 200, body: mayaPerson } })
+    renderShell()
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin menu' }))
+
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Admin' })).getByRole('button', { name: 'Close' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Admin' })).toBeNull()
   })
 
   it('sends someone signed out to sign in', async () => {

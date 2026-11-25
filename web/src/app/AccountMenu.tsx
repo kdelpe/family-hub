@@ -2,13 +2,16 @@ import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
 
+import sheet from '../components/Sheet/Sheet.module.css'
 import { errorMessage } from '../lib/errorMessage'
+import { useMotionPaused } from '../lib/motion'
 import { useSignInBusy, useSignOut } from '../lib/useSignOut'
 import styles from './AccountMenu.module.css'
 
 // design-notes §2.1: your picture at the top right, opening a panel from the right (owner's pick A, 2026-11-21).
 export function AccountMenu({ initials, name, waiting, linked }: { initials: string; name: string; waiting: number; linked: boolean }) {
   const [open, setOpen] = useState(false)
+  const [paused] = useMotionPaused()
   const button = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const signOut = useSignOut()
@@ -71,8 +74,8 @@ export function AccountMenu({ initials, name, waiting, linked }: { initials: str
       {open &&
         createPortal(
         <>
-          <div className={styles.scrim} onClick={close} />
-          <div ref={panel} role="dialog" aria-modal="true" aria-label="Your account" onKeyDown={onKeyDown} className={styles.panel}>
+          <div data-still={paused || undefined} className={sheet.scrim} onClick={close} />
+          <div ref={panel} role="dialog" aria-modal="true" aria-label="Your account" onKeyDown={onKeyDown} data-still={paused || undefined} className={`${sheet.panel} ${styles.panel}`}>
             <div className={styles.who}>
               <span aria-hidden="true" className={`${styles.picture} ${styles.large}`}>
                 {initials}
