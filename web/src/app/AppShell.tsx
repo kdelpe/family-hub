@@ -10,6 +10,7 @@ import { myRequestsQuery } from '../api/contacts'
 import { Logo } from '../components/Logo/Logo'
 import { initials } from '../lib/names'
 import { errorMessage } from '../lib/errorMessage'
+import { useMenuFolded } from '../lib/motion'
 import { useNarrow } from '../lib/useNarrow'
 import { useSignedIn } from '../lib/useSignedIn'
 import { AccountMenu } from './AccountMenu'
@@ -18,28 +19,6 @@ import styles from './AppShell.module.css'
 import { MenuIcon } from './MenuIcon'
 import { adminPages, menuPages } from './signedInPages'
 
-
-const foldedKey = 'family-hub.menu-folded'
-
-// The menu folded to its rail stays folded on the next visit. Storage can be missing or refused.
-function useFolded() {
-  const [folded, setFolded] = useState(() => {
-    try {
-      return localStorage.getItem(foldedKey) === '1'
-    } catch {
-      return false
-    }
-  })
-  const fold = (next: boolean) => {
-    setFolded(next)
-    try {
-      localStorage.setItem(foldedKey, next ? '1' : '0')
-    } catch {
-      // Folded for this visit only.
-    }
-  }
-  return [folded, fold] as const
-}
 
 // One highlight that glides to the page opened. On a phone, short is the tab's label.
 function MenuItem({
@@ -52,10 +31,11 @@ function MenuItem({
   onClick,
 }: (typeof menuPages)[number] & { rail: boolean; narrow: boolean; onClick?: () => void }) {
   const tab = narrow && short
+  const [tipOpen, setTipOpen] = useState(false)
   // Always inside the tooltip, closed off the rail: unwrapping it would remount the link and drop its focus. NavLink
   // marks the current page with aria-current, which the styles read, so its className stays plain for the trigger.
   return (
-    <Tooltip.Root open={rail ? undefined : false}>
+    <Tooltip.Root open={rail && tipOpen} onOpenChange={setTipOpen}>
       <Tooltip.Trigger asChild>
         <NavLink to={path} end aria-label={tab ? label : undefined} onClick={onClick} className={styles.item}>
           {({ isActive }) => (
@@ -76,8 +56,8 @@ function MenuItem({
   )
 }
 
-// Phones: the admin pages don't fit the tab bar, so admins get them in a drawer from the top right, the account
-// panel's sheet.
+// Phones: the admin pages don't fit the tab bar, so a ☰ at the top opens them in a drawer from the right, the
+// account panel's sheet.
 function AdminDrawer() {
   const [open, setOpen] = useState(false)
   return (
@@ -109,11 +89,14 @@ function AdminDrawer() {
 }
 
 // Toasts live outside the shell, so the page root says when the phone's tab bar is there to keep clear of.
-function useTabBarRoom() {
+function useTabBarRoom(shown: boolean) {
   useEffect(() => {
+    if (!shown) {
+      return
+    }
     document.documentElement.toggleAttribute('data-tab-bar', true)
     return () => document.documentElement.removeAttribute('data-tab-bar')
-  }, [])
+  }, [shown])
 }
 
 // The parent route of every signed-in page (design-notes §2.1): the left menu, then the page's own <main>.
@@ -126,11 +109,12 @@ export function AppShell() {
   const personId = user?.person_id ?? null
   const requests = useQuery({ ...myRequestsQuery(personId ?? ''), enabled: personId !== null, refetchInterval: 60_000 })
   const waiting = requests.data?.filter((r) => r.status === 'pending').length ?? 0
-  const [folded, fold] = useFolded()
+  const [folded, fold] = useMenuFolded()
   const narrow = useNarrow()
   // Phones have the tab bar instead, whatever was folded on a wider screen.
   const rail = folded && !narrow
-  useTabBarRoom()
+  // Not while loading or failed, which show no menu.
+  useTabBarRoom(Boolean(user && personSettled))
 
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth/login" replace state={{ from: location.pathname + location.search }} />
@@ -162,19 +146,20 @@ export function AppShell() {
               <span className={styles.hub}>Family Hub</span>
             </span>
           </Link>
-            <div className={styles.items}>
-              {menuPages.map((page) => (
+          <div className={styles.items}>
+            {menuPages.map((page) => (
+              <MenuItem key={page.path} {...page} rail={rail} narrow={narrow} />
+            ))}
+          </div>
+          {/* On a phone these live in the drawer instead; both at once would share the current-page pill. */}
+          {user.role === 'admin' && !narrow && (
+            <div className={`${styles.items} ${styles.admin}`}>
+              <span className={styles.adminLabel}>Admin</span>
+              {adminPages.map((page) => (
                 <MenuItem key={page.path} {...page} rail={rail} narrow={narrow} />
               ))}
             </div>
-            {user.role === 'admin' && (
-              <div className={`${styles.items} ${styles.admin}`}>
-                <span className={styles.adminLabel}>Admin</span>
-                {adminPages.map((page) => (
-                  <MenuItem key={page.path} {...page} rail={rail} narrow={narrow} />
-                ))}
-              </div>
-            )}
+          )}
         </nav>
         <div className={styles.content}>
           <div className={styles.account}>

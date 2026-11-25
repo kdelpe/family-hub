@@ -4,6 +4,7 @@ import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { resetMenuFolded } from '../lib/motion'
 import { AppShell } from './AppShell'
 
 const maya = { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: 'p1' }
@@ -168,7 +169,10 @@ describe('AppShell', () => {
   })
 
   describe('folding the menu', () => {
-    afterEach(() => localStorage.clear())
+    afterEach(() => {
+      localStorage.clear()
+      resetMenuFolded()
+    })
     const signedIn = () => stubApi({ '/api/auth/me': { status: 200, body: maya }, '/api/persons/p1': { status: 200, body: mayaPerson } })
 
     it('folds to a rail that names each page as you reach it, and stays folded next time', async () => {
@@ -213,7 +217,8 @@ describe('AppShell', () => {
     })
 
     it('keeps the tab bar on a phone, with short labels that keep their full names', async () => {
-      localStorage.setItem('family-hub.menu-folded', '1')
+      localStorage.setItem('fh-menu-folded', '1')
+      resetMenuFolded()
       vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {} }))
       signedIn()
       renderShell()

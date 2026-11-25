@@ -36,6 +36,43 @@ export function useMotionPaused(): [boolean, (paused: boolean) => void] {
   return [useSyncExternalStore(subscribePaused, readPaused, () => false), setPaused]
 }
 
+const foldedKey = 'fh-menu-folded'
+const foldedListeners = new Set<() => void>()
+let folded: boolean | null = null
+const readFolded = () => {
+  if (folded === null) {
+    try {
+      folded = localStorage.getItem(foldedKey) === '1'
+    } catch {
+      folded = false
+    }
+  }
+  return folded
+}
+const subscribeFolded = (listener: () => void) => {
+  foldedListeners.add(listener)
+  return () => foldedListeners.delete(listener)
+}
+const setFolded = (next: boolean) => {
+  folded = next
+  try {
+    localStorage.setItem(foldedKey, next ? '1' : '0')
+  } catch {
+    // Kept in memory only.
+  }
+  foldedListeners.forEach((l) => l())
+}
+
+// The menu folded to its rail (design-notes §2.1), kept for the next visit.
+export function useMenuFolded(): [boolean, (folded: boolean) => void] {
+  return [useSyncExternalStore(subscribeFolded, readFolded, () => false), setFolded]
+}
+
+// Tests only: forget the remembered fold, as the module outlives each test.
+export function resetMenuFolded() {
+  folded = null
+}
+
 const reducedQuery = '(prefers-reduced-motion: reduce)'
 // One media query list, made again only if matchMedia itself changes (as tests stub it).
 let reduced: { from: typeof window.matchMedia; list: MediaQueryList } | null = null

@@ -29,6 +29,11 @@
   padding-inline: 12px;
 }
 
+/* Narrow enough to sit beside the rail down to the phones' 600px, instead of wrapping under it. */
+.folded .content {
+  flex-basis: 480px;
+}
+
 /* On the menu's edge, half in and half out. */
 .fold {
   position: absolute;

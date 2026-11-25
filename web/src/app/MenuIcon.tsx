@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { useMotionPaused } from '../lib/motion'
 import styles from './MenuIcon.module.css'
 
 export type MenuIconName = 'home' | 'tree' | 'book' | 'calendar' | 'mic' | 'key'
@@ -50,10 +51,12 @@ const paths: Record<MenuIconName, ReactNode> = {
 // The menu's line icons (design-notes §2.1), drawn in the text's colour. Each moves its own way when its link is
 // pointed at or focused (MenuIcon.module.css).
 export function MenuIcon({ name, className }: { name: MenuIconName; className?: string }) {
+  const [paused] = useMotionPaused()
   return (
     <svg
       aria-hidden="true"
       data-icon={name}
+      data-still={paused || undefined}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

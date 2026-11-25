@@ -1,5 +1,5 @@
-/* Each icon's move, over and over while its link is pointed at or focused (owner's call, 2026-11-25). Only when
-   motion is welcome (§2.4). */
+/* Each icon's move, over and over while its link is pointed at, once when it's focused, as focus can stay put
+   (owner's call, 2026-11-25). Only when motion is welcome (§2.4) and not paused (§6.4). */
 @media (prefers-reduced-motion: no-preference) {
   .icon,
   .door,
@@ -7,6 +7,10 @@
   .page {
     transform-box: view-box;
     animation: 1.4s ease-in-out infinite;
+  }
+
+  a:focus-visible :is(.icon, .door, .cover, .page) {
+    animation-iteration-count: 1;
   }
 
   .door {
@@ -79,6 +83,12 @@
   a:hover .icon[data-icon='key'] {
     animation-name: unlock;
   }
+}
+
+/* Pause motion, chosen on the site. Last, to outweigh the pointed-at rules. */
+a .icon[data-still][data-icon],
+a .icon[data-still] * {
+  animation: none;
 }
 
 @keyframes swing {
