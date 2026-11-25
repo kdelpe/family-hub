@@ -80,10 +80,8 @@ describe('Events', () => {
     expect(card.getByRole('heading', { level: 2, name: 'Jean-Robert & Nadège’s wedding' })).toBeInTheDocument()
     expect(card.getByText('November 13, 1984 · Flatbush')).toBeInTheDocument()
     expect(card.getByText('Scanned from Nadège’s album.')).toBeInTheDocument()
-    expect(within(card.getByRole('list', { name: 'Who was there' })).getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
-      ['Jean-Robert Pluviose', '/people/jr'],
-      ['Nadège Pluviose', '/people/n'],
-    ])
+    // Who was there stays with the event, but the timeline doesn't show it (owner's call, 2026-11-25).
+    expect(card.queryByRole('list', { name: 'Who was there' })).toBeNull()
   })
 
   describe('removing an event', () => {

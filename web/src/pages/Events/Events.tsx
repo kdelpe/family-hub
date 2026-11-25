@@ -1,7 +1,6 @@
 import { useIsMutating, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, m } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
 
 import { onSessionEnded, sameSession, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
@@ -11,9 +10,7 @@ import { useToast } from '../../components/Toaster/Toaster'
 import { bornOn, year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
 import { useMotionPaused, useReducedMotion } from '../../lib/motion'
-import { fullName } from '../../lib/names'
 import { useSignedIn } from '../../lib/useSignedIn'
-import { PersonHoverCard } from '../../components/PersonHoverCard/PersonHoverCard'
 import styles from './Events.module.css'
 import { NewEvent } from './NewEvent'
 import { hideEvent, unhideEvent, usePendingRemovals } from './pendingRemovals'
@@ -269,7 +266,6 @@ export function Events() {
                     first={i === 0}
                     last={i === list.length - 1}
                     lit={years.length > 1 && y === current}
-                    viewerId={user?.person_id ?? null}
                     onRemove={
                       user?.role === 'admin'
                         ? () => {
@@ -316,7 +312,6 @@ function TimelineEntry({
   first,
   last,
   lit,
-  viewerId,
   onRemove,
 }: {
   event: FamilyEvent
@@ -326,7 +321,6 @@ function TimelineEntry({
   first: boolean
   last: boolean
   lit: boolean
-  viewerId: string | null
   onRemove?: () => void
 }) {
   const when = whenItHappened(event)
@@ -360,19 +354,6 @@ function TimelineEntry({
           {(when || event.location) && <span className={styles.when}>{[when, event.location].filter(Boolean).join(' · ')}</span>}
         </div>
         {event.description && <p className={styles.story}>{event.description}</p>}
-        {event.people.length > 0 && (
-          <ul aria-label="Who was there" className={styles.people}>
-            {event.people.map((p) => (
-              <li key={p.id}>
-                <PersonHoverCard person={p} viewerId={viewerId}>
-                  <Link to={`/people/${p.id}`} className={styles.chip}>
-                    {fullName(p)}
-                  </Link>
-                </PersonHoverCard>
-              </li>
-            ))}
-          </ul>
-        )}
       </m.article>
     </m.li>
   )
