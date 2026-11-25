@@ -74,6 +74,9 @@
   /* Cards lifted off the page. */
   --card-near: rgba(43, 38, 32, 0.05);
   --card-far: rgba(43, 38, 32, 0.09);
+  --card-lift:
+    0 1px 2px var(--card-near),
+    0 14px 32px var(--card-far);
 
   /* Illustration colors: the trees and the logo. Repeats point at the one color the mockups share. */
   --tree-branch: #8c7b5e;

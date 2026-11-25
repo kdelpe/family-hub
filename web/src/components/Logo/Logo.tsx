@@ -1,7 +1,6 @@
 import styles from './Logo.module.css'
 
 // The placeholder mark (design-notes §2.2), drawn at whatever size the page gives it.
-// On the menu's green cover, it's drawn in the cover's gold.
 export function Logo({ size, onCover = false }: { size: number; onCover?: boolean }) {
   return (
     <svg aria-hidden="true" width={size} height={size} viewBox="0 0 52 52" className={onCover ? styles.onCover : undefined}>

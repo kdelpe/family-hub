@@ -32,9 +32,7 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  box-shadow:
-    0 1px 2px var(--card-near),
-    0 14px 32px var(--card-far);
+  box-shadow: var(--card-lift);
 }
 
 .who {
@@ -385,9 +383,7 @@ form.who {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow:
-    0 1px 2px var(--card-near),
-    0 14px 32px var(--card-far);
+  box-shadow: var(--card-lift);
 }
 
 .sideTitle {
