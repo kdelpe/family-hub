@@ -8,6 +8,7 @@ import { authKeys } from '../../api/auth'
 import { type Home, homeKeys } from '../../api/home'
 import { personKeys } from '../../api/persons'
 import { treeKeys } from '../../api/tree'
+import { useMotionPaused } from '../../lib/motion'
 import { HomeHearth } from './HomeHearth'
 
 const fridayEvening = new Date('2026-11-20T18:30')
@@ -164,5 +165,26 @@ describe('HomeHearth', () => {
 
     expect(name).toHaveFocus()
     expect(screen.queryByRole('link', { name: 'In the tree' })).toBeNull()
+  })
+
+  it('keeps the greeting still once Pause motion is switched back off, rather than replaying its rise', () => {
+    let setPaused: (paused: boolean) => void = () => {}
+    function Pause() {
+      setPaused = useMotionPaused()[1]
+      return null
+    }
+    render(<Pause />)
+    act(() => setPaused(true))
+    try {
+      renderHome('p1')
+      const hero = screen.getByRole('region', { name: 'Welcome' })
+      expect(hero).toHaveAttribute('data-still')
+
+      act(() => setPaused(false))
+
+      expect(hero).toHaveAttribute('data-still')
+    } finally {
+      act(() => setPaused(false))
+    }
   })
 })

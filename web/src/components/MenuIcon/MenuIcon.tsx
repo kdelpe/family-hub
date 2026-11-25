@@ -79,8 +79,8 @@ const paths: Record<MenuIconName, ReactNode> = {
   ),
 }
 
-// The line icons of the menu, account sheet and tree toolbar (design-notes §2.1), drawn in the text's colour. Each moves its own way when its link is
-// pointed at or focused (MenuIcon.module.css).
+// The line icons of the menu, account sheet and tree toolbar (design-notes §2.1), drawn in the text's colour. The
+// menu's own icons move when their link is pointed at or focused (MenuIcon.module.css).
 export function MenuIcon({ name, className }: { name: MenuIconName; className?: string }) {
   const [paused] = useMotionPaused()
   return (
