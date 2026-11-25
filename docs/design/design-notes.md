@@ -101,7 +101,7 @@ White text only ever sits on `--accent` (buttons, the focus avatar).
 
 **Green cover and sky band (owner's pick K, 2026-11-25):**
 - The menu is bound like the Members book: a deep green gradient (`--accent` to `--cover-deep`) with a thin gold frame inset 10px, gold *Family Hub* and Admin label, and the logo drawn in gold. Names and icons are pale (`--on-cover`, `--on-cover-soft`); the current page is lit (`--cover-current`) with a 3px gold edge and a gold icon. The admin drawer stays on paper.
-- About a fifth of the window wide (`clamp(240px, 21vw, 320px)`, owner's call), with 17px names, 24px icons and a 60px logo. From 601 to 800px it's a green bar across the top, the name and pages in a row.
+- About a fifth of the window wide (`clamp(240px, 21vw, 320px)`, owner's call), with 17px names, 24px icons and a 76px logo. From 601 to 800px it's a green bar across the top, the name and pages in a row.
 - On phones the tab bar is the same green, with a gold rule along its top; the current tab is gold.
 - Across the top of every signed-in page runs a sky band: a sage-to-peach wash (`--sky-1`…`--sky-4`) with faint endpaper dots, 380px tall (300px on phones), fading into the cream. Pages' cards sit on it.
 - Cards on Home, Members & invites, My profile, a person's family and Requests are lifted off the page (`--card-lift`).

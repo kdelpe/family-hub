@@ -79,6 +79,17 @@
   gap: 0;
 }
 
+.identity svg {
+  transition:
+    width 0.4s cubic-bezier(0.3, 1.2, 0.5, 1),
+    height 0.4s cubic-bezier(0.3, 1.2, 0.5, 1);
+}
+
+.folded .identity svg {
+  width: 48px;
+  height: 48px;
+}
+
 .folded .label {
   width: 0;
   overflow: hidden;
@@ -109,7 +120,7 @@
 }
 
 /* Pause motion (§6.4): the fold and its tooltips without their springs. */
-.page[data-still] :is(.menu, .fold, .names, .adminLabel, .label) {
+.page[data-still] :is(.menu, .fold, .names, .adminLabel, .label, .identity svg) {
   transition: none;
 }
 
