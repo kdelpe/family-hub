@@ -281,7 +281,7 @@ Title **Events**. Segmented **Timeline / Media**, plus two buttons shown to admi
   - Dates are written "November 13, 1984", "July 2025", "1984" and "Around 1962", with "c. 1962" in the year column.
   - An undated event has an empty year column. Undated events come last.
   - On phones, the year sits above each card and the line runs down the left edge.
-- **Album page (owner's pick, 2026-11-25):** the timeline sits on the tree page's album page (§4.2): the Members book's endpaper dots inside a thin double frame, with soft fades at its top and bottom edges.
+- **Album page (owner's pick, 2026-11-25):** the timeline sits on the tree page's album page (§4.2): the Members book's endpaper dots on its `--endpaper` green (owner's call, 2026-11-25), inside a thin double frame, with soft fades at its top and bottom edges.
   - Only the timeline scrolls, inside the frame (the dots scroll with it); the title and + New event stay put. The page fills the window; with the New event panel open on a short window, the page scrolls too.
   - The line runs down the middle and the events take turns either side, each joined to its dot by a short tick, the year across the line from it. Phones keep one column with the line on the left.
   - Each card is a print mounted in the album: square corners, dark photo corners top left and bottom right, set slightly askew (−0.4° left, 0.35° right) and straightening as it lifts. Its date and place are in italic serif, `--print-date`.
