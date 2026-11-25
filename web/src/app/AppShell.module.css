@@ -69,6 +69,7 @@
 .folded .names,
 .folded .adminLabel {
   height: 0;
+  padding: 0;
   overflow: hidden;
   opacity: 0;
 }
@@ -321,12 +322,9 @@
   top: 6px;
 }
 
-.drawer {
+/* Doubled to outweigh the account panel's own gap, whichever stylesheet loads last. */
+.drawer.drawer {
   gap: 8px;
-}
-
-.drawer .item[aria-current='page'] {
-  background: var(--nav-active);
 }
 
 .drawerTitle {
@@ -390,6 +388,11 @@
     box-shadow: none;
   }
 
+  .item:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
   .item[aria-current='page'],
   .item[aria-current='page']:hover {
     color: var(--accent);
@@ -418,6 +421,15 @@
 
   .drawer .item[aria-current='page'] {
     font-weight: 600;
+  }
+
+  .drawer .currentPill {
+    inset: 0;
+    width: auto;
+    height: auto;
+    margin: 0;
+    border-radius: 8px;
+    background: var(--nav-active);
   }
 
   .phoneIdentity {

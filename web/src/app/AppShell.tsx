@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import * as Tooltip from '@radix-ui/react-tooltip'
 import { useQuery } from '@tanstack/react-query'
 import { m } from 'motion/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router'
 
 import { ApiError } from '../api/client'
@@ -42,27 +42,31 @@ function useFolded() {
 }
 
 // One highlight that glides to the page opened. On a phone, short is the tab's label.
-function MenuItem({ path, label, short, icon, rail, narrow }: (typeof menuPages)[number] & { rail: boolean; narrow: boolean }) {
+function MenuItem({
+  path,
+  label,
+  short,
+  icon,
+  rail,
+  narrow,
+  onClick,
+}: (typeof menuPages)[number] & { rail: boolean; narrow: boolean; onClick?: () => void }) {
   const tab = narrow && short
-  const link = (
-    // NavLink marks the current page with aria-current, which the styles read: a plain className, which the tooltip's
-    // trigger can merge with its own.
-    <NavLink to={path} end aria-label={tab ? label : undefined} className={styles.item}>
-      {({ isActive }) => (
-        <>
-          {isActive && <m.span layoutId="menu-current" className={styles.currentPill} transition={{ type: 'spring', stiffness: 380, damping: 32 }} />}
-          <MenuIcon name={icon} className={styles.icon} />
-          <span className={styles.label}>{tab ? short : label}</span>
-        </>
-      )}
-    </NavLink>
-  )
-  if (!rail) {
-    return link
-  }
+  // Always inside the tooltip, closed off the rail: unwrapping it would remount the link and drop its focus. NavLink
+  // marks the current page with aria-current, which the styles read, so its className stays plain for the trigger.
   return (
-    <Tooltip.Root>
-      <Tooltip.Trigger asChild>{link}</Tooltip.Trigger>
+    <Tooltip.Root open={rail ? undefined : false}>
+      <Tooltip.Trigger asChild>
+        <NavLink to={path} end aria-label={tab ? label : undefined} onClick={onClick} className={styles.item}>
+          {({ isActive }) => (
+            <>
+              {isActive && <m.span layoutId="menu-current" className={styles.currentPill} transition={{ type: 'spring', stiffness: 380, damping: 32 }} />}
+              <MenuIcon name={icon} className={styles.icon} />
+              <span className={styles.label}>{tab ? short : label}</span>
+            </>
+          )}
+        </NavLink>
+      </Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content side="right" sideOffset={10} className={styles.tip}>
           {label}
@@ -83,20 +87,33 @@ function AdminDrawer() {
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className={sheet.scrim} />
-        <Dialog.Content aria-describedby={undefined} className={`${sheet.panel} ${styles.drawer}`}>
+        {/* Focus on the sheet, not its first link, whose icon would otherwise start moving on its own. */}
+        <Dialog.Content
+          aria-describedby={undefined}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            ;(event.currentTarget as HTMLElement).focus()
+          }}
+          className={`${sheet.panel} ${styles.drawer}`}
+        >
           <Dialog.Title className={styles.drawerTitle}>Admin</Dialog.Title>
           <nav aria-label="Admin">
-            {adminPages.map(({ path, label, icon }) => (
-              <NavLink key={path} to={path} end onClick={() => setOpen(false)} className={styles.item}>
-                <MenuIcon name={icon} className={styles.icon} />
-                <span className={styles.label}>{label}</span>
-              </NavLink>
+            {adminPages.map((page) => (
+              <MenuItem key={page.path} {...page} rail={false} narrow={false} onClick={() => setOpen(false)} />
             ))}
           </nav>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
   )
+}
+
+// Toasts live outside the shell, so the page root says when the phone's tab bar is there to keep clear of.
+function useTabBarRoom() {
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-tab-bar', true)
+    return () => document.documentElement.removeAttribute('data-tab-bar')
+  }, [])
 }
 
 // The parent route of every signed-in page (design-notes §2.1): the left menu, then the page's own <main>.
@@ -113,6 +130,7 @@ export function AppShell() {
   const narrow = useNarrow()
   // Phones have the tab bar instead, whatever was folded on a wider screen.
   const rail = folded && !narrow
+  useTabBarRoom()
 
   if (error instanceof ApiError && error.status === 401) {
     return <Navigate to="/auth/login" replace state={{ from: location.pathname + location.search }} />
@@ -131,52 +149,52 @@ export function AppShell() {
   }
 
   return (
-    <div className={rail ? `${styles.page} ${styles.folded}` : styles.page}>
-      <nav aria-label="Main" className={styles.menu}>
-        <button type="button" aria-expanded={!folded} aria-label={folded ? 'Unfold the menu' : 'Fold the menu'} onClick={() => fold(!folded)} className={styles.fold}>
-          <span aria-hidden="true">‹</span>
-        </button>
-        <Link to="/" aria-label="Pluviose Family Hub, home" className={styles.identity}>
-          <Logo size={52} />
-          <span className={styles.names}>
-            <span className={styles.familyName}>Pluviose</span>
-            <span className={styles.hub}>Family Hub</span>
-          </span>
-        </Link>
-        <Tooltip.Provider delayDuration={200}>
-          <div className={styles.items}>
-            {menuPages.map((page) => (
-              <MenuItem key={page.path} {...page} rail={rail} narrow={narrow} />
-            ))}
-          </div>
-          {user.role === 'admin' && (
-            <div className={`${styles.items} ${styles.admin}`}>
-              <span className={styles.adminLabel}>Admin</span>
-              {adminPages.map((page) => (
+    <Tooltip.Provider delayDuration={200}>
+      <div className={rail ? `${styles.page} ${styles.folded}` : styles.page}>
+        <nav id="main-menu" aria-label="Main" className={styles.menu}>
+          <button type="button" aria-controls="main-menu" aria-expanded={!folded} aria-label={folded ? 'Unfold the menu' : 'Fold the menu'} onClick={() => fold(!folded)} className={styles.fold}>
+            <span aria-hidden="true">‹</span>
+          </button>
+          <Link to="/" aria-label="Pluviose Family Hub, home" className={styles.identity}>
+            <Logo size={52} />
+            <span className={styles.names}>
+              <span className={styles.familyName}>Pluviose</span>
+              <span className={styles.hub}>Family Hub</span>
+            </span>
+          </Link>
+            <div className={styles.items}>
+              {menuPages.map((page) => (
                 <MenuItem key={page.path} {...page} rail={rail} narrow={narrow} />
               ))}
             </div>
-          )}
-        </Tooltip.Provider>
-      </nav>
-      <div className={styles.content}>
-        <div className={styles.account}>
-          {/* Phones only: the menu's top is gone to the tab bar, so the name and home link sit here. */}
-          <Link to="/" aria-label="Pluviose Family Hub, home" className={styles.phoneIdentity}>
-            <Logo size={34} />
-            <span className={styles.familyName}>Pluviose</span>
-          </Link>
-          {/* Only while it can show: a drawer left open as the screen widens would have no ☰ to close it. */}
-          {user.role === 'admin' && narrow && <AdminDrawer />}
-          <AccountMenu
-            initials={person ? initials(person) : (user.email[0] ?? '?').toUpperCase()}
-            name={person ? `${person.first_name} ${person.last_name ?? ''}`.trim() : user.email}
-            waiting={waiting}
-            linked={person !== null && person !== undefined}
-          />
+            {user.role === 'admin' && (
+              <div className={`${styles.items} ${styles.admin}`}>
+                <span className={styles.adminLabel}>Admin</span>
+                {adminPages.map((page) => (
+                  <MenuItem key={page.path} {...page} rail={rail} narrow={narrow} />
+                ))}
+              </div>
+            )}
+        </nav>
+        <div className={styles.content}>
+          <div className={styles.account}>
+            {/* Phones only: the menu's top is gone to the tab bar, so the name and home link sit here. */}
+            <Link to="/" aria-label="Pluviose Family Hub, home" className={styles.phoneIdentity}>
+              <Logo size={34} />
+              <span className={styles.familyName}>Pluviose</span>
+            </Link>
+            {/* Only while it can show: a drawer left open as the screen widens would have no ☰ to close it. */}
+            {user.role === 'admin' && narrow && <AdminDrawer />}
+            <AccountMenu
+              initials={person ? initials(person) : (user.email[0] ?? '?').toUpperCase()}
+              name={person ? `${person.first_name} ${person.last_name ?? ''}`.trim() : user.email}
+              waiting={waiting}
+              linked={person !== null && person !== undefined}
+            />
+          </div>
+          <Outlet />
         </div>
-        <Outlet />
       </div>
-    </div>
+    </Tooltip.Provider>
   )
 }
