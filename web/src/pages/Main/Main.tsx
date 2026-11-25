@@ -869,14 +869,24 @@ function FocusTree({
   // Anything else the person does stops a throw where it is. A press in the panel, and the focus it gives a card, are
   // the panel's own: they catch it instead.
   const stopNow = useRef(stopFling)
+  // Stopped and back inside the limits, from a throw or a stretch held by a drag or a caught spring-back.
+  const settle = () => {
+    stopFling()
+    if (moved?.free) {
+      const { at, zoom } = live.current
+      place(at.x, at.y, zoom)
+    }
+  }
+  const settleNow = useRef(settle)
   useLayoutEffect(() => {
     stopNow.current = stopFling
+    settleNow.current = settle
   })
-  // Reduced motion or Pause turned on mid-throw: the throw stops, inside the limits.
+  // Reduced motion or Pause turned on mid-throw or mid-stretch: the tree settles inside the limits.
   useEffect(() => {
     if (still) {
       fling.current = null
-      stopNow.current()
+      settleNow.current()
     }
   }, [still])
   useEffect(() => {

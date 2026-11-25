@@ -1020,7 +1020,8 @@ describe('Main', () => {
       expect(shownX()).toBeLessThan(560)
     })
 
-    it('stops a throw inside them when reduced motion is turned on mid-throw', () => {
+    // A matchMedia whose reduced-motion setting can be turned on mid-test.
+    const reducible = () => {
       const listeners = new Set<() => void>()
       let reduce = false
       vi.stubGlobal('matchMedia', (query: string) => ({
@@ -1031,6 +1032,40 @@ describe('Main', () => {
         addEventListener: (_: string, l: () => void) => listeners.add(l),
         removeEventListener: (_: string, l: () => void) => listeners.delete(l),
       }))
+      return () => {
+        reduce = true
+        act(() => listeners.forEach((l) => l()))
+      }
+    }
+
+    it.each([
+      { name: 'while held stretched by a drag', caught: false },
+      { name: 'while a caught spring-back is held', caught: true },
+    ])('settles the tree inside them when reduced motion is turned on $name', ({ caught }) => {
+      const reduceMotion = reducible()
+      vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+      try {
+        layOut({ tree: 600 })
+        renderTree('fritz')
+        const letGo = dragFar()
+        if (caught) {
+          letGo()
+          act(() => vi.advanceTimersByTime(50))
+          fireEvent.pointerDown(screen.getByRole('region', { name: 'Family tree centered on you' }), { pointerId: 2, pointerType: 'mouse', button: 0, clientX: 0, clientY: 0 })
+        }
+        expect(shownX()).toBeGreaterThan(540)
+
+        reduceMotion()
+        fireEvent.pointerUp(window, { pointerId: caught ? 2 : 1 })
+
+        expect(shownX()).toBe(540)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('stops a throw inside them when reduced motion is turned on mid-throw', () => {
+      const reduceMotion = reducible()
       vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
       try {
         layOut({ tree: 600 })
@@ -1039,8 +1074,7 @@ describe('Main', () => {
         act(() => vi.advanceTimersByTime(50))
         expect(shownX()).toBeGreaterThan(540)
 
-        reduce = true
-        act(() => listeners.forEach((l) => l()))
+        reduceMotion()
         act(() => vi.advanceTimersByTime(500))
 
         expect(shownX()).toBe(540)
