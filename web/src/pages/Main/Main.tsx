@@ -486,7 +486,10 @@ function FocusTree({
     const draw = () => {
       const now = clock()
       const paths = measure(st, r, view, focus, fly)
-      setLineStarts((starts) => (paths.every((l) => starts.has(l.key)) ? starts : new Map([...paths.map((l) => [l.key, now] as const), ...starts])))
+      // A line gone and back later mounts afresh, so only the lines shown keep their times.
+      setLineStarts((starts) =>
+        paths.length === starts.size && paths.every((l) => starts.has(l.key)) ? starts : new Map(paths.map((l) => [l.key, starts.get(l.key) ?? now])),
+      )
       setPanelSize({ width: p.clientWidth, height: p.clientHeight })
       setLines({ width: st.offsetWidth, height: st.offsetHeight, paths })
       setCards(cardBounds(st, r))
@@ -574,15 +577,25 @@ function FocusTree({
     for (const group of r.querySelectorAll<HTMLElement>('[data-unit]')) {
       const { backgroundColor, borderColor } = getComputedStyle(group)
       group.animate?.([{ backgroundColor: 'transparent', borderColor: 'transparent' }, { backgroundColor, borderColor }], {
+        id: 'fly',
         duration: 300,
         delay: 150,
         fill: 'backwards',
       })
     }
     for (const label of r.querySelectorAll<HTMLElement>('[data-label]')) {
-      label.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: 150, fill: 'backwards' })
+      label.animate?.([{ opacity: 0 }, { opacity: 1 }], { id: 'fly', duration: 300, delay: 150, fill: 'backwards' })
     }
   }, [anchor, from])
+  // Reduced motion or Pause turned on mid-flight: everything lands at once.
+  useEffect(() => {
+    if (!still) {
+      return
+    }
+    for (const el of rows.current?.querySelectorAll<HTMLElement>('[data-card], [data-unit], [data-label]') ?? []) {
+      el.getAnimations?.().forEach((a) => a.id === 'fly' && a.finish())
+    }
+  }, [still])
 
   // Where the page scrolls, keyboard focus landing on the new focus card (preventScroll, above) brings the card into
   // the window too, once it's measured and placed in the panel. Once per view, so a later scroll isn't undone.
@@ -763,6 +776,10 @@ function FocusTree({
     } else {
       live.current = { at, zoom: next }
     }
+    // A zoom mid-drag: the drag carries on from there, at no speed yet.
+    if (fling.current) {
+      fling.current = { raw: { ...live.current.at }, moves: [] }
+    }
     onZoom(() => next)
   }
   // The − / + buttons and keys: a centered tree stays centered; a moved one zooms about the panel's middle.
@@ -855,6 +872,13 @@ function FocusTree({
   useLayoutEffect(() => {
     stopNow.current = stopFling
   })
+  // Reduced motion or Pause turned on mid-throw: the throw stops, inside the limits.
+  useEffect(() => {
+    if (still) {
+      fling.current = null
+      stopNow.current()
+    }
+  }, [still])
   useEffect(() => {
     const stop = (event: Event) => {
       const inPanel = panel.current?.contains(event.target as Node)

@@ -1020,6 +1020,48 @@ describe('Main', () => {
       expect(shownX()).toBeLessThan(560)
     })
 
+    it('stops a throw inside them when reduced motion is turned on mid-throw', () => {
+      const listeners = new Set<() => void>()
+      let reduce = false
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        get matches() {
+          return query.includes('reduce') && reduce
+        },
+        media: query,
+        addEventListener: (_: string, l: () => void) => listeners.add(l),
+        removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+      }))
+      vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+      try {
+        layOut({ tree: 600 })
+        renderTree('fritz')
+        dragFar()()
+        act(() => vi.advanceTimersByTime(50))
+        expect(shownX()).toBeGreaterThan(540)
+
+        reduce = true
+        act(() => listeners.forEach((l) => l()))
+        act(() => vi.advanceTimersByTime(500))
+
+        expect(shownX()).toBe(540)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('carries a stretched drag on from where a zoom put the tree', () => {
+      layOut({ tree: 600 })
+      renderTree('fritz')
+      dragFar()
+      const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+      const zoomed = shownX()
+      fireEvent.pointerMove(panel, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 2010, clientY: 0 })
+
+      expect(shownX()).toBeLessThan(zoomed + 20)
+    })
+
     it('stops at them with reduced motion', () => {
       vi.stubGlobal('matchMedia', (query: string) => ({
         matches: query.includes('reduce'),
