@@ -178,14 +178,23 @@ describe('Events', () => {
       event({ id: 'e', title: 'Picnic' }),
     ]
     const handle = () => within(screen.getByRole('group', { name: 'Move through the years' }))
+    const timeline = () => screen.getByRole('region', { name: 'Timeline' })
+    // The timeline scrolls in its own box, which jsdom can't scroll.
+    const scrolls = () => {
+      const scrollTo = vi.fn()
+      Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: scrollTo })
+      return scrollTo
+    }
+    afterEach(() => {
+      delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo
+    })
     const lit = () => [...document.querySelectorAll('[class*="yearLit"]')].map((el) => el.textContent)
 
     it.each([
       { name: 'the ▼ button', go: () => fireEvent.click(handle().getByRole('button', { name: 'Older year' })) },
       { name: 'the down arrow key', go: () => fireEvent.keyDown(handle().getByRole('slider', { name: 'Year' }), { key: 'ArrowDown' }) },
     ])('steps to the next older year with $name, lighting every event of that year', ({ go }) => {
-      const scrollTo = vi.fn()
-      vi.stubGlobal('scrollTo', scrollTo)
+      const scrollTo = scrolls()
       renderPage(spread)
       expect(handle().getByRole('button', { name: 'Newer year' })).toBeDisabled()
       expect(lit()).toEqual(['2026'])
@@ -195,10 +204,12 @@ describe('Events', () => {
       expect(scrollTo).toHaveBeenCalledTimes(1)
       expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', '2025')
       expect(lit()).toEqual(['2025', '2025'])
+      // It shows the month of the year's first event; the year is beside it on the timeline.
+      expect(handle().getByRole('slider').textContent).toBe('May')
     })
 
     it('scrubs a year for every 26px dragged, and reaches the undated events last', () => {
-      vi.stubGlobal('scrollTo', vi.fn())
+      scrolls()
       renderPage(spread)
       const grip = handle().getByRole('slider')
 
@@ -206,15 +217,18 @@ describe('Events', () => {
       expect(grip).toHaveFocus()
       fireEvent.pointerMove(grip, { pointerId: 1, clientY: 152 })
       expect(grip).toHaveAttribute('aria-valuetext', '1984')
+      // No month known: its year.
+      expect(grip.textContent).toBe('’84')
       fireEvent.pointerMove(grip, { pointerId: 1, clientY: 400 })
       fireEvent.pointerUp(grip, { pointerId: 1 })
 
       expect(grip).toHaveAttribute('aria-valuetext', 'Undated')
+      expect(grip.textContent).toBe('—')
       expect(handle().getByRole('button', { name: 'Older year' })).toBeDisabled()
     })
 
     it('goes to the oldest with End and the newest with Home', () => {
-      vi.stubGlobal('scrollTo', vi.fn())
+      scrolls()
       renderPage(spread)
       const grip = handle().getByRole('slider')
 
@@ -224,22 +238,37 @@ describe('Events', () => {
       expect(grip).toHaveAttribute('aria-valuetext', '2026')
     })
 
-    it('keeps a picked year through the page’s scrolling until the reader scrolls', () => {
-      vi.stubGlobal('scrollTo', vi.fn())
+    it('keeps a picked year through the timeline’s scrolling until the reader scrolls', () => {
+      scrolls()
       renderPage(spread)
       fireEvent.click(handle().getByRole('button', { name: 'Older year' }))
+      // Scrolled to the very bottom.
+      for (const [key, value] of Object.entries({ scrollTop: 600, scrollHeight: 1000, clientHeight: 400 })) {
+        Object.defineProperty(timeline(), key, { configurable: true, value })
+      }
 
-      // jsdom lays nothing out, so following the scroll would land on the last year.
-      fireEvent.scroll(window)
+      fireEvent.scroll(timeline())
       expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', '2025')
 
       fireEvent.wheel(window)
-      fireEvent.scroll(window)
+      fireEvent.scroll(timeline())
       expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', 'Undated')
     })
 
+    it('reads the newest year at the very top, however little the timeline scrolls', () => {
+      scrolls()
+      renderPage(spread)
+      fireEvent.keyDown(handle().getByRole('slider'), { key: 'End' })
+
+      fireEvent.wheel(window)
+      fireEvent.scroll(timeline())
+
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', '2026')
+      expect(handle().getByRole('slider').textContent).toBe('Nov')
+    })
+
     it('changes the year without its fade with reduced motion', () => {
-      vi.stubGlobal('scrollTo', vi.fn())
+      scrolls()
       vi.stubGlobal('matchMedia', (query: string) => ({
         matches: query.includes('reduce'),
         media: query,
@@ -250,8 +279,53 @@ describe('Events', () => {
 
       fireEvent.click(handle().getByRole('button', { name: 'Older year' }))
 
-      // A fading year would still be there, leaving.
-      expect(handle().getByRole('slider').textContent).toBe('’25')
+      // A fading month would still be there, leaving.
+      expect(handle().getByRole('slider').textContent).toBe('May')
+    })
+
+    it('reads the oldest year’s last event at the bottom, as scrolling there does', () => {
+      scrolls()
+      renderPage(spread.slice(0, 3))
+
+      fireEvent.keyDown(handle().getByRole('slider'), { key: 'End' })
+
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', '2025')
+      expect(handle().getByRole('slider').textContent).toBe('Jul')
+    })
+
+    it('moves on to the next event when the one it’s on is removed', () => {
+      scrolls()
+      renderPage(spread, 'admin')
+      fireEvent.keyDown(handle().getByRole('slider'), { key: 'End' })
+      fireEvent.keyDown(handle().getByRole('slider'), { key: 'ArrowUp' })
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', '1984')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove “Wedding”' }))
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Remove “Wedding”?' })).getByRole('button', { name: 'Remove' }))
+
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', 'Undated')
+      // Pending removals outlive the page; this one mustn't hide the next test's events.
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    })
+
+    it('follows the scrolling again once the timeline is back from a failed reread', async () => {
+      scrolls()
+      renderPage(spread)
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
+      await act(() => lastClient.refetchQueries({ queryKey: eventKeys.all }))
+      expect(await screen.findByRole('alert')).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Timeline' })).toBeNull()
+
+      // The same events, unchanged, so the list keeps its identity.
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(Response.json({ events: spread }))))
+      await act(() => lastClient.refetchQueries({ queryKey: eventKeys.all }))
+      await screen.findByRole('region', { name: 'Timeline' })
+      for (const [key, value] of Object.entries({ scrollTop: 600, scrollHeight: 1000, clientHeight: 400 })) {
+        Object.defineProperty(timeline(), key, { configurable: true, value })
+      }
+      fireEvent.scroll(timeline())
+
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', 'Undated')
     })
 
     it('isn’t there when every event falls in one year', () => {

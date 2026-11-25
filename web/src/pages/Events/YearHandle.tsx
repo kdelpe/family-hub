@@ -5,15 +5,17 @@ import styles from './Events.module.css'
 
 const dragPxPerYear = 26
 
-// still: with reduced motion, the year changes without its fade.
+// label: the month of the event it's on (Events.tsx); still: with reduced motion, it changes without its fade.
 export function YearHandle({
   years,
   current,
+  label,
   still,
   onPick,
 }: {
   years: string[]
   current: string
+  label: string
   still: boolean
   onPick: (year: string, glide: boolean) => void
 }) {
@@ -71,7 +73,7 @@ export function YearHandle({
           aria-valuemin={0}
           aria-valuemax={years.length - 1}
           aria-valuenow={at}
-          aria-valuetext={labelOf(current, true)}
+          aria-valuetext={current === undated ? 'Undated' : current}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={release}
@@ -80,20 +82,20 @@ export function YearHandle({
           className={styles.grip}
         >
           {still ? (
-            <span className={styles.gripLabel}>{labelOf(current, false)}</span>
+            <span className={styles.gripLabel}>{label}</span>
           ) : (
             // The leaving and arriving years share one grid cell (Events.module.css), not popLayout's injected
             // styles, which the site's CSP blocks.
             <AnimatePresence initial={false}>
               <m.span
-                key={current}
+                key={label}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.14 }}
                 className={styles.gripLabel}
               >
-                {labelOf(current, false)}
+                {label}
               </m.span>
             </AnimatePresence>
           )}
@@ -113,10 +115,3 @@ export function YearHandle({
 }
 
 export const undated = 'undated'
-
-function labelOf(year: string, spoken: boolean) {
-  if (year === undated) {
-    return spoken ? 'Undated' : '—'
-  }
-  return spoken ? year : `’${year.slice(2)}`
-}

@@ -275,16 +275,21 @@ Title **Events**. Segmented **Timeline / Media**, plus two buttons shown to admi
   - Dates are written "November 13, 1984", "July 2025", "1984" and "Around 1962", with "c. 1962" in the year column.
   - An undated event has an empty year column. Undated events come last.
   - On phones, the year sits above each card and the line runs down the left edge.
+- **Album page (owner's pick, 2026-11-25):** the timeline sits on the tree page's album page (§4.2): the Members book's endpaper dots inside a thin double frame, with soft fades at its top and bottom edges.
+  - Only the timeline scrolls, inside the frame (the dots scroll with it); the title and + New event stay put. The page fills the window; with the New event panel open on a short window, the page scrolls too.
+  - The line runs down the middle and the events take turns either side, each joined to its dot by a short tick, the year across the line from it. Phones keep one column with the line on the left.
+  - Each card is a print mounted in the album: square corners, dark photo corners top left and bottom right, set slightly askew (−0.4° left, 0.35° right) and straightening as it lifts. Its date and place are in italic serif, `--print-date`.
 - **Removing an event (admins, 2026-11-22):** a × at the top right of each card (shown on hover or focus; always on touch screens) asks *"Remove “…”?"* with *"It leaves the timeline for everyone. You'll have a few seconds to undo."*, **Keep it** / **Remove** (§2.4a).
   - The event slides out at once and a toast says *Removed “…”.* with **Undo** (§2.4b).
   - The server is only told once the toast runs out, so Undo has nothing to put back; closing the tab before then keeps the event.
   - If the server refuses, the event comes back and a toast says *Couldn't remove “…”.* and why.
 - **Motion:** events slide in when saved and out when removed, and the others glide into their new places.
-- **Year handle (owner's pick, 2026-11-22):** when the timeline spans two years or more, a green handle sits on the line and stays in view while you scroll (42% down the window).
-  - It shows the year it's on (*’84*; *—* for undated), between **▲** (newer) and **▼** (older), which glide there.
+- **Year handle (owner's pick, 2026-11-22; slimmed 2026-11-25):** when the timeline spans two years or more, a slim green handle (28px wide) sits on the line, 42% down the album page.
+  - It shows the month of the event it's on (*Nov*), not the year, which is already beside it on the timeline; an event with no month shows its year (*’84*), an undated one *—*. **▲** (newer) and **▼** (older) glide a year at a time.
+  - Its taps reach past its edges, but the grip is 30px tall, under §1.3's 44px (owner's call for a smaller handle).
+  - At the very top of the timeline it reads the newest year and at the very bottom the oldest, so every year can be reached however little the timeline scrolls.
   - Dragging its middle scrubs a year per 26px; the up and down arrow keys step too.
   - The year labels it's on turn `--accent` and grow slightly; scrolling moves it along.
-  - On phones the line moves in 21px to make room, and the year stops just above the handle instead of beside it.
 - **+ New event, as built:** shown to admins only, since members can't add events yet.
   - **Motion (owner's pick, 2026-11-22):** the panel grows open and shrinks closed; the precision switch's white pill glides to the choice; Save shows three bouncing dots while saving, then a check drawing itself with *Saved* for 0.7s before the panel closes.
   - The date control follows the precision picked:
