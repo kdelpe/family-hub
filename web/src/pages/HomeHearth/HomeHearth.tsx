@@ -1,13 +1,11 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
-import { animate, m } from 'motion/react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
-import { type Birthday, type Counts, type Home, homeQuery, type Newcomer } from '../../api/home'
+import { type Birthday, type Home, homeQuery, type Newcomer } from '../../api/home'
 import { addedOn, inDays, monthAndDay } from '../../lib/dates'
-import { dayPartLabel, greeting } from '../../lib/dayPart'
+import { greeting } from '../../lib/dayPart'
 import { errorMessage } from '../../lib/errorMessage'
-import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, initials } from '../../lib/names'
 import { useRelations } from '../../lib/useRelations'
 import { useSignedIn } from '../../lib/useSignedIn'
@@ -25,22 +23,10 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
   return (
     <main className={styles.page}>
       <title>Home — Pluviose Family Hub</title>
+      {/* On the sky band, no card: the greeting and one line (owner's pick A, 2026-11-25). */}
       <section aria-label="Welcome" className={styles.hero}>
-        <div className={styles.words}>
-          <span className={styles.dayPart}>{dayPartLabel(now)}</span>
-          <h1 className={styles.title}>{person ? `${hello}, ${person.first_name}` : hello}</h1>
-          {next && <p className={styles.line}>{birthdayLine(next, user?.person_id ?? null)}</p>}
-          <div className={styles.actions}>
-            <Link to="/tree" className={`pill ${styles.primary}`}>
-              Open the family tree
-            </Link>
-            <Link to="/events" className={`pill ${styles.secondary}`}>
-              See new photos
-            </Link>
-          </div>
-          {home.data?.counts && <Stats counts={home.data.counts} />}
-        </div>
-        <HeroTree />
+        <h1 className={styles.title}>{person ? `${hello}, ${person.first_name}` : hello}</h1>
+        {next && <BirthdayLine birthday={next} viewerId={user?.person_id ?? null} />}
       </section>
       <div className={styles.cards}>
         <Card
@@ -60,147 +46,19 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
   )
 }
 
-// The soonest birthday, said in the hero (owner's call, 2026-11-21).
-function birthdayLine(b: Birthday, viewerId: string | null) {
-  const whose = b.id === viewerId ? 'Your' : `${b.first_name}’s`
+// The soonest birthday, said in the hero (owner's call, 2026-11-21), with a way to their page unless it's yours.
+function BirthdayLine({ birthday: b, viewerId }: { birthday: Birthday; viewerId: string | null }) {
+  const yours = b.id === viewerId
   const when = b.in_days === 0 ? 'today' : b.in_days === 1 ? 'tomorrow' : `in ${b.in_days} days`
-  return `${whose} birthday is ${when}.`
-}
-
-const branches = ['M100 145V70', 'M100 100L60 60', 'M100 90l42-38', 'M100 75L78 35', 'M100 72l20-42']
-const leaves = [
-  { cx: 60, cy: 58, r: 13, light: false },
-  { cx: 143, cy: 50, r: 15, light: false },
-  { cx: 78, cy: 32, r: 12, light: false },
-  { cx: 121, cy: 28, r: 13, light: false },
-  { cx: 100, cy: 20, r: 11, light: false },
-  { cx: 44, cy: 74, r: 8, light: true },
-  { cx: 160, cy: 68, r: 9, light: true },
-]
-// It grows once per visit; coming back to Home shows it grown.
-let counted = false
-
-function Stats({ counts }: { counts: Counts }) {
-  const [paused] = useMotionPaused()
-  const reduced = useReducedMotion()
-  // Decided once as Home opens, so a later re-render can't cut the count short; Pause or reduced motion stops it.
-  const [eligible, setEligible] = useState(() => !counted && !paused && !reduced)
-  // Turned off for good: switching Pause or reduced motion back off doesn't start the count over.
-  if (eligible && (paused || reduced)) {
-    setEligible(false)
-  }
-  const count = eligible
-  useEffect(() => {
-    counted = true
-  }, [])
-  const stats: [number, string, string][] = [
-    [counts.people, 'person', 'people'],
-    [counts.generations, 'generation', 'generations'],
-    [counts.new_this_month, 'new this month', 'new this month'],
-  ]
   return (
-    <ul aria-label="The family in numbers" className={styles.stats}>
-      {stats.map(([n, one, many]) => (
-        <li key={many} className={styles.stat}>
-          <CountUp to={n} count={count} />
-          <span className="visually-hidden">{n}</span> {n === 1 ? one : many}
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-// Counts up from zero once per visit; the number read aloud is the final one beside it.
-function CountUp({ to, count }: { to: number; count: boolean }) {
-  const shown = useRef<HTMLElement>(null)
-  // Once the first count has finished or been stopped, a total that changes later just shows.
-  const [settled, setSettled] = useState(false)
-  const counting = count && !settled
-  useEffect(() => {
-    if (!counting) {
-      return
-    }
-    // Stopping the run writes one last frame: cut short (Pause, reduced motion), it would land over the total React
-    // has just shown.
-    let live = true
-    const run = animate(0, to, {
-      duration: 1.2,
-      ease: 'easeOut',
-      onUpdate: (v) => {
-        if (live && shown.current) {
-          shown.current.textContent = Math.round(v).toLocaleString()
-        }
-      },
-      onComplete: () => setSettled(true),
-    })
-    return () => {
-      live = false
-      run.stop()
-    }
-  }, [to, counting])
-  return (
-    <b ref={shown} aria-hidden="true" className={styles.statNumber}>
-      {(counting ? 0 : to).toLocaleString()}
-    </b>
-  )
-}
-
-const branchDraw = 0.9
-const branchDelay = (i: number) => 0.15 + i * 0.12
-// The leaves bud once the last branch is drawn.
-const leavesStart = branchDelay(branches.length - 1) + branchDraw
-
-let grown = false
-
-// A leaf buds (when the tree grows) and then sways, unless still.
-export function leafMotion(i: number, grow: boolean, still: boolean) {
-  return {
-    // Not `false` on a return visit: that would skip the sway too.
-    initial: grow ? { scale: 0 } : { scale: 1, y: 0 },
-    animate: still ? { scale: 1, y: 0 } : { scale: 1, y: [0, -2.5, 0] },
-    transition: {
-      scale: { type: 'spring' as const, stiffness: 260, damping: 12, delay: grow ? leavesStart + i * 0.1 : 0 },
-      y: still ? { duration: 0.3 } : { duration: 5 + (i % 3), repeat: Infinity, ease: 'easeInOut' as const, delay: (grow ? leavesStart + 1 : 0) + i * 0.3 },
-    },
-  }
-}
-
-export function HeroTree() {
-  const [paused] = useMotionPaused()
-  const reduced = useReducedMotion()
-  const [grow] = useState(() => !grown && !reduced)
-  useEffect(() => {
-    grown = true
-  }, [])
-  const still = paused || reduced
-
-  return (
-    <svg aria-hidden="true" className={styles.tree} viewBox="0 0 200 150">
-      {branches.map((d, i) => (
-        <m.path
-          key={d}
-          d={d}
-          className={styles.branches}
-          // Hidden until it starts: a round cap shows as a dot even at pathLength 0.
-          initial={grow ? { pathLength: 0, opacity: 0 } : false}
-          animate={{ pathLength: 1, opacity: 1 }}
-          transition={{
-            pathLength: { duration: branchDraw, delay: branchDelay(i), ease: 'easeOut' },
-            opacity: { duration: 0.01, delay: branchDelay(i) },
-          }}
-        />
-      ))}
-      {leaves.map((leaf, i) => (
-        <m.circle
-          key={i}
-          cx={leaf.cx}
-          cy={leaf.cy}
-          r={leaf.r}
-          className={leaf.light ? styles.lightLeaf : styles.leaf}
-          {...leafMotion(i, grow, still)}
-        />
-      ))}
-    </svg>
+    <p className={styles.line}>
+      {`${yours ? 'Your' : `${b.first_name}’s`} birthday is ${when}.`}
+      {!yours && (
+        <Link to={`/people/${b.id}`} aria-label={`See ${b.first_name}’s profile`} className={styles.lineLink}>
+          See profile ›
+        </Link>
+      )}
+    </p>
   )
 }
 
