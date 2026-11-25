@@ -804,16 +804,15 @@ describe('Main', () => {
     { name: 'a child', viewer: 'fritz', card: 'Tim', data: tree, runs: [['kids:1', '0ms', 'up']] },
     { name: 'a grandchild', viewer: 'rose', card: 'Naomie', data: fostering, runs: [['down:mt', '0ms', 'up'], ['kids:0', '180ms', 'up']] },
   ])('runs the green from $name to the focus person, one line after another', ({ viewer, card, data, runs }) => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    vi.useFakeTimers({ toFake: ['performance'] })
     try {
       renderTree(viewer, { data })
       // Once the lines have drawn in.
-      act(() => vi.advanceTimersByTime(2000))
+      vi.advanceTimersByTime(2000)
+      fireEvent.pointerEnter(personOf(card), { pointerType: 'mouse' })
     } finally {
       vi.useRealTimers()
     }
-
-    fireEvent.pointerEnter(personOf(card), { pointerType: 'mouse' })
 
     for (const [line, delay, way] of runs) {
       const path = document.querySelector<SVGElement>(`[data-chain="${line}"]`)!
@@ -822,13 +821,18 @@ describe('Main', () => {
     }
   })
 
-  it('draws a green line in with the rest, so a card already under the pointer lights it as it draws', () => {
-    renderTree('fritz')
+  it('waits for each line to draw in, and for the green before it, when a card is lifted as the tree opens', () => {
+    vi.useFakeTimers({ toFake: ['performance'] })
+    try {
+      renderTree('fritz')
+      fireEvent.pointerEnter(personOf('Joseph'), { pointerType: 'mouse' })
+    } finally {
+      vi.useRealTimers()
+    }
 
-    fireEvent.pointerEnter(personOf('Joseph'), { pointerType: 'mouse' })
-
-    expect(document.querySelector<SVGElement>('[data-chain="up:jr"]')!.style.animationDelay).toBe('480ms')
-    expect(document.querySelector<SVGElement>('[data-chain="sib:fritz"]')!.style.animationDelay).toBe(`${560 + 180}ms`)
+    // up:jr starts drawing at 480ms and takes 400ms; sib:fritz has drawn in by 960ms, but the green before it runs on.
+    expect(document.querySelector<SVGElement>('[data-chain="up:jr"]')!.style.animationDelay).toBe('880ms')
+    expect(document.querySelector<SVGElement>('[data-chain="sib:fritz"]')!.style.animationDelay).toBe(`${880 + 180}ms`)
   })
 
   it('runs the green afresh when the lift moves to a card sharing a line', () => {
@@ -883,6 +887,18 @@ describe('Main', () => {
       expect(flown()).toEqual(expect.arrayContaining(['fritz', 'jr', 'maya', 'joseph']))
       // The lines wait for the cards to land.
       expect(parseInt(document.querySelector<SVGElement>('[data-line="sib:jr"]')!.style.animationDelay)).toBeGreaterThanOrEqual(520)
+    })
+
+    it('has every newcomer in before the lines start, however many there are', () => {
+      // Joseph with six more children, all new in his view.
+      const more = ['Ana', 'Bea', 'Cal', 'Dov', 'Eli', 'Fay'].map((name) => person(name.toLowerCase(), name, 'female'))
+      renderTree('fritz', { data: { ...tree, persons: [...tree.persons, ...more], relationships: [...tree.relationships, ...more.map((m) => parent('joseph', m.id))] } })
+
+      fireEvent.click(cardOf('Joseph'))
+
+      const arrivals = animate.mock.calls.filter(([frames]) => frames[0].opacity === 0).map(([, o]) => o.delay + o.duration)
+      expect(arrivals.length).toBeGreaterThanOrEqual(6)
+      expect(Math.max(...arrivals)).toBeLessThanOrEqual(520)
     })
 
     it('doesn’t fly them with reduced motion', () => {
@@ -950,6 +966,35 @@ describe('Main', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+
+    it('stops a throw where it is on a key pressed anywhere', () => {
+      vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+      try {
+        layOut({ tree: 600 })
+        renderTree('fritz')
+        dragFar()()
+        act(() => vi.advanceTimersByTime(50))
+
+        fireEvent.keyDown(document.body, { key: 'a' })
+        act(() => vi.advanceTimersByTime(500))
+
+        expect(shownX()).toBe(540)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('carries a stretched drag on from where a wheel put the tree', () => {
+      layOut({ tree: 600 })
+      renderTree('fritz')
+      dragFar()
+      const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+
+      fireEvent.wheel(panel, { deltaX: 10 })
+      fireEvent.pointerMove(panel, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 2010, clientY: 0 })
+
+      expect(shownX()).toBeLessThan(560)
     })
 
     it('stops at them with reduced motion', () => {

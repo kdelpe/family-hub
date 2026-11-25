@@ -49,6 +49,10 @@ const flingPull = 0.18
 const stretch = 0.35
 // The endpaper's dots, as in the Members book: they move and scale with the tree, as if it were drawn on them.
 const dotGrid = 30
+// A line draws in this long (Main.module.css's draw).
+const lineDraw = 400
+// When a lift began and the lines started drawing, on one clock, to time the green against them.
+const clock = () => performance.now()
 const rowsStyle = { '--row-landed': `${rowLanded}ms` } as CSSProperties
 
 // Family tree (design-notes §4.2): one focus person with the generations around them, built from /api/tree.
@@ -278,7 +282,12 @@ function FocusTree({
   const whose = (words: string) => (you ? `Your ${words}` : `${first(focus)}’s ${words}`)
 
   // The card under the mouse or keyboard focus: lifted, with the lines to the focus person in green.
-  const [hover, setHover] = useState<string | null>(null)
+  // at: when the lift began, so the green runs to a schedule that stays put while it lasts.
+  const [lift, setLift] = useState<{ id: string; at: number } | null>(null)
+  const hover = lift?.id ?? null
+  const [lines, setLines] = useState<{ width: number; height: number; paths: Line[] }>({ width: 0, height: 0, paths: [] })
+  // When the lines started drawing in: the first measure of this view.
+  const [linesAt, setLinesAt] = useState<number | null>(null)
   const reduced = useReducedMotion()
   const still = reduced || paused
   // Fixed for this view: flying only when centered on from another view, not on opening the page or when the focus
@@ -287,6 +296,17 @@ function FocusTree({
   const fly = from !== null
   const chainLines = chainTo(view, focus, hover)
   const chain = new Map(chainLines.map((l, i) => [l.key, { ...l, at: i }]))
+  // Each green line starts once its own line has drawn in and the one before it has run, timed from the lift.
+  const greenDelays = new Map<string, number>()
+  if (lift && linesAt !== null) {
+    let free = lift.at
+    for (const l of chainLines) {
+      const base = lines.paths.find((p) => p.key === l.key)
+      const start = Math.max(free, base ? linesAt + base.delay + lineDraw : 0)
+      greenDelays.set(l.key, start - lift.at)
+      free = start + chainStep
+    }
+  }
   // Everyone the green lines touch stays as they are; the rest fade back.
   const lit = chainLines.length > 0 ? new Set([hover!, focus, ...chainLines.flatMap((l) => l.people)]) : null
   // When the pressed button is gone with the old view, keyboard focus lands on the new focus card,
@@ -313,7 +333,13 @@ function FocusTree({
       lifted={hover === id}
       dim={lit !== null && !lit.has(id)}
       buttonRef={id === focus ? focusCard : undefined}
-      onHover={(on) => !quietFocus.current && setHover((h) => (on ? id : h === id ? null : h))}
+      onHover={(on) => {
+        if (quietFocus.current) {
+          return
+        }
+        const at = clock()
+        setLift((l) => (on ? (l?.id === id ? l : { id, at }) : l?.id === id ? null : l))
+      }}
       onCenter={() => onCenter(id)}
     />
   )
@@ -441,7 +467,6 @@ function FocusTree({
   const rows = useRef<HTMLDivElement>(null)
   const stage = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLElement>(null)
-  const [lines, setLines] = useState<{ width: number; height: number; paths: Line[] }>({ width: 0, height: 0, paths: [] })
   // The panel fills what the window leaves (Main.module.css); the tree is laid out at its width, then scaled and
   // moved inside it.
   const [panelSize, setPanelSize] = useState({ width: 0, height: 0 })
@@ -457,7 +482,9 @@ function FocusTree({
     if (!p || !st || !r) {
       return
     }
+    const started = clock()
     const draw = () => {
+      setLinesAt((t) => t ?? started)
       setPanelSize({ width: p.clientWidth, height: p.clientHeight })
       setLines({ width: st.offsetWidth, height: st.offsetHeight, paths: measure(st, r, view, focus, fly) })
       setCards(cardBounds(st, r))
@@ -530,11 +557,13 @@ function FocusTree({
       const now = person.getBoundingClientRect()
       if (was) {
         const from = `translate(${(was.left - now.left) / z}px, ${(was.top - now.top) / z}px)`
-        card.animate([{ transform: from }, { transform: 'none' }], { duration: flyMs, easing: flyEasing })
+        card.animate([{ transform: from }, { transform: 'none' }], { id: 'fly', duration: flyMs, easing: flyEasing })
       } else {
+        // Capped, so every newcomer has arrived by flyMs, when the lines start.
         card.animate([{ opacity: 0, transform: 'scale(0.9)' }, { opacity: 1, transform: 'none' }], {
-          duration: 320,
-          delay: 150 + newcomer++ * 40,
+          id: 'fly',
+          duration: 280,
+          delay: 120 + Math.min(newcomer++, 4) * 30,
           easing: 'ease-out',
           fill: 'backwards',
         })
@@ -632,16 +661,6 @@ function FocusTree({
       place(at.x, at.y, zoom)
     }
   }
-  // Once every line has drawn in, a green chain runs at once; before, each green line waits for its own to draw.
-  const [drawn, setDrawn] = useState(false)
-  const lastDraw = lines.paths.length ? Math.max(...lines.paths.map((l) => l.delay)) + rowLanded : 0
-  useEffect(() => {
-    if (lines.paths.length === 0) {
-      return
-    }
-    const done = window.setTimeout(() => setDrawn(true), lastDraw)
-    return () => window.clearTimeout(done)
-  }, [lastDraw, lines.paths.length])
   // Unmounted, or brought back to the middle by centering on the person already centered: a fling stops there.
   useEffect(() => {
     cancelAnimationFrame(flingFrame.current)
@@ -672,6 +691,8 @@ function FocusTree({
     show(inside.x + (f.raw.x - inside.x) * stretch, inside.y + (f.raw.y - inside.y) * stretch)
   }
   const letGo = (time: number) => {
+    cancelAnimationFrame(flingFrame.current)
+    flingFrame.current = 0
     const f = fling.current
     fling.current = null
     const { at, zoom } = live.current
@@ -723,11 +744,12 @@ function FocusTree({
     setMoved(to)
   }
   const moveBy = (dx: number, dy: number) => {
-    if (fling.current) {
-      fling.current.raw = { x: fling.current.raw.x + dx, y: fling.current.raw.y + dy }
-    }
     takeOverGlide()
     place(live.current.at.x + dx, live.current.at.y + dy, live.current.zoom)
+    // A wheel or key mid-drag: the drag carries on from where that put the tree, at no speed yet.
+    if (fling.current) {
+      fling.current = { raw: { ...live.current.at }, moves: [] }
+    }
   }
   // A zoom keeps the point it's made at in place: the pointer or the pinch; the buttons keep a centered tree centered.
   const zoomAround = (change: (z: number) => number, point?: { x: number; y: number }) => {
@@ -819,20 +841,41 @@ function FocusTree({
       dragged.current = true
       p.setPointerCapture?.(event.pointerId)
       // Looking around the tree, not at the card the drag began on: nobody stays faded.
-      setHover(null)
+      setLift(null)
     }
     if (dragged.current) {
       dragBy(event.clientX - last.x, event.pointerType === 'touch' && pageScrolls() ? 0 : event.clientY - last.y, event.timeStamp)
     }
   }
+  // Anything else the person does stops a throw where it is. A press in the panel, and the focus it gives a card, are
+  // the panel's own: they catch it instead.
+  const stopNow = useRef(stopFling)
+  useLayoutEffect(() => {
+    stopNow.current = stopFling
+  })
+  useEffect(() => {
+    const stop = (event: Event) => {
+      const inPanel = panel.current?.contains(event.target as Node)
+      if (inPanel && (event.type === 'pointerdown' || (event.type === 'focusin' && pointers.current.size > 0))) {
+        return
+      }
+      stopNow.current()
+    }
+    const types = ['wheel', 'keydown', 'focusin', 'pointerdown'] as const
+    types.forEach((type) => window.addEventListener(type, stop, { capture: true, passive: true }))
+    return () => types.forEach((type) => window.removeEventListener(type, stop, { capture: true }))
+  }, [])
   // On the window: a press released outside the panel before it became a drag never reaches the panel.
+  // Only this panel's own presses: another pointer's release mustn't start a second spring-back.
   const letGoNow = useRef(letGo)
   useLayoutEffect(() => {
     letGoNow.current = letGo
   })
   useEffect(() => {
     const end = (event: PointerEvent) => {
-      pointers.current.delete(event.pointerId)
+      if (!pointers.current.delete(event.pointerId)) {
+        return
+      }
       if (pointers.current.size === 0) {
         letGoNow.current(event.timeStamp)
       }
@@ -941,12 +984,12 @@ function FocusTree({
                   return (
                     <path
                       // Mounted afresh for each lifted card, so its green runs again in order.
-                      key={`over:${l.key}:${green ? hover : ''}`}
+                      key={`over:${l.key}:${green ? lift!.at : ''}`}
                       data-chain={green ? l.key : undefined}
                       d={l.d}
                       pathLength={100}
                       className={green ? `${styles.over} ${styles.chain} ${green.back ? styles.chainBack : ''}` : styles.over}
-                      style={{ animationDelay: `${green ? (drawn ? 0 : l.delay) + green.at * chainStep : l.delay}ms` }}
+                      style={{ animationDelay: `${green ? Math.round(greenDelays.get(l.key) ?? 0) : l.delay}ms` }}
                     />
                   )
                 })}
@@ -1185,7 +1228,7 @@ function cardRects() {
   return new Map(
     [...document.querySelectorAll<HTMLElement>('[data-stage] [data-person]')].map((el) => {
       const card = el.querySelector<HTMLElement>('[data-card]')
-      const flying = card?.getAnimations?.().length
+      const flying = card?.getAnimations?.().some((a) => a.id === 'fly')
       return [el.dataset.person!, (flying ? card! : el).getBoundingClientRect()]
     }),
   )
