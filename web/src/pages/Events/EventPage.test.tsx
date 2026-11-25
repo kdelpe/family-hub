@@ -2,11 +2,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { authKeys } from '../../api/auth'
 import { eventKeys, type FamilyEvent } from '../../api/events'
 import { EventPage } from './EventPage'
+import { hideEvent, unhideEvent } from './pendingRemovals'
 import { Events } from './Events'
 
 const event = (over: Partial<FamilyEvent>): FamilyEvent => ({
@@ -47,6 +48,11 @@ function renderAt(path: string) {
   return router
 }
 
+afterEach(() => {
+  unhideEvent('naomie')
+  unhideEvent('wedding')
+})
+
 describe('EventPage', () => {
   it('shows the event, its story and a cover waiting for its first photo', () => {
     renderAt('/events/thanks')
@@ -76,6 +82,21 @@ describe('EventPage', () => {
 
     expect(screen.getByText('This event isn’t in the album. It may have been removed.')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+  })
+
+  it('skips an event being removed, while its Undo still shows', () => {
+    hideEvent('naomie')
+    renderAt('/events/thanks')
+
+    expect(screen.getByRole('link', { name: 'Older ›Jean-Robert & Nadège’s wedding · 1984' })).toBeInTheDocument()
+  })
+
+  it('leaves out the other events’ links when there are none', () => {
+    hideEvent('naomie')
+    hideEvent('wedding')
+    renderAt('/events/thanks')
+
+    expect(screen.queryByRole('navigation', { name: 'Other events' })).toBeNull()
   })
 
   it('opens from its card on the timeline', () => {

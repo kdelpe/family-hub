@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
+import { useLayoutEffect } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { eventsQuery, type FamilyEvent } from '../../api/events'
 import { year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
+import { usePendingRemovals } from './pendingRemovals'
 import { whenItHappened } from './whenItHappened'
 import styles from './EventPage.module.css'
 
@@ -13,9 +15,20 @@ export function EventPage() {
   const { id = '' } = useParams()
   // The timeline's list: usually already loaded, and it gives the events either side.
   const events = useQuery(eventsQuery)
-  const list = events.data ?? []
+  // As on the timeline: one being removed (its Undo still showing) is already gone.
+  const hidden = usePendingRemovals()
+  const list = (events.data ?? []).filter((e) => !hidden.has(e.id))
   const at = list.findIndex((e) => e.id === id)
   const event = list[at]
+  const newer = list[at - 1]
+  const older = list[at + 1]
+
+  // Newer and Older sit at the bottom; the next event starts at its top.
+  useLayoutEffect(() => {
+    if (document.scrollingElement) {
+      document.scrollingElement.scrollTop = 0
+    }
+  }, [id])
 
   return (
     <main className={styles.page}>
@@ -25,7 +38,7 @@ export function EventPage() {
       </Link>
       {events.isPending ? (
         <p className={styles.muted}>Loading…</p>
-      ) : events.error && !events.data ? (
+      ) : events.isError ? (
         <p role="alert">{errorMessage(events.error)}</p>
       ) : !event ? (
         <p className={styles.muted}>This event isn’t in the album. It may have been removed.</p>
@@ -44,10 +57,12 @@ export function EventPage() {
               {event.description && <p className={styles.story}>{event.description}</p>}
             </div>
           </article>
-          <nav aria-label="Other events" className={styles.nav}>
-            <Neighbor event={list[at - 1]} label="‹ Newer" />
-            <Neighbor event={list[at + 1]} label="Older ›" older />
-          </nav>
+          {(newer || older) && (
+            <nav aria-label="Other events" className={styles.nav}>
+              <Neighbor event={newer} label="‹ Newer" />
+              <Neighbor event={older} label="Older ›" older />
+            </nav>
+          )}
         </>
       )}
     </main>
