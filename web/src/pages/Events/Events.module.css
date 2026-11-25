@@ -118,6 +118,13 @@
 .entryLeft .year {
   grid-column: 2;
   padding-left: 28px;
+}
+
+.yearText {
+  display: inline-block;
+}
+
+.entryLeft .yearText {
   transform-origin: left top;
 }
 
@@ -130,6 +137,9 @@
   grid-column: 1;
   padding-right: 28px;
   text-align: right;
+}
+
+.entryRight .yearText {
   transform-origin: right top;
 }
 
@@ -138,7 +148,7 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .year {
+  .yearText {
     transition:
       color 0.2s ease,
       scale 0.2s ease;
@@ -721,6 +731,9 @@
     padding: 12px 0 0;
     text-align: left;
     font-size: 18px;
+  }
+
+  .entry .yearText {
     transform-origin: left center;
   }
 

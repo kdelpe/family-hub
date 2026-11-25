@@ -336,8 +336,9 @@ function TimelineEntry({
       className={[styles.entry, side === 'left' ? styles.entryLeft : styles.entryRight, first && styles.first, last && styles.last].filter(Boolean).join(' ')}
     >
       {/* Each glides to its new side when an event added or removed above swaps the sides. */}
-      <m.span layout="position" className={lit ? `${styles.year} ${styles.yearLit}` : styles.year}>
-        {year(event.date, event.date_precision)}
+      <m.span layout="position" className={styles.year}>
+        {/* Lit on a span of its own: Motion's layout glide leaves its own transform-origin on the outer one. */}
+        <span className={lit ? `${styles.yearText} ${styles.yearLit}` : styles.yearText}>{year(event.date, event.date_precision)}</span>
       </m.span>
       <span aria-hidden="true" className={styles.line}>
         <span data-dot className={styles.dot} />
