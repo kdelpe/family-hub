@@ -35,7 +35,8 @@
 .fold {
   position: absolute;
   top: 44px;
-  right: -14px;
+  /* Just over the cover's edge, clear of its gold frame (inset 6–10px). */
+  right: -23px;
   width: 28px;
   height: 28px;
   padding: 0;
