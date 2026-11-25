@@ -125,9 +125,10 @@ export function Events() {
   const reduced = useReducedMotion()
   const [motionPaused] = useMotionPaused()
   const album = useRef<HTMLDivElement>(null)
-  const scroller = useRef<HTMLDivElement>(null)
+  // State, not a ref: a failed refetch swaps the timeline for its error, and the one that comes back needs following.
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
   useEffect(() => {
-    const box = scroller.current
+    const box = scroller
     if (years.length < 2 || !box) {
       return
     }
@@ -177,12 +178,12 @@ export function Events() {
       window.removeEventListener('pointerdown', release, capture)
       window.removeEventListener('keydown', release, capture)
     }
-  }, [list, years])
+  }, [list, years, scroller])
   const pick = (year: string, glide: boolean) => {
     const i = years.indexOf(year)
     // The oldest is at the very bottom, where following the scroll reads the last event.
     const on = i === years.length - 1 ? list.at(-1) : list.find((e) => yearOf(e) === year)
-    const box = scroller.current
+    const box = scroller
     // By its event, not its year's anchor, which one sliding out after its removal may still carry too.
     const el = on && box?.querySelector<HTMLElement>(`[data-event="${on.id}"]`)
     if (!on || !el || !box || !album.current) {
@@ -252,7 +253,7 @@ export function Events() {
       ) : (
         <div ref={album} className={styles.album}>
           {/* Focusable, so the timeline scrolls from the keyboard too. */}
-          <div ref={scroller} role="region" aria-label="Timeline" tabIndex={0} className={styles.scroller}>
+          <div ref={setScroller} role="region" aria-label="Timeline" tabIndex={0} className={styles.scroller}>
             <ol className={styles.timeline}>
             <AnimatePresence initial={false}>
               {list.map((event, i) => {

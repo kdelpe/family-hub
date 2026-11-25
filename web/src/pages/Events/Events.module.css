@@ -826,6 +826,11 @@
     --line-x: 32px;
   }
 
+  /* Room on the right only, as the line here is a fixed 32px in, under the handle. */
+  .scroller {
+    scrollbar-gutter: stable;
+  }
+
   .timeline {
     padding: 16px 12px 40px 21px;
   }

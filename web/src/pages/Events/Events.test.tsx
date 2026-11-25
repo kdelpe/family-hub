@@ -308,6 +308,26 @@ describe('Events', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
     })
 
+    it('follows the scrolling again once the timeline is back from a failed reread', async () => {
+      scrolls()
+      renderPage(spread)
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
+      await act(() => lastClient.refetchQueries({ queryKey: eventKeys.all }))
+      expect(await screen.findByRole('alert')).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Timeline' })).toBeNull()
+
+      // The same events, unchanged, so the list keeps its identity.
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(Response.json({ events: spread }))))
+      await act(() => lastClient.refetchQueries({ queryKey: eventKeys.all }))
+      await screen.findByRole('region', { name: 'Timeline' })
+      for (const [key, value] of Object.entries({ scrollTop: 600, scrollHeight: 1000, clientHeight: 400 })) {
+        Object.defineProperty(timeline(), key, { configurable: true, value })
+      }
+      fireEvent.scroll(timeline())
+
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', 'Undated')
+    })
+
     it('isn’t there when every event falls in one year', () => {
       renderPage([spread[1]!, spread[2]!])
 
