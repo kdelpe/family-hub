@@ -136,7 +136,7 @@ describe('Main', () => {
     expect(cardOf('Sabine')).toHaveTextContent('Half-sister')
     expect(cardOf('Tim')).toHaveTextContent('Son · adopted')
     expect(cardOf('Odette')).toHaveTextContent('Former wife')
-    expect(screen.getByText((_, el) => el?.textContent === '4 generations')).toBeInTheDocument()
+    expect(screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === '10 people · 4 generations')).toBeInTheDocument()
   })
 
   it('centers on a relative on a click', () => {
