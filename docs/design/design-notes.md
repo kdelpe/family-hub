@@ -99,6 +99,12 @@ White text only ever sits on `--accent` (buttons, the focus avatar).
 
 **Gliding highlight (owner's pick, 2026-11-22):** the current page's `--nav-active` background is one pill that glides (Motion layout spring) to the page opened; a page outside the menu, like Requests, has none.
 
+**Green cover and sky band (owner's pick K, 2026-11-25):**
+- The menu is bound like the Members book: a deep green gradient (`--accent` to `--cover-deep`) with a thin gold frame inset 10px, gold *Family Hub* and Admin label, and the logo drawn in gold. Names and icons are pale (`--on-cover`, `--on-cover-soft`); the current page is lit (`--cover-current`) with a 3px gold edge and a gold icon. The admin drawer stays on paper.
+- On phones the tab bar is the same green, with a gold rule along its top; the current tab is gold.
+- Across the top of every signed-in page runs a sky band: a sage-to-peach wash (`--sky-1`…`--sky-4`) with faint endpaper dots, 380px tall (300px on phones), fading into the cream. Pages' cards sit on it.
+- Cards on Home, Members & invites, My profile, a person's family and Requests are lifted off the page (`--card-near`, `--card-far`).
+
 **Icons and the rail (owner's picks, 2026-11-25):**
 - Each item has a 22px line icon before its name, `--accent` on the current page: Home a house, Family tree a tree, Members an open book, Events a calendar, Stories a microphone, Members & invites a key.
 - Pointed at, an icon moves its own way, over and over until the pointer leaves (once when keyboard-focused, as focus can stay put; never from a tap): the house's door swings open, the tree sways, the book's page turns, the calendar's page lifts, the microphone bobs, the key turns. Off with reduced motion or Pause motion (§6.4).
