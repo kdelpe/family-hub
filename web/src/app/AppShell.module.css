@@ -146,10 +146,6 @@
   }
 }
 
-.identity:hover {
-  color: var(--on-cover);
-}
-
 .identity {
   display: flex;
   flex-direction: column;
@@ -158,6 +154,11 @@
   text-align: center;
   color: var(--on-cover);
   text-decoration: none;
+}
+
+/* Beats the global a:hover green, which would vanish on the cover. */
+.identity:hover {
+  color: var(--on-cover);
 }
 
 .names {

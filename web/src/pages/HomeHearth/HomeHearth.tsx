@@ -18,7 +18,9 @@ import styles from './HomeHearth.module.css'
 export function HomeHearth({ now = new Date() }: { now?: Date }) {
   const { user, person } = useSignedIn()
   const hello = greeting(now)
+  // Decided as Home opens: switching Pause off later mustn't replay the greeting's rise.
   const [paused] = useMotionPaused()
+  const [stillAtStart] = useState(paused)
   const home = useQuery(homeQuery)
   const next = home.data?.birthdays[0]
 
@@ -26,7 +28,7 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
     <main className={styles.page}>
       <title>Home — Pluviose Family Hub</title>
       {/* On the sky band, no card: the greeting and one line (owner's pick A, 2026-11-25). */}
-      <section aria-label="Welcome" data-still={paused || undefined} className={styles.hero}>
+      <section aria-label="Welcome" data-still={stillAtStart || undefined} className={styles.hero}>
         <h1 className={styles.title}>{person ? `${hello}, ${person.first_name}` : hello}</h1>
         {next && <BirthdayLine birthday={next} viewerId={user?.person_id ?? null} />}
       </section>
@@ -51,10 +53,9 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
 // The soonest birthday, said in the hero (owner's call, 2026-11-21), with a way to their page unless it's yours.
 function BirthdayLine({ birthday: b, viewerId }: { birthday: Birthday; viewerId: string | null }) {
   const yours = b.id === viewerId
-  const when = b.in_days === 0 ? 'today' : b.in_days === 1 ? 'tomorrow' : `in ${b.in_days} days`
   return (
     <p className={styles.line}>
-      {`${yours ? 'Your' : `${b.first_name}’s`} birthday is ${when}.`}
+      {`${yours ? 'Your' : `${b.first_name}’s`} birthday is ${inDays(b.in_days).toLowerCase()}.`}
       {!yours && (
         <Link to={`/people/${b.id}`} aria-label={`See profile, ${b.first_name}`} className={styles.lineLink}>
           See profile ›

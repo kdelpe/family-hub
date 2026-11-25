@@ -74,7 +74,8 @@ button.picture[aria-expanded='true'] {
   font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--muted);
+  /* --muted is too faint at 11px on the see-through sheet. */
+  color: var(--text-2);
 }
 
 /* Rows grouped on a card, a hairline between them, inset from the rows' rounded corners. */
