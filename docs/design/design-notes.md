@@ -97,6 +97,8 @@ White text only ever sits on `--accent` (buttons, the focus avatar).
 - Current page: `--nav-active` background, 600 weight, `aria-current="page"`.
 - **Hover / keyboard focus:** `--brand-panel` background plus `box-shadow: 0 1px 3px rgba(43,38,32,.12)`, transition 150ms. The current page keeps its own color and only gains the shadow.
 
+**Gliding highlight (owner's pick, 2026-11-22):** the current page's `--nav-active` background is one pill that glides (Motion layout spring) to the page opened; a page outside the menu, like Requests, has none.
+
 ### 2.2 Logo
 
 Placeholder until a real logo exists: circle `#E6EEE9` with a `#2F5D50` outline, a small tree (trunk, two branches, top bud in green, two side leaves in `#8A6F4A`). Keep it simple and swappable.
@@ -327,7 +329,7 @@ Not drawn in the mockup, settled with the owner (November 2026):
 - **Suggest a relative**: the card's line reads *"Suggest a relative and an admin will take a look. If they approve, your relative gets an invitation by email."* (the mockup's *"… an admin will send them an invitation"* promised too much). The button opens a form inside the card: **Their full name**, **Their email**, *"How are they related? (optional)"* as *"They're the [—] of [your name]"* (Request access's list; the name starts as yours and can be changed, so the admins' queue can find it in the tree), *"Anything else? (optional)"*, then **Send suggestion** / **Cancel**. Afterwards: *"Thanks. An admin will take a look, and if they approve, Darline gets an invitation by email."* and **Suggest someone else**. A login linked to nobody sees neither card.
 
 ### 4.8a Requests (`/requests`)
-Owner's pick R1, 2026-11-21: requests for your details on their own page, opened from the account panel. Title *Requests*, then *"Family asking for your phone number, WhatsApp or address. They only see it if you say yes."* Three tabs: **Waiting** (with its count), **Answered** (*✓ Shared*, *Not shared* or *Stopped sharing*, newest first) and **Shared with** (Stop sharing, as before). Share, Don't share and Stop sharing keep §4.8's confirm steps and wording; an answer given on this visit stays in Waiting, saying what happened. The server now lists answered requests too (pending first); a requester is still never told of a decline. The footer keeps the sharing note.
+Owner's pick R1, 2026-11-21: requests for your details on their own page, opened from the account panel. Title *Requests*, then *"Family asking for your phone number, WhatsApp or address. They only see it if you say yes."* Three tabs: **Waiting** (with its count), **Answered** (*✓ Shared*, *Not shared* or *Stopped sharing*, newest first) and **Shared with** (Stop sharing, as before). The tabs are Radix Tabs (arrow keys, Home and End move and select; one Tab stop), with a 2.5px `--accent` underline that glides to the tab picked (2026-11-22). Share, Don't share and Stop sharing keep §4.8's confirm steps and wording; an answer given on this visit stays in Waiting, saying what happened. The server now lists answered requests too (pending first); a requester is still never told of a decline. The footer keeps the sharing note.
 
 ### 4.9 Full profile (from "Open full profile" / "View profile")
 Back to the tree · portrait, relation, name, maiden name, birthday, place, story · **Center the tree on Nadège** and a dashed **Request phone number** button (never the number itself, unless she has shared it with you) · family grouped as Parents / Married to / Siblings / Children / Step-children / Grandchildren · photos · moments (events + stories).

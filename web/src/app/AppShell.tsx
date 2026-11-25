@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { m } from 'motion/react'
 import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router'
 
 import { ApiError } from '../api/client'
@@ -12,6 +13,16 @@ import styles from './AppShell.module.css'
 import { adminPages, menuPages } from './signedInPages'
 
 const item = ({ isActive }: { isActive: boolean }) => (isActive ? `${styles.item} ${styles.current}` : styles.item)
+
+// One highlight that glides to the page opened.
+function MenuLabel({ label, current }: { label: string; current: boolean }) {
+  return (
+    <>
+      {current && <m.span layoutId="menu-current" className={styles.currentPill} transition={{ type: 'spring', stiffness: 380, damping: 32 }} />}
+      <span className={styles.label}>{label}</span>
+    </>
+  )
+}
 
 // The parent route of every signed-in page (design-notes §2.1): the left menu, then the page's own <main>.
 // Signed out, it sends you to sign in, and back here after.
@@ -53,7 +64,7 @@ export function AppShell() {
         <div className={styles.items}>
           {menuPages.map(({ path, label }) => (
             <NavLink key={path} to={path} end className={item}>
-              {label}
+              {({ isActive }) => <MenuLabel label={label} current={isActive} />}
             </NavLink>
           ))}
         </div>
@@ -62,7 +73,7 @@ export function AppShell() {
             <span className={styles.adminLabel}>Admin</span>
             {adminPages.map(({ path, label }) => (
               <NavLink key={path} to={path} end className={item}>
-                {label}
+                {({ isActive }) => <MenuLabel label={label} current={isActive} />}
               </NavLink>
             ))}
           </div>

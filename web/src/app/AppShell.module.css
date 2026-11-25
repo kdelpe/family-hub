@@ -72,6 +72,7 @@
 }
 
 .item {
+  position: relative;
   padding: 12px 14px;
   border-radius: 8px;
   color: var(--text);
@@ -88,12 +89,26 @@
   box-shadow: 0 1px 3px var(--shadow-press);
 }
 
-/* The current page keeps its own color and only gains the shadow. */
+/* Its colour comes from the pill, so it doesn't stay behind while the pill glides away. */
 .current,
 .current:hover,
 .current:focus-visible {
-  background-color: var(--nav-active);
+  background-color: transparent;
   font-weight: 600;
+}
+
+.currentPill {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 8px;
+  background: var(--nav-active);
+}
+
+/* Above the pill, which can glide across other links on its way. */
+.label {
+  position: relative;
+  z-index: 1;
 }
 
 
