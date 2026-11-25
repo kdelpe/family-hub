@@ -7,8 +7,10 @@
 
 .menu {
   position: relative;
-  /* About a fifth of the window (owner's call, 2026-11-25): 240px beside a 540px page fits from 780px up. */
-  flex: 0 0 clamp(240px, 21vw, 320px);
+  /* Above the content, which is positioned for the sky band and would otherwise cover the cover's shadow. */
+  z-index: 1;
+  /* About a fifth of the window (owner's call, 2026-11-25); 260px keeps "Members & invites" whole. */
+  flex: 0 0 clamp(260px, 21vw, 320px);
   /* Its basis, not its longest name, sets its width: names that don't fit end in an ellipsis. */
   min-width: 0;
   /* As the mockups set it: the browser's own, not the paragraphs' 1.5. */
@@ -481,6 +483,7 @@
   /* Its line hugs the bar, rather than sharing a short page's spare height with the page. */
   .page {
     align-content: flex-start;
+    --menu-bar: 68px;
   }
 
   /* One row of a set height, scrolling sideways if it must, so pages sized to the window can take it off. */
@@ -493,17 +496,15 @@
     align-items: center;
     gap: 18px;
     overflow-x: auto;
-    scrollbar-width: none;
+    /* A thin scrollbar, so a mouse can reach the admin link when the row runs past the window. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--cover-frame) transparent;
     border-bottom: 1px solid var(--cover-frame);
   }
 
   /* A frame would scroll away with the row: a gold rule along its foot instead. */
   .menu::after {
     display: none;
-  }
-
-  .page {
-    --menu-bar: 68px;
   }
 
   .content {
@@ -523,6 +524,11 @@
   .items {
     flex: none;
     flex-direction: row;
+  }
+
+  .items .item {
+    padding: 8px 12px;
+    font-size: 16px;
   }
 
   .admin {

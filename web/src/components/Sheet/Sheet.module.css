@@ -10,9 +10,10 @@
 
 .panel {
   position: fixed;
-  top: 12px;
-  right: 12px;
-  bottom: 12px;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  /* Clear of an iPhone's home bar, where Sign out sits. */
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
   z-index: 41;
   width: min(330px, calc(100vw - 24px));
   box-sizing: border-box;

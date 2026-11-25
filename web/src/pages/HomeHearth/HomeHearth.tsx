@@ -54,7 +54,7 @@ function BirthdayLine({ birthday: b, viewerId }: { birthday: Birthday; viewerId:
     <p className={styles.line}>
       {`${yours ? 'Your' : `${b.first_name}’s`} birthday is ${when}.`}
       {!yours && (
-        <Link to={`/people/${b.id}`} aria-label={`See ${b.first_name}’s profile`} className={styles.lineLink}>
+        <Link to={`/people/${b.id}`} aria-label={`See profile, ${b.first_name}`} className={styles.lineLink}>
           See profile ›
         </Link>
       )}

@@ -108,7 +108,7 @@ describe('HomeHearth', () => {
     if (id === 'p1') {
       expect(hero.queryByRole('link')).toBeNull()
     } else {
-      expect(hero.getByRole('link', { name: 'See Mackenson’s profile' })).toHaveAttribute('href', '/people/mack')
+      expect(hero.getByRole('link', { name: 'See profile, Mackenson' })).toHaveAttribute('href', '/people/mack')
     }
   })
 
