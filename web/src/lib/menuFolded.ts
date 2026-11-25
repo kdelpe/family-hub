@@ -19,7 +19,8 @@ const readFolded = () => {
 // Also hears a fold in another tab.
 const subscribe = (listener: () => void) => {
   const onStorage = (event: StorageEvent) => {
-    if (event.key === foldedKey) {
+    // A null key: the whole storage was cleared.
+    if (event.key === foldedKey || event.key === null) {
       folded = null
       listener()
     }

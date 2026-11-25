@@ -59,8 +59,12 @@ a:hover {
 
 /* The phone's tab bar, while the signed-in shell shows it; toasts and the page's foot keep clear of it. */
 @media (max-width: 600px) {
+  :root {
+    --tab-bar-height: calc(66px + env(safe-area-inset-bottom, 0px));
+  }
+
   :root[data-tab-bar] {
-    --tab-bar: calc(66px + env(safe-area-inset-bottom, 0px));
+    --tab-bar: var(--tab-bar-height);
   }
 }
 

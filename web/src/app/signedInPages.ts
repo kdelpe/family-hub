@@ -1,6 +1,6 @@
 import type { MenuIconName } from './MenuIcon'
 
-type MenuPage = { path: string; label: string; icon: MenuIconName; short?: string }
+export type MenuPage = { path: string; label: string; icon: MenuIconName; short?: string }
 
 // The signed-in pages, in menu order (design-notes §2.1). The menu and the routes both read this list, so a
 // menu link always lands inside the shell. short: the phone's tab label, where the label won't fit.

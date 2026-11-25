@@ -29,7 +29,6 @@
   padding-inline: 12px;
 }
 
-
 /* On the menu's edge, half in and half out. */
 .fold {
   position: absolute;
@@ -226,7 +225,6 @@
   min-width: 0;
 }
 
-
 .content {
   --account-bar: 32px;
   flex: 999 1 560px;
@@ -234,7 +232,6 @@
   display: flex;
   flex-direction: column;
 }
-
 
 .failed {
   min-height: 100vh;
@@ -448,7 +445,7 @@
 
   /* The shell's own, set with its first paint; the page root's copy, for toasts, comes a moment later. */
   .page {
-    --tab-bar: calc(66px + env(safe-area-inset-bottom, 0px));
+    --tab-bar: var(--tab-bar-height);
   }
 
   /* Room for the tab bar, which pages sized to the window also take off their height. */

@@ -17,8 +17,7 @@ import { useSignedIn } from '../lib/useSignedIn'
 import { AccountMenu } from './AccountMenu'
 import styles from './AppShell.module.css'
 import { MenuIcon } from './MenuIcon'
-import { adminPages, menuPages } from './signedInPages'
-
+import { adminPages, type MenuPage, menuPages } from './signedInPages'
 
 // One highlight that glides to the page opened. On a phone, short is the tab's label.
 function MenuItem({
@@ -29,13 +28,13 @@ function MenuItem({
   rail,
   narrow,
   onClick,
-}: (typeof menuPages)[number] & { rail: boolean; narrow: boolean; onClick?: () => void }) {
+}: MenuPage & { rail: boolean; narrow: boolean; onClick?: () => void }) {
   const tab = narrow && short
   const [tipOpen, setTipOpen] = useState(false)
   // Always inside the tooltip, closed off the rail: unwrapping it would remount the link and drop its focus. NavLink
   // marks the current page with aria-current, which the styles read, so its className stays plain for the trigger.
   return (
-    <Tooltip.Root open={rail && tipOpen} onOpenChange={rail ? setTipOpen : undefined}>
+    <Tooltip.Root open={rail && tipOpen} onOpenChange={setTipOpen}>
       <Tooltip.Trigger asChild>
         <NavLink to={path} end aria-label={tab ? label : undefined} onClick={onClick} className={styles.item}>
           {({ isActive }) => (
