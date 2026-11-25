@@ -50,6 +50,8 @@
   --gold: #d9c38c;
   --gold-pale: #eadfc2;
   --endpaper: #e8efe9;
+  /* Paler than the endpapers, so the tree's panel doesn't merge with the sky band (owner's pick, 2026-11-25). */
+  --tree-paper: #f0f5f1;
   --cover-light: rgba(255, 255, 255, 0.1);
   --cover-dark: rgba(0, 0, 0, 0.22);
   --cover-grain: rgba(0, 0, 0, 0.025);
