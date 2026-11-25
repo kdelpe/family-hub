@@ -194,6 +194,33 @@ describe('AppShell', () => {
       expect(await screen.findByRole('button', { name: 'Unfold the menu' })).toBeInTheDocument()
     })
 
+    it('opens no tooltip by itself when the menu folds again', async () => {
+      signedIn()
+      renderShell()
+      fireEvent.click(await screen.findByRole('button', { name: 'Fold the menu' }))
+      const menu = screen.getByRole('navigation', { name: 'Main' })
+      fireEvent.focus(within(menu).getByRole('link', { name: 'Events' }))
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+
+      fireEvent.click(within(menu).getByRole('button', { name: 'Unfold the menu' }))
+      fireEvent.click(within(menu).getByRole('button', { name: 'Fold the menu' }))
+
+      expect(screen.queryByRole('tooltip')).toBeNull()
+    })
+
+    it.each([
+      { name: 'moves an icon for a mouse', pointerType: 'mouse', pointed: true },
+      { name: 'leaves an icon still for a tap', pointerType: 'touch', pointed: false },
+    ])('$name', async ({ pointerType, pointed }) => {
+      signedIn()
+      renderShell()
+      const events = await within(await screen.findByRole('navigation', { name: 'Main' })).findByRole('link', { name: 'Events' })
+
+      fireEvent.pointerEnter(events, { pointerType })
+
+      expect(events.hasAttribute('data-pointed')).toBe(pointed)
+    })
+
     it('puts the admin drawer away when the screen widens', async () => {
       const listeners = new Set<() => void>()
       let narrow = true

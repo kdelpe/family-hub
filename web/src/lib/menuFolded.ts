@@ -16,21 +16,20 @@ const readFolded = () => {
   return folded
 }
 
-// Also hears a fold in another tab.
-const subscribe = (listener: () => void) => {
-  const onStorage = (event: StorageEvent) => {
-    // A null key: the whole storage was cleared.
+// Hears a fold in another tab for as long as the page lives, so it's known even while no menu shows (signed out).
+// A null key: the whole storage was cleared.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
     if (event.key === foldedKey || event.key === null) {
       folded = null
-      listener()
+      listeners.forEach((l) => l())
     }
-  }
+  })
+}
+
+const subscribe = (listener: () => void) => {
   listeners.add(listener)
-  window.addEventListener('storage', onStorage)
-  return () => {
-    listeners.delete(listener)
-    window.removeEventListener('storage', onStorage)
-  }
+  return () => listeners.delete(listener)
 }
 
 const setFolded = (next: boolean) => {

@@ -9,7 +9,7 @@
     animation: 1.4s ease-in-out infinite;
   }
 
-  a:focus-visible:not(:hover) :is(.icon, .door, .cover, .page) {
+  a:focus-visible:not([data-pointed]) :is(.icon, .door, .cover, .page) {
     animation-iteration-count: 1;
   }
 
@@ -58,29 +58,29 @@
   }
 }
 
-/* Pointing only with a mouse: a tapped tab on a touch screen keeps :hover, and would move on and on. */
-@media (prefers-reduced-motion: no-preference) and (hover: hover) {
-  a:hover .door {
+/* Pointed at with a mouse (data-pointed, set by the menu): a tap can leave :hover behind, and would move on and on. */
+@media (prefers-reduced-motion: no-preference) {
+  a[data-pointed] .door {
     animation-name: swing;
   }
 
-  a:hover .icon[data-icon='tree'] {
+  a[data-pointed] .icon[data-icon='tree'] {
     animation-name: sway;
   }
 
-  a:hover .cover {
+  a[data-pointed] .cover {
     animation-name: turn-page;
   }
 
-  a:hover .page {
+  a[data-pointed] .page {
     animation-name: lift;
   }
 
-  a:hover .icon[data-icon='mic'] {
+  a[data-pointed] .icon[data-icon='mic'] {
     animation-name: bob;
   }
 
-  a:hover .icon[data-icon='key'] {
+  a[data-pointed] .icon[data-icon='key'] {
     animation-name: unlock;
   }
 }

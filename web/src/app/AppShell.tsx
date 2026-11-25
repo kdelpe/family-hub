@@ -31,12 +31,29 @@ function MenuItem({
 }: MenuPage & { rail: boolean; narrow: boolean; onClick?: () => void }) {
   const tab = narrow && short
   const [tipOpen, setTipOpen] = useState(false)
+  // Off the rail a tooltip can't open, and one open as the rail goes is closed, so folding again doesn't reopen it.
+  const [onRail, setOnRail] = useState(rail)
+  if (onRail !== rail) {
+    setOnRail(rail)
+    setTipOpen(false)
+  }
+  // Pointed at with a mouse only: a tap can leave :hover behind, even on a device that also has a mouse.
+  const [pointed, setPointed] = useState(false)
   // Always inside the tooltip, closed off the rail: unwrapping it would remount the link and drop its focus. NavLink
   // marks the current page with aria-current, which the styles read, so its className stays plain for the trigger.
   return (
-    <Tooltip.Root open={rail && tipOpen} onOpenChange={setTipOpen}>
+    <Tooltip.Root open={rail && tipOpen} onOpenChange={(next) => setTipOpen(rail && next)}>
       <Tooltip.Trigger asChild>
-        <NavLink to={path} end aria-label={tab ? label : undefined} onClick={onClick} className={styles.item}>
+        <NavLink
+          to={path}
+          end
+          aria-label={tab ? label : undefined}
+          data-pointed={pointed || undefined}
+          onPointerEnter={(event) => event.pointerType === 'mouse' && setPointed(true)}
+          onPointerLeave={() => setPointed(false)}
+          onClick={onClick}
+          className={styles.item}
+        >
           {({ isActive }) => (
             <>
               {isActive && <m.span layoutId="menu-current" className={styles.currentPill} transition={{ type: 'spring', stiffness: 380, damping: 32 }} />}
