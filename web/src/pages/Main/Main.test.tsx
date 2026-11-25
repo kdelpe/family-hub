@@ -256,7 +256,7 @@ describe('Main', () => {
     }
   })
 
-  it('recenters a tree that was moved, keeping its zoom', () => {
+  it('recenters a tree that was moved or zoomed, back to 100%', () => {
     renderTree('fritz')
     const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
     const mouse = { pointerId: 1, pointerType: 'mouse', button: 0 }
@@ -269,7 +269,10 @@ describe('Main', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
 
     expect(screen.getByRole('button', { name: 'Recenter' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Reset zoom, now 110%' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reset zoom, now 100%' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
+    expect(screen.getByRole('button', { name: 'Recenter' })).toBeEnabled()
   })
 
   it('brings a moved tree back to the middle on Back to me when it’s already centered on you, keeping the zoom', () => {
@@ -284,8 +287,10 @@ describe('Main', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to me' }))
 
-    expect(screen.getByRole('button', { name: 'Recenter' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Reset zoom, now 110%' })).toBeInTheDocument()
+    // Back at 100%, nothing is left for Recenter: the move was undone.
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
+    expect(screen.getByRole('button', { name: 'Recenter' })).toBeDisabled()
   })
 
   it('centers a tree that was moved when the zoom is reset', () => {
@@ -459,7 +464,7 @@ describe('Main', () => {
     const handled = !fireEvent.keyDown(cardOf('Maya'), { key, ctrlKey })
 
     expect(handled).toBe(moved || zoom !== '100%')
-    expect(screen.getByRole('button', { name: 'Recenter' })).toHaveProperty('disabled', !moved)
+    expect(screen.getByRole('button', { name: 'Recenter' })).toHaveProperty('disabled', !moved && zoom === '100%')
     expect(screen.getByRole('button', { name: `Reset zoom, now ${zoom}` })).toBeInTheDocument()
   })
 

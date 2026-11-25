@@ -1071,11 +1071,12 @@ function FocusTree({
         <button
           type="button"
           className={styles.recenter}
-          disabled={!moved}
+          disabled={!moved && zoom === 1}
           onClick={() => {
             stopFling()
-            glideBack(zoom)
+            glideBack(1)
             setMoved(null)
+            onZoom(() => 1)
           }}
         >
           Recenter
