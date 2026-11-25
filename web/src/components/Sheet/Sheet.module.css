@@ -37,7 +37,7 @@
 
 @keyframes slide-in {
   from {
-    translate: calc(100% + 12px) 0;
+    translate: calc(100% + max(12px, env(safe-area-inset-right, 0px))) 0;
   }
 }
 

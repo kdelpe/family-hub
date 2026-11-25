@@ -2,7 +2,6 @@
   margin: 0;
   font-size: 15px;
   color: var(--text-2);
-  white-space: nowrap;
 }
 
 .strip b {

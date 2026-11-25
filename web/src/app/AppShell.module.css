@@ -255,7 +255,8 @@
 .content {
   --account-bar: 32px;
   position: relative;
-  flex: 999 1 540px;
+  /* 260px of menu beside it still fits at 800px less a 15px scrollbar. */
+  flex: 999 1 520px;
   min-width: 0;
   display: flex;
   flex-direction: column;

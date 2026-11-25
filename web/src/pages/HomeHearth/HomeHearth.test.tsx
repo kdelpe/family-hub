@@ -29,7 +29,7 @@ const tree = {
   ],
 }
 
-function renderHome(personId: string | null, home: Omit<Home, 'counts'> & Partial<Home> = nothing, Page = HomeHearth) {
+function renderHome(personId: string | null, home: Omit<Home, 'counts'> & Partial<Home> = nothing) {
   const client = new QueryClient()
   client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: personId })
   client.setQueryData(personKeys.one('p1'), { id: 'p1', first_name: 'Maya', last_name: 'Pluviose' })
@@ -37,7 +37,7 @@ function renderHome(personId: string | null, home: Omit<Home, 'counts'> & Partia
   client.setQueryData(treeKeys.all, tree)
   render(
     <QueryClientProvider client={client}>
-      <RouterProvider router={createMemoryRouter([{ path: '/', element: <Page now={fridayEvening} /> }])} />
+      <RouterProvider router={createMemoryRouter([{ path: '/', element: <HomeHearth now={fridayEvening} /> }])} />
     </QueryClientProvider>,
   )
   return client

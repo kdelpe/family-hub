@@ -97,7 +97,7 @@ function AdminDrawer() {
           data-still={paused || undefined}
           className={`${sheet.panel} ${styles.drawer}`}
         >
-          {/* At 320px the sheet fills the screen, leaving no scrim to tap. */}
+          {/* On a phone the scrim beside the sheet is a thin strip, too small to tap reliably. */}
           <div className={styles.drawerHead}>
             <Dialog.Title className={styles.drawerTitle}>Admin</Dialog.Title>
             <Dialog.Close aria-label="Close" className={styles.drawerClose}>

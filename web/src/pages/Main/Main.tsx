@@ -935,6 +935,14 @@ function FocusTree({
     }
   }, [])
 
+  // The percentage and Recenter both bring the tree back to the middle at 100% (design-notes §4.2).
+  const resetView = () => {
+    stopFling()
+    glideBack(1)
+    setMoved(null)
+    onZoom(() => 1)
+  }
+
   return (
     <div className={styles.frame}>
       {/* Not while the tree rests moved up to show the focus card: a parent's card can then run under it. */}
@@ -1068,12 +1076,7 @@ function FocusTree({
         <button type="button" aria-label="Zoom out" className={styles.zoomButton} disabled={zoom <= minZoom} onClick={() => zoomBy(-0.1)}>
           −
         </button>
-        <button type="button" aria-label={`Reset zoom, now ${Math.round(zoom * 100)}%`} className={styles.zoomLevel} onClick={() => {
-            stopFling()
-            glideBack(1)
-            setMoved(null)
-            onZoom(() => 1)
-          }}>
+        <button type="button" aria-label={`Reset zoom, now ${Math.round(zoom * 100)}%`} className={styles.zoomLevel} onClick={resetView}>
           {Math.round(zoom * 100)}%
         </button>
         <button type="button" aria-label="Zoom in" className={styles.zoomButton} disabled={zoom >= maxZoom} onClick={() => zoomBy(0.1)}>
@@ -1082,13 +1085,9 @@ function FocusTree({
         <button
           type="button"
           className={styles.recenter}
-          disabled={!moved && zoom === 1}
-          onClick={() => {
-            stopFling()
-            glideBack(1)
-            setMoved(null)
-            onZoom(() => 1)
-          }}
+          // As shown: a pinch can leave the zoom a hair off 100%.
+          disabled={!moved && Math.round(zoom * 100) === 100}
+          onClick={resetView}
         >
           Recenter
         </button>
