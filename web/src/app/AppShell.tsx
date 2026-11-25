@@ -49,7 +49,7 @@ function MenuItem({
       <Tooltip.Trigger asChild>
         <NavLink
           to={path}
-          // Only Home needs an exact match; a page under another, like an event's, keeps that one lit.
+          // Only Home needs an exact match, so a page under a menu item's path (an event's, under /events) keeps it lit.
           end={path === '/'}
           aria-label={tab ? label : undefined}
           data-pointed={pointed || undefined}
