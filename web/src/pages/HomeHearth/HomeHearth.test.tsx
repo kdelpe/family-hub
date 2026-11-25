@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { MotionGlobalConfig } from 'motion/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { authKeys } from '../../api/auth'
 import { type Home, homeKeys } from '../../api/home'
@@ -12,7 +13,9 @@ import { HomeHearth } from './HomeHearth'
 
 const fridayEvening = new Date('2026-11-20T18:30')
 
-const nothing: Home = { birthdays: [], newcomers: [] }
+const counts = { people: 26, generations: 6, new_this_month: 1 }
+
+const nothing = { birthdays: [], newcomers: [] }
 
 const person = (id: string, first_name: string, last_name = 'Pluviose') => ({ id, first_name, last_name, side: 'first', gender: 'female', is_deceased: false })
 
@@ -27,18 +30,53 @@ const tree = {
   ],
 }
 
-function renderHome(personId: string | null, home: Home = nothing) {
+function renderHome(personId: string | null, home: Omit<Home, 'counts'> & Partial<Home> = nothing, Page = HomeHearth) {
   const client = new QueryClient()
   client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: personId })
   client.setQueryData(personKeys.one('p1'), { id: 'p1', first_name: 'Maya', last_name: 'Pluviose' })
-  client.setQueryData(homeKeys.all, home)
+  client.setQueryData(homeKeys.all, { counts, ...home })
   client.setQueryData(treeKeys.all, tree)
   render(
     <QueryClientProvider client={client}>
-      <RouterProvider router={createMemoryRouter([{ path: '/', element: <HomeHearth now={fridayEvening} /> }])} />
+      <RouterProvider router={createMemoryRouter([{ path: '/', element: <Page now={fridayEvening} /> }])} />
     </QueryClientProvider>,
   )
+  return client
 }
+
+// Home counts up once per visit, remembered in its module: a fresh copy is a first visit. Animations on.
+async function renderFirstVisit() {
+  vi.resetModules()
+  const { HomeHearth: Fresh } = await import('./HomeHearth')
+  MotionGlobalConfig.skipAnimations = false
+  const client = renderHome('p1', nothing, Fresh)
+  const people = () => within(screen.getByRole('list', { name: 'The family in numbers' })).getAllByRole('listitem')[0]!.querySelector('b')!
+  return { client, people }
+}
+
+// Reduced motion, switched on and off as the test goes.
+function stubReduced() {
+  let reduced = false
+  const listeners = new Set<() => void>()
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    get matches() {
+      return query.includes('reduce') && reduced
+    },
+    media: query,
+    addEventListener: (_: string, l: () => void) => listeners.add(l),
+    removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+  }))
+  return (on: boolean) =>
+    act(() => {
+      reduced = on
+      listeners.forEach((l) => l())
+    })
+}
+
+afterEach(() => {
+  MotionGlobalConfig.skipAnimations = true
+  vi.unstubAllGlobals()
+})
 
 describe('HomeHearth', () => {
   it('greets the viewer by name for the time of day', () => {
@@ -145,6 +183,45 @@ describe('HomeHearth', () => {
     expect(card.getByText('Cousin')).toBeInTheDocument()
     expect(card.getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/people/naomie')
     expect(inTree).toHaveAttribute('href', '/tree?person=naomie')
+  })
+
+  it('shows the family in numbers', () => {
+    renderHome('p1')
+
+    const stats = within(screen.getByRole('list', { name: 'The family in numbers' }))
+    const [people, generations, added] = stats.getAllByRole('listitem')
+    expect(people).toHaveTextContent(/26 people$/)
+    expect(generations).toHaveTextContent(/6 generations$/)
+    expect(added).toHaveTextContent(/1 new this month$/)
+  })
+
+  it('counts up once: a total that changes after the count just shows', async () => {
+    const { client, people } = await renderFirstVisit()
+    expect(people()).toHaveTextContent('0')
+    // The count takes 1.2s.
+    await act(() => new Promise((r) => setTimeout(r, 1500)))
+    expect(people()).toHaveTextContent('26')
+
+    // The query tells the page on a timer of its own.
+    await act(async () => {
+      client.setQueryData(homeKeys.all, { counts: { ...counts, people: 27 }, ...nothing })
+      await new Promise((r) => setTimeout(r, 0))
+    })
+
+    expect(people()).toHaveTextContent('27')
+  })
+
+  it('stops counting for good once reduced motion comes on, even switched off again', async () => {
+    const setReduced = stubReduced()
+    const { people } = await renderFirstVisit()
+    expect(people()).toHaveTextContent('0')
+
+    setReduced(true)
+    expect(people()).toHaveTextContent('26')
+    setReduced(false)
+    await act(() => new Promise((r) => setTimeout(r, 300)))
+
+    expect(people()).toHaveTextContent('26')
   })
 
   it('doesn’t open a name’s card on keyboard focus', async () => {

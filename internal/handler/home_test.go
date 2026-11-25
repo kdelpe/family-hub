@@ -28,10 +28,12 @@ func TestHome(t *testing.T) {
 		{name: "birthdays and newcomers", home: family.Home{
 			Birthdays: []family.Birthday{{ID: testPersonID, FirstName: "Nadège", LastName: new("Pluviose"), On: time.Date(2026, 11, 19, 0, 0, 0, 0, time.UTC), InDays: 6}},
 			Newcomers: []family.Newcomer{{ID: otherPersonID, FirstName: "Naomie", AddedAt: added}},
+			Counts:    family.Counts{People: 26, Generations: 6, NewThisMonth: 3},
 		}, wantStatus: http.StatusOK,
 			wantBody: `{"birthdays":[{"id":"` + testPersonID.String() + `","first_name":"Nadège","last_name":"Pluviose","on":"2026-11-19","in_days":6}],
-				"newcomers":[{"id":"` + otherPersonID.String() + `","first_name":"Naomie","last_name":null,"added_at":"2026-11-10T15:04:05Z"}]}`},
-		{name: "nothing coming up", wantStatus: http.StatusOK, wantBody: `{"birthdays":[],"newcomers":[]}`},
+				"newcomers":[{"id":"` + otherPersonID.String() + `","first_name":"Naomie","last_name":null,"added_at":"2026-11-10T15:04:05Z"}],
+				"counts":{"people":26,"generations":6,"new_this_month":3}}`},
+		{name: "nothing coming up", wantStatus: http.StatusOK, wantBody: `{"birthdays":[],"newcomers":[],"counts":{"people":0,"generations":0,"new_this_month":0}}`},
 		{name: "database error", homeErr: errors.New("db down"), wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 		{name: "mounted without a session gate", noSession: true, wantStatus: http.StatusInternalServerError, wantBody: internalBody},
 	}

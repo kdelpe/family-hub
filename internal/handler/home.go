@@ -33,6 +33,13 @@ func NewHome(svc HomeService, timezone *time.Location) *Home {
 type homeResponse struct {
 	Birthdays []birthdayResponse `json:"birthdays"`
 	Newcomers []newcomerResponse `json:"newcomers"`
+	Counts    countsResponse     `json:"counts"`
+}
+
+type countsResponse struct {
+	People       int `json:"people"`
+	Generations  int `json:"generations"`
+	NewThisMonth int `json:"new_this_month"`
 }
 
 type birthdayResponse struct {
@@ -60,7 +67,11 @@ func (h *Home) Show(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err, "home")
 		return
 	}
-	resp := homeResponse{Birthdays: make([]birthdayResponse, 0, len(home.Birthdays)), Newcomers: make([]newcomerResponse, 0, len(home.Newcomers))}
+	resp := homeResponse{
+		Birthdays: make([]birthdayResponse, 0, len(home.Birthdays)),
+		Newcomers: make([]newcomerResponse, 0, len(home.Newcomers)),
+		Counts:    countsResponse{People: home.Counts.People, Generations: home.Counts.Generations, NewThisMonth: home.Counts.NewThisMonth},
+	}
 	for _, b := range home.Birthdays {
 		resp.Birthdays = append(resp.Birthdays, birthdayResponse{ID: b.ID, FirstName: b.FirstName, LastName: b.LastName, On: b.On.Format(time.DateOnly), InDays: b.InDays})
 	}

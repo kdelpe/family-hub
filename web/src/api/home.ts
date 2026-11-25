@@ -5,7 +5,9 @@ export type Birthday = { id: string; first_name: string; last_name: string | nul
 
 export type Newcomer = { id: string; first_name: string; last_name: string | null; added_at: string }
 
-export type Home = { birthdays: Birthday[]; newcomers: Newcomer[] }
+export type Counts = { people: number; generations: number; new_this_month: number }
+
+export type Home = { birthdays: Birthday[]; newcomers: Newcomer[]; counts: Counts }
 
 export const homeKeys = {
   all: ['home'] as const,

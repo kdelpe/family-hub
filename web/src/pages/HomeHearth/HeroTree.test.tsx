@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // HomeHearth keeps "already grown this visit" at module level, so each test imports it afresh.
@@ -9,7 +9,10 @@ const fresh = async () => {
 const leafStyle = (container: HTMLElement) => container.querySelector('circle')!.getAttribute('style') ?? ''
 
 describe('HeroTree', () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+  })
   afterEach(() => vi.unstubAllGlobals())
 
   it('grows on the first arrival of a visit, and shows grown when Home is opened again', async () => {
@@ -47,5 +50,64 @@ describe('HeroTree', () => {
 
     expect(Array.isArray(animate.y)).toBe(sways)
     expect('repeat' in transition.y).toBe(sways)
+  })
+
+  // With Motion running for real, a leaf's sway shows as a moving translateY; still, it settles at 0.
+  describe('with the site’s Pause motion', () => {
+    async function mountSwaying(startPaused: boolean) {
+      const { HeroTree } = await fresh()
+      const { useMotionPaused } = await import('../../lib/motion')
+      const { domMax, LazyMotion, MotionGlobalConfig } = await import('motion/react')
+      MotionGlobalConfig.skipAnimations = false
+      function PauseSwitch() {
+        const [paused, setPaused] = useMotionPaused()
+        return <button onClick={() => setPaused(!paused)}>{paused ? 'Play motion' : 'Pause motion'}</button>
+      }
+      // Grown once already, so this mount sways straight away instead of budding first.
+      render(<HeroTree />).unmount()
+      const view = render(
+        <LazyMotion features={domMax}>
+          <PauseSwitch />
+          <HeroTree />
+        </LazyMotion>,
+      )
+      if (startPaused) {
+        fireEvent.click(screen.getByRole('button', { name: 'Pause motion' }))
+      }
+      const offset = () => {
+        const moved = view.container.querySelector('circle')!.style.transform.match(/translateY\((-?[\d.]+)px\)/)
+        return moved ? Math.abs(Number(moved[1])) : 0
+      }
+      return { offset, restore: () => (MotionGlobalConfig.skipAnimations = true) }
+    }
+    const wait = (ms: number) => act(() => new Promise((r) => setTimeout(r, ms)))
+
+    it('stops the sway when paused and starts it again on play', async () => {
+      const { offset, restore } = await mountSwaying(false)
+      try {
+        await wait(800)
+        expect(offset()).toBeGreaterThan(0.05)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Pause motion' }))
+        await wait(800)
+        expect(offset()).toBeLessThan(0.01)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Play motion' }))
+        await wait(800)
+        expect(offset()).toBeGreaterThan(0.05)
+      } finally {
+        restore()
+      }
+    })
+
+    it('doesn’t sway in a session already paused', async () => {
+      const { offset, restore } = await mountSwaying(true)
+      try {
+        await wait(800)
+        expect(offset()).toBeLessThan(0.01)
+      } finally {
+        restore()
+      }
+    })
   })
 })

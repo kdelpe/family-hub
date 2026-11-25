@@ -23,6 +23,15 @@ const (
 type Home struct {
 	Birthdays []Birthday
 	Newcomers []Newcomer
+	Counts    Counts
+}
+
+// Counts are the hero's numbers: everyone in the tree, the longest parent line, and who was added since the
+// first of this month in the family's timezone.
+type Counts struct {
+	People       int
+	Generations  int
+	NewThisMonth int
 }
 
 // Birthday is a coming birthday: its date this year (or next) and how many days away, never the birth year.
@@ -70,6 +79,12 @@ func (s *Service) Home(ctx context.Context, viewer Viewer, now time.Time, loc *t
 		for _, a := range added {
 			home.Newcomers = append(home.Newcomers, Newcomer{ID: a.ID, FirstName: a.FirstName, LastName: a.LastName, AddedAt: a.CreatedAt})
 		}
+		local := now.In(loc)
+		counts, err := q.FamilyCounts(ctx, time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, loc))
+		if err != nil {
+			return fmt.Errorf("family counts: %w", err)
+		}
+		home.Counts = Counts{People: int(counts.People), Generations: int(counts.Generations), NewThisMonth: int(counts.AddedSince)}
 		return nil
 	})
 	if err != nil {

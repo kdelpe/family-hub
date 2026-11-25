@@ -1,9 +1,9 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
-import { m } from 'motion/react'
+import { animate, m } from 'motion/react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
-import { type Birthday, type Home, homeQuery, type Newcomer } from '../../api/home'
+import { type Birthday, type Counts, type Home, homeQuery, type Newcomer } from '../../api/home'
 import { addedOn, inDays, monthAndDay } from '../../lib/dates'
 import { dayPartLabel, greeting } from '../../lib/dayPart'
 import { errorMessage } from '../../lib/errorMessage'
@@ -38,6 +38,7 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
               See new photos
             </Link>
           </div>
+          {home.data?.counts && <Stats counts={home.data.counts} />}
         </div>
         <HeroTree />
       </section>
@@ -77,6 +78,73 @@ const leaves = [
   { cx: 160, cy: 68, r: 9, light: true },
 ]
 // It grows once per visit; coming back to Home shows it grown.
+let counted = false
+
+function Stats({ counts }: { counts: Counts }) {
+  const [paused] = useMotionPaused()
+  const reduced = useReducedMotion()
+  // Decided once as Home opens, so a later re-render can't cut the count short; Pause or reduced motion stops it.
+  const [eligible, setEligible] = useState(() => !counted && !paused && !reduced)
+  // Turned off for good: switching Pause or reduced motion back off doesn't start the count over.
+  if (eligible && (paused || reduced)) {
+    setEligible(false)
+  }
+  const count = eligible
+  useEffect(() => {
+    counted = true
+  }, [])
+  const stats: [number, string, string][] = [
+    [counts.people, 'person', 'people'],
+    [counts.generations, 'generation', 'generations'],
+    [counts.new_this_month, 'new this month', 'new this month'],
+  ]
+  return (
+    <ul aria-label="The family in numbers" className={styles.stats}>
+      {stats.map(([n, one, many]) => (
+        <li key={many} className={styles.stat}>
+          <CountUp to={n} count={count} />
+          <span className="visually-hidden">{n}</span> {n === 1 ? one : many}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// Counts up from zero once per visit; the number read aloud is the final one beside it.
+function CountUp({ to, count }: { to: number; count: boolean }) {
+  const shown = useRef<HTMLElement>(null)
+  // Once the first count has finished or been stopped, a total that changes later just shows.
+  const [settled, setSettled] = useState(false)
+  const counting = count && !settled
+  useEffect(() => {
+    if (!counting) {
+      return
+    }
+    // Stopping the run writes one last frame: cut short (Pause, reduced motion), it would land over the total React
+    // has just shown.
+    let live = true
+    const run = animate(0, to, {
+      duration: 1.2,
+      ease: 'easeOut',
+      onUpdate: (v) => {
+        if (live && shown.current) {
+          shown.current.textContent = Math.round(v).toLocaleString()
+        }
+      },
+      onComplete: () => setSettled(true),
+    })
+    return () => {
+      live = false
+      run.stop()
+    }
+  }, [to, counting])
+  return (
+    <b ref={shown} aria-hidden="true" className={styles.statNumber}>
+      {(counting ? 0 : to).toLocaleString()}
+    </b>
+  )
+}
+
 const branchDraw = 0.9
 const branchDelay = (i: number) => 0.15 + i * 0.12
 // The leaves bud once the last branch is drawn.

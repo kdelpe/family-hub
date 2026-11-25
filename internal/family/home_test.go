@@ -100,6 +100,102 @@ func TestHome(t *testing.T) {
 	require.Len(t, home.Newcomers, 2)
 	assert.Equal(t, []string{"Recent", "Two weeks"}, []string{home.Newcomers[0].FirstName, home.Newcomers[1].FirstName},
 		"added in the last 30 days, newest first, other than the viewer")
+	assert.Equal(t, Counts{People: 10, Generations: 1, NewThisMonth: 2}, home.Counts,
+		"living and deceased, not deleted; no parent links; added since November 1 in New York")
+}
+
+func TestHomeCountsNewThisMonth(t *testing.T) {
+	newYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+	at := func(value string) time.Time {
+		v, err := time.ParseInLocation(time.DateTime, value, newYork)
+		require.NoError(t, err)
+		return v
+	}
+	tests := []struct {
+		name  string
+		now   time.Time
+		added []time.Time
+		want  int
+	}{
+		{
+			name:  "from the family's midnight on the 1st, not a second before",
+			now:   at("2026-12-01 01:00:00"),
+			added: []time.Time{at("2026-11-30 23:59:59"), at("2026-12-01 00:00:00")},
+			want:  1,
+		},
+		{
+			// 10pm on November 30 in New York is already December in UTC.
+			name:  "the family's month when UTC has moved on",
+			now:   at("2026-11-30 22:00:00"),
+			added: []time.Time{at("2026-11-15 12:00:00")},
+			want:  1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := testdb.MigratedPool(t, database.MigrateUp)
+			svc, admin := NewService(pool), insertAdmin(t, pool)
+			for i, when := range tt.added {
+				p, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: fmt.Sprint("Added ", i)})
+				require.NoError(t, err)
+				_, err = pool.Exec(t.Context(), `UPDATE persons SET created_at = $1 WHERE id = $2`, when, p.ID)
+				require.NoError(t, err)
+			}
+
+			home, err := svc.Home(t.Context(), Viewer{}, tt.now, newYork)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, home.Counts.NewThisMonth)
+		})
+	}
+}
+
+func TestHomeCountsGenerations(t *testing.T) {
+	tests := []struct {
+		name string
+		// Each pair is parent, child, by index into five people.
+		links [][2]int
+		// Foster links, which the tree's summary doesn't count as a generation either.
+		fostered [][2]int
+		// The person deleted, or -1.
+		deleted int
+		want    int
+	}{
+		{name: "nobody linked", deleted: -1, want: 1},
+		{name: "longest line, not the most people", links: [][2]int{{0, 1}, {1, 2}, {2, 3}, {0, 4}}, deleted: -1, want: 4},
+		{name: "two parents of one child count once", links: [][2]int{{0, 2}, {1, 2}, {2, 3}}, deleted: -1, want: 3},
+		{name: "a deleted person breaks no line and adds none", links: [][2]int{{0, 1}, {1, 2}, {2, 3}}, deleted: 3, want: 3},
+		{name: "foster links aren't a generation", links: [][2]int{{0, 1}, {1, 2}}, fostered: [][2]int{{2, 3}}, deleted: -1, want: 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := testdb.MigratedPool(t, database.MigrateUp)
+			svc, admin := NewService(pool), insertAdmin(t, pool)
+			ids := make([]uuid.UUID, 5)
+			for i := range ids {
+				p, err := svc.CreatePerson(t.Context(), admin, PersonInput{FirstName: fmt.Sprint("Person ", i)})
+				require.NoError(t, err)
+				ids[i] = p.ID
+			}
+			for _, l := range tt.links {
+				_, err := svc.CreateRelationship(t.Context(), RelationshipInput{Type: "parent_child", Subtype: new("biological"), ParentID: ids[l[0]], ChildID: ids[l[1]]})
+				require.NoError(t, err)
+			}
+			for _, l := range tt.fostered {
+				_, err := svc.CreateRelationship(t.Context(), RelationshipInput{Type: "parent_child", Subtype: new("foster"), ParentID: ids[l[0]], ChildID: ids[l[1]]})
+				require.NoError(t, err)
+			}
+			if tt.deleted >= 0 {
+				require.NoError(t, svc.DeletePerson(t.Context(), ids[tt.deleted]))
+			}
+
+			home, err := svc.Home(t.Context(), Viewer{}, time.Now(), time.UTC)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, home.Counts.Generations)
+		})
+	}
 }
 
 func TestHomeShowsAtMostTwentyNewcomers(t *testing.T) {
