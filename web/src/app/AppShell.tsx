@@ -169,7 +169,7 @@ export function AppShell() {
             <span aria-hidden="true">‹</span>
           </button>
           <Link to="/" aria-label="Pluviose Family Hub, home" className={styles.identity}>
-            <Logo size={52} />
+            <Logo size={52} onCover />
             <span className={styles.names}>
               <span className={styles.familyName}>Pluviose</span>
               <span className={styles.hub}>Family Hub</span>

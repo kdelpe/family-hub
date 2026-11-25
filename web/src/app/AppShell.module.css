@@ -373,6 +373,100 @@
   }
 }
 
+/* The green cover (owner's pick, 2026-11-25): the menu bound like the Members book, with a thin gold frame and a
+   gold edge on the current page. Scoped to the menu: the admin drawer's links stay on paper. */
+.menu {
+  border-right: 0;
+  background: linear-gradient(180deg, var(--accent), var(--cover-deep));
+  color: var(--on-cover);
+  box-shadow: 4px 0 22px var(--cover-shade);
+}
+
+.menu::after {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border: 1px solid var(--cover-frame);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.menu .identity,
+.menu .identity:hover {
+  color: var(--on-cover);
+}
+
+.menu .hub,
+.menu .adminLabel {
+  color: var(--gold);
+}
+
+.menu .admin {
+  border-top-color: var(--cover-frame);
+}
+
+.menu .item {
+  color: var(--on-cover);
+}
+
+.menu .item:hover,
+.menu .item:focus-visible {
+  color: var(--on-cover);
+  background-color: var(--cover-hover);
+  box-shadow: none;
+}
+
+.menu .item:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.menu .item[aria-current='page'] {
+  color: var(--surface);
+  background-color: transparent;
+}
+
+.menu .icon {
+  color: var(--on-cover-soft);
+}
+
+.menu .item[aria-current='page'] .icon {
+  color: var(--gold);
+}
+
+.menu .currentPill {
+  background: var(--cover-current);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+
+/* The sky band (owner's pick, 2026-11-25): a sage-to-peach wash with the endpaper's dots across the top of every
+   page, fading into the cream; the pages' own cards and panels sit on it. */
+.content {
+  position: relative;
+  isolation: isolate;
+}
+
+.content::before,
+.content::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  height: 380px;
+  pointer-events: none;
+}
+
+.content::before {
+  background: linear-gradient(100deg, var(--sky-1) 0%, var(--sky-2) 40%, var(--sky-3) 75%, var(--sky-4) 100%);
+  mask-image: linear-gradient(#000 50%, transparent);
+}
+
+.content::after {
+  background-image: radial-gradient(circle at 25% 25%, color-mix(in srgb, var(--accent) 15%, transparent) 1.6px, transparent 2.2px);
+  background-size: 26px 26px;
+  mask-image: linear-gradient(#000, transparent 80%);
+}
+
 /* Phones (owner's pick, 2026-11-25): the menu becomes a tab bar along the bottom, in thumb reach. */
 @media (max-width: 600px) {
   .menu {
@@ -487,5 +581,40 @@
 
   .account {
     align-items: center;
+  }
+}
+
+/* The tab bar is the cover too, with a thin gold rule along its top. */
+@media (max-width: 600px) {
+  .menu {
+    border-top: 0;
+    border-radius: 18px 18px 0 0;
+    background: linear-gradient(180deg, var(--accent), var(--cover-deep));
+    backdrop-filter: none;
+  }
+
+  .menu::after {
+    inset: 5px 12px auto;
+    border-width: 1px 0 0;
+    border-radius: 0;
+  }
+
+  .menu .item,
+  .menu .item:hover {
+    color: var(--on-cover-soft);
+    background-color: transparent;
+  }
+
+  .menu .item[aria-current='page'] {
+    color: var(--gold);
+  }
+
+  .menu .currentPill {
+    box-shadow: none;
+  }
+
+  .content::before,
+  .content::after {
+    height: 300px;
   }
 }

@@ -57,6 +57,23 @@
   --cover-hinge-soft: rgba(0, 0, 0, 0.05);
   --cover-sheen: rgba(255, 240, 200, 0.16);
   --cover-text-shadow: rgba(0, 0, 0, 0.25);
+  /* The menu as the Members book's cover (owner's pick, 2026-11-25): its text, gold frame and lit current page. */
+  --cover-deep: #244a40;
+  --on-cover: #efe9dc;
+  --on-cover-soft: #c9d8cf;
+  --cover-frame: rgba(217, 195, 140, 0.45);
+  --cover-hover: rgba(255, 253, 248, 0.08);
+  --cover-current: rgba(255, 253, 248, 0.14);
+  --cover-shade: rgba(30, 63, 54, 0.2);
+  --logo-cover-leaf: #e0a07f;
+  /* The sky band across the top of each signed-in page: sage to peach. */
+  --sky-1: #d4e5da;
+  --sky-2: #e7ecd6;
+  --sky-3: #f6e2cc;
+  --sky-4: #f3d6c6;
+  /* Cards lifted off the page. */
+  --card-near: rgba(43, 38, 32, 0.05);
+  --card-far: rgba(43, 38, 32, 0.09);
 
   /* Illustration colors: the trees and the logo. Repeats point at the one color the mockups share. */
   --tree-branch: #8c7b5e;
