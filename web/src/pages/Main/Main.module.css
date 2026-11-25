@@ -57,8 +57,7 @@
   overflow: hidden;
 }
 
-.zoomButton,
-.zoomLevel {
+.zoomButton {
   height: 100%;
   border: 0;
   background: transparent;
@@ -73,6 +72,9 @@
 }
 
 .zoomLevel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-width: 56px;
   padding: 0 4px;
   font-size: 14px;
@@ -92,7 +94,6 @@
 }
 
 .zoomButton:hover:not(:disabled),
-.zoomLevel:hover,
 .recenter:hover:not(:disabled) {
   background: var(--chip);
 }

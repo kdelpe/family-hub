@@ -929,7 +929,7 @@ function FocusTree({
     }
   }, [])
 
-  // The percentage and Recenter both bring the tree back to the middle at 100% (design-notes §4.2).
+  // Back to the middle at 100% (design-notes §4.2).
   const resetView = () => {
     stopFling()
     glideBack(1)
@@ -1070,9 +1070,7 @@ function FocusTree({
         <button type="button" aria-label="Zoom out" className={styles.zoomButton} disabled={zoom <= minZoom} onClick={() => zoomBy(-0.1)}>
           −
         </button>
-        <button type="button" aria-label={`Reset zoom, now ${Math.round(zoom * 100)}%`} className={styles.zoomLevel} onClick={resetView}>
-          {Math.round(zoom * 100)}%
-        </button>
+        <span className={styles.zoomLevel}>{Math.round(zoom * 100)}%</span>
         <button type="button" aria-label="Zoom in" className={styles.zoomButton} disabled={zoom >= maxZoom} onClick={() => zoomBy(0.1)}>
           +
         </button>
