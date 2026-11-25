@@ -17,7 +17,7 @@ import { useMenuAbove, useNarrow } from '../lib/useNarrow'
 import { useSignedIn } from '../lib/useSignedIn'
 import { AccountMenu } from './AccountMenu'
 import styles from './AppShell.module.css'
-import { MenuIcon } from './MenuIcon'
+import { MenuIcon } from '../components/MenuIcon/MenuIcon'
 import { adminPages, type MenuPage, menuPages } from './signedInPages'
 
 // One highlight that glides to the page opened. On a phone, short is the tab's label.

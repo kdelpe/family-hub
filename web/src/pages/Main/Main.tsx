@@ -13,7 +13,7 @@ import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, initials, nameMatches } from '../../lib/names'
 import { relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
-import { MenuIcon } from '../../app/MenuIcon'
+import { MenuIcon } from '../../components/MenuIcon/MenuIcon'
 import styles from './Main.module.css'
 
 const maxMatches = 6

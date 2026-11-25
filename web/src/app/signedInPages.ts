@@ -1,4 +1,4 @@
-import type { MenuIconName } from './MenuIcon'
+import type { MenuIconName } from '../components/MenuIcon/MenuIcon'
 
 export type MenuPage = { path: string; label: string; icon: MenuIconName; short?: string }
 

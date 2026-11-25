@@ -7,7 +7,7 @@ import { errorMessage } from '../lib/errorMessage'
 import { useMotionPaused } from '../lib/motion'
 import { useSignInBusy, useSignOut } from '../lib/useSignOut'
 import styles from './AccountMenu.module.css'
-import { MenuIcon } from './MenuIcon'
+import { MenuIcon } from '../components/MenuIcon/MenuIcon'
 
 // design-notes §2.1: your picture at the top right, opening a floating sheet on the right (owner's pick C, 2026-11-25).
 export function AccountMenu({ initials, name, waiting, linked }: { initials: string; name: string; waiting: number; linked: boolean }) {

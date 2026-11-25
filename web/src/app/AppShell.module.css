@@ -7,8 +7,9 @@
 
 .menu {
   position: relative;
-  /* Above the content, which is positioned for the sky band and would otherwise cover the cover's shadow. */
-  z-index: 1;
+  /* Above the content (positioned for the sky band) and its account row (5): the menu's shadow and its fold button,
+     which pokes past its edge, would sit under them. */
+  z-index: 6;
   /* About a fifth of the window (owner's call, 2026-11-25); 260px keeps "Members & invites" whole. */
   flex: 0 0 clamp(260px, 21vw, 320px);
   /* Its basis, not its longest name, sets its width: names that don't fit end in an ellipsis. */
@@ -47,8 +48,6 @@
   line-height: 1;
   box-shadow: 0 2px 6px var(--shadow-press);
   cursor: pointer;
-  /* Over the account row, which reaches across the menu's edge at the top of the content. */
-  z-index: 6;
   transition: rotate 0.4s cubic-bezier(0.3, 1.2, 0.5, 1);
 }
 
