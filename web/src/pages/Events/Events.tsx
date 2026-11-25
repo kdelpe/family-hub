@@ -23,8 +23,11 @@ const yearOf = (event: FamilyEvent) => event.date?.match(/^\d{4}/)?.[0] ?? undat
 const anchorId = (year: string) => `events-year-${year}`
 // The handle's middle, down the album page: matches .handleColumn in Events.module.css.
 const handleAt = 0.42
-// From an entry's top to its dot, which a pick brings to the handle.
-const dotDown = 30
+// From an entry's top to its dot's middle, which crosses the handle; measured, as it sits higher on phones.
+const dotDown = (entry: HTMLElement) => {
+  const dot = entry.querySelector<HTMLElement>('[data-dot]')!.getBoundingClientRect()
+  return dot.top + dot.height / 2 - entry.getBoundingClientRect().top
+}
 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 // The handle shows the month of the event it's on; with no month known, its year, or — when undated.
 const handleLabel = (event: FamilyEvent | undefined) => {
@@ -59,6 +62,9 @@ export function Events() {
   const removed = useRef(false)
   const hidden = usePendingRemovals()
   const [onEvent, setOnEvent] = useState<{ id: string; year: string } | null>(null)
+  // A picked year holds until the reader scrolls or presses something themselves, so the glide's own scroll events
+  // don't move it back.
+  const held = useRef(false)
   const list = useMemo(() => (events.data ?? []).filter((e) => !hidden.has(e.id)), [events.data, hidden])
   const years = useMemo(() => [...new Set(list.map(yearOf))], [list])
   // The event the handle is on, and its year, which holds if a refresh drops that event.
@@ -68,10 +74,12 @@ export function Events() {
     // Signed out or in as someone else during Undo: nothing is sent, and no answer is shown to them.
     const since = sessionGeneration()
     // The handle moves on to the next event along, where the reader is.
+    // Held there, as the timeline closes up under it without a scroll.
     if (shown?.id === event.id) {
-      const i = list.indexOf(event)
+      const i = list.findIndex((e) => e.id === event.id)
       const next = list[i + 1] ?? list[i - 1]
       setOnEvent(next ? { id: next.id, year: yearOf(next) } : null)
+      held.current = true
     }
     hideEvent(event.id)
     toast({
@@ -118,9 +126,6 @@ export function Events() {
   const [motionPaused] = useMotionPaused()
   const album = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
-  // A picked year holds until the reader scrolls or presses something themselves, so the glide's own scroll events
-  // don't move it back.
-  const held = useRef(false)
   useEffect(() => {
     const box = scroller.current
     if (years.length < 2 || !box) {
@@ -141,7 +146,7 @@ export function Events() {
         const r = album.current!.getBoundingClientRect()
         const line = r.top + r.height * handleAt
         for (const el of entries) {
-          if (el.getBoundingClientRect().top + dotDown > line + 1) {
+          if (el.getBoundingClientRect().top + dotDown(el) > line + 1) {
             break
           }
           at = el
@@ -149,7 +154,8 @@ export function Events() {
       }
       const id = at?.dataset.event
       const found = list.find((e) => e.id === id)
-      setOnEvent(found ? { id: found.id, year: yearOf(found) } : null)
+      // The same event keeps the same state, so a scroll within it renders nothing.
+      setOnEvent((was) => (was?.id === found?.id ? was : found ? { id: found.id, year: yearOf(found) } : null))
     }
     // Capture, so a press on the handle releases first and its own pick then holds again.
     const release = () => {
@@ -173,20 +179,21 @@ export function Events() {
     }
   }, [list, years])
   const pick = (year: string, glide: boolean) => {
-    const el = document.getElementById(anchorId(year))
-    const box = scroller.current
-    if (!el || !box || !album.current) {
-      return
-    }
     const i = years.indexOf(year)
     // The oldest is at the very bottom, where following the scroll reads the last event.
     const on = i === years.length - 1 ? list.at(-1) : list.find((e) => yearOf(e) === year)
-    setOnEvent(on ? { id: on.id, year } : null)
+    const box = scroller.current
+    // By its event, not its year's anchor, which one sliding out after its removal may still carry too.
+    const el = on && box?.querySelector<HTMLElement>(`[data-event="${on.id}"]`)
+    if (!on || !el || !box || !album.current) {
+      return
+    }
+    setOnEvent({ id: on.id, year })
     held.current = true
     const line = album.current.clientHeight * handleAt - (box.getBoundingClientRect().top - album.current.getBoundingClientRect().top)
     const top =
-      i === 0 ? 0 : i === years.length - 1 ? box.scrollHeight : el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - line + dotDown
-    box.scrollTo?.({ top, behavior: glide && !reduced ? 'smooth' : 'auto' })
+      i === 0 ? 0 : i === years.length - 1 ? box.scrollHeight : el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - line + dotDown(el)
+    box.scrollTo({ top, behavior: glide && !reduced ? 'smooth' : 'auto' })
   }
 
   return (
@@ -257,7 +264,8 @@ export function Events() {
                     event={event}
                     anchor={first ? anchorId(y) : undefined}
                     side={i % 2 === 0 ? 'left' : 'right'}
-                    ends={i === 0 && i === list.length - 1 ? 'only' : i === 0 ? 'first' : i === list.length - 1 ? 'last' : undefined}
+                    first={i === 0}
+                    last={i === list.length - 1}
                     lit={years.length > 1 && y === current}
                     viewerId={user?.person_id ?? null}
                     onRemove={
@@ -303,7 +311,8 @@ function TimelineEntry({
   event,
   anchor,
   side,
-  ends,
+  first,
+  last,
   lit,
   viewerId,
   onRemove,
@@ -312,7 +321,8 @@ function TimelineEntry({
   anchor?: string
   side: 'left' | 'right'
   // Classes, not :first-child: a removed entry stays in the list while it slides out.
-  ends?: 'first' | 'last' | 'only'
+  first: boolean
+  last: boolean
   lit: boolean
   viewerId: string | null
   onRemove?: () => void
@@ -327,14 +337,14 @@ function TimelineEntry({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: 40, transition: { duration: 0.2 } }}
       transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-      className={[styles.entry, side === 'left' ? styles.entryLeft : styles.entryRight, ends && styles[ends]].filter(Boolean).join(' ')}
+      className={[styles.entry, side === 'left' ? styles.entryLeft : styles.entryRight, first && styles.first, last && styles.last].filter(Boolean).join(' ')}
     >
       {/* Each glides to its new side when an event added or removed above swaps the sides. */}
       <m.span layout="position" className={lit ? `${styles.year} ${styles.yearLit}` : styles.year}>
         {year(event.date, event.date_precision)}
       </m.span>
       <span aria-hidden="true" className={styles.line}>
-        <span className={styles.dot} />
+        <span data-dot className={styles.dot} />
       </span>
       <span aria-hidden="true" className={styles.tick} />
       <m.article layout="position" className={styles.card}>
