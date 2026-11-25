@@ -8,6 +8,7 @@ import { authKeys } from '../../api/auth'
 import { familyKeys } from '../../api/family'
 import { treeKeys } from '../../api/tree'
 import { Main } from './Main'
+import styles from './Main.module.css'
 
 const person = (id: string, first_name: string, gender: 'female' | 'male', bio_excerpt: string | null = null) => ({
   id,
@@ -602,19 +603,6 @@ describe('Main', () => {
     expect(parents.className.includes('spaced')).toBe(spaced)
   })
 
-  it('takes the tip off the panel once the tree is moved, and brings it back with Recenter', () => {
-    renderTree('fritz')
-    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
-    const tip = () => within(panel.parentElement!).queryByText(/^Click or tap a name/)
-    expect(tip()).toBeInTheDocument()
-
-    fireEvent.wheel(panel, { deltaY: 50 })
-    expect(tip()).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
-    expect(tip()).toBeInTheDocument()
-  })
-
   it('moves the tree with a plain wheel or two-finger scroll, instead of scrolling the page', () => {
     renderTree('fritz')
     const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
@@ -810,11 +798,317 @@ describe('Main', () => {
     expect(chain()).toEqual(lit)
   })
 
-  it('draws a green line in with the rest, so a card already under the pointer lights it as it draws', () => {
-    renderTree('fritz')
+  it.each([
+    { name: 'a grandparent', viewer: 'fritz', card: 'Joseph', data: tree, runs: [['up:jr', '0ms', 'down'], ['sib:fritz', '180ms', 'down']] },
+    { name: 'a sibling', viewer: 'fritz', card: 'Maya', data: tree, runs: [['sib:maya', '0ms', 'up'], ['sib:fritz', '180ms', 'down']] },
+    { name: 'a child', viewer: 'fritz', card: 'Tim', data: tree, runs: [['kids:1', '0ms', 'up']] },
+    { name: 'a grandchild', viewer: 'rose', card: 'Naomie', data: fostering, runs: [['down:mt', '0ms', 'up'], ['kids:0', '180ms', 'up']] },
+  ])('runs the green from $name to the focus person, one line after another', ({ viewer, card, data, runs }) => {
+    vi.useFakeTimers({ toFake: ['performance'] })
+    try {
+      renderTree(viewer, { data })
+      // Once the lines have drawn in.
+      vi.advanceTimersByTime(2000)
+      fireEvent.pointerEnter(personOf(card), { pointerType: 'mouse' })
+    } finally {
+      vi.useRealTimers()
+    }
 
+    for (const [line, delay, way] of runs) {
+      const path = document.querySelector<SVGElement>(`[data-chain="${line}"]`)!
+      expect(path.style.animationDelay).toBe(delay)
+      expect(path.classList.contains(styles.chainBack!)).toBe(way === 'up')
+    }
+  })
+
+  it('waits for each line to draw in, and for the green before it, when a card is lifted as the tree opens', () => {
+    vi.useFakeTimers({ toFake: ['performance'] })
+    try {
+      renderTree('fritz')
+      fireEvent.pointerEnter(personOf('Joseph'), { pointerType: 'mouse' })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    // up:jr starts drawing at 480ms and takes 400ms; sib:fritz has drawn in by 960ms, but the green before it runs on.
+    expect(document.querySelector<SVGElement>('[data-chain="up:jr"]')!.style.animationDelay).toBe('880ms')
+    expect(document.querySelector<SVGElement>('[data-chain="sib:fritz"]')!.style.animationDelay).toBe(`${880 + 180}ms`)
+  })
+
+  it('times the green on a line that arrived with a refresh from when that line started drawing', async () => {
+    vi.useFakeTimers({ toFake: ['performance'] })
+    try {
+      const client = renderTree('fritz')
+      vi.advanceTimersByTime(2000)
+      // A new sister, after the first lines have long drawn in.
+      // The query tells its readers on a later tick.
+      await act(async () => {
+        client.setQueryData(treeKeys.all, {
+          persons: [...tree.persons, person('lea', 'Léa', 'female')],
+          relationships: [...tree.relationships, parent('jr', 'lea'), parent('nadege', 'lea')],
+        })
+        await new Promise((r) => setTimeout(r, 0))
+      })
+      fireEvent.pointerEnter(personOf('Léa'), { pointerType: 'mouse' })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const line = document.querySelector<SVGElement>('[data-line="sib:lea"]')!
+    expect(document.querySelector<SVGElement>('[data-chain="sib:lea"]')!.style.animationDelay).toBe(`${parseInt(line.style.animationDelay) + 400}ms`)
+  })
+
+  it('runs the green afresh when the lift moves to a card sharing a line', () => {
+    renderTree('fritz')
+    fireEvent.pointerEnter(personOf('Jean-Robert'), { pointerType: 'mouse' })
+    const before = document.querySelector('[data-chain="sib:fritz"]')
+
+    fireEvent.pointerLeave(personOf('Jean-Robert'), { pointerType: 'mouse' })
     fireEvent.pointerEnter(personOf('Joseph'), { pointerType: 'mouse' })
 
-    expect(document.querySelector<SVGElement>('[data-chain="up:jr"]')!.style.animationDelay).toBe('480ms')
+    expect(document.querySelector('[data-chain="sib:fritz"]')).not.toBe(before)
+  })
+
+  it('fades back everyone off the green while a card is lifted', () => {
+    renderTree('fritz')
+    const dimmed = () => [...document.querySelectorAll('[data-person]')].filter((p) => p.querySelector(`.${styles.dim}`)).map((p) => p.getAttribute('data-person'))
+
+    fireEvent.pointerEnter(personOf('Joseph'), { pointerType: 'mouse' })
+    expect(dimmed()).toContain('tim')
+    expect(dimmed()).not.toContain('joseph')
+    expect(dimmed()).not.toContain('jr')
+    expect(dimmed()).not.toContain('fritz')
+
+    fireEvent.pointerLeave(personOf('Joseph'), { pointerType: 'mouse' })
+    expect(dimmed()).toEqual([])
+
+    // A partner shares the household: no green, so nobody fades.
+    fireEvent.pointerEnter(personOf('Fabienne'), { pointerType: 'mouse' })
+    expect(dimmed()).toEqual([])
+  })
+
+  describe('flying the cards to their new places', () => {
+    const animate = vi.fn()
+    beforeEach(() => {
+      animate.mockClear()
+      Object.defineProperty(HTMLElement.prototype, 'animate', { value: animate, configurable: true })
+    })
+    afterEach(() => {
+      delete (HTMLElement.prototype as Partial<HTMLElement>).animate
+    })
+    const flown = () =>
+      (animate.mock.contexts as HTMLElement[]).flatMap((el, i) =>
+        el.matches('[data-card]') && String(animate.mock.calls[i]![0][0].transform).startsWith('translate(') ? [el.closest('[data-person]')!.getAttribute('data-person')] : [],
+      )
+
+    it('flies the cards still in view from where they were, on centering', () => {
+      renderTree('fritz')
+      expect(animate).not.toHaveBeenCalled()
+
+      fireEvent.click(cardOf('Jean-Robert'))
+
+      expect(flown()).toEqual(expect.arrayContaining(['fritz', 'jr', 'maya', 'joseph']))
+      // The lines wait for the cards to land.
+      expect(parseInt(document.querySelector<SVGElement>('[data-line="sib:jr"]')!.style.animationDelay)).toBeGreaterThanOrEqual(520)
+    })
+
+    it('has every newcomer in before the lines start, however many there are', () => {
+      // Joseph with six more children, all new in his view.
+      const more = ['Ana', 'Bea', 'Cal', 'Dov', 'Eli', 'Fay'].map((name) => person(name.toLowerCase(), name, 'female'))
+      renderTree('fritz', { data: { ...tree, persons: [...tree.persons, ...more], relationships: [...tree.relationships, ...more.map((m) => parent('joseph', m.id))] } })
+
+      fireEvent.click(cardOf('Joseph'))
+
+      const arrivals = animate.mock.calls.filter(([frames]) => frames[0].opacity === 0).map(([, o]) => o.delay + o.duration)
+      expect(arrivals.length).toBeGreaterThanOrEqual(6)
+      expect(Math.max(...arrivals)).toBeLessThanOrEqual(520)
+    })
+
+    it('doesn’t fly them with reduced motion', () => {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query.includes('reduce'),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }))
+      renderTree('fritz')
+
+      fireEvent.click(cardOf('Jean-Robert'))
+
+      expect(animate).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('dragging past the limits', () => {
+    const dragFar = () => {
+      const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+      const mouse = { pointerId: 1, pointerType: 'mouse', button: 0 }
+      fireEvent.pointerDown(panel, { ...mouse, clientX: 0, clientY: 0 })
+      fireEvent.pointerMove(panel, { ...mouse, clientX: 10, clientY: 0 })
+      fireEvent.pointerMove(panel, { ...mouse, clientX: 2000, clientY: 0 })
+      return () => fireEvent.pointerUp(window, mouse)
+    }
+    const shownX = () => Number(document.querySelector<HTMLElement>('[data-stage]')!.style.transform.match(/translate\((-?[\d.]+)px/)![1])
+
+    it('stretches the tree past them, then springs it back to keep 60px in the panel', () => {
+      vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+      try {
+        layOut({ tree: 600 })
+        renderTree('fritz')
+
+        const letGo = dragFar()
+        // 60px of the 190px card stays in: 540, and 35% of the rest of the way beyond.
+        expect(shownX()).toBeCloseTo(540 + (2000 - 540) * 0.35, 0)
+
+        letGo()
+        act(() => vi.advanceTimersByTime(3000))
+        expect(shownX()).toBeCloseTo(540, 0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('holds a tree caught as it springs back, and lets it spring back once let go', () => {
+      vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+      try {
+        layOut({ tree: 600 })
+        renderTree('fritz')
+        dragFar()()
+        act(() => vi.advanceTimersByTime(50))
+        const caught = shownX()
+        expect(caught).toBeGreaterThan(540)
+
+        const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+        fireEvent.pointerDown(panel, { pointerId: 2, pointerType: 'mouse', button: 0, clientX: 0, clientY: 0 })
+        act(() => vi.advanceTimersByTime(500))
+        expect(shownX()).toBe(caught)
+
+        fireEvent.pointerUp(window, { pointerId: 2 })
+        act(() => vi.advanceTimersByTime(3000))
+        expect(shownX()).toBeCloseTo(540, 0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('stops a throw where it is on a key pressed anywhere', () => {
+      vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+      try {
+        layOut({ tree: 600 })
+        renderTree('fritz')
+        dragFar()()
+        act(() => vi.advanceTimersByTime(50))
+
+        fireEvent.keyDown(document.body, { key: 'a' })
+        act(() => vi.advanceTimersByTime(500))
+
+        expect(shownX()).toBe(540)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('carries a stretched drag on from where a wheel put the tree', () => {
+      layOut({ tree: 600 })
+      renderTree('fritz')
+      dragFar()
+      const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+
+      fireEvent.wheel(panel, { deltaX: 10 })
+      fireEvent.pointerMove(panel, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 2010, clientY: 0 })
+
+      expect(shownX()).toBeLessThan(560)
+    })
+
+    // A matchMedia whose reduced-motion setting can be turned on mid-test.
+    const reducible = () => {
+      const listeners = new Set<() => void>()
+      let reduce = false
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        get matches() {
+          return query.includes('reduce') && reduce
+        },
+        media: query,
+        addEventListener: (_: string, l: () => void) => listeners.add(l),
+        removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+      }))
+      return () => {
+        reduce = true
+        act(() => listeners.forEach((l) => l()))
+      }
+    }
+
+    it.each([
+      { name: 'while held stretched by a drag', caught: false },
+      { name: 'while a caught spring-back is held', caught: true },
+    ])('settles the tree inside them when reduced motion is turned on $name', ({ caught }) => {
+      const reduceMotion = reducible()
+      vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+      try {
+        layOut({ tree: 600 })
+        renderTree('fritz')
+        const letGo = dragFar()
+        if (caught) {
+          letGo()
+          act(() => vi.advanceTimersByTime(50))
+          fireEvent.pointerDown(screen.getByRole('region', { name: 'Family tree centered on you' }), { pointerId: 2, pointerType: 'mouse', button: 0, clientX: 0, clientY: 0 })
+        }
+        expect(shownX()).toBeGreaterThan(540)
+
+        reduceMotion()
+        fireEvent.pointerUp(window, { pointerId: caught ? 2 : 1 })
+
+        expect(shownX()).toBe(540)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('stops a throw inside them when reduced motion is turned on mid-throw', () => {
+      const reduceMotion = reducible()
+      vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+      try {
+        layOut({ tree: 600 })
+        renderTree('fritz')
+        dragFar()()
+        act(() => vi.advanceTimersByTime(50))
+        expect(shownX()).toBeGreaterThan(540)
+
+        reduceMotion()
+        act(() => vi.advanceTimersByTime(500))
+
+        expect(shownX()).toBe(540)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('carries a stretched drag on from where a zoom put the tree', () => {
+      layOut({ tree: 600 })
+      renderTree('fritz')
+      dragFar()
+      const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+      const zoomed = shownX()
+      fireEvent.pointerMove(panel, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 2010, clientY: 0 })
+
+      expect(shownX()).toBeLessThan(zoomed + 20)
+    })
+
+    it('stops at them with reduced motion', () => {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query.includes('reduce'),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }))
+      layOut({ tree: 600 })
+      renderTree('fritz')
+
+      dragFar()
+
+      expect(shownX()).toBe(540)
+    })
   })
 })
