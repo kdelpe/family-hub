@@ -221,28 +221,6 @@ describe('AppShell', () => {
       expect(events.hasAttribute('data-pointed')).toBe(pointed)
     })
 
-    it('puts the admin drawer away when the screen widens', async () => {
-      const listeners = new Set<() => void>()
-      let narrow = true
-      vi.stubGlobal('matchMedia', (query: string) => ({
-        get matches() {
-          return narrow && query.includes('max-width')
-        },
-        media: query,
-        addEventListener: (_: string, l: () => void) => listeners.add(l),
-        removeEventListener: (_: string, l: () => void) => listeners.delete(l),
-      }))
-      signedIn()
-      renderShell()
-      fireEvent.click(await screen.findByRole('button', { name: 'Admin menu' }))
-      expect(screen.getByRole('dialog', { name: 'Admin' })).toBeInTheDocument()
-
-      narrow = false
-      act(() => listeners.forEach((l) => l()))
-
-      expect(screen.queryByRole('dialog', { name: 'Admin' })).toBeNull()
-    })
-
     it('keeps the tab bar on a phone, with short labels that keep their full names', async () => {
       localStorage.setItem('fh-menu-folded', '1')
       resetMenuFolded()
@@ -275,6 +253,28 @@ describe('AppShell', () => {
     fireEvent.click(drawer!)
     const panel = within(screen.getByRole('dialog', { name: 'Admin' }))
     fireEvent.click(panel.getByRole('link', { name: 'Members & invites' }))
+    expect(screen.queryByRole('dialog', { name: 'Admin' })).toBeNull()
+  })
+
+  it('puts the admin drawer away when the screen widens', async () => {
+    const listeners = new Set<() => void>()
+    let narrow = true
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      get matches() {
+        return narrow && query.includes('max-width')
+      },
+      media: query,
+      addEventListener: (_: string, l: () => void) => listeners.add(l),
+      removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+    }))
+    stubApi({ '/api/auth/me': { status: 200, body: maya }, '/api/persons/p1': { status: 200, body: mayaPerson } })
+    renderShell()
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin menu' }))
+    expect(screen.getByRole('dialog', { name: 'Admin' })).toBeInTheDocument()
+
+    narrow = false
+    act(() => listeners.forEach((l) => l()))
+
     expect(screen.queryByRole('dialog', { name: 'Admin' })).toBeNull()
   })
 

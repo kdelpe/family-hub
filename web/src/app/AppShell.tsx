@@ -12,6 +12,7 @@ import sheet from '../components/Sheet/Sheet.module.css'
 import { initials } from '../lib/names'
 import { errorMessage } from '../lib/errorMessage'
 import { useMenuFolded } from '../lib/menuFolded'
+import { useMotionPaused } from '../lib/motion'
 import { useMenuAbove, useNarrow } from '../lib/useNarrow'
 import { useSignedIn } from '../lib/useSignedIn'
 import { AccountMenu } from './AccountMenu'
@@ -28,7 +29,8 @@ function MenuItem({
   rail,
   narrow,
   onClick,
-}: MenuPage & { rail: boolean; narrow: boolean; onClick?: () => void }) {
+  pill = 'menu-current',
+}: MenuPage & { rail: boolean; narrow: boolean; onClick?: () => void; pill?: string }) {
   const tab = narrow && short
   const [tipOpen, setTipOpen] = useState(false)
   // Off the rail a tooltip can't open, and one open as the rail goes is closed, so folding again doesn't reopen it.
@@ -39,6 +41,7 @@ function MenuItem({
   }
   // Pointed at with a mouse only: a tap can leave :hover behind, even on a device that also has a mouse.
   const [pointed, setPointed] = useState(false)
+  const [paused] = useMotionPaused()
   // Always inside the tooltip, closed off the rail: unwrapping it would remount the link and drop its focus. NavLink
   // marks the current page with aria-current, which the styles read, so its className stays plain for the trigger.
   return (
@@ -56,7 +59,7 @@ function MenuItem({
         >
           {({ isActive }) => (
             <>
-              {isActive && <m.span layoutId="menu-current" className={styles.currentPill} transition={{ type: 'spring', stiffness: 380, damping: 32 }} />}
+              {isActive && <m.span layoutId={pill} className={styles.currentPill} transition={{ type: 'spring', stiffness: 380, damping: 32 }} />}
               <MenuIcon name={icon} className={styles.icon} />
               <span className={styles.label}>{tab ? short : label}</span>
             </>
@@ -64,7 +67,7 @@ function MenuItem({
         </NavLink>
       </Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Content side="right" sideOffset={10} className={styles.tip}>
+        <Tooltip.Content side="right" sideOffset={10} data-still={paused || undefined} className={styles.tip}>
           {label}
         </Tooltip.Content>
       </Tooltip.Portal>
@@ -95,7 +98,7 @@ function AdminDrawer() {
           <Dialog.Title className={styles.drawerTitle}>Admin</Dialog.Title>
           <nav aria-label="Admin">
             {adminPages.map((page) => (
-              <MenuItem key={page.path} {...page} rail={false} narrow={false} onClick={() => setOpen(false)} />
+              <MenuItem key={page.path} {...page} rail={false} narrow={false} pill="drawer-current" onClick={() => setOpen(false)} />
             ))}
           </nav>
         </Dialog.Content>
@@ -127,6 +130,7 @@ export function AppShell() {
   const waiting = requests.data?.filter((r) => r.status === 'pending').length ?? 0
   const [folded, fold] = useMenuFolded()
   const narrow = useNarrow()
+  const [paused] = useMotionPaused()
   // Phones have the tab bar, and up to 800px the menu sits above the page, whatever was folded on a wider screen.
   const above = useMenuAbove()
   const rail = folded && !above
@@ -151,7 +155,7 @@ export function AppShell() {
 
   return (
     <Tooltip.Provider delayDuration={200}>
-      <div className={rail ? `${styles.page} ${styles.folded}` : styles.page}>
+      <div data-still={paused || undefined} className={rail ? `${styles.page} ${styles.folded}` : styles.page}>
         <nav id="main-menu" aria-label="Main" className={styles.menu}>
           <button type="button" aria-controls="main-menu" aria-expanded={!folded} aria-label={folded ? 'Unfold the menu' : 'Fold the menu'} onClick={() => fold(!folded)} className={styles.fold}>
             <span aria-hidden="true">‹</span>
