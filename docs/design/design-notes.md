@@ -286,6 +286,7 @@ Title **Events**. Segmented **Timeline / Media**, plus two buttons shown to admi
   - The year labels it's on turn `--accent` and grow slightly; scrolling moves it along.
   - On phones the line moves in 21px to make room, and the year stops just above the handle instead of beside it.
 - **+ New event, as built:** shown to admins only, since members can't add events yet.
+  - **Motion (owner's pick, 2026-11-22):** the panel grows open and shrinks closed; the precision switch's white pill glides to the choice; Save shows three bouncing dots while saving, then a check drawing itself with *Saved* for 0.7s before the panel closes.
   - The date control follows the precision picked:
     - **Exact day:** the browser's date picker, as for birthdays.
     - **Month:** a month menu beside a year box. Safari has no month picker.

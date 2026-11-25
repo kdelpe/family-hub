@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { domMax, LazyMotion, MotionGlobalConfig } from 'motion/react'
+import { StrictMode } from 'react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -29,7 +30,8 @@ const tree = { persons: [person('rose', 'Rose', 'Monestime'), person('fritz', 'F
 let lastClient: QueryClient
 
 // motion: with Motion's features and animations on, so a closing panel stays mounted while it leaves.
-function renderPage(events?: FamilyEvent[], role = 'member', { motion = false } = {}) {
+// strict: under StrictMode, as the app runs, which runs effects twice in development.
+function renderPage(events?: FamilyEvent[], role = 'member', { motion = false, strict = false } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   lastClient = client
   client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role, person_id: null })
@@ -47,7 +49,8 @@ function renderPage(events?: FamilyEvent[], role = 'member', { motion = false } 
   if (motion) {
     MotionGlobalConfig.skipAnimations = false
   }
-  render(motion ? <LazyMotion features={domMax}>{page}</LazyMotion> : page)
+  const app = motion ? <LazyMotion features={domMax}>{page}</LazyMotion> : page
+  render(strict ? <StrictMode>{app}</StrictMode> : app)
 }
 
 afterEach(() => {
@@ -321,6 +324,26 @@ describe('New event', () => {
   const panel = () => within(screen.getByRole('region', { name: 'New event' }))
   const type = (label: string, value: string) => fireEvent.change(panel().getByLabelText(label), { target: { value } })
 
+  // Closed 500ms into the 700ms Saved moment and opened again at once: the old panel is still sliding away when its
+  // moment would have run out, so its hold must end as it starts to leave, not when it unmounts.
+  it('drops a save’s closing when the panel is closed during the Saved moment and opened afresh', async () => {
+    serve()
+    renderPage([], 'admin', { motion: true, strict: true })
+    open()
+    type('What happened?', 'Picnic')
+    fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
+    await panel().findByRole('button', { name: 'Saved' }, { timeout: 3000 })
+    await act(() => new Promise((r) => setTimeout(r, 500)))
+
+    open()
+    expect(screen.getByRole('region', { name: 'New event', hidden: true })).toHaveAttribute('inert')
+    open()
+    await act(() => new Promise((r) => setTimeout(r, 1500)))
+
+    expect(panel().getByLabelText('What happened?')).toHaveValue('')
+    expect(screen.queryByText('Saved “Picnic”.')).toBeNull()
+  })
+
   it('saves what was typed, the date at its precision and who was there', async () => {
     const sent = serve()
     renderPage([], 'admin')
@@ -342,11 +365,12 @@ describe('New event', () => {
     fireEvent.click(panel().getByRole('button', { name: 'Remove Rose Monestime' }))
     fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Saved “Rose’s kitchen”.')
+    expect(await panel().findByRole('button', { name: 'Saved' })).toBeDisabled()
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved “Rose’s kitchen”.'), { timeout: 3000 })
     expect(sent).toEqual([
       { title: 'Rose’s kitchen', date: '1962', date_precision: 'circa', location: 'Jacmel', description: 'The earliest photos we have.', person_ids: ['fritz'] },
     ])
-    expect(screen.queryByRole('region', { name: 'New event' })).toBeNull()
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'New event' })).toBeNull())
     expect(await screen.findByRole('heading', { level: 2, name: 'Rose’s kitchen' })).toBeInTheDocument()
   })
 
@@ -357,7 +381,7 @@ describe('New event', () => {
     type('What happened?', 'Naomie is born')
     type('Date', '2025-07-02')
     fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
-    await screen.findByText('Saved “Naomie is born”.')
+    await screen.findByText('Saved “Naomie is born”.', {}, { timeout: 3000 })
 
     open()
     type('What happened?', 'Thanksgiving')
@@ -365,7 +389,7 @@ describe('New event', () => {
     fireEvent.change(panel().getByLabelText('Month', { selector: 'select' }), { target: { value: '11' } })
     type('Year', '2026')
     fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
-    await screen.findByText('Saved “Thanksgiving”.')
+    await screen.findByText('Saved “Thanksgiving”.', {}, { timeout: 3000 })
 
     expect(sent).toEqual([
       { title: 'Naomie is born', date: '2025-07-02', date_precision: 'day', person_ids: [] },
@@ -463,7 +487,7 @@ describe('New event', () => {
     expect(screen.getByRole('button', { name: '+ New event' })).toBeDisabled()
 
     answer(Response.json(event({ id: 'new', title: 'Wedding' }), { status: 201 }))
-    expect(await screen.findByText('Saved “Wedding”.')).toBeInTheDocument()
+    expect(await screen.findByText('Saved “Wedding”.', {}, { timeout: 3000 })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '+ New event' })).toBeEnabled()
   })
 

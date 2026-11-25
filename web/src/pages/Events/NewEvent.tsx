@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AnimatePresence, m, useIsPresent } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { createEvent, createEventKey, type DatePrecision, eventKeys, type NewEvent as NewEventBody } from '../../api/events'
 import { treeQuery } from '../../api/tree'
 import { errorMessage, refusedMessage } from '../../lib/errorMessage'
+import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, nameMatches } from '../../lib/names'
 import styles from './Events.module.css'
 
@@ -13,6 +15,8 @@ const precisions: { id: DatePrecision; label: string }[] = [
   { id: 'year', label: 'Year' },
   { id: 'circa', label: 'About' },
 ]
+
+const savedHold = 700
 
 const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
@@ -69,17 +73,31 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
     return found
   }, [tree.data, people, typed])
 
+  // The saved event's title, once saved.
+  const [done, setDone] = useState<string | null>(null)
+  // Closed during the hold some other way, it no longer reports the save as closing it.
+  const hold = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(hold.current), [])
+  // Closing, it stays mounted for the slide away: the hold ends now, and its controls take no more input.
+  const present = useIsPresent()
+  useEffect(() => {
+    if (!present) {
+      clearTimeout(hold.current)
+    }
+  }, [present])
+  const reduced = useReducedMotion()
+  const [motionPaused] = useMotionPaused()
   const save = useMutation({
     mutationKey: createEventKey,
     mutationFn: (body: NewEventBody) => createEvent(body),
     onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: eventKeys.all })
-      onSaved(saved.title)
+      setDone(saved.title)
     },
   })
 
   const date = dateOf(draft)
-  const canSave = title.trim() !== '' && date !== 'invalid' && !save.isPending
+  const canSave = title.trim() !== '' && date !== 'invalid' && !save.isPending && !done
 
   const submit = () => {
     if (!canSave) {
@@ -109,9 +127,9 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
   }
 
   return (
-    <section aria-labelledby="ev-new" aria-busy={save.isPending} className={styles.panel}>
+    <section aria-labelledby="ev-new" aria-busy={save.isPending} inert={!present} className={styles.panel}>
       {/* Locked while saving: an edit made now would be lost when the saved panel closes. */}
-      <fieldset disabled={save.isPending} className={styles.locked}>
+      <fieldset disabled={save.isPending || done !== null} className={styles.locked}>
         <div className={styles.panelHead}>
           <h2 id="ev-new" className={styles.panelTitle}>
             New event
@@ -154,9 +172,12 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
                   aria-pressed={draft.precision === p.id}
                   // Switching away drops a half-typed day the picker never reported, so its flag goes too.
                 onClick={() => setDraft((d) => ({ ...d, precision: p.id, dayUnfinished: d.precision === p.id && d.dayUnfinished }))}
-                  className={draft.precision === p.id ? `${styles.switchOption} ${styles.switchOn}` : styles.switchOption}
+                  className={styles.switchOption}
                 >
-                  {p.label}
+                  {draft.precision === p.id && (
+                    <m.span layoutId="event-precision" className={styles.switchPill} transition={{ type: 'spring', stiffness: 420, damping: 34 }} />
+                  )}
+                  <span className={styles.switchLabel}>{p.label}</span>
                 </button>
               ))}
             </div>
@@ -293,11 +314,61 @@ export function NewEvent({ onClose, onSaved }: { onClose: () => void; onSaved: (
         <button type="button" onClick={onClose} className={`pill ${styles.cancel}`}>
           Cancel
         </button>
-        <button type="button" onClick={submit} disabled={!canSave} className={`pill ${styles.save}`}>
-          {save.isPending ? 'Saving…' : 'Save event'}
+        <button type="button" onClick={submit} disabled={!canSave} className={`pill ${styles.save} ${done ? styles.saveDone : ''}`}>
+          <AnimatePresence mode="wait" initial={false}>
+            {done ? (
+              <m.span key="done" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.saveFace}>
+                {/* The check shows for its full moment, counted from when it's on screen, before the panel closes. */}
+                <OnShown
+                  run={() => {
+                    // StrictMode runs this twice in development; only one hold may be left to close the panel.
+                    clearTimeout(hold.current)
+                    hold.current = setTimeout(() => onSaved(done), savedHold)
+                  }}
+                />
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                  <m.path
+                    d="M5 12l5 5 9-10"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ duration: reduced || motionPaused ? 0 : 0.35 }}
+                  />
+                </svg>
+                Saved
+              </m.span>
+            ) : save.isPending ? (
+              <m.span key="saving" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className={styles.saveFace}>
+                <span className="visually-hidden">Saving…</span>
+                {[0, 1, 2].map((i) => (
+                  <m.i
+                    key={i}
+                    aria-hidden="true"
+                    className={styles.saveDot}
+                    animate={{ y: [0, -5, 0] }}
+                    transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.12 }}
+                  />
+                ))}
+              </m.span>
+            ) : (
+              <m.span key="idle" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className={styles.saveFace}>
+                Save event
+              </m.span>
+            )}
+          </AnimatePresence>
         </button>
       </div>
       </fieldset>
     </section>
   )
+}
+
+function OnShown({ run }: { run: () => void }) {
+  const once = useRef(run)
+  useEffect(() => once.current(), [])
+  return null
 }
