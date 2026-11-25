@@ -90,17 +90,17 @@ White text only ever sits on `--accent` (buttons, the focus avatar).
 
 ### 2.1 Left menu (signed-in pages)
 
-- Top: logo mark (52px circle, tree glyph) **centered above** "Pluviose" (Fraunces 22px/600) and "FAMILY HUB" (13px small caps). The whole block links to Home.
+- Top: logo mark (92px circle, tree glyph, drawn in the cover's gold; 48px on the rail) **centered above** "Pluviose" (Fraunces 26px/600) and "FAMILY HUB" (13px small caps). The whole block links to Home.
 - Items, in order: **Home · Family tree · Members · Events · Stories**. My profile moved to the account picture (below; owner's call, 2026-11-21).
 - **Admin** section (admins only), under a thin divider and small "ADMIN" label: **Members & invites**.
 - **Account picture** (owner's pick A of three, 2026-11-21, like Reddit's): your initials in a 40px accent circle at the top right of every signed-in page, in a row of its own so it never sits on a page's top cards (owner's call): the row overlaps the page's top padding, moving pages down 32px (`--account-bar`), which the tree and the Members book take off their window-sized height. Requests waiting for an answer (architecture §5.2) show as a count in a `--notice` dot on it, read out as *"Your account, 2 requests waiting"*; it rereads the count every minute. A click opens a **floating sheet** (owner's pick C, 2026-11-25): frosted, 24px corners, inset 12px from the window's edges, sliding in from the right over a scrim. Your picture, name and **View my profile ›**; then rows with an icon and a › on rounded cards under small headings: *Family* (**Requests**, its count in a `--notice` badge; **Suggest a relative**) and *Account* (**Change password**); **Sign out** in `--notice` on its own card at the foot. The admin drawer floats the same way. Esc or a click on the scrim closes it back onto the picture; Tab stays inside. Suggest a relative and Change password open the **Account** page (`/account`), which holds the Sign-in card (password only) and the Suggest card.
-- Current page: `--nav-active` background, 600 weight, `aria-current="page"`.
-- **Hover / keyboard focus:** `--brand-panel` background plus `box-shadow: 0 1px 3px rgba(43,38,32,.12)`, transition 150ms. The current page keeps its own color and only gains the shadow.
+- Current page: `--cover-current` background with a 3px gold edge, 600 weight, `--on-cover-current` name, `aria-current="page"`.
+- **Hover / keyboard focus:** a `--cover-hover` wash, transition 150ms; keyboard focus adds a 2px gold outline.
 
-**Gliding highlight (owner's pick, 2026-11-22):** the current page's `--nav-active` background is one pill that glides (Motion layout spring) to the page opened; a page outside the menu, like Requests, has none.
+**Gliding highlight (owner's pick, 2026-11-22):** the current page's background is one pill that glides (Motion layout spring) to the page opened; a page outside the menu, like Requests, has none.
 
 **Green cover and sky band (owner's pick K, 2026-11-25):**
-- The menu is bound like the Members book: a deep green gradient (`--accent` to `--cover-deep`) with a thin gold frame inset 10px, pale gold (`--gold-pale`, for contrast) *Family Hub* and Admin label, and the logo drawn in gold. Names and icons are pale (`--on-cover`, `--on-cover-soft`); the current page is lit (`--cover-current`) with a 3px gold edge, a gold icon and a brighter name (`--surface`). The admin drawer stays on paper.
+- The menu is bound like the Members book: a deep green gradient (`--accent` to `--cover-deep`) with a thin gold frame inset 10px, pale gold (`--gold-pale`, for contrast) *Family Hub* and Admin label, and the logo drawn in gold. Names and icons are pale (`--on-cover`, `--on-cover-soft`); the current page is lit (`--cover-current`) with a 3px gold edge, a gold icon and a brighter name (`--on-cover-current`). The admin drawer stays on paper.
 - About a fifth of the window wide (`clamp(240px, 21vw, 320px)`, owner's call), with 17px names, 24px icons and a 92px logo. From 601 to 800px it's a 68px green bar across the top: the logo and pages in one row, scrolling sideways if they don't fit; pages sized to the window take it off their height.
 - On phones the tab bar is the same green, with a gold rule along its top; the current tab's icon is gold and its label pale gold.
 - Across the top of every signed-in page runs a sky band: a sage-to-peach wash (`--sky-1`…`--sky-4`) with faint endpaper dots, 380px tall (300px on phones), fading into the cream. Pages' cards sit on it.

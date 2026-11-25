@@ -421,7 +421,7 @@
 }
 
 .menu .item[aria-current='page'] {
-  color: var(--surface);
+  color: var(--on-cover-current);
   background-color: transparent;
 }
 
@@ -465,9 +465,16 @@
 
 /* The menu sits above the page here: a bar across the top, the cover's name and pages in a row. */
 @media (max-width: 800px) {
-  .fold,
+  .fold {
+    display: none;
+  }
+}
+
+/* Above phones, where the tab bar takes over. */
+@media (min-width: 601px) and (max-width: 800px) {
   .hub,
-  .adminLabel {
+  .adminLabel,
+  .names {
     display: none;
   }
 
@@ -487,6 +494,12 @@
     gap: 18px;
     overflow-x: auto;
     scrollbar-width: none;
+    border-bottom: 1px solid var(--cover-frame);
+  }
+
+  /* A frame would scroll away with the row: a gold rule along its foot instead. */
+  .menu::after {
+    display: none;
   }
 
   .page {
@@ -495,10 +508,6 @@
 
   .content {
     --account-bar: calc(32px + var(--menu-bar));
-  }
-
-  .menu .familyName {
-    display: none;
   }
 
   .identity {
@@ -590,6 +599,11 @@
 
   .drawer .item[aria-current='page'] {
     font-weight: 600;
+  }
+
+  .drawer .item:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
   }
 
   .drawer .currentPill {

@@ -77,7 +77,7 @@ button.picture[aria-expanded='true'] {
   color: var(--muted);
 }
 
-/* Rows grouped on a card, a hairline between them. */
+/* Rows grouped on a card, a hairline between them, inset from the rows' rounded corners. */
 .group {
   padding: 6px;
   border-radius: 18px;
@@ -94,8 +94,8 @@ button.picture[aria-expanded='true'] {
 .item {
   min-height: 44px;
   padding: 10px 10px;
+  position: relative;
   border: 0;
-  border-top: 1px solid transparent;
   border-radius: 12px;
   background: none;
   font: inherit;
@@ -108,8 +108,11 @@ button.picture[aria-expanded='true'] {
   cursor: pointer;
 }
 
-.item + .item {
-  border-top-color: var(--chip);
+.item + .item::before {
+  content: '';
+  position: absolute;
+  inset: -1px 12px auto;
+  border-top: 1px solid var(--border);
 }
 
 .item:hover,
@@ -135,6 +138,12 @@ button.picture[aria-expanded='true'] {
 .signOut,
 .signOut .icon {
   color: var(--notice);
+}
+
+/* A paler wash than the other rows', keeping the red text over 4.5:1. */
+.signOut:hover,
+.signOut:focus-visible {
+  background: var(--surface-soft);
 }
 
 .count {

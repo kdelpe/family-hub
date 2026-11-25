@@ -61,6 +61,7 @@
   --cover-deep: #244a40;
   --on-cover: #efe9dc;
   --on-cover-soft: #c9d8cf;
+  --on-cover-current: #fffdf8;
   --cover-frame: rgba(217, 195, 140, 0.45);
   --cover-hover: rgba(255, 253, 248, 0.08);
   --cover-current: rgba(255, 253, 248, 0.14);
@@ -78,6 +79,9 @@
   --card-lift:
     0 1px 2px var(--card-near),
     0 14px 32px var(--card-far);
+  --card-lift-hover:
+    0 1px 2px var(--card-near),
+    0 20px 38px var(--shadow-press);
 
   /* Illustration colors: the trees and the logo. Repeats point at the one color the mockups share. */
   --tree-branch: #8c7b5e;
