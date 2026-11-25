@@ -100,8 +100,8 @@ White text only ever sits on `--accent` (buttons, the focus avatar).
 **Gliding highlight (owner's pick, 2026-11-22):** the current page's `--nav-active` background is one pill that glides (Motion layout spring) to the page opened; a page outside the menu, like Requests, has none.
 
 **Green cover and sky band (owner's pick K, 2026-11-25):**
-- The menu is bound like the Members book: a deep green gradient (`--accent` to `--cover-deep`) with a thin gold frame inset 10px, pale gold (`--gold-pale`, for contrast) *Family Hub* and Admin label, and the logo drawn in gold. Names and icons are pale (`--on-cover`, `--on-cover-soft`); the current page is lit (`--cover-current`) with a 3px gold edge and a gold icon. The admin drawer stays on paper.
-- About a fifth of the window wide (`clamp(240px, 21vw, 320px)`, owner's call), with 17px names, 24px icons and a 92px logo. From 601 to 800px it's a green bar across the top, the name and pages in a row.
+- The menu is bound like the Members book: a deep green gradient (`--accent` to `--cover-deep`) with a thin gold frame inset 10px, pale gold (`--gold-pale`, for contrast) *Family Hub* and Admin label, and the logo drawn in gold. Names and icons are pale (`--on-cover`, `--on-cover-soft`); the current page is lit (`--cover-current`) with a 3px gold edge, a gold icon and a brighter name (`--surface`). The admin drawer stays on paper.
+- About a fifth of the window wide (`clamp(240px, 21vw, 320px)`, owner's call), with 17px names, 24px icons and a 92px logo. From 601 to 800px it's a 68px green bar across the top: the logo and pages in one row, scrolling sideways if they don't fit; pages sized to the window take it off their height.
 - On phones the tab bar is the same green, with a gold rule along its top; the current tab's icon is gold and its label pale gold.
 - Across the top of every signed-in page runs a sky band: a sage-to-peach wash (`--sky-1`…`--sky-4`) with faint endpaper dots, 380px tall (300px on phones), fading into the cream. Pages' cards sit on it.
 - Cards on Home, Members & invites, My profile, a person's family and Requests are lifted off the page (`--card-lift`).

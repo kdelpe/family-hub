@@ -9,6 +9,8 @@
   position: relative;
   /* About a fifth of the window (owner's call, 2026-11-25): 240px beside a 540px page fits from 780px up. */
   flex: 0 0 clamp(240px, 21vw, 320px);
+  /* Its basis, not its longest name, sets its width: names that don't fit end in an ellipsis. */
+  min-width: 0;
   /* As the mockups set it: the browser's own, not the paragraphs' 1.5. */
   line-height: normal;
   padding: 36px 26px;
@@ -23,8 +25,6 @@
 /* Folded to a rail of icons (owner's pick, 2026-11-25), giving the pages more room; each name shows as a tooltip. */
 .folded .menu {
   flex: 0 0 76px;
-  /* Not widened by the hidden names, whose width stays while they fade. */
-  min-width: 0;
   padding-inline: 12px;
 }
 
@@ -145,6 +145,10 @@
   }
 }
 
+.identity:hover {
+  color: var(--on-cover);
+}
+
 .identity {
   display: flex;
   flex-direction: column;
@@ -240,6 +244,8 @@
   position: relative;
   z-index: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Not isolated: its sky band at z-index -1 sits under the page and the menu's shadow, and pages' fixed overlays stay
@@ -470,14 +476,29 @@
     align-content: flex-start;
   }
 
+  /* One row of a set height, scrolling sideways if it must, so pages sized to the window can take it off. */
   .menu {
     flex: 1 1 100%;
-    padding: 14px 22px;
+    height: var(--menu-bar);
+    padding: 0 22px;
     box-shadow: 0 6px 20px var(--cover-shade);
     flex-direction: row;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 6px 18px;
+    gap: 18px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .page {
+    --menu-bar: 68px;
+  }
+
+  .content {
+    --account-bar: calc(32px + var(--menu-bar));
+  }
+
+  .menu .familyName {
+    display: none;
   }
 
   .identity {
@@ -491,8 +512,8 @@
   }
 
   .items {
+    flex: none;
     flex-direction: row;
-    flex-wrap: wrap;
   }
 
   .admin {
