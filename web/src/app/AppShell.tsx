@@ -79,13 +79,14 @@ function MenuItem({
 // account panel's sheet.
 function AdminDrawer() {
   const [open, setOpen] = useState(false)
+  const [paused] = useMotionPaused()
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger aria-label="Admin menu" className={styles.drawerButton}>
         <span aria-hidden="true" className={styles.bars} />
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className={sheet.scrim} />
+        <Dialog.Overlay data-still={paused || undefined} className={sheet.scrim} />
         {/* Focus on the sheet, not its first link, whose icon would otherwise start moving on its own. */}
         <Dialog.Content
           aria-describedby={undefined}
@@ -93,9 +94,16 @@ function AdminDrawer() {
             event.preventDefault()
             ;(event.currentTarget as HTMLElement).focus()
           }}
+          data-still={paused || undefined}
           className={`${sheet.panel} ${styles.drawer}`}
         >
-          <Dialog.Title className={styles.drawerTitle}>Admin</Dialog.Title>
+          {/* At 320px the sheet fills the screen, leaving no scrim to tap. */}
+          <div className={styles.drawerHead}>
+            <Dialog.Title className={styles.drawerTitle}>Admin</Dialog.Title>
+            <Dialog.Close aria-label="Close" className={styles.drawerClose}>
+              <span aria-hidden="true">×</span>
+            </Dialog.Close>
+          </div>
           <nav aria-label="Admin">
             {adminPages.map((page) => (
               <MenuItem key={page.path} {...page} rail={false} narrow={false} pill="drawer-current" onClick={() => setOpen(false)} />

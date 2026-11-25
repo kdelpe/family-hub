@@ -278,6 +278,17 @@ describe('AppShell', () => {
     expect(screen.queryByRole('dialog', { name: 'Admin' })).toBeNull()
   })
 
+  it('closes the admin drawer from its own button, staying on the page', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    stubApi({ '/api/auth/me': { status: 200, body: maya }, '/api/persons/p1': { status: 200, body: mayaPerson } })
+    renderShell()
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin menu' }))
+
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Admin' })).getByRole('button', { name: 'Close' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Admin' })).toBeNull()
+  })
+
   it('sends someone signed out to sign in', async () => {
     stubApi({ '/api/auth/me': { status: 401, body: { error: { code: 'unauthorized', message: 'sign in first' } } } })
     renderShell()

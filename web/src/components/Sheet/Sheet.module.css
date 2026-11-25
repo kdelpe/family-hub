@@ -25,6 +25,12 @@
   animation: slide-in 0.28s ease both;
 }
 
+/* Pause motion (§6.4): opens in place. */
+.scrim[data-still],
+.panel[data-still] {
+  animation: none;
+}
+
 @keyframes slide-in {
   from {
     translate: 100% 0;
