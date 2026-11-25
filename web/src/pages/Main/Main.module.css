@@ -33,9 +33,9 @@
 /* Floats in the panel's corner, outside the moving tree, so it stays put. */
 .zoom {
   position: absolute;
-  /* Below the ▲ arrow on the border, which can reach this corner on a narrow panel. */
-  top: 16px;
-  right: 10px;
+  /* Below the ▲ arrow on the border, which can reach this corner on a narrow panel, and inside the frame. */
+  top: 18px;
+  right: 18px;
   z-index: 3;
   height: 44px;
   border: 1px solid var(--input-border);
@@ -171,28 +171,6 @@
   color: var(--muted);
 }
 
-/* In the panel's top-left corner, opposite the zoom control, where it's seen with the tree. */
-.tip {
-  position: absolute;
-  top: 18px;
-  left: 20px;
-  z-index: 3;
-  max-width: calc(50% - 80px);
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.35;
-  color: var(--text-2);
-  pointer-events: none;
-}
-
-.tipAbove {
-  display: none;
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.35;
-  color: var(--text-2);
-}
-
 .note {
   margin: 0;
   color: var(--muted);
@@ -208,6 +186,8 @@
 
 .panel {
   position: relative;
+  /* Its own stacking context, so the frame inside stays under the ▲ / ▼ arrows on its border. */
+  isolation: isolate;
   overflow: hidden;
   border-radius: 22px;
   border: 1px solid var(--border);
@@ -220,6 +200,48 @@
   touch-action: none;
 }
 
+/* Everything moving in the panel, clipped to the inside of the frame below. */
+.inside {
+  position: absolute;
+  inset: 0;
+  clip-path: inset(11px round 11px);
+}
+
+/* The Members book's endpaper dots (owner's pick, 2026-11-25), only inside the frame below. --dots and --dots-at are
+   set from Main.tsx, so the dots move and scale with the tree. */
+.paper {
+  position: absolute;
+  inset: 11px;
+  border-radius: 11px;
+  background-image:
+    radial-gradient(circle at 25% 25%, color-mix(in srgb, var(--accent) 20%, transparent) 2.2px, transparent 2.8px),
+    radial-gradient(circle at 75% 75%, color-mix(in srgb, var(--accent) 12%, transparent) 2.2px, transparent 2.8px);
+  background-size: var(--dots, 30px) var(--dots, 30px);
+  background-position: var(--dots-at, 0 0);
+  pointer-events: none;
+}
+
+/* Gliding back with the tree. */
+.paper.glide {
+  transition:
+    background-position 0.3s ease,
+    background-size 0.3s ease;
+}
+
+/* A thin double border inset from the edge, as on the Members book's printed pages, so the panel reads as a page of
+   the album. Over the tree and the fade, so it always shows whole. */
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  z-index: 3;
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
+  border-radius: 15px;
+  outline: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  outline-offset: -4px;
+  pointer-events: none;
+}
+
 /* A soft edge where the tree runs on below the panel, so the cut looks meant; above the tree, under the controls. */
 .panel::after {
   content: '';
@@ -228,7 +250,8 @@
   right: 0;
   bottom: 0;
   z-index: 2;
-  height: 40px;
+  height: 48px;
+  border-radius: 0 0 22px 22px;
   background: linear-gradient(to bottom, transparent, var(--surface-soft));
   pointer-events: none;
 }
@@ -279,6 +302,21 @@
 
 .lines .chain {
   stroke: var(--accent);
+  animation: chain 0.18s linear both;
+}
+
+/* Below the focus person, the green runs up its line, from the child's end. */
+.lines .chainBack {
+  animation-name: chain-back;
+}
+
+.still .chain {
+  animation: none;
+}
+
+/* Off the green chain while a card is lifted (design-notes §4.2). */
+.dim {
+  opacity: 0.45;
 }
 
 .rows {
@@ -290,17 +328,10 @@
   gap: 34px;
 }
 
-/* The generations arrive one after another, top to bottom. Delays are set inline; the duration is --row-landed,
-   set on .rows from Main.tsx's rowLanded, which also times the lines drawn into them. */
-.up .generation {
-  animation: slide-up var(--row-landed) ease-out both;
-}
-
-.down .generation {
-  animation: slide-down var(--row-landed) ease-out both;
-}
-
-.side .generation {
+/* Opening the page, the generations arrive one after another, top to bottom; centering, the cards fly instead
+   (Main.tsx). Delays are set inline; the duration is --row-landed, set on .rows from Main.tsx's rowLanded, which also
+   times the lines drawn into them. */
+.arrive .generation {
   animation: side var(--row-landed) ease-out both;
 }
 
@@ -403,7 +434,8 @@
   text-align: center;
   transition:
     transform 0.15s ease,
-    box-shadow 0.15s ease;
+    box-shadow 0.15s ease,
+    opacity 0.25s ease;
 }
 
 .focusCard {
@@ -557,28 +589,6 @@
 /* Room for the arrows, so at rest they don't sit on the first or last generation. With .rows, so the phone
    padding below doesn't undo it. */
 
-@keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(-48px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes slide-down {
-  from {
-    opacity: 0;
-    transform: translateY(48px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 @keyframes side {
   from {
     opacity: 0;
@@ -587,6 +597,24 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes chain {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes chain-back {
+  from {
+    stroke-dashoffset: -100;
+  }
+  to {
+    stroke-dashoffset: 0;
   }
 }
 
@@ -654,14 +682,6 @@
 
   .group {
     padding: 8px;
-  }
-
-  .tip {
-    display: none;
-  }
-
-  .tipAbove {
-    display: block;
   }
 }
 

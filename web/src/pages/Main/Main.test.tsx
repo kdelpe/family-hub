@@ -8,6 +8,7 @@ import { authKeys } from '../../api/auth'
 import { familyKeys } from '../../api/family'
 import { treeKeys } from '../../api/tree'
 import { Main } from './Main'
+import styles from './Main.module.css'
 
 const person = (id: string, first_name: string, gender: 'female' | 'male', bio_excerpt: string | null = null) => ({
   id,
@@ -602,19 +603,6 @@ describe('Main', () => {
     expect(parents.className.includes('spaced')).toBe(spaced)
   })
 
-  it('takes the tip off the panel once the tree is moved, and brings it back with Recenter', () => {
-    renderTree('fritz')
-    const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
-    const tip = () => within(panel.parentElement!).queryByText(/^Click or tap a name/)
-    expect(tip()).toBeInTheDocument()
-
-    fireEvent.wheel(panel, { deltaY: 50 })
-    expect(tip()).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
-    expect(tip()).toBeInTheDocument()
-  })
-
   it('moves the tree with a plain wheel or two-finger scroll, instead of scrolling the page', () => {
     renderTree('fritz')
     const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
@@ -810,11 +798,139 @@ describe('Main', () => {
     expect(chain()).toEqual(lit)
   })
 
+  it.each([
+    { name: 'a grandparent', viewer: 'fritz', card: 'Joseph', data: tree, runs: [['up:jr', '0ms', 'down'], ['sib:fritz', '180ms', 'down']] },
+    { name: 'a sibling', viewer: 'fritz', card: 'Maya', data: tree, runs: [['sib:maya', '0ms', 'up'], ['sib:fritz', '180ms', 'down']] },
+    { name: 'a child', viewer: 'fritz', card: 'Tim', data: tree, runs: [['kids:1', '0ms', 'up']] },
+    { name: 'a grandchild', viewer: 'rose', card: 'Naomie', data: fostering, runs: [['down:mt', '0ms', 'up'], ['kids:0', '180ms', 'up']] },
+  ])('runs the green from $name to the focus person, one line after another', ({ viewer, card, data, runs }) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      renderTree(viewer, { data })
+      // Once the lines have drawn in.
+      act(() => vi.advanceTimersByTime(2000))
+    } finally {
+      vi.useRealTimers()
+    }
+
+    fireEvent.pointerEnter(personOf(card), { pointerType: 'mouse' })
+
+    for (const [line, delay, way] of runs) {
+      const path = document.querySelector<SVGElement>(`[data-chain="${line}"]`)!
+      expect(path.style.animationDelay).toBe(delay)
+      expect(path.classList.contains(styles.chainBack!)).toBe(way === 'up')
+    }
+  })
+
   it('draws a green line in with the rest, so a card already under the pointer lights it as it draws', () => {
     renderTree('fritz')
 
     fireEvent.pointerEnter(personOf('Joseph'), { pointerType: 'mouse' })
 
     expect(document.querySelector<SVGElement>('[data-chain="up:jr"]')!.style.animationDelay).toBe('480ms')
+    expect(document.querySelector<SVGElement>('[data-chain="sib:fritz"]')!.style.animationDelay).toBe(`${560 + 180}ms`)
+  })
+
+  it('fades back everyone off the green while a card is lifted', () => {
+    renderTree('fritz')
+    const dimmed = () => [...document.querySelectorAll('[data-person]')].filter((p) => p.querySelector(`.${styles.dim}`)).map((p) => p.getAttribute('data-person'))
+
+    fireEvent.pointerEnter(personOf('Joseph'), { pointerType: 'mouse' })
+    expect(dimmed()).toContain('tim')
+    expect(dimmed()).not.toContain('joseph')
+    expect(dimmed()).not.toContain('jr')
+    expect(dimmed()).not.toContain('fritz')
+
+    fireEvent.pointerLeave(personOf('Joseph'), { pointerType: 'mouse' })
+    expect(dimmed()).toEqual([])
+
+    // A partner shares the household: no green, so nobody fades.
+    fireEvent.pointerEnter(personOf('Fabienne'), { pointerType: 'mouse' })
+    expect(dimmed()).toEqual([])
+  })
+
+  describe('flying the cards to their new places', () => {
+    const animate = vi.fn()
+    beforeEach(() => {
+      animate.mockClear()
+      Object.defineProperty(HTMLElement.prototype, 'animate', { value: animate, configurable: true })
+    })
+    afterEach(() => {
+      delete (HTMLElement.prototype as Partial<HTMLElement>).animate
+    })
+    const flown = () =>
+      (animate.mock.contexts as HTMLElement[]).flatMap((el, i) =>
+        el.matches('[data-card]') && String(animate.mock.calls[i]![0][0].transform).startsWith('translate(') ? [el.closest('[data-person]')!.getAttribute('data-person')] : [],
+      )
+
+    it('flies the cards still in view from where they were, on centering', () => {
+      renderTree('fritz')
+      expect(animate).not.toHaveBeenCalled()
+
+      fireEvent.click(cardOf('Jean-Robert'))
+
+      expect(flown()).toEqual(expect.arrayContaining(['fritz', 'jr', 'maya', 'joseph']))
+      // The lines wait for the cards to land.
+      expect(parseInt(document.querySelector<SVGElement>('[data-line="sib:jr"]')!.style.animationDelay)).toBeGreaterThanOrEqual(520)
+    })
+
+    it('doesn’t fly them with reduced motion', () => {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query.includes('reduce'),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }))
+      renderTree('fritz')
+
+      fireEvent.click(cardOf('Jean-Robert'))
+
+      expect(animate).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('dragging past the limits', () => {
+    const dragFar = () => {
+      const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
+      const mouse = { pointerId: 1, pointerType: 'mouse', button: 0 }
+      fireEvent.pointerDown(panel, { ...mouse, clientX: 0, clientY: 0 })
+      fireEvent.pointerMove(panel, { ...mouse, clientX: 10, clientY: 0 })
+      fireEvent.pointerMove(panel, { ...mouse, clientX: 2000, clientY: 0 })
+      return () => fireEvent.pointerUp(window, mouse)
+    }
+    const shownX = () => Number(document.querySelector<HTMLElement>('[data-stage]')!.style.transform.match(/translate\((-?[\d.]+)px/)![1])
+
+    it('stretches the tree past them, then springs it back to keep 60px in the panel', () => {
+      vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+      try {
+        layOut({ tree: 600 })
+        renderTree('fritz')
+
+        const letGo = dragFar()
+        // 60px of the 190px card stays in: 540, and 35% of the rest of the way beyond.
+        expect(shownX()).toBeCloseTo(540 + (2000 - 540) * 0.35, 0)
+
+        letGo()
+        act(() => vi.advanceTimersByTime(3000))
+        expect(shownX()).toBeCloseTo(540, 0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('stops at them with reduced motion', () => {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query.includes('reduce'),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }))
+      layOut({ tree: 600 })
+      renderTree('fritz')
+
+      dragFar()
+
+      expect(shownX()).toBe(540)
+    })
   })
 })
