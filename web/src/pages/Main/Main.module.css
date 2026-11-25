@@ -598,21 +598,32 @@
   }
 }
 
+/* Hidden until the stroke starts, as in draw: a round cap would show as a dot while the green waits. */
 @keyframes chain {
-  from {
+  0% {
     stroke-dashoffset: 100;
+    opacity: 0;
   }
-  to {
+  3% {
+    opacity: 1;
+  }
+  100% {
     stroke-dashoffset: 0;
+    opacity: 1;
   }
 }
 
 @keyframes chain-back {
-  from {
+  0% {
     stroke-dashoffset: -100;
+    opacity: 0;
   }
-  to {
+  3% {
+    opacity: 1;
+  }
+  100% {
     stroke-dashoffset: 0;
+    opacity: 1;
   }
 }
 

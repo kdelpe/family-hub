@@ -286,8 +286,8 @@ function FocusTree({
   const [lift, setLift] = useState<{ id: string; at: number } | null>(null)
   const hover = lift?.id ?? null
   const [lines, setLines] = useState<{ width: number; height: number; paths: Line[] }>({ width: 0, height: 0, paths: [] })
-  // When the lines started drawing in: the first measure of this view.
-  const [linesAt, setLinesAt] = useState<number | null>(null)
+  // When each line was first drawn, by key: its draw-in animation starts as it mounts, after a refetch too.
+  const [lineStarts, setLineStarts] = useState<ReadonlyMap<string, number>>(new Map())
   const reduced = useReducedMotion()
   const still = reduced || paused
   // Fixed for this view: flying only when centered on from another view, not on opening the page or when the focus
@@ -298,11 +298,12 @@ function FocusTree({
   const chain = new Map(chainLines.map((l, i) => [l.key, { ...l, at: i }]))
   // Each green line starts once its own line has drawn in and the one before it has run, timed from the lift.
   const greenDelays = new Map<string, number>()
-  if (lift && linesAt !== null) {
+  if (lift) {
     let free = lift.at
     for (const l of chainLines) {
       const base = lines.paths.find((p) => p.key === l.key)
-      const start = Math.max(free, base ? linesAt + base.delay + lineDraw : 0)
+      const mounted = lineStarts.get(l.key)
+      const start = Math.max(free, base && mounted !== undefined ? mounted + base.delay + lineDraw : 0)
       greenDelays.set(l.key, start - lift.at)
       free = start + chainStep
     }
@@ -482,11 +483,12 @@ function FocusTree({
     if (!p || !st || !r) {
       return
     }
-    const started = clock()
     const draw = () => {
-      setLinesAt((t) => t ?? started)
+      const now = clock()
+      const paths = measure(st, r, view, focus, fly)
+      setLineStarts((starts) => (paths.every((l) => starts.has(l.key)) ? starts : new Map([...paths.map((l) => [l.key, now] as const), ...starts])))
       setPanelSize({ width: p.clientWidth, height: p.clientHeight })
-      setLines({ width: st.offsetWidth, height: st.offsetHeight, paths: measure(st, r, view, focus, fly) })
+      setLines({ width: st.offsetWidth, height: st.offsetHeight, paths })
       setCards(cardBounds(st, r))
       const grandparents = [...r.querySelectorAll<HTMLElement>('[data-unit^="up-"]')].map((g) => offsetBox(g, st).bottom)
       const card = focusCard.current?.closest<HTMLElement>('[data-card]')

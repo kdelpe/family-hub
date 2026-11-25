@@ -835,6 +835,29 @@ describe('Main', () => {
     expect(document.querySelector<SVGElement>('[data-chain="sib:fritz"]')!.style.animationDelay).toBe(`${880 + 180}ms`)
   })
 
+  it('times the green on a line that arrived with a refresh from when that line started drawing', async () => {
+    vi.useFakeTimers({ toFake: ['performance'] })
+    try {
+      const client = renderTree('fritz')
+      vi.advanceTimersByTime(2000)
+      // A new sister, after the first lines have long drawn in.
+      // The query tells its readers on a later tick.
+      await act(async () => {
+        client.setQueryData(treeKeys.all, {
+          persons: [...tree.persons, person('lea', 'Léa', 'female')],
+          relationships: [...tree.relationships, parent('jr', 'lea'), parent('nadege', 'lea')],
+        })
+        await new Promise((r) => setTimeout(r, 0))
+      })
+      fireEvent.pointerEnter(personOf('Léa'), { pointerType: 'mouse' })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const line = document.querySelector<SVGElement>('[data-line="sib:lea"]')!
+    expect(document.querySelector<SVGElement>('[data-chain="sib:lea"]')!.style.animationDelay).toBe(`${parseInt(line.style.animationDelay) + 400}ms`)
+  })
+
   it('runs the green afresh when the lift moves to a card sharing a line', () => {
     renderTree('fritz')
     fireEvent.pointerEnter(personOf('Jean-Robert'), { pointerType: 'mouse' })
