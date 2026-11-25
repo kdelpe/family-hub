@@ -4,7 +4,7 @@ import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { resetMenuFolded } from '../lib/motion'
+import { resetMenuFolded } from '../lib/menuFolded'
 import { AppShell } from './AppShell'
 
 const maya = { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: 'p1' }

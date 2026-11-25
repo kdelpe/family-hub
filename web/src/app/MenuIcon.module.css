@@ -9,7 +9,7 @@
     animation: 1.4s ease-in-out infinite;
   }
 
-  a:focus-visible :is(.icon, .door, .cover, .page) {
+  a:focus-visible:not(:hover) :is(.icon, .door, .cover, .page) {
     animation-iteration-count: 1;
   }
 

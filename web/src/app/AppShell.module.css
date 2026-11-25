@@ -29,10 +29,6 @@
   padding-inline: 12px;
 }
 
-/* Narrow enough to sit beside the rail down to the phones' 600px, instead of wrapping under it. */
-.folded .content {
-  flex-basis: 480px;
-}
 
 /* On the menu's edge, half in and half out. */
 .fold {
@@ -106,7 +102,6 @@
   flex: none;
   position: relative;
   z-index: 1;
-  color: var(--text-2);
 }
 
 .item[aria-current='page'] .icon {
@@ -327,8 +322,7 @@
   top: 6px;
 }
 
-/* Doubled to outweigh the account panel's own gap, whichever stylesheet loads last. */
-.drawer.drawer {
+.drawer {
   gap: 8px;
 }
 
@@ -340,6 +334,13 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* The menu sits above the page here, where there's no room to fold it beside. */
+@media (max-width: 800px) {
+  .fold {
+    display: none;
+  }
 }
 
 /* Phones (owner's pick, 2026-11-25): the menu becomes a tab bar along the bottom, in thumb reach. */
@@ -443,6 +444,11 @@
 
   .drawerButton {
     display: grid;
+  }
+
+  /* The shell's own, set with its first paint; the page root's copy, for toasts, comes a moment later. */
+  .page {
+    --tab-bar: calc(66px + env(safe-area-inset-bottom, 0px));
   }
 
   /* Room for the tab bar, which pages sized to the window also take off their height. */

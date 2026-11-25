@@ -2,6 +2,7 @@ import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
 
+import sheet from '../components/Sheet/Sheet.module.css'
 import { errorMessage } from '../lib/errorMessage'
 import { useSignInBusy, useSignOut } from '../lib/useSignOut'
 import styles from './AccountMenu.module.css'
@@ -71,8 +72,8 @@ export function AccountMenu({ initials, name, waiting, linked }: { initials: str
       {open &&
         createPortal(
         <>
-          <div className={styles.scrim} onClick={close} />
-          <div ref={panel} role="dialog" aria-modal="true" aria-label="Your account" onKeyDown={onKeyDown} className={styles.panel}>
+          <div className={sheet.scrim} onClick={close} />
+          <div ref={panel} role="dialog" aria-modal="true" aria-label="Your account" onKeyDown={onKeyDown} className={`${sheet.panel} ${styles.panel}`}>
             <div className={styles.who}>
               <span aria-hidden="true" className={`${styles.picture} ${styles.large}`}>
                 {initials}

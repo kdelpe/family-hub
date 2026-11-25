@@ -2,19 +2,19 @@ import * as Dialog from '@radix-ui/react-dialog'
 import * as Tooltip from '@radix-ui/react-tooltip'
 import { useQuery } from '@tanstack/react-query'
 import { m } from 'motion/react'
-import { useEffect, useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router'
 
 import { ApiError } from '../api/client'
 import { myRequestsQuery } from '../api/contacts'
 import { Logo } from '../components/Logo/Logo'
+import sheet from '../components/Sheet/Sheet.module.css'
 import { initials } from '../lib/names'
 import { errorMessage } from '../lib/errorMessage'
-import { useMenuFolded } from '../lib/motion'
-import { useNarrow } from '../lib/useNarrow'
+import { useMenuFolded } from '../lib/menuFolded'
+import { useMenuAbove, useNarrow } from '../lib/useNarrow'
 import { useSignedIn } from '../lib/useSignedIn'
 import { AccountMenu } from './AccountMenu'
-import sheet from './AccountMenu.module.css'
 import styles from './AppShell.module.css'
 import { MenuIcon } from './MenuIcon'
 import { adminPages, menuPages } from './signedInPages'
@@ -35,7 +35,7 @@ function MenuItem({
   // Always inside the tooltip, closed off the rail: unwrapping it would remount the link and drop its focus. NavLink
   // marks the current page with aria-current, which the styles read, so its className stays plain for the trigger.
   return (
-    <Tooltip.Root open={rail && tipOpen} onOpenChange={setTipOpen}>
+    <Tooltip.Root open={rail && tipOpen} onOpenChange={rail ? setTipOpen : undefined}>
       <Tooltip.Trigger asChild>
         <NavLink to={path} end aria-label={tab ? label : undefined} onClick={onClick} className={styles.item}>
           {({ isActive }) => (
@@ -90,11 +90,11 @@ function AdminDrawer() {
 
 // Toasts live outside the shell, so the page root says when the phone's tab bar is there to keep clear of.
 function useTabBarRoom(shown: boolean) {
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!shown) {
       return
     }
-    document.documentElement.toggleAttribute('data-tab-bar', true)
+    document.documentElement.setAttribute('data-tab-bar', '')
     return () => document.documentElement.removeAttribute('data-tab-bar')
   }, [shown])
 }
@@ -111,8 +111,9 @@ export function AppShell() {
   const waiting = requests.data?.filter((r) => r.status === 'pending').length ?? 0
   const [folded, fold] = useMenuFolded()
   const narrow = useNarrow()
-  // Phones have the tab bar instead, whatever was folded on a wider screen.
-  const rail = folded && !narrow
+  // Phones have the tab bar, and up to 800px the menu sits above the page, whatever was folded on a wider screen.
+  const above = useMenuAbove()
+  const rail = folded && !above
   // Not while loading or failed, which show no menu.
   useTabBarRoom(Boolean(user && personSettled))
 
