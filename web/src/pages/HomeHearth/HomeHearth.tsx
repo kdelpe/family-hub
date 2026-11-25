@@ -1,4 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
+import { m } from 'motion/react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
@@ -7,6 +8,7 @@ import { treeQuery } from '../../api/tree'
 import { addedOn, inDays, monthAndDay } from '../../lib/dates'
 import { dayPartLabel, greeting } from '../../lib/dayPart'
 import { errorMessage } from '../../lib/errorMessage'
+import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, initials } from '../../lib/names'
 import { relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
@@ -64,21 +66,72 @@ function birthdayLine(b: Birthday, viewerId: string | null) {
   return `${whose} birthday is ${when}.`
 }
 
-function HeroTree() {
+const branches = ['M100 145V70', 'M100 100L60 60', 'M100 90l42-38', 'M100 75L78 35', 'M100 72l20-42']
+const leaves = [
+  { cx: 60, cy: 58, r: 13, light: false },
+  { cx: 143, cy: 50, r: 15, light: false },
+  { cx: 78, cy: 32, r: 12, light: false },
+  { cx: 121, cy: 28, r: 13, light: false },
+  { cx: 100, cy: 20, r: 11, light: false },
+  { cx: 44, cy: 74, r: 8, light: true },
+  { cx: 160, cy: 68, r: 9, light: true },
+]
+// It grows once per visit; coming back to Home shows it grown.
+const branchDraw = 0.9
+const branchDelay = (i: number) => 0.15 + i * 0.12
+// The leaves bud once the last branch is drawn.
+const leavesStart = branchDelay(branches.length - 1) + branchDraw
+
+let grown = false
+
+// A leaf buds (when the tree grows) and then sways, unless still.
+export function leafMotion(i: number, grow: boolean, still: boolean) {
+  return {
+    // Not `false` on a return visit: that would skip the sway too.
+    initial: grow ? { scale: 0 } : { scale: 1, y: 0 },
+    animate: still ? { scale: 1, y: 0 } : { scale: 1, y: [0, -2.5, 0] },
+    transition: {
+      scale: { type: 'spring' as const, stiffness: 260, damping: 12, delay: grow ? leavesStart + i * 0.1 : 0 },
+      y: still ? { duration: 0.3 } : { duration: 5 + (i % 3), repeat: Infinity, ease: 'easeInOut' as const, delay: (grow ? leavesStart + 1 : 0) + i * 0.3 },
+    },
+  }
+}
+
+export function HeroTree() {
+  const [paused] = useMotionPaused()
+  const reduced = useReducedMotion()
+  const [grow] = useState(() => !grown && !reduced)
+  useEffect(() => {
+    grown = true
+  }, [])
+  const still = paused || reduced
+
   return (
     <svg aria-hidden="true" className={styles.tree} viewBox="0 0 200 150">
-      <path d="M100 145V70M100 100L60 60M100 90l42-38M100 75L78 35M100 72l20-42" className={styles.branches} />
-      <g className={styles.leaves}>
-        <circle cx="60" cy="58" r="13" />
-        <circle cx="143" cy="50" r="15" />
-        <circle cx="78" cy="32" r="12" />
-        <circle cx="121" cy="28" r="13" />
-        <circle cx="100" cy="20" r="11" />
-      </g>
-      <g className={styles.lightLeaves}>
-        <circle cx="44" cy="74" r="8" />
-        <circle cx="160" cy="68" r="9" />
-      </g>
+      {branches.map((d, i) => (
+        <m.path
+          key={d}
+          d={d}
+          className={styles.branches}
+          // Hidden until it starts: a round cap shows as a dot even at pathLength 0.
+          initial={grow ? { pathLength: 0, opacity: 0 } : false}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{
+            pathLength: { duration: branchDraw, delay: branchDelay(i), ease: 'easeOut' },
+            opacity: { duration: 0.01, delay: branchDelay(i) },
+          }}
+        />
+      ))}
+      {leaves.map((leaf, i) => (
+        <m.circle
+          key={i}
+          cx={leaf.cx}
+          cy={leaf.cy}
+          r={leaf.r}
+          className={leaf.light ? styles.lightLeaf : styles.leaf}
+          {...leafMotion(i, grow, still)}
+        />
+      ))}
     </svg>
   )
 }

@@ -36,11 +36,11 @@
   stroke-linecap: round;
 }
 
-.leaves {
+.leaf {
   fill: var(--leaf-1);
 }
 
-.lightLeaves {
+.lightLeaf {
   fill: var(--leaf-3);
 }
 
