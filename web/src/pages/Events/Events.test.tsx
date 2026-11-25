@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { domMax, LazyMotion, MotionGlobalConfig } from 'motion/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -26,7 +27,8 @@ const tree = { persons: [person('rose', 'Rose', 'Monestime'), person('fritz', 'F
 
 let lastClient: QueryClient
 
-function renderPage(events?: FamilyEvent[], role = 'member') {
+// motion: with Motion's features and animations on, so a closing panel stays mounted while it leaves.
+function renderPage(events?: FamilyEvent[], role = 'member', { motion = false } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   lastClient = client
   client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role, person_id: null })
@@ -34,14 +36,19 @@ function renderPage(events?: FamilyEvent[], role = 'member') {
   if (events) {
     client.setQueryData(eventKeys.all, events)
   }
-  render(
+  const page = (
     <QueryClientProvider client={client}>
       <RouterProvider router={createMemoryRouter([{ path: '/', element: <Events /> }])} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  if (motion) {
+    MotionGlobalConfig.skipAnimations = false
+  }
+  render(motion ? <LazyMotion features={domMax}>{page}</LazyMotion> : page)
 }
 
 afterEach(() => {
+  MotionGlobalConfig.skipAnimations = true
   vi.unstubAllGlobals()
 })
 
@@ -71,6 +78,99 @@ describe('Events', () => {
       ['Jean-Robert Pluviose', '/people/jr'],
       ['Nadège Pluviose', '/people/n'],
     ])
+  })
+
+  describe('the year handle', () => {
+    const spread = [
+      event({ id: 'a', title: 'Thanksgiving', date: '2026-11-26', date_precision: 'day' }),
+      event({ id: 'b', title: 'Graduation', date: '2025-05-30', date_precision: 'day' }),
+      event({ id: 'c', title: 'Reunion', date: '2025-07', date_precision: 'month' }),
+      event({ id: 'd', title: 'Wedding', date: '1984', date_precision: 'year' }),
+      event({ id: 'e', title: 'Picnic' }),
+    ]
+    const handle = () => within(screen.getByRole('group', { name: 'Move through the years' }))
+    const lit = () => [...document.querySelectorAll('[class*="yearLit"]')].map((el) => el.textContent)
+
+    it.each([
+      { name: 'the ▼ button', go: () => fireEvent.click(handle().getByRole('button', { name: 'Older year' })) },
+      { name: 'the down arrow key', go: () => fireEvent.keyDown(handle().getByRole('slider', { name: 'Year' }), { key: 'ArrowDown' }) },
+    ])('steps to the next older year with $name, lighting every event of that year', ({ go }) => {
+      const scrollTo = vi.fn()
+      vi.stubGlobal('scrollTo', scrollTo)
+      renderPage(spread)
+      expect(handle().getByRole('button', { name: 'Newer year' })).toBeDisabled()
+      expect(lit()).toEqual(['2026'])
+
+      go()
+
+      expect(scrollTo).toHaveBeenCalledTimes(1)
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', '2025')
+      expect(lit()).toEqual(['2025', '2025'])
+    })
+
+    it('scrubs a year for every 26px dragged, and reaches the undated events last', () => {
+      vi.stubGlobal('scrollTo', vi.fn())
+      renderPage(spread)
+      const grip = handle().getByRole('slider')
+
+      fireEvent.pointerDown(grip, { button: 0, pointerId: 1, clientY: 100 })
+      expect(grip).toHaveFocus()
+      fireEvent.pointerMove(grip, { pointerId: 1, clientY: 152 })
+      expect(grip).toHaveAttribute('aria-valuetext', '1984')
+      fireEvent.pointerMove(grip, { pointerId: 1, clientY: 400 })
+      fireEvent.pointerUp(grip, { pointerId: 1 })
+
+      expect(grip).toHaveAttribute('aria-valuetext', 'Undated')
+      expect(handle().getByRole('button', { name: 'Older year' })).toBeDisabled()
+    })
+
+    it('goes to the oldest with End and the newest with Home', () => {
+      vi.stubGlobal('scrollTo', vi.fn())
+      renderPage(spread)
+      const grip = handle().getByRole('slider')
+
+      fireEvent.keyDown(grip, { key: 'End' })
+      expect(grip).toHaveAttribute('aria-valuetext', 'Undated')
+      fireEvent.keyDown(grip, { key: 'Home' })
+      expect(grip).toHaveAttribute('aria-valuetext', '2026')
+    })
+
+    it('keeps a picked year through the page’s scrolling until the reader scrolls', () => {
+      vi.stubGlobal('scrollTo', vi.fn())
+      renderPage(spread)
+      fireEvent.click(handle().getByRole('button', { name: 'Older year' }))
+
+      // jsdom lays nothing out, so following the scroll would land on the last year.
+      fireEvent.scroll(window)
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', '2025')
+
+      fireEvent.wheel(window)
+      fireEvent.scroll(window)
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', 'Undated')
+    })
+
+    it('changes the year without its fade with reduced motion', () => {
+      vi.stubGlobal('scrollTo', vi.fn())
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query.includes('reduce'),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }))
+      renderPage(spread, 'member', { motion: true })
+
+      fireEvent.click(handle().getByRole('button', { name: 'Older year' }))
+
+      // A fading year would still be there, leaving.
+      expect(handle().getByRole('slider').textContent).toBe('’25')
+    })
+
+    it('isn’t there when every event falls in one year', () => {
+      renderPage([spread[1]!, spread[2]!])
+
+      expect(screen.queryByRole('group', { name: 'Move through the years' })).toBeNull()
+      expect(lit()).toEqual([])
+    })
   })
 
   it('writes each kind of date as the design does', () => {
