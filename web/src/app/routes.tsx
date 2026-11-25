@@ -5,6 +5,7 @@ import { SignInLayout } from '../components/SignInLayout/SignInLayout'
 import { FirstSetup } from '../pages/FirstSetup/FirstSetup'
 import { ForgotPassword } from '../pages/ForgotPassword/ForgotPassword'
 import { Account } from '../pages/Account/Account'
+import { EventPage } from '../pages/Events/EventPage'
 import { Events } from '../pages/Events/Events'
 import { HomeHearth } from '../pages/HomeHearth/HomeHearth'
 import { Login } from '../pages/Login/Login'
@@ -45,6 +46,7 @@ export const routes: RouteObject[] = [
     children: [
       ...[...menuPages, ...adminPages].map(({ path }) => ({ path, element: built[path] ?? <NotBuiltYet /> })),
       { path: '/people/:id', element: <PersonProfile /> },
+      { path: '/events/:id', element: <EventPage /> },
       { path: '/profile', element: <MyProfile /> },
       { path: '/requests', element: <Requests /> },
       { path: '/account', element: <Account /> },

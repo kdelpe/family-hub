@@ -1,0 +1,151 @@
+.page {
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.back {
+  align-self: flex-start;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back:hover {
+  text-decoration: underline;
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* The timeline's album paper, its dots and border. */
+.album {
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background-color: var(--endpaper);
+  background-image:
+    radial-gradient(circle at 25% 25%, color-mix(in srgb, var(--accent) 20%, transparent) 2.2px, transparent 2.8px),
+    radial-gradient(circle at 75% 75%, color-mix(in srgb, var(--accent) 12%, transparent) 2.2px, transparent 2.8px);
+  background-size: 30px 30px;
+}
+
+/* The full-width cover's place: a dashed frame until the first photo arrives. */
+.cover {
+  margin: 28px 28px 0;
+  aspect-ratio: 16 / 7;
+  max-height: 420px;
+  display: grid;
+  place-items: center;
+  border: 2px dashed color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.coverNote {
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+  color: var(--text-2);
+}
+
+.coverNote b {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.body {
+  padding: 24px 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 38px;
+  font-weight: 500;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.when {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-style: italic;
+  color: var(--print-date);
+}
+
+.story {
+  margin: 10px 0 0;
+  max-width: 62ch;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--text-2);
+  white-space: pre-line;
+}
+
+.nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.neighbor {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.neighbor small {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.neighbor span {
+  font-family: var(--font-serif);
+  font-size: 16px;
+}
+
+.neighbor:hover span {
+  text-decoration: underline;
+}
+
+.older {
+  text-align: right;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 24px 16px 40px;
+  }
+
+  .cover {
+    margin: 16px 16px 0;
+    aspect-ratio: 4 / 3;
+  }
+
+  .body {
+    padding: 18px 18px 24px;
+  }
+
+  .title {
+    font-size: 30px;
+  }
+}
