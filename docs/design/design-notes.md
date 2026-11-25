@@ -113,6 +113,9 @@ Every card-style item lifts on hover **and** on keyboard focus inside it: `trans
 ### 2.4a Confirm dialog
 An answer that can't be undone asks first in one shared dialog (`components/ConfirmDialog`, Radix Dialog + Motion; owner's pick from the Motion + Radix mockup, 2026-11-22): centred over a blurred `--scrim`, it springs in (scale 0.92 → 1 and up 14px) and fades out. A serif question, an optional note under it, an error in a `--warning-tint` box if the answer fails (the dialog stays open), then the quiet choice and the primary one, right-aligned. Focus starts on the primary choice and stays inside; Escape, the backdrop or the quiet choice cancel it (not while the answer is being sent), and focus goes back to the button that opened it, or, once answered, to the line saying what happened. With reduced motion or Pause motion (§6.4) it appears without the spring.
 
+### 2.4b Toast
+One note at a time, bottom centre (`components/Toaster`, Radix Toast + Motion, 2026-11-22): `--text` background, `--surface` text, an optional **Undo**, and a `--gold` bar that drains over 5 seconds. It springs up from below; hovering or focusing it pauses the countdown; it can be swiped down. A new note ends the one before as if it had run out. Radix announces it to screen readers.
+
 ### 2.5 Buttons
 
 Primary: pill, `--accent` background, white 600 text. Secondary: pill, transparent with `--input-border`. Quiet: underlined text link in `--accent`.
@@ -265,6 +268,11 @@ Title **Events**. Segmented **Timeline / Media**, plus two buttons shown to admi
   - Dates are written "November 13, 1984", "July 2025", "1984" and "Around 1962", with "c. 1962" in the year column.
   - An undated event has an empty year column. Undated events come last.
   - On phones, the year sits above each card and the line runs down the left edge.
+- **Removing an event (admins, 2026-11-22):** a × at the top right of each card (shown on hover or focus; always on touch screens) asks *"Remove “…”?"* with *"It leaves the timeline for everyone. You'll have a few seconds to undo."*, **Keep it** / **Remove** (§2.4a).
+  - The event slides out at once and a toast says *Removed “…”.* with **Undo** (§2.4b).
+  - The server is only told once the toast runs out, so Undo has nothing to put back; closing the tab before then keeps the event.
+  - If the server refuses, the event comes back and a toast says *Couldn't remove “…”.* and why.
+- **Motion:** events slide in when saved and out when removed, and the others glide into their new places.
 - **Year handle (owner's pick, 2026-11-22):** when the timeline spans two years or more, a green handle sits on the line and stays in view while you scroll (42% down the window).
   - It shows the year it's on (*’84*; *—* for undated), between **▲** (newer) and **▼** (older), which glide there.
   - Dragging its middle scrubs a year per 26px; the up and down arrow keys step too.
