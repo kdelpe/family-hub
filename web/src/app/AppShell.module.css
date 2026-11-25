@@ -7,25 +7,27 @@
 
 .menu {
   position: relative;
-  flex: 1 1 220px;
+  /* Above the content (positioned for the sky band) and its account row (5): the menu's shadow and its fold button,
+     which pokes past its edge, would sit under them. */
+  z-index: 6;
+  /* About a fifth of the window (owner's call, 2026-11-25); 260px keeps "Members & invites" whole. */
+  flex: 0 0 clamp(260px, 21vw, 320px);
+  /* Its basis, not its longest name, sets its width: names that don't fit end in an ellipsis. */
+  min-width: 0;
   /* As the mockups set it: the browser's own, not the paragraphs' 1.5. */
   line-height: normal;
-  max-width: 260px;
-  padding: 32px 24px;
-  border-right: 1px solid var(--border);
+  padding: 36px 26px;
   display: flex;
   flex-direction: column;
   gap: 28px;
   transition:
     flex-basis 0.4s cubic-bezier(0.3, 1.2, 0.5, 1),
-    max-width 0.4s cubic-bezier(0.3, 1.2, 0.5, 1),
     padding 0.4s cubic-bezier(0.3, 1.2, 0.5, 1);
 }
 
 /* Folded to a rail of icons (owner's pick, 2026-11-25), giving the pages more room; each name shows as a tooltip. */
 .folded .menu {
   flex: 0 0 76px;
-  max-width: 76px;
   padding-inline: 12px;
 }
 
@@ -33,7 +35,8 @@
 .fold {
   position: absolute;
   top: 44px;
-  right: -14px;
+  /* Just over the cover's edge, clear of its gold frame (inset 6–10px). */
+  right: -23px;
   width: 28px;
   height: 28px;
   padding: 0;
@@ -46,8 +49,6 @@
   line-height: 1;
   box-shadow: 0 2px 6px var(--shadow-press);
   cursor: pointer;
-  /* Over the account row, which reaches across the menu's edge at the top of the content. */
-  z-index: 6;
   transition: rotate 0.4s cubic-bezier(0.3, 1.2, 0.5, 1);
 }
 
@@ -78,6 +79,17 @@
   gap: 0;
 }
 
+.identity svg {
+  transition:
+    width 0.4s cubic-bezier(0.3, 1.2, 0.5, 1),
+    height 0.4s cubic-bezier(0.3, 1.2, 0.5, 1);
+}
+
+.folded .identity svg {
+  width: 48px;
+  height: 48px;
+}
+
 .folded .label {
   width: 0;
   overflow: hidden;
@@ -96,8 +108,8 @@
 }
 
 .icon {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   flex: none;
   position: relative;
   z-index: 1;
@@ -108,7 +120,7 @@
 }
 
 /* Pause motion (§6.4): the fold and its tooltips without their springs. */
-.page[data-still] :is(.menu, .fold, .names, .adminLabel, .label) {
+.page[data-still] :is(.menu, .fold, .names, .adminLabel, .label, .identity svg) {
   transition: none;
 }
 
@@ -141,12 +153,13 @@
   align-items: center;
   gap: 12px;
   text-align: center;
-  color: var(--text);
+  color: var(--on-cover);
   text-decoration: none;
 }
 
+/* Beats the global a:hover green, which would vanish on the cover. */
 .identity:hover {
-  color: var(--text);
+  color: var(--on-cover);
 }
 
 .names {
@@ -158,7 +171,7 @@
 
 .familyName {
   font-family: var(--font-serif);
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 600;
   line-height: 1.15;
 }
@@ -167,7 +180,8 @@
   font-size: 13px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted);
+  /* The paler gold: the cover's own gold is under 4.5:1 for text this small. */
+  color: var(--gold-pale);
 }
 
 .items {
@@ -178,7 +192,7 @@
 
 .admin {
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--cover-frame);
 }
 
 .adminLabel {
@@ -186,7 +200,7 @@
   font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--gold-pale);
 }
 
 .item {
@@ -195,7 +209,8 @@
   align-items: center;
   gap: 12px;
   white-space: nowrap;
-  padding: 11px 14px;
+  padding: 12px 16px;
+  font-size: 17px;
   border-radius: 8px;
   color: var(--text);
   text-decoration: none;
@@ -232,11 +247,17 @@
   position: relative;
   z-index: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* Not isolated: its sky band at z-index -1 sits under the page and the menu's shadow, and pages' fixed overlays stay
+   in the root stacking context, over the menu. */
 .content {
   --account-bar: 32px;
-  flex: 999 1 560px;
+  position: relative;
+  /* 260px of menu beside it still fits at 800px less a 15px scrollbar. */
+  flex: 999 1 520px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -366,10 +387,156 @@
   color: var(--muted);
 }
 
-/* The menu sits above the page here, where there's no room to fold it beside. */
+/* The green cover (owner's pick, 2026-11-25): the menu bound like the Members book, with a thin gold frame and a
+   gold edge on the current page. Scoped to the menu: the admin drawer's links stay on paper. */
+.menu {
+  background: linear-gradient(180deg, var(--accent), var(--cover-deep));
+  color: var(--on-cover);
+  box-shadow: 4px 0 22px var(--cover-shade);
+}
+
+.folded .menu::after {
+  inset: 6px;
+}
+
+.menu::after {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border: 1px solid var(--cover-frame);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.menu .item {
+  color: var(--on-cover);
+}
+
+.menu .item:hover,
+.menu .item:focus-visible {
+  color: var(--on-cover);
+  background-color: var(--cover-hover);
+  box-shadow: none;
+}
+
+.menu .item:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.menu .item[aria-current='page'] {
+  color: var(--on-cover-current);
+  background-color: transparent;
+}
+
+.menu .icon {
+  color: var(--on-cover-soft);
+}
+
+.menu .item[aria-current='page'] .icon {
+  color: var(--gold);
+}
+
+.menu .currentPill {
+  background: var(--cover-current);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+
+/* The sky band (owner's pick, 2026-11-25): a sage-to-peach wash with the endpaper's dots across the top of every
+   page, fading into the cream; the pages' own cards and panels sit on it. */
+.content::before,
+.content::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  height: 380px;
+  pointer-events: none;
+}
+
+.content::before {
+  background: linear-gradient(100deg, var(--sky-1) 0%, var(--sky-2) 40%, var(--sky-3) 75%, var(--sky-4) 100%);
+  -webkit-mask-image: linear-gradient(#000 50%, transparent);
+  mask-image: linear-gradient(#000 50%, transparent);
+}
+
+.content::after {
+  background-image: radial-gradient(circle at 25% 25%, color-mix(in srgb, var(--accent) 15%, transparent) 1.6px, transparent 2.2px);
+  background-size: 26px 26px;
+  -webkit-mask-image: linear-gradient(#000, transparent 80%);
+  mask-image: linear-gradient(#000, transparent 80%);
+}
+
+/* The menu sits above the page here: a bar across the top, the cover's name and pages in a row. */
 @media (max-width: 800px) {
   .fold {
     display: none;
+  }
+}
+
+/* Above phones, where the tab bar takes over. */
+@media (min-width: 601px) and (max-width: 800px) {
+  .hub,
+  .adminLabel,
+  .names {
+    display: none;
+  }
+
+  /* Its line hugs the bar, rather than sharing a short page's spare height with the page. */
+  .page {
+    align-content: flex-start;
+    --menu-bar: 68px;
+  }
+
+  /* One row of a set height, scrolling sideways if it must, so pages sized to the window can take it off. */
+  .menu {
+    flex: 1 1 100%;
+    height: var(--menu-bar);
+    padding: 0 22px;
+    box-shadow: 0 6px 20px var(--cover-shade);
+    flex-direction: row;
+    align-items: center;
+    gap: 18px;
+    overflow-x: auto;
+    /* A thin scrollbar, so a mouse can reach the admin link when the row runs past the window. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--cover-frame) transparent;
+    border-bottom: 1px solid var(--cover-frame);
+  }
+
+  /* A frame would scroll away with the row: a gold rule along its foot instead. */
+  .menu::after {
+    display: none;
+  }
+
+  .content {
+    --account-bar: calc(32px + var(--menu-bar));
+  }
+
+  .identity {
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .identity svg {
+    width: 38px;
+    height: 38px;
+  }
+
+  .items {
+    flex: none;
+    flex-direction: row;
+  }
+
+  .items .item {
+    padding: 8px 12px;
+    font-size: 16px;
+  }
+
+  .admin {
+    padding: 0 0 0 14px;
+    border-top: 0;
+    border-left: 1px solid var(--cover-frame);
   }
 }
 
@@ -381,14 +548,11 @@
     right: 0;
     bottom: 0;
     z-index: 30;
-    max-width: none;
     height: var(--tab-bar);
     box-sizing: border-box;
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
-    border-right: 0;
-    border-top: 1px solid var(--border);
-    background: color-mix(in srgb, var(--surface) 94%, transparent);
-    backdrop-filter: blur(8px);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -6px 20px var(--cover-shade);
     flex-direction: row;
     gap: 0;
   }
@@ -413,7 +577,6 @@
     gap: 3px;
     font-size: 11px;
     font-weight: 600;
-    color: var(--muted);
   }
 
   .item:hover,
@@ -422,23 +585,12 @@
     box-shadow: none;
   }
 
-  .item:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
-  }
-
-  .item[aria-current='page'],
-  .item[aria-current='page']:hover {
-    color: var(--accent);
-  }
-
   .currentPill {
     inset: 3px auto auto 50%;
     width: 52px;
     height: 30px;
     margin-left: -26px;
     border-radius: 15px;
-    background: var(--accent-tint);
   }
 
   .drawer .item {
@@ -457,6 +609,11 @@
     font-weight: 600;
   }
 
+  .drawer .item:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
   .drawer .currentPill {
     inset: 0;
     width: auto;
@@ -464,6 +621,32 @@
     margin: 0;
     border-radius: 8px;
     background: var(--nav-active);
+  }
+
+  .menu::after {
+    inset: 5px 12px auto;
+    border-width: 1px 0 0;
+    border-radius: 0;
+  }
+
+  .menu .item,
+  .menu .item:hover,
+  .menu .item:focus-visible {
+    color: var(--on-cover-soft);
+    background-color: transparent;
+  }
+
+  .menu .item[aria-current='page'] {
+    color: var(--gold-pale);
+  }
+
+  .menu .currentPill {
+    box-shadow: none;
+  }
+
+  .content::before,
+  .content::after {
+    height: 300px;
   }
 
   .phoneIdentity {

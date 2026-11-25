@@ -6,130 +6,47 @@
 }
 
 .hero {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 32px;
-  align-items: center;
-  padding: 32px 36px;
-  border-radius: 22px;
-  background: linear-gradient(135deg, var(--surface), var(--accent-tint));
-  border: 1px solid var(--border);
-}
-
-.line {
-  margin: -4px 0 0;
-  font-size: 18px;
-  color: var(--text-2);
-}
-
-.tree {
-  flex: none;
-  width: 220px;
-  height: 165px;
-  margin-left: auto;
-}
-
-.branches {
-  fill: none;
-  stroke: var(--tree-branch);
-  stroke-width: 4;
-  stroke-linecap: round;
-}
-
-.leaf {
-  fill: var(--leaf-1);
-}
-
-.lightLeaf {
-  fill: var(--leaf-3);
-}
-
-.words {
-  flex: 1 1 340px;
-  line-height: normal;
+  padding: 4px 2px 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  animation: rise 0.8s ease-out both;
-}
-
-.dayPart {
-  font-size: 14px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
+  gap: 8px;
+  line-height: normal;
+  animation: rise 0.6s ease-out both;
 }
 
 .title {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: 52px;
+  font-size: 40px;
   font-weight: 500;
-  line-height: 1.05;
+  line-height: 1.1;
 }
 
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 6px;
+.line {
+  margin: 0;
+  font-size: 17px;
+  color: var(--text-2);
 }
 
-.stats {
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.stat {
-  padding: 8px 14px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
-  font-size: 15px;
-}
-
-.statNumber {
-  margin-right: 4px;
-  font-family: var(--font-serif);
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
-}
-
-.primary,
-.secondary {
-  height: 48px;
-  padding: 0 22px;
-  display: flex;
-  align-items: center;
-  border-radius: 24px;
+.lineLink {
+  margin-left: 8px;
+  font-weight: 600;
+  color: var(--accent);
   text-decoration: none;
 }
 
-.primary,
-.primary:hover {
-  background: var(--accent);
-  color: var(--on-accent);
-  font-weight: 600;
+.lineLink:hover {
+  text-decoration: underline;
 }
 
-.secondary,
-.secondary:hover {
-  border: 1px solid var(--input-border);
-  color: var(--text);
+.hero[data-still] {
+  animation: none;
 }
 
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
+    transform: translateY(10px);
   }
 }
 
@@ -148,6 +65,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  box-shadow: var(--card-lift);
   transition:
     translate 0.2s ease,
     box-shadow 0.2s ease;
@@ -156,7 +74,7 @@
 .card:hover,
 .card:focus-within {
   translate: 0 -4px;
-  box-shadow: 0 12px 26px var(--shadow-press);
+  box-shadow: var(--card-lift-hover);
 }
 
 .first {
@@ -284,11 +202,4 @@
 .more:hover {
   color: var(--accent-hover);
   text-decoration: underline;
-}
-
-/* On a phone the drawing would only push the cards down. */
-@media (max-width: 600px) {
-  .tree {
-    display: none;
-  }
 }

@@ -1,16 +1,12 @@
 .strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.stat {
-  padding: 6px 14px;
-  border-radius: 16px;
-  background: var(--chip);
+  margin: 0;
   font-size: 15px;
+  color: var(--text-2);
 }
 
-.statFirst {
-  background: var(--accent-tint);
+.strip b {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
 }

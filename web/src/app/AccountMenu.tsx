@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
+import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
 
@@ -7,11 +7,14 @@ import { errorMessage } from '../lib/errorMessage'
 import { useMotionPaused } from '../lib/motion'
 import { useSignInBusy, useSignOut } from '../lib/useSignOut'
 import styles from './AccountMenu.module.css'
+import { MenuIcon } from '../components/MenuIcon/MenuIcon'
 
-// design-notes §2.1: your picture at the top right, opening a panel from the right (owner's pick A, 2026-11-21).
+// design-notes §2.1: your picture at the top right, opening a floating sheet on the right (owner's pick C, 2026-11-25).
 export function AccountMenu({ initials, name, waiting, linked }: { initials: string; name: string; waiting: number; linked: boolean }) {
   const [open, setOpen] = useState(false)
   const [paused] = useMotionPaused()
+  const familyId = useId()
+  const accountId = useId()
   const button = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const signOut = useSignOut()
@@ -87,30 +90,51 @@ export function AccountMenu({ initials, name, waiting, linked }: { initials: str
                 </Link>
               </span>
             </div>
-            <Link to="/requests" onClick={() => setOpen(false)} className={styles.item} aria-label={waiting > 0 ? `Requests, ${requests}` : undefined}>
-              <span>
-                Requests
-                <span className={styles.hint}>Family asking for your details</span>
-              </span>
-              {waiting > 0 && (
-                <span aria-hidden="true" className={styles.count}>
-                  {waiting}
+            <p id={familyId} className={styles.groupLabel}>
+              Family
+            </p>
+            <div role="group" aria-labelledby={familyId} className={styles.group}>
+              <Link to="/requests" onClick={() => setOpen(false)} className={styles.item} aria-label={waiting > 0 ? `Requests, ${requests}` : undefined}>
+                <MenuIcon name="inbox" className={styles.icon} />
+                <span className={styles.label}>Requests</span>
+                {waiting > 0 && (
+                  <span aria-hidden="true" className={styles.count}>
+                    {waiting}
+                  </span>
+                )}
+                <span aria-hidden="true" className={styles.chevron}>
+                  ›
                 </span>
-              )}
-            </Link>
-            {/* A login linked to nobody can't suggest anyone, as on the Account page. */}
-            {linked && (
-              <Link to="/account#suggest" onClick={() => setOpen(false)} className={styles.item}>
-                Suggest a relative
               </Link>
-            )}
-            <Link to="/account#password" onClick={() => setOpen(false)} className={styles.item}>
-              Change password
-            </Link>
-            <hr className={styles.rule} />
-            <button type="button" onClick={() => !busy && signOut.mutate()} aria-disabled={busy || undefined} className={styles.item}>
-              Sign out
-            </button>
+              {/* A login linked to nobody can't suggest anyone, as on the Account page. */}
+              {linked && (
+                <Link to="/account#suggest" onClick={() => setOpen(false)} className={styles.item}>
+                  <MenuIcon name="addPerson" className={styles.icon} />
+                  <span className={styles.label}>Suggest a relative</span>
+                  <span aria-hidden="true" className={styles.chevron}>
+                    ›
+                  </span>
+                </Link>
+              )}
+            </div>
+            <p id={accountId} className={styles.groupLabel}>
+              Account
+            </p>
+            <div role="group" aria-labelledby={accountId} className={styles.group}>
+              <Link to="/account#password" onClick={() => setOpen(false)} className={styles.item}>
+                <MenuIcon name="lock" className={styles.icon} />
+                <span className={styles.label}>Change password</span>
+                <span aria-hidden="true" className={styles.chevron}>
+                  ›
+                </span>
+              </Link>
+            </div>
+            <div className={`${styles.group} ${styles.foot}`}>
+              <button type="button" onClick={() => !busy && signOut.mutate()} aria-disabled={busy || undefined} className={`${styles.item} ${styles.signOut}`}>
+                <MenuIcon name="signOut" className={styles.icon} />
+                <span className={styles.label}>Sign out</span>
+              </button>
+            </div>
             {signOut.isError && <p role="alert">{errorMessage(signOut.error)}</p>}
           </div>
         </>,

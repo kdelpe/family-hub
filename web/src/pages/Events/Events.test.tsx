@@ -80,10 +80,8 @@ describe('Events', () => {
     expect(card.getByRole('heading', { level: 2, name: 'Jean-Robert & Nadège’s wedding' })).toBeInTheDocument()
     expect(card.getByText('November 13, 1984 · Flatbush')).toBeInTheDocument()
     expect(card.getByText('Scanned from Nadège’s album.')).toBeInTheDocument()
-    expect(within(card.getByRole('list', { name: 'Who was there' })).getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
-      ['Jean-Robert Pluviose', '/people/jr'],
-      ['Nadège Pluviose', '/people/n'],
-    ])
+    // Who was there stays with the event, but the timeline doesn't show it (owner's call, 2026-11-25).
+    expect(card.queryByRole('list', { name: 'Who was there' })).toBeNull()
   })
 
   describe('removing an event', () => {
@@ -418,7 +416,7 @@ describe('New event', () => {
     expect(screen.queryByText('Saved “Picnic”.')).toBeNull()
   })
 
-  it('saves what was typed, the date at its precision and who was there', async () => {
+  it('saves what was typed and the date at its precision', async () => {
     const sent = serve()
     renderPage([], 'admin')
     open()
@@ -429,20 +427,13 @@ describe('New event', () => {
     fireEvent.click(panel().getByRole('button', { name: 'About' }))
     type('About which year', '1962')
     type('Tell the story (optional)', 'The earliest photos we have.')
-    fireEvent.click(panel().getByRole('button', { name: '+ Add person' }))
-    type('Find a relative', 'ros')
-    fireEvent.click(panel().getByRole('button', { name: 'Rose Monestime' }))
-    fireEvent.click(panel().getByRole('button', { name: '+ Add person' }))
-    type('Find a relative', 'pluv')
-    expect(panel().getAllByRole('button', { name: /Pluviose/ }).map((b) => b.textContent)).toEqual(['Fritz Pluviose', 'Frantz Pluviose'])
-    fireEvent.click(panel().getByRole('button', { name: 'Fritz Pluviose' }))
-    fireEvent.click(panel().getByRole('button', { name: 'Remove Rose Monestime' }))
+    expect(panel().queryByText('Who was there?')).toBeNull()
     fireEvent.click(panel().getByRole('button', { name: 'Save event' }))
 
     expect(await panel().findByRole('button', { name: 'Saved' })).toBeDisabled()
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved “Rose’s kitchen”.'), { timeout: 3000 })
     expect(sent).toEqual([
-      { title: 'Rose’s kitchen', date: '1962', date_precision: 'circa', location: 'Jacmel', description: 'The earliest photos we have.', person_ids: ['fritz'] },
+      { title: 'Rose’s kitchen', date: '1962', date_precision: 'circa', location: 'Jacmel', description: 'The earliest photos we have.', person_ids: [] },
     ])
     await waitFor(() => expect(screen.queryByRole('region', { name: 'New event' })).toBeNull())
     expect(await screen.findByRole('heading', { level: 2, name: 'Rose’s kitchen' })).toBeInTheDocument()
@@ -563,55 +554,6 @@ describe('New event', () => {
     answer(Response.json(event({ id: 'new', title: 'Wedding' }), { status: 201 }))
     expect(await screen.findByText('Saved “Wedding”.', {}, { timeout: 3000 })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '+ New event' })).toBeEnabled()
-  })
-
-  it('keeps focus in the picker when a person is removed', async () => {
-    serve()
-    renderPage([], 'admin')
-    open()
-    fireEvent.click(panel().getByRole('button', { name: '+ Add person' }))
-    type('Find a relative', 'rose')
-    fireEvent.click(panel().getByRole('button', { name: 'Rose Monestime' }))
-
-    // The pick hands focus back to + Add person on the next frame; the × is focused after that, as a keyboard would.
-    await vi.waitFor(() => expect(panel().getByRole('button', { name: '+ Add person' })).toHaveFocus())
-    const remove = panel().getByRole('button', { name: 'Remove Rose Monestime' })
-    remove.focus()
-    fireEvent.click(remove)
-
-    await vi.waitFor(() => expect(panel().getByRole('button', { name: '+ Add person' })).toHaveFocus())
-  })
-
-  it('still says no one matched when a reread of the tree fails', async () => {
-    serve()
-    renderPage([], 'admin')
-    open()
-    fireEvent.click(panel().getByRole('button', { name: '+ Add person' }))
-    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
-    await act(() => lastClient.refetchQueries({ queryKey: treeKeys.all }))
-    type('Find a relative', 'zzz')
-
-    expect(panel().getByText('No one by that name.')).toBeInTheDocument()
-  })
-
-  it('says the search failed when the tree can’t be read', async () => {
-    vi.stubGlobal('fetch', vi.fn((url: string) => (url === '/api/tree' ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve(Response.json({ events: [] })))))
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: null })
-    client.setQueryData(eventKeys.all, [])
-    render(
-      <QueryClientProvider client={client}>
-        <Toaster>
-        <RouterProvider router={createMemoryRouter([{ path: '/', element: <Events /> }])} />
-      </Toaster>
-      </QueryClientProvider>,
-    )
-    open()
-    fireEvent.click(panel().getByRole('button', { name: '+ Add person' }))
-    type('Find a relative', 'rose')
-
-    expect(await panel().findByRole('alert')).toHaveTextContent('Can’t search the family tree right now.')
-    expect(panel().queryByText('No one by that name.')).toBeNull()
   })
 
   it('closes from Cancel and ×, handing focus back to + New event', async () => {

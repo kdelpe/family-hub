@@ -13,6 +13,7 @@ import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, initials, nameMatches } from '../../lib/names'
 import { relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
+import { MenuIcon } from '../../components/MenuIcon/MenuIcon'
 import styles from './Main.module.css'
 
 const maxMatches = 6
@@ -122,15 +123,18 @@ export function Main() {
       <title>Family tree — Pluviose Family Hub</title>
       <h1 className="visually-hidden">Family tree</h1>
       <div className={styles.top}>
-        <div className={styles.stats}>{summary.data && <FamilyStrip summary={summary.data} />}</div>
-        <div className={styles.controls}>
-          <Search persons={tree.data?.persons ?? []} relations={relations} onPick={centerOn} />
-          {viewerId && people.has(viewerId) && (
-            <button type="button" className={`pill ${styles.home}`} onClick={() => centerOn(viewerId)}>
-              Back to me
-            </button>
-          )}
-        </div>
+        <Search persons={tree.data?.persons ?? []} relations={relations} onPick={centerOn} />
+        {viewerId && people.has(viewerId) && (
+          <button type="button" className={`pill ${styles.home}`} onClick={() => centerOn(viewerId)}>
+            <MenuIcon name="crosshair" className={styles.toolIcon} />
+            Back to me
+          </button>
+        )}
+        {summary.data && (
+          <div className={styles.stats}>
+            <FamilyStrip summary={summary.data} />
+          </div>
+        )}
       </div>
 
       <p aria-live="polite" className="visually-hidden">
@@ -191,6 +195,7 @@ function Search({
       <label htmlFor="tree-search" className="visually-hidden">
         Find a relative
       </label>
+      <MenuIcon name="search" className={`${styles.toolIcon} ${styles.searchIcon}`} />
       <input
         id="tree-search"
         type="search"
@@ -924,6 +929,14 @@ function FocusTree({
     }
   }, [])
 
+  // Back to the middle at 100% (design-notes §4.2).
+  const resetView = () => {
+    stopFling()
+    glideBack(1)
+    setMoved(null)
+    onZoom(() => 1)
+  }
+
   return (
     <div className={styles.frame}>
       {/* Not while the tree rests moved up to show the focus card: a parent's card can then run under it. */}
@@ -1057,26 +1070,16 @@ function FocusTree({
         <button type="button" aria-label="Zoom out" className={styles.zoomButton} disabled={zoom <= minZoom} onClick={() => zoomBy(-0.1)}>
           −
         </button>
-        <button type="button" aria-label={`Reset zoom, now ${Math.round(zoom * 100)}%`} className={styles.zoomLevel} onClick={() => {
-            stopFling()
-            glideBack(1)
-            setMoved(null)
-            onZoom(() => 1)
-          }}>
-          {Math.round(zoom * 100)}%
-        </button>
+        <span className={styles.zoomLevel}>{Math.round(zoom * 100)}%</span>
         <button type="button" aria-label="Zoom in" className={styles.zoomButton} disabled={zoom >= maxZoom} onClick={() => zoomBy(0.1)}>
           +
         </button>
         <button
           type="button"
           className={styles.recenter}
-          disabled={!moved}
-          onClick={() => {
-            stopFling()
-            glideBack(zoom)
-            setMoved(null)
-          }}
+          // As shown: a pinch can leave the zoom a hair off 100%.
+          disabled={!moved && Math.round(zoom * 100) === 100}
+          onClick={resetView}
         >
           Recenter
         </button>

@@ -46,13 +46,11 @@ button.picture[aria-expanded='true'] {
 }
 
 .panel {
-  gap: 2px;
+  gap: 14px;
 }
 
 .who {
-  margin-bottom: 8px;
-  padding: 6px 8px 16px;
-  border-bottom: 1px solid var(--border);
+  padding: 4px 4px 2px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -71,11 +69,35 @@ button.picture[aria-expanded='true'] {
   color: var(--accent);
 }
 
+.groupLabel {
+  margin: 6px 8px -4px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  /* --muted is too faint at 11px on the see-through sheet. */
+  color: var(--text-2);
+}
+
+/* Rows grouped on a card, a hairline between them, inset from the rows' rounded corners. */
+.group {
+  padding: 6px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.foot {
+  margin-top: auto;
+}
+
 .item {
   min-height: 44px;
-  padding: 8px 10px;
+  padding: 10px 10px;
+  position: relative;
   border: 0;
-  border-radius: 10px;
+  border-radius: 12px;
   background: none;
   font: inherit;
   color: var(--text);
@@ -83,37 +105,56 @@ button.picture[aria-expanded='true'] {
   text-decoration: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
   cursor: pointer;
+}
+
+.item + .item::before {
+  content: '';
+  position: absolute;
+  inset: -1px 12px auto;
+  border-top: 1px solid var(--border);
 }
 
 .item:hover,
 .item:focus-visible {
-  background: var(--surface-soft);
+  background: var(--brand-panel);
 }
 
-.hint {
-  display: block;
-  font-size: 13px;
+.icon {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  color: var(--text-2);
+}
+
+.label {
+  flex: 1;
+}
+
+.chevron {
   color: var(--muted);
+}
+
+.signOut,
+.signOut .icon {
+  color: var(--notice);
+}
+
+/* A paler wash than the other rows', keeping the red text over 4.5:1. */
+.signOut:hover,
+.signOut:focus-visible {
+  background: var(--surface-soft);
 }
 
 .count {
   min-width: 22px;
   padding: 0 7px;
   border-radius: 11px;
-  background: var(--accent);
+  background: var(--notice);
   color: var(--on-accent);
   font-size: 12px;
   font-weight: 700;
-  line-height: 20px;
+  line-height: 22px;
   text-align: center;
-}
-
-.rule {
-  width: 100%;
-  margin: 8px 0;
-  border: 0;
-  border-top: 1px solid var(--border);
 }

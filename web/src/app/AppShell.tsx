@@ -17,7 +17,7 @@ import { useMenuAbove, useNarrow } from '../lib/useNarrow'
 import { useSignedIn } from '../lib/useSignedIn'
 import { AccountMenu } from './AccountMenu'
 import styles from './AppShell.module.css'
-import { MenuIcon } from './MenuIcon'
+import { MenuIcon } from '../components/MenuIcon/MenuIcon'
 import { adminPages, type MenuPage, menuPages } from './signedInPages'
 
 // One highlight that glides to the page opened. On a phone, short is the tab's label.
@@ -97,7 +97,7 @@ function AdminDrawer() {
           data-still={paused || undefined}
           className={`${sheet.panel} ${styles.drawer}`}
         >
-          {/* At 320px the sheet fills the screen, leaving no scrim to tap. */}
+          {/* On a phone the scrim beside the sheet is a thin strip, too small to tap reliably. */}
           <div className={styles.drawerHead}>
             <Dialog.Title className={styles.drawerTitle}>Admin</Dialog.Title>
             <Dialog.Close aria-label="Close" className={styles.drawerClose}>
@@ -169,7 +169,7 @@ export function AppShell() {
             <span aria-hidden="true">‹</span>
           </button>
           <Link to="/" aria-label="Pluviose Family Hub, home" className={styles.identity}>
-            <Logo size={52} />
+            <Logo size={92} onCover />
             <span className={styles.names}>
               <span className={styles.familyName}>Pluviose</span>
               <span className={styles.hub}>Family Hub</span>

@@ -1,14 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { MotionGlobalConfig } from 'motion/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { authKeys } from '../../api/auth'
 import { type Home, homeKeys } from '../../api/home'
 import { personKeys } from '../../api/persons'
 import { treeKeys } from '../../api/tree'
+import { useMotionPaused } from '../../lib/motion'
 import { HomeHearth } from './HomeHearth'
 
 const fridayEvening = new Date('2026-11-20T18:30')
@@ -30,7 +30,7 @@ const tree = {
   ],
 }
 
-function renderHome(personId: string | null, home: Omit<Home, 'counts'> & Partial<Home> = nothing, Page = HomeHearth) {
+function renderHome(personId: string | null, home: Omit<Home, 'counts'> & Partial<Home> = nothing) {
   const client = new QueryClient()
   client.setQueryData(authKeys.me, { id: 'u1', email: 'maya.pluviose@example.com', role: 'admin', person_id: personId })
   client.setQueryData(personKeys.one('p1'), { id: 'p1', first_name: 'Maya', last_name: 'Pluviose' })
@@ -38,54 +38,16 @@ function renderHome(personId: string | null, home: Omit<Home, 'counts'> & Partia
   client.setQueryData(treeKeys.all, tree)
   render(
     <QueryClientProvider client={client}>
-      <RouterProvider router={createMemoryRouter([{ path: '/', element: <Page now={fridayEvening} /> }])} />
+      <RouterProvider router={createMemoryRouter([{ path: '/', element: <HomeHearth now={fridayEvening} /> }])} />
     </QueryClientProvider>,
   )
-  return client
 }
-
-// Home counts up once per visit, remembered in its module: a fresh copy is a first visit. Animations on.
-async function renderFirstVisit() {
-  vi.resetModules()
-  const { HomeHearth: Fresh } = await import('./HomeHearth')
-  MotionGlobalConfig.skipAnimations = false
-  const client = renderHome('p1', nothing, Fresh)
-  const people = () => within(screen.getByRole('list', { name: 'The family in numbers' })).getAllByRole('listitem')[0]!.querySelector('b')!
-  return { client, people }
-}
-
-// Reduced motion, switched on and off as the test goes.
-function stubReduced() {
-  let reduced = false
-  const listeners = new Set<() => void>()
-  vi.stubGlobal('matchMedia', (query: string) => ({
-    get matches() {
-      return query.includes('reduce') && reduced
-    },
-    media: query,
-    addEventListener: (_: string, l: () => void) => listeners.add(l),
-    removeEventListener: (_: string, l: () => void) => listeners.delete(l),
-  }))
-  return (on: boolean) =>
-    act(() => {
-      reduced = on
-      listeners.forEach((l) => l())
-    })
-}
-
-afterEach(() => {
-  MotionGlobalConfig.skipAnimations = true
-  vi.unstubAllGlobals()
-})
 
 describe('HomeHearth', () => {
   it('greets the viewer by name for the time of day', () => {
     renderHome('p1')
 
-    expect(screen.getByText('Friday evening')).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1, name: 'Good evening, Maya' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Open the family tree' })).toHaveAttribute('href', '/tree')
-    expect(screen.getByRole('link', { name: 'See new photos' })).toHaveAttribute('href', '/events')
   })
 
   it('greets a login linked to nobody without a name', () => {
@@ -140,7 +102,13 @@ describe('HomeHearth', () => {
       ],
     })
 
-    expect(within(screen.getByRole('region', { name: 'Welcome' })).getByText(line)).toBeInTheDocument()
+    const hero = within(screen.getByRole('region', { name: 'Welcome' }))
+    expect(hero.getByText(line)).toBeInTheDocument()
+    if (id === 'p1') {
+      expect(hero.queryByRole('link')).toBeNull()
+    } else {
+      expect(hero.getByRole('link', { name: 'See profile, Mackenson' })).toHaveAttribute('href', '/people/mack')
+    }
   })
 
   it('says nothing about birthdays in the hero when none is coming up', () => {
@@ -185,45 +153,6 @@ describe('HomeHearth', () => {
     expect(inTree).toHaveAttribute('href', '/tree?person=naomie')
   })
 
-  it('shows the family in numbers', () => {
-    renderHome('p1')
-
-    const stats = within(screen.getByRole('list', { name: 'The family in numbers' }))
-    const [people, generations, added] = stats.getAllByRole('listitem')
-    expect(people).toHaveTextContent(/26 people$/)
-    expect(generations).toHaveTextContent(/6 generations$/)
-    expect(added).toHaveTextContent(/1 new this month$/)
-  })
-
-  it('counts up once: a total that changes after the count just shows', async () => {
-    const { client, people } = await renderFirstVisit()
-    expect(people()).toHaveTextContent('0')
-    // The count takes 1.2s.
-    await act(() => new Promise((r) => setTimeout(r, 1500)))
-    expect(people()).toHaveTextContent('26')
-
-    // The query tells the page on a timer of its own.
-    await act(async () => {
-      client.setQueryData(homeKeys.all, { counts: { ...counts, people: 27 }, ...nothing })
-      await new Promise((r) => setTimeout(r, 0))
-    })
-
-    expect(people()).toHaveTextContent('27')
-  })
-
-  it('stops counting for good once reduced motion comes on, even switched off again', async () => {
-    const setReduced = stubReduced()
-    const { people } = await renderFirstVisit()
-    expect(people()).toHaveTextContent('0')
-
-    setReduced(true)
-    expect(people()).toHaveTextContent('26')
-    setReduced(false)
-    await act(() => new Promise((r) => setTimeout(r, 300)))
-
-    expect(people()).toHaveTextContent('26')
-  })
-
   it('doesn’t open a name’s card on keyboard focus', async () => {
     renderHome('p1', {
       birthdays: [],
@@ -236,5 +165,26 @@ describe('HomeHearth', () => {
 
     expect(name).toHaveFocus()
     expect(screen.queryByRole('link', { name: 'In the tree' })).toBeNull()
+  })
+
+  it('keeps the greeting still once Pause motion is switched back off, rather than replaying its rise', () => {
+    let setPaused: (paused: boolean) => void = () => {}
+    function Pause() {
+      setPaused = useMotionPaused()[1]
+      return null
+    }
+    render(<Pause />)
+    act(() => setPaused(true))
+    try {
+      renderHome('p1')
+      const hero = screen.getByRole('region', { name: 'Welcome' })
+      expect(hero).toHaveAttribute('data-still')
+
+      act(() => setPaused(false))
+
+      expect(hero).toHaveAttribute('data-still')
+    } finally {
+      act(() => setPaused(false))
+    }
   })
 })

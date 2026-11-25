@@ -16,3 +16,20 @@
 .leaf {
   fill: var(--logo-leaf);
 }
+
+.onCover .ground {
+  fill: var(--cover-hover);
+  stroke: var(--gold);
+}
+
+.onCover .stem {
+  stroke: var(--gold);
+}
+
+.onCover .top {
+  fill: var(--on-cover-soft);
+}
+
+.onCover .leaf {
+  fill: var(--logo-cover-leaf);
+}

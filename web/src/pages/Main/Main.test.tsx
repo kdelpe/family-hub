@@ -125,6 +125,8 @@ const personOf = (name: string) => cardOf(name).closest<HTMLElement>('[data-pers
 // The lines drawn green: the chain between the open quick look and the focus person.
 const chain = () => [...document.querySelectorAll('[data-chain]')].map((p) => p.getAttribute('data-chain')).sort()
 
+const zoomLevel = () => within(screen.getByRole('group', { name: 'Zoom' })).getByText(/^\d+%$/)
+
 describe('Main', () => {
   it('centers on the viewer with their family around them', () => {
     renderTree('fritz')
@@ -136,7 +138,7 @@ describe('Main', () => {
     expect(cardOf('Sabine')).toHaveTextContent('Half-sister')
     expect(cardOf('Tim')).toHaveTextContent('Son · adopted')
     expect(cardOf('Odette')).toHaveTextContent('Former wife')
-    expect(screen.getByText((_, el) => el?.textContent === '4 generations')).toBeInTheDocument()
+    expect(screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === '10 people · 4 generations')).toBeInTheDocument()
   })
 
   it('centers on a relative on a click', () => {
@@ -196,7 +198,7 @@ describe('Main', () => {
       }
     }
 
-    expect(screen.getByRole('button', { name: `Reset zoom, now ${level}` })).toBeInTheDocument()
+    expect(zoomLevel()).toHaveTextContent(level)
     expect(stage().style.transform).toMatch(new RegExp(`${scale.replace(/[().]/g, '\\$&')}$`))
     fireEvent.click(cardOf('Jean-Robert'))
     expect(stage().style.transform).toMatch(new RegExp(`${scale.replace(/[().]/g, '\\$&')}$`))
@@ -256,7 +258,7 @@ describe('Main', () => {
     }
   })
 
-  it('recenters a tree that was moved, keeping its zoom', () => {
+  it('recenters a tree that was moved or zoomed, back to 100%', () => {
     renderTree('fritz')
     const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
     const mouse = { pointerId: 1, pointerType: 'mouse', button: 0 }
@@ -269,7 +271,10 @@ describe('Main', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
 
     expect(screen.getByRole('button', { name: 'Recenter' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Reset zoom, now 110%' })).toBeInTheDocument()
+    expect(zoomLevel()).toHaveTextContent('100%')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
+    expect(screen.getByRole('button', { name: 'Recenter' })).toBeEnabled()
   })
 
   it('brings a moved tree back to the middle on Back to me when it’s already centered on you, keeping the zoom', () => {
@@ -284,11 +289,13 @@ describe('Main', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to me' }))
 
+    expect(zoomLevel()).toHaveTextContent('110%')
+    // Back at 100%, nothing is left for Recenter: the move was undone.
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
     expect(screen.getByRole('button', { name: 'Recenter' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Reset zoom, now 110%' })).toBeInTheDocument()
   })
 
-  it('centers a tree that was moved when the zoom is reset', () => {
+  it('puts a moved tree back in the middle on Recenter', () => {
     renderTree('fritz')
     const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
     const mouse = { pointerId: 1, pointerType: 'mouse', button: 0 }
@@ -296,7 +303,7 @@ describe('Main', () => {
     fireEvent.pointerMove(panel, { ...mouse, clientX: 140, clientY: 130 })
     fireEvent.pointerUp(panel, mouse)
 
-    fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
 
     expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe('')
   })
@@ -429,7 +436,7 @@ describe('Main', () => {
       panel.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, ...finger(2, 210) }))
     })
 
-    expect(screen.getByRole('button', { name: 'Reset zoom, now 120%' })).toBeInTheDocument()
+    expect(zoomLevel()).toHaveTextContent('120%')
   })
 
   it('zooms with Ctrl and the wheel, which is also a trackpad pinch, and resets', () => {
@@ -437,13 +444,13 @@ describe('Main', () => {
     const panel = screen.getByRole('region', { name: 'Family tree centered on you' })
 
     fireEvent.wheel(panel, { ctrlKey: true, deltaY: -200 })
-    expect(screen.getByRole('button', { name: /^Reset zoom, now 150%$/ })).toBeInTheDocument()
+    expect(zoomLevel()).toHaveTextContent('150%')
     fireEvent.wheel(panel, { deltaY: -200 })
-    expect(screen.getByRole('button', { name: /^Reset zoom, now 150%$/ })).toBeInTheDocument()
+    expect(zoomLevel()).toHaveTextContent('150%')
 
-    fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
 
-    expect(screen.getByRole('button', { name: 'Reset zoom, now 100%' })).toBeInTheDocument()
+    expect(zoomLevel()).toHaveTextContent('100%')
     expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe('')
   })
 
@@ -459,8 +466,8 @@ describe('Main', () => {
     const handled = !fireEvent.keyDown(cardOf('Maya'), { key, ctrlKey })
 
     expect(handled).toBe(moved || zoom !== '100%')
-    expect(screen.getByRole('button', { name: 'Recenter' })).toHaveProperty('disabled', !moved)
-    expect(screen.getByRole('button', { name: `Reset zoom, now ${zoom}` })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Recenter' })).toHaveProperty('disabled', !moved && zoom === '100%')
+    expect(zoomLevel()).toHaveTextContent(zoom)
   })
 
   it('glides the tree back on Recenter, and a move by hand takes over at once', () => {
@@ -480,14 +487,14 @@ describe('Main', () => {
       expect(stage()).not.toHaveClass(/glide/)
 
       // Already centered at 100%, a reset has nothing to glide.
-      fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
       expect(stage()).not.toHaveClass(/glide/)
 
       fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
-      fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
       expect(stage()).toHaveClass(/glide/)
       // A second reset mid-glide lets it carry on rather than jump to the end.
-      fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
       expect(stage()).toHaveClass(/glide/)
       fireEvent.wheel(panel, { deltaY: 50 })
       expect(stage()).not.toHaveClass(/glide/)
@@ -610,7 +617,7 @@ describe('Main', () => {
     expect(fireEvent.wheel(panel, { deltaX: 10, deltaY: 50 })).toBe(false)
 
     expect(screen.getByRole('button', { name: 'Recenter' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Reset zoom, now 100%' })).toBeInTheDocument()
+    expect(zoomLevel()).toHaveTextContent('100%')
   })
 
   // A window too short or narrow for the page to fit scrolls the page, and up and down are left to it. Told by the same
@@ -664,7 +671,7 @@ describe('Main', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
     fireEvent.wheel(panel, { deltaY: 100 })
-    fireEvent.click(screen.getByRole('button', { name: /^Reset zoom/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Recenter' }))
     // Part way back: jsdom has no transitions, so the stage reports what a browser would show then.
     vi.stubGlobal(
       'DOMMatrixReadOnly',
@@ -677,7 +684,7 @@ describe('Main', () => {
 
     fireEvent.wheel(panel, { deltaY: 0 })
 
-    expect(screen.getByRole('button', { name: 'Reset zoom, now 110%' })).toBeInTheDocument()
+    expect(zoomLevel()).toHaveTextContent('110%')
     expect(document.querySelector<HTMLElement>('[data-stage]')!.style.transform).toBe('translate(-30px, -80px) scale(1.1)')
   })
 
