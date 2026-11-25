@@ -12,7 +12,6 @@ import { bornOn, year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
 import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName } from '../../lib/names'
-import { useNarrow } from '../../lib/useNarrow'
 import { useSignedIn } from '../../lib/useSignedIn'
 import { PersonHoverCard } from '../../components/PersonHoverCard/PersonHoverCard'
 import styles from './Events.module.css'
@@ -22,10 +21,20 @@ import { undated, YearHandle } from './YearHandle'
 
 const yearOf = (event: FamilyEvent) => event.date?.match(/^\d{4}/)?.[0] ?? undated
 const anchorId = (year: string) => `events-year-${year}`
-// Matches the handle's sticky top in Events.module.css.
-const handleTop = () => window.innerHeight * 0.42
-// About the grip's middle, down the handle: past the 44px ▲ button, halfway down the 44px grip.
-const handleMiddle = 64
+// The handle's middle, down the album page: matches .handleColumn in Events.module.css.
+const handleAt = 0.42
+// From an entry's top to its dot, which a pick brings to the handle.
+const dotDown = 30
+const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+// The handle shows the month of the event it's on; with no month known, its year, or — when undated.
+const handleLabel = (event: FamilyEvent | undefined) => {
+  const month = event && event.date_precision !== 'circa' ? event.date?.match(/^\d{4}-(\d{2})/)?.[1] : undefined
+  if (month) {
+    return months[Number(month) - 1]!
+  }
+  const y = event ? yearOf(event) : undated
+  return y === undated ? '—' : `’${y.slice(2)}`
+}
 
 // Events (design-notes §4.5): the timeline. Media, + Upload and each card's photos wait for Phase 5.
 export function Events() {
@@ -95,31 +104,40 @@ export function Events() {
 
   const list = useMemo(() => (events.data ?? []).filter((e) => !hidden.has(e.id)), [events.data, hidden])
   const years = useMemo(() => [...new Set(list.map(yearOf))], [list])
-  const [picked, setPicked] = useState<string | null>(null)
-  const current = picked && years.includes(picked) ? picked : (years[0] ?? undated)
+  const [onEvent, setOnEvent] = useState<string | null>(null)
+  const shown = list.find((e) => e.id === onEvent) ?? list[0]
+  const current = shown ? yearOf(shown) : undated
   const reduced = useReducedMotion()
   const [motionPaused] = useMotionPaused()
-  const narrow = useNarrow()
-  // A picked year holds until the reader scrolls or presses something themselves: the glide's own scroll events
-  // don't move it back, and nor does a page too short to bring a last year up to the handle.
+  const album = useRef<HTMLDivElement>(null)
+  const scroller = useRef<HTMLDivElement>(null)
+  // A picked year holds until the reader scrolls or presses something themselves, so the glide's own scroll events
+  // don't move it back.
   const held = useRef(false)
   useEffect(() => {
-    if (years.length < 2) {
+    const box = scroller.current
+    if (years.length < 2 || !box) {
       return
     }
     const follow = () => {
       if (held.current) {
         return
       }
-      const line = handleTop() + handleMiddle
-      let at = years[0]!
-      for (const y of years) {
-        const el = document.getElementById(anchorId(y))
-        if (el && el.getBoundingClientRect().top <= line) {
-          at = y
+      const entries = [...box.querySelectorAll<HTMLElement>('[data-event]')]
+      // The very top is the newest and the very bottom the oldest, so every year can be reached however few there are.
+      let at = entries[0]
+      if (box.scrollTop > 1 && box.scrollTop + box.clientHeight >= box.scrollHeight - 1) {
+        at = entries.at(-1)
+      } else if (box.scrollTop > 1) {
+        const r = album.current!.getBoundingClientRect()
+        const line = r.top + r.height * handleAt
+        for (const el of entries) {
+          if (el.getBoundingClientRect().top + dotDown <= line + 1) {
+            at = el
+          }
         }
       }
-      setPicked(at)
+      setOnEvent(at?.dataset.event ?? null)
     }
     // Capture, so a press on the handle releases first and its own pick then holds again.
     const release = () => {
@@ -128,14 +146,14 @@ export function Events() {
     const first = requestAnimationFrame(follow)
     const passive = { passive: true }
     const capture = { capture: true, passive: true }
-    window.addEventListener('scroll', follow, passive)
+    box.addEventListener('scroll', follow, passive)
     window.addEventListener('wheel', release, passive)
     window.addEventListener('touchstart', release, passive)
     window.addEventListener('pointerdown', release, capture)
     window.addEventListener('keydown', release, capture)
     return () => {
       cancelAnimationFrame(first)
-      window.removeEventListener('scroll', follow)
+      box.removeEventListener('scroll', follow)
       window.removeEventListener('wheel', release)
       window.removeEventListener('touchstart', release)
       window.removeEventListener('pointerdown', release, capture)
@@ -144,15 +162,17 @@ export function Events() {
   }, [years])
   const pick = (year: string, glide: boolean) => {
     const el = document.getElementById(anchorId(year))
-    if (!el) {
+    const box = scroller.current
+    if (!el || !box || !album.current) {
       return
     }
-    const smooth = glide && !reduced
-    setPicked(year)
+    setOnEvent(el.dataset.event ?? null)
     held.current = true
-    // On phones the year sits above its card, so it stops above the handle.
-    const offset = handleTop() - (narrow ? 40 : 6)
-    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - offset, behavior: smooth ? 'smooth' : 'auto' })
+    const i = years.indexOf(year)
+    const line = album.current.clientHeight * handleAt - (box.getBoundingClientRect().top - album.current.getBoundingClientRect().top)
+    const top =
+      i === 0 ? 0 : i === years.length - 1 ? box.scrollHeight : el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - line + dotDown
+    box.scrollTo?.({ top, behavior: glide && !reduced ? 'smooth' : 'auto' })
   }
 
   return (
@@ -209,8 +229,10 @@ export function Events() {
       ) : list.length === 0 ? (
         <p className={styles.muted}>No events yet.</p>
       ) : (
-        <div className={styles.timelineWrap}>
-          <ol className={styles.timeline}>
+        <div ref={album} className={styles.album}>
+          {/* Focusable, so the timeline scrolls from the keyboard too. */}
+          <div ref={scroller} role="region" aria-label="Timeline" tabIndex={0} className={styles.scroller}>
+            <ol className={styles.timeline}>
             <AnimatePresence initial={false}>
               {list.map((event, i) => {
                 const y = yearOf(event)
@@ -220,6 +242,7 @@ export function Events() {
                     key={event.id}
                     event={event}
                     anchor={first ? anchorId(y) : undefined}
+                    side={i % 2 === 0 ? 'left' : 'right'}
                     lit={years.length > 1 && y === current}
                     viewerId={user?.person_id ?? null}
                     onRemove={
@@ -235,8 +258,11 @@ export function Events() {
                 )
               })}
             </AnimatePresence>
-          </ol>
-          {years.length > 1 && <YearHandle years={years} current={current} still={reduced} onPick={pick} />}
+            </ol>
+          </div>
+          {years.length > 1 && (
+            <YearHandle years={years} current={current} label={handleLabel(shown)} labelKey={shown?.id ?? ''} still={reduced} onPick={pick} />
+          )}
         </div>
       )}
       <ConfirmDialog
@@ -261,12 +287,14 @@ export function Events() {
 function TimelineEntry({
   event,
   anchor,
+  side,
   lit,
   viewerId,
   onRemove,
 }: {
   event: FamilyEvent
   anchor?: string
+  side: 'left' | 'right'
   lit: boolean
   viewerId: string | null
   onRemove?: () => void
@@ -275,17 +303,19 @@ function TimelineEntry({
   return (
     <m.li
       id={anchor}
+      data-event={event.id}
       layout="position"
       initial={{ opacity: 0, y: -14 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: 40, transition: { duration: 0.2 } }}
       transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-      className={styles.entry}
+      className={`${styles.entry} ${side === 'left' ? styles.entryLeft : styles.entryRight}`}
     >
       <span className={lit ? `${styles.year} ${styles.yearLit}` : styles.year}>{year(event.date, event.date_precision)}</span>
       <span aria-hidden="true" className={styles.line}>
         <span className={styles.dot} />
       </span>
+      <span aria-hidden="true" className={styles.tick} />
       <article className={styles.card}>
         <div className={styles.cardHead}>
           <h2 className={styles.cardTitle}>{event.title}</h2>
