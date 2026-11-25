@@ -191,7 +191,8 @@
   overflow: hidden;
   border-radius: 22px;
   border: 1px solid var(--border);
-  background: var(--surface-soft);
+  /* The Members book's endpaper green, as on its first page (owner's call, 2026-11-25). */
+  background: var(--endpaper);
   cursor: grab;
   flex: 1;
   min-height: 0;
@@ -251,7 +252,7 @@
   z-index: 2;
   height: 48px;
   border-radius: 0 0 22px 22px;
-  background: linear-gradient(to bottom, transparent, var(--surface-soft));
+  background: linear-gradient(to bottom, transparent, var(--endpaper));
   pointer-events: none;
 }
 
@@ -358,7 +359,7 @@
   position: relative;
   padding: 2px 10px;
   border-radius: 999px;
-  background: var(--surface-soft);
+  background: var(--endpaper);
   font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
