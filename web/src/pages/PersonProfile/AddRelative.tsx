@@ -1,12 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import * as Dialog from '@radix-ui/react-dialog'
+import { m, useDragControls } from 'motion/react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ApiError } from '../../api/client'
 import { type AddedRelative, addRelative, type NewRelative, type ParentKind, type Relation } from '../../api/relatives'
 import { type Tree, treeKeys, type TreePerson } from '../../api/tree'
 import { errorMessage } from '../../lib/errorMessage'
 import type { FamilyLinks } from '../../lib/familyLinks'
+import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, initials, nameMatches } from '../../lib/names'
 import { gendered } from '../../lib/relation'
 import styles from './AddRelative.module.css'
@@ -92,7 +94,6 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
   const [married, setMarried] = useState(true)
   const [ended, setEnded] = useState(false)
   const [shared, setShared] = useState<string | null>(null)
-  const sheet = useRef<HTMLDivElement>(null)
   const question = useRef<HTMLHeadingElement>(null)
   const search = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
@@ -139,18 +140,6 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
       onAdded(added, body.person !== undefined, word)
     },
   })
-
-  // The page behind stays put and out of reach while the sheet is open.
-  useEffect(() => {
-    const root = document.getElementById('root')
-    const overflow = document.body.style.overflow
-    root?.setAttribute('inert', '')
-    document.body.style.overflow = 'hidden'
-    return () => {
-      root?.removeAttribute('inert')
-      document.body.style.overflow = overflow
-    }
-  }, [])
 
   useEffect(() => {
     if (step === 'who') {
@@ -209,36 +198,28 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
     save.mutate(body)
   }
 
-  // Not while saving: the answer, a refusal included, needs the sheet to show on.
-  const dismiss = () => {
-    if (!save.isPending) {
+  // It slides away before it closes. Not while saving: the answer, a refusal included, needs the sheet to show on.
+  const [leaving, setLeaving] = useState(false)
+  const closed = useRef(false)
+  const fallback = useRef<ReturnType<typeof setTimeout>>(undefined)
+  // Unmounted another way (a relation change mounts a new sheet), the old fallback mustn't close the new one.
+  useEffect(() => () => clearTimeout(fallback.current), [])
+  const finish = () => {
+    if (!closed.current) {
+      closed.current = true
       onClose()
     }
   }
-  // Escape in a filled search box clears it, as the browser's own clear would; otherwise it closes. Tab wraps
-  // around inside the sheet: the page behind is inert, but Tab could still leave for the browser's own controls.
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Tab' && sheet.current) {
-      const focusable = [...sheet.current.querySelectorAll<HTMLElement>('button:not(:disabled):not([hidden]), input')]
-      const edge = e.shiftKey ? focusable[0] : focusable[focusable.length - 1]
-      if (document.activeElement === edge || (e.shiftKey && document.activeElement === question.current)) {
-        e.preventDefault()
-        const wrapTo = e.shiftKey ? focusable[focusable.length - 1] : focusable[0]
-        wrapTo?.focus()
-      }
-      return
-    }
-    if (e.key !== 'Escape') {
-      return
-    }
-    e.preventDefault()
-    if (e.target === search.current && query) {
-      setQuery('')
-    } else {
-      dismiss()
+  const dismiss = () => {
+    if (!save.isPending && !leaving) {
+      setLeaving(true)
+      // Motion's features load after the page, so the slide may never run; it closes regardless.
+      fallback.current = setTimeout(finish, 500)
     }
   }
-
+  const drag = useDragControls()
+  const [motionPaused] = useMotionPaused()
+  const still = useReducedMotion() || motionPaused
   const firstOf = (id: string) => (opened.people.get(id) ?? byId.get(id))?.first_name ?? ''
   const avatar = (p: Named | undefined) =>
     p && (
@@ -409,37 +390,78 @@ export function AddRelative({ tree, byId, links, person, relation, onRelation, o
     )
   }
 
-  return createPortal(
-    <div
-      className={styles.scrim}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) {
-          dismiss()
-        }
-      }}
-    >
-      <div ref={sheet} className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="add-relative-question" onKeyDown={onKeyDown}>
-        <div className={styles.bar}>
-          <button type="button" className={styles.nav} onClick={() => go(-1)} hidden={at === 0} disabled={save.isPending}>
-            ← Back
-          </button>
-          <span className={styles.dots} role="img" aria-label={`Step ${at + 1} of ${steps.length}`}>
-            {steps.map((s, i) => (
-              <span key={s} className={i <= at ? `${styles.dot} ${styles.dotOn}` : styles.dot} />
-            ))}
-          </span>
-          <button type="button" className={`${styles.nav} ${styles.cancel}`} onClick={dismiss}>
-            Cancel
-          </button>
-        </div>
-        <div key={step} className={styles.screen}>
-          <h2 id="add-relative-question" ref={question} tabIndex={-1} className={styles.question}>
-            {heading}
-          </h2>
-          {screen}
-        </div>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <Dialog.Root open onOpenChange={(open) => !open && dismiss()}>
+      <Dialog.Portal>
+        <Dialog.Overlay asChild>
+          {/* Like the sheet, it fades in with CSS, so the page behind is dimmed even if Motion never loads. */}
+          <m.div className={still ? styles.scrim : `${styles.scrim} ${styles.fadeIn}`} initial={false} animate={{ opacity: leaving ? 0 : 1 }} />
+        </Dialog.Overlay>
+        <Dialog.Content
+          asChild
+          aria-describedby={undefined}
+          // Radix's portal mounts after the step effect ran, so the first screen's focus is set here.
+          onOpenAutoFocus={(e) => {
+            e.preventDefault()
+            const start = step === 'who' ? (search.current ?? question.current) : question.current
+            start?.focus()
+          }}
+          // The profile puts focus back on the Add card itself.
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          // Escape in a filled search box clears it, as the browser's own clear would; otherwise it closes.
+          onEscapeKeyDown={(e) => {
+            if (e.target === search.current && query) {
+              e.preventDefault()
+              setQuery('')
+            }
+          }}
+        >
+          <m.div
+            // The rise is CSS, so the sheet is on screen even if Motion's features never load.
+            className={still ? styles.sheet : `${styles.sheet} ${styles.rise}`}
+            // Sliding away, its controls can't start anything, like a save no one would see the answer to.
+            inert={leaving}
+            aria-labelledby="add-relative-question"
+            initial={false}
+            animate={{ y: leaving ? '100%' : 0 }}
+            transition={{ type: 'spring', stiffness: 340, damping: 34 }}
+            onAnimationComplete={() => leaving && finish()}
+            drag="y"
+            dragListener={false}
+            dragControls={drag}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 110 || info.velocity.y > 600) {
+                dismiss()
+              }
+            }}
+          >
+            <div aria-hidden="true" className={styles.grab} onPointerDown={(e) => drag.start(e)} />
+            <div className={styles.bar}>
+              <button type="button" className={styles.nav} onClick={() => go(-1)} hidden={at === 0} disabled={save.isPending}>
+                ← Back
+              </button>
+              <span className={styles.dots} role="img" aria-label={`Step ${at + 1} of ${steps.length}`}>
+                {steps.map((s, i) => (
+                  <span key={s} className={i <= at ? `${styles.dot} ${styles.dotOn}` : styles.dot} />
+                ))}
+              </span>
+              <button type="button" className={`${styles.nav} ${styles.cancel}`} onClick={dismiss}>
+                Cancel
+              </button>
+            </div>
+            <div key={step} className={styles.screen}>
+              <Dialog.Title asChild>
+                <h2 id="add-relative-question" ref={question} tabIndex={-1} className={styles.question}>
+                  {heading}
+                </h2>
+              </Dialog.Title>
+              {screen}
+            </div>
+          </m.div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
