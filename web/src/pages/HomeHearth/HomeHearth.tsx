@@ -6,6 +6,7 @@ import { type Birthday, type Home, homeQuery, type Newcomer } from '../../api/ho
 import { addedOn, inDays, monthAndDay } from '../../lib/dates'
 import { greeting } from '../../lib/dayPart'
 import { errorMessage } from '../../lib/errorMessage'
+import { useMotionPaused } from '../../lib/motion'
 import { fullName, initials } from '../../lib/names'
 import { useRelations } from '../../lib/useRelations'
 import { useSignedIn } from '../../lib/useSignedIn'
@@ -17,6 +18,7 @@ import styles from './HomeHearth.module.css'
 export function HomeHearth({ now = new Date() }: { now?: Date }) {
   const { user, person } = useSignedIn()
   const hello = greeting(now)
+  const [paused] = useMotionPaused()
   const home = useQuery(homeQuery)
   const next = home.data?.birthdays[0]
 
@@ -24,7 +26,7 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
     <main className={styles.page}>
       <title>Home — Pluviose Family Hub</title>
       {/* On the sky band, no card: the greeting and one line (owner's pick A, 2026-11-25). */}
-      <section aria-label="Welcome" className={styles.hero}>
+      <section aria-label="Welcome" data-still={paused || undefined} className={styles.hero}>
         <h1 className={styles.title}>{person ? `${hello}, ${person.first_name}` : hello}</h1>
         {next && <BirthdayLine birthday={next} viewerId={user?.person_id ?? null} />}
       </section>

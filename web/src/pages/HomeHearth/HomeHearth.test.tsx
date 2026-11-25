@@ -40,9 +40,7 @@ function renderHome(personId: string | null, home: Omit<Home, 'counts'> & Partia
       <RouterProvider router={createMemoryRouter([{ path: '/', element: <HomeHearth now={fridayEvening} /> }])} />
     </QueryClientProvider>,
   )
-  return client
 }
-
 
 describe('HomeHearth', () => {
   it('greets the viewer by name for the time of day', () => {

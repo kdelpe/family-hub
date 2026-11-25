@@ -13,6 +13,7 @@ import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, initials, nameMatches } from '../../lib/names'
 import { relationsTo } from '../../lib/relation'
 import { useSignedIn } from '../../lib/useSignedIn'
+import { MenuIcon } from '../../app/MenuIcon'
 import styles from './Main.module.css'
 
 const maxMatches = 6
@@ -121,15 +122,11 @@ export function Main() {
     <main className={styles.page}>
       <title>Family tree — Pluviose Family Hub</title>
       <h1 className="visually-hidden">Family tree</h1>
-      {/* One frosted toolbar (owner's pick A, 2026-11-25): the search, Back to me, and the family in one quiet line. */}
       <div className={styles.top}>
         <Search persons={tree.data?.persons ?? []} relations={relations} onPick={centerOn} />
         {viewerId && people.has(viewerId) && (
           <button type="button" className={`pill ${styles.home}`} onClick={() => centerOn(viewerId)}>
-            <svg aria-hidden="true" viewBox="0 0 24 24" className={styles.toolIcon}>
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
-            </svg>
+            <MenuIcon name="crosshair" className={styles.toolIcon} />
             Back to me
           </button>
         )}
@@ -198,10 +195,7 @@ function Search({
       <label htmlFor="tree-search" className="visually-hidden">
         Find a relative
       </label>
-      <svg aria-hidden="true" viewBox="0 0 24 24" className={`${styles.toolIcon} ${styles.searchIcon}`}>
-        <circle cx="11" cy="11" r="6.5" />
-        <path d="m20 20-4.2-4.2" />
-      </svg>
+      <MenuIcon name="search" className={`${styles.toolIcon} ${styles.searchIcon}`} />
       <input
         id="tree-search"
         type="search"

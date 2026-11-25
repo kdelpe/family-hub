@@ -39,6 +39,10 @@
   text-decoration: underline;
 }
 
+.hero[data-still] {
+  animation: none;
+}
+
 @keyframes rise {
   from {
     opacity: 0;
