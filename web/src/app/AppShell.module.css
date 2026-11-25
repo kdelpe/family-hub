@@ -11,22 +11,18 @@
   flex: 0 0 clamp(240px, 21vw, 320px);
   /* As the mockups set it: the browser's own, not the paragraphs' 1.5. */
   line-height: normal;
-  max-width: 320px;
   padding: 36px 26px;
-  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 28px;
   transition:
     flex-basis 0.4s cubic-bezier(0.3, 1.2, 0.5, 1),
-    max-width 0.4s cubic-bezier(0.3, 1.2, 0.5, 1),
     padding 0.4s cubic-bezier(0.3, 1.2, 0.5, 1);
 }
 
 /* Folded to a rail of icons (owner's pick, 2026-11-25), giving the pages more room; each name shows as a tooltip. */
 .folded .menu {
   flex: 0 0 76px;
-  max-width: 76px;
   padding-inline: 12px;
 }
 
@@ -179,7 +175,8 @@
   font-size: 13px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted);
+  /* The paler gold: the cover's own gold is under 4.5:1 for text this small. */
+  color: var(--gold-pale);
 }
 
 .items {
@@ -190,7 +187,7 @@
 
 .admin {
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--cover-frame);
 }
 
 .adminLabel {
@@ -198,7 +195,7 @@
   font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--gold-pale);
 }
 
 .item {
@@ -379,7 +376,6 @@
   color: var(--muted);
 }
 
-/* The menu sits above the page here, where there's no room to fold it beside. */
 /* The menu sits above the page here: a bar across the top, the cover's name and pages in a row. */
 @media (max-width: 800px) {
   .fold,
@@ -388,10 +384,15 @@
     display: none;
   }
 
+  /* Its line hugs the bar, rather than sharing a short page's spare height with the page. */
+  .page {
+    align-content: flex-start;
+  }
+
   .menu {
     flex: 1 1 100%;
-    max-width: none;
     padding: 14px 22px;
+    box-shadow: 0 6px 20px var(--cover-shade);
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
@@ -423,12 +424,9 @@
 /* The green cover (owner's pick, 2026-11-25): the menu bound like the Members book, with a thin gold frame and a
    gold edge on the current page. Scoped to the menu: the admin drawer's links stay on paper. */
 .menu {
-  border-right: 0;
   background: linear-gradient(180deg, var(--accent), var(--cover-deep));
   color: var(--on-cover);
   box-shadow: 4px 0 22px var(--cover-shade);
-  /* Above the page's sky band, which would otherwise paint over this shadow. */
-  z-index: 1;
 }
 
 .folded .menu::after {
@@ -447,15 +445,6 @@
 .menu .identity,
 .menu .identity:hover {
   color: var(--on-cover);
-}
-
-.menu .hub,
-.menu .adminLabel {
-  color: var(--gold);
-}
-
-.menu .admin {
-  border-top-color: var(--cover-frame);
 }
 
 .menu .item {
@@ -494,9 +483,10 @@
 
 /* The sky band (owner's pick, 2026-11-25): a sage-to-peach wash with the endpaper's dots across the top of every
    page, fading into the cream; the pages' own cards and panels sit on it. */
+/* Not isolated: the band at z-index -1 sits under the page and the menu's shadow, and pages' fixed overlays stay in
+   the root stacking context, over the menu. */
 .content {
   position: relative;
-  isolation: isolate;
 }
 
 .content::before,
@@ -511,12 +501,14 @@
 
 .content::before {
   background: linear-gradient(100deg, var(--sky-1) 0%, var(--sky-2) 40%, var(--sky-3) 75%, var(--sky-4) 100%);
+  -webkit-mask-image: linear-gradient(#000 50%, transparent);
   mask-image: linear-gradient(#000 50%, transparent);
 }
 
 .content::after {
   background-image: radial-gradient(circle at 25% 25%, color-mix(in srgb, var(--accent) 15%, transparent) 1.6px, transparent 2.2px);
   background-size: 26px 26px;
+  -webkit-mask-image: linear-gradient(#000, transparent 80%);
   mask-image: linear-gradient(#000, transparent 80%);
 }
 
@@ -559,7 +551,6 @@
     gap: 3px;
     font-size: 11px;
     font-weight: 600;
-    color: var(--muted);
   }
 
   .item:hover,
@@ -568,23 +559,12 @@
     box-shadow: none;
   }
 
-  .item:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
-  }
-
-  .item[aria-current='page'],
-  .item[aria-current='page']:hover {
-    color: var(--accent);
-  }
-
   .currentPill {
     inset: 3px auto auto 50%;
     width: 52px;
     height: 30px;
     margin-left: -26px;
     border-radius: 15px;
-    background: var(--accent-tint);
   }
 
   .drawer .item {
@@ -626,7 +606,7 @@
   }
 
   .menu .item[aria-current='page'] {
-    color: var(--gold);
+    color: var(--gold-pale);
   }
 
   .menu .currentPill {
