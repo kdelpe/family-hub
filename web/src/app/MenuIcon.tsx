@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { useMotionPaused } from '../lib/motion'
 import styles from './MenuIcon.module.css'
 
-export type MenuIconName = 'home' | 'tree' | 'book' | 'calendar' | 'mic' | 'key'
+export type MenuIconName = 'home' | 'tree' | 'book' | 'calendar' | 'mic' | 'key' | 'inbox' | 'addPerson' | 'lock' | 'signOut'
 
 const paths: Record<MenuIconName, ReactNode> = {
   home: (
@@ -46,6 +46,25 @@ const paths: Record<MenuIconName, ReactNode> = {
       <path d="M11.5 12H20l-2 2M16.5 12v2.5" />
     </>
   ),
+  inbox: (
+    <>
+      <path d="M4 13.5 6.5 5h11l2.5 8.5V19H4z" />
+      <path d="M4 13.5h5l1 2h4l1-2h5" />
+    </>
+  ),
+  addPerson: (
+    <>
+      <circle cx="10" cy="8.5" r="3.5" />
+      <path d="M3.5 19c.8-3.4 3.4-5 6.5-5s5.7 1.6 6.5 5M18.5 7v6M15.5 10h6" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="5" y="10.5" width="14" height="9.5" rx="2.5" />
+      <path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" />
+    </>
+  ),
+  signOut: <path d="M14 4.5H6.5v15H14M10.5 12H20M17 8.5l3.5 3.5-3.5 3.5" />,
 }
 
 // The menu's line icons (design-notes §2.1), drawn in the text's colour. Each moves its own way when its link is
