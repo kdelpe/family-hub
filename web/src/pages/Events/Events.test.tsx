@@ -283,6 +283,31 @@ describe('Events', () => {
       expect(handle().getByRole('slider').textContent).toBe('May')
     })
 
+    it('reads the oldest year’s last event at the bottom, as scrolling there does', () => {
+      scrolls()
+      renderPage(spread.slice(0, 3))
+
+      fireEvent.keyDown(handle().getByRole('slider'), { key: 'End' })
+
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', '2025')
+      expect(handle().getByRole('slider').textContent).toBe('Jul')
+    })
+
+    it('moves on to the next event when the one it’s on is removed', () => {
+      scrolls()
+      renderPage(spread, 'admin')
+      fireEvent.keyDown(handle().getByRole('slider'), { key: 'End' })
+      fireEvent.keyDown(handle().getByRole('slider'), { key: 'ArrowUp' })
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', '1984')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove “Wedding”' }))
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Remove “Wedding”?' })).getByRole('button', { name: 'Remove' }))
+
+      expect(handle().getByRole('slider')).toHaveAttribute('aria-valuetext', 'Undated')
+      // Pending removals outlive the page; this one mustn't hide the next test's events.
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    })
+
     it('isn’t there when every event falls in one year', () => {
       renderPage([spread[1]!, spread[2]!])
 

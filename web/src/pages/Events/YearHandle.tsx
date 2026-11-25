@@ -10,14 +10,12 @@ export function YearHandle({
   years,
   current,
   label,
-  labelKey,
   still,
   onPick,
 }: {
   years: string[]
   current: string
   label: string
-  labelKey: string
   still: boolean
   onPick: (year: string, glide: boolean) => void
 }) {
@@ -90,7 +88,7 @@ export function YearHandle({
             // styles, which the site's CSP blocks.
             <AnimatePresence initial={false}>
               <m.span
-                key={labelKey}
+                key={label}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}

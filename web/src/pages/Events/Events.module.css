@@ -70,17 +70,14 @@
   border-radius: 11px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
   background-image:
     radial-gradient(circle at 25% 25%, color-mix(in srgb, var(--accent) 20%, transparent) 2.2px, transparent 2.8px),
     radial-gradient(circle at 75% 75%, color-mix(in srgb, var(--accent) 12%, transparent) 2.2px, transparent 2.8px);
   background-size: 30px 30px;
   /* The dots scroll with the events. */
   background-attachment: local;
-}
-
-.scroller::-webkit-scrollbar {
-  display: none;
 }
 
 .scroller:focus-visible {
@@ -229,14 +226,18 @@
   background: var(--line);
 }
 
-/* From the first dot to the last. */
-.entry:first-child .line {
+/* From the first dot to the last; a lone event has no line. */
+.first .line {
   top: 31px;
 }
 
-.entry:last-child .line {
+.last .line {
   bottom: auto;
   height: 31px;
+}
+
+.only .line {
+  background: none;
 }
 
 .dot {
@@ -252,7 +253,7 @@
 }
 
 /* The first line starts at its dot. */
-.entry:first-child .dot {
+.first .dot {
   top: -7px;
 }
 
@@ -836,11 +837,11 @@
     left: 0;
   }
 
-  .entry:first-child .line {
+  .first .line {
     top: 25px;
   }
 
-  .entry:last-child .line {
+  .last .line {
     height: 25px;
   }
 
