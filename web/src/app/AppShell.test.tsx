@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -165,6 +165,58 @@ describe('AppShell', () => {
 
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(picture).toHaveFocus()
+  })
+
+  describe('folding the menu', () => {
+    afterEach(() => localStorage.clear())
+    const signedIn = () => stubApi({ '/api/auth/me': { status: 200, body: maya }, '/api/persons/p1': { status: 200, body: mayaPerson } })
+
+    it('folds to a rail that names each page as you reach it, and stays folded next time', async () => {
+      signedIn()
+      renderShell()
+      fireEvent.click(await screen.findByRole('button', { name: 'Fold the menu' }))
+
+      const menu = screen.getByRole('navigation', { name: 'Main' })
+      expect(within(menu).getByRole('button', { name: 'Unfold the menu' })).toHaveAttribute('aria-expanded', 'false')
+      fireEvent.focus(within(menu).getByRole('link', { name: 'Events' }))
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Events')
+
+      cleanup()
+      signedIn()
+      renderShell()
+      expect(await screen.findByRole('button', { name: 'Unfold the menu' })).toBeInTheDocument()
+    })
+
+    it('keeps the tab bar on a phone, with short labels that keep their full names', async () => {
+      localStorage.setItem('family-hub.menu-folded', '1')
+      vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+      signedIn()
+      renderShell()
+
+      const tree = await within(await screen.findByRole('navigation', { name: 'Main' })).findByRole('link', { name: 'Family tree' })
+      expect(tree).toHaveTextContent('Tree')
+      fireEvent.focus(tree)
+      expect(screen.queryByRole('tooltip')).toBeNull()
+    })
+  })
+
+  it.each([
+    { name: 'opens the admin pages from the drawer for an admin', role: 'admin' },
+    { name: 'offers no admin drawer to a member', role: 'member' },
+  ])('$name', async ({ role }) => {
+    stubApi({ '/api/auth/me': { status: 200, body: { ...maya, role } }, '/api/persons/p1': { status: 200, body: mayaPerson } })
+    renderShell()
+    await screen.findByRole('button', { name: 'Your account' })
+
+    const drawer = screen.queryByRole('button', { name: 'Admin menu' })
+    if (role !== 'admin') {
+      expect(drawer).toBeNull()
+      return
+    }
+    fireEvent.click(drawer!)
+    const panel = within(screen.getByRole('dialog', { name: 'Admin' }))
+    fireEvent.click(panel.getByRole('link', { name: 'Members & invites' }))
+    expect(screen.queryByRole('dialog', { name: 'Admin' })).toBeNull()
   })
 
   it('sends someone signed out to sign in', async () => {

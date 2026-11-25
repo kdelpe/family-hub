@@ -1,0 +1,100 @@
+/* Each icon's move, over and over while its link is pointed at or focused (owner's call, 2026-11-25). Only when
+   motion is welcome (§2.4). */
+@media (prefers-reduced-motion: no-preference) {
+  .icon,
+  .door,
+  .cover,
+  .page {
+    transform-box: view-box;
+    animation: 1.4s ease-in-out infinite;
+  }
+
+  /* The door swings open on its hinge. */
+  .door {
+    transform-origin: 10px 17px;
+  }
+
+  /* The tree sways from its root. */
+  .icon[data-icon='tree'] {
+    transform-origin: 50% 90%;
+  }
+
+  /* The book's right page turns toward its spine. */
+  .cover {
+    transform-origin: 12px 12px;
+  }
+
+  /* The calendar's page lifts. */
+  .page {
+    transform-origin: 12px 10px;
+  }
+
+  /* The key turns in its lock. */
+  .icon[data-icon='key'] {
+    transform-origin: 33% 50%;
+  }
+
+  :is(a:hover, a:focus-visible) .door {
+    animation-name: swing;
+  }
+
+  :is(a:hover, a:focus-visible) .icon[data-icon='tree'] {
+    animation-name: sway;
+  }
+
+  :is(a:hover, a:focus-visible) .cover {
+    animation-name: turn-page;
+  }
+
+  :is(a:hover, a:focus-visible) .page {
+    animation-name: lift;
+  }
+
+  :is(a:hover, a:focus-visible) .icon[data-icon='mic'] {
+    animation-name: bob;
+  }
+
+  :is(a:hover, a:focus-visible) .icon[data-icon='key'] {
+    animation-name: unlock;
+  }
+}
+
+@keyframes swing {
+  50% {
+    transform: scaleX(0.3);
+  }
+}
+
+@keyframes sway {
+  25% {
+    transform: rotate(-7deg);
+  }
+
+  75% {
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes turn-page {
+  50% {
+    transform: scaleX(0.55);
+  }
+}
+
+@keyframes lift {
+  50% {
+    transform: translateY(-2px) rotate(-8deg);
+  }
+}
+
+@keyframes bob {
+  50% {
+    transform: translateY(-2.5px);
+  }
+}
+
+@keyframes unlock {
+  50% {
+    transform: rotate(18deg);
+  }
+}

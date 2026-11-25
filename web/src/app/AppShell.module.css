@@ -6,6 +6,7 @@
 }
 
 .menu {
+  position: relative;
   flex: 1 1 220px;
   /* As the mockups set it: the browser's own, not the paragraphs' 1.5. */
   line-height: normal;
@@ -15,6 +16,118 @@
   display: flex;
   flex-direction: column;
   gap: 28px;
+  transition:
+    flex-basis 0.4s cubic-bezier(0.3, 1.2, 0.5, 1),
+    max-width 0.4s cubic-bezier(0.3, 1.2, 0.5, 1),
+    padding 0.4s cubic-bezier(0.3, 1.2, 0.5, 1);
+}
+
+/* Folded to a rail of icons (owner's pick, 2026-11-25), giving the pages more room; each name shows as a tooltip. */
+.folded .menu {
+  flex: 0 0 76px;
+  max-width: 76px;
+  padding-inline: 12px;
+}
+
+/* On the menu's edge, half in and half out. */
+.fold {
+  position: absolute;
+  top: 44px;
+  right: -14px;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  box-shadow: 0 2px 6px var(--shadow-press);
+  cursor: pointer;
+  transition: rotate 0.4s cubic-bezier(0.3, 1.2, 0.5, 1);
+}
+
+/* A 44px tap (§1.3) that looks smaller. */
+.fold::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.fold:hover {
+  color: var(--text);
+}
+
+.folded .fold {
+  rotate: 180deg;
+}
+
+.folded .names,
+.folded .adminLabel {
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.folded .identity {
+  gap: 0;
+}
+
+.folded .label {
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.folded .item {
+  gap: 0;
+  padding-inline: 13px;
+}
+
+.names,
+.adminLabel,
+.label {
+  transition: opacity 0.2s ease;
+}
+
+.icon {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  position: relative;
+  z-index: 1;
+  color: var(--text-2);
+}
+
+.current .icon {
+  color: var(--accent);
+}
+
+.tipAnchor {
+  display: flex;
+  flex-direction: column;
+}
+
+.tip {
+  z-index: 50;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 6px 16px var(--shadow-lift);
+  animation: tip-in 0.18s cubic-bezier(0.3, 1.2, 0.5, 1) both;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    translate: -4px 0;
+  }
 }
 
 .identity {
@@ -73,7 +186,11 @@
 
 .item {
   position: relative;
-  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+  padding: 11px 14px;
   border-radius: 8px;
   color: var(--text);
   text-decoration: none;
@@ -109,6 +226,7 @@
 .label {
   position: relative;
   z-index: 1;
+  min-width: 0;
 }
 
 
@@ -140,4 +258,230 @@
   justify-content: flex-end;
   position: relative;
   z-index: 5;
+}
+
+/* Phones only: the family's name and home link, and the admin drawer, at the top. */
+.phoneIdentity,
+.drawerButton {
+  display: none;
+}
+
+.phoneIdentity {
+  margin-right: auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.phoneIdentity .familyName {
+  font-size: 18px;
+}
+
+.drawerButton {
+  width: 44px;
+  height: 44px;
+  margin-right: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  place-items: center;
+  cursor: pointer;
+}
+
+.drawerButton:hover,
+.drawerButton[data-state='open'] {
+  background: var(--brand-panel);
+}
+
+.bars,
+.bars::before,
+.bars::after {
+  display: block;
+  width: 20px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.bars {
+  position: relative;
+}
+
+.bars::before,
+.bars::after {
+  content: '';
+  position: absolute;
+  left: 0;
+}
+
+.bars::before {
+  top: -6px;
+}
+
+.bars::after {
+  top: 6px;
+}
+
+.drawerScrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--scrim);
+  animation: fade 0.2s ease both;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 41;
+  width: min(300px, 86vw);
+  padding: 18px 14px;
+  border-radius: 18px 0 0 18px;
+  background: var(--bg);
+  box-shadow: -8px 0 24px var(--shadow-lift);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: drawer-in 0.4s cubic-bezier(0.3, 1.2, 0.5, 1) both;
+}
+
+.drawer .item {
+  background: transparent;
+}
+
+.drawer .current {
+  background: var(--nav-active);
+}
+
+.drawerTitle {
+  margin: 0;
+  padding: 4px 14px 8px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    translate: 100% 0;
+  }
+}
+
+/* Phones (owner's pick, 2026-11-25): the menu becomes a tab bar along the bottom, in thumb reach. */
+@media (max-width: 600px) {
+  .menu,
+  .folded .menu {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    max-width: none;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+    border-right: 0;
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    backdrop-filter: blur(8px);
+    flex-direction: row;
+    gap: 0;
+  }
+
+  .fold,
+  .identity,
+  .admin {
+    display: none;
+  }
+
+  .items {
+    flex: 1;
+    flex-direction: row;
+    gap: 0;
+  }
+
+  .item,
+  .folded .item {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 52px;
+    padding: 4px 2px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  .item:hover,
+  .item:focus-visible {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .current,
+  .current:hover {
+    color: var(--accent);
+  }
+
+  .currentPill {
+    inset: 3px auto auto 50%;
+    width: 52px;
+    height: 30px;
+    margin-left: -26px;
+    border-radius: 15px;
+    background: var(--accent-tint);
+  }
+
+  .label,
+  .folded .label {
+    width: auto;
+    opacity: 1;
+  }
+
+  .drawer .item {
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    min-height: 44px;
+    padding: 11px 14px;
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--text);
+  }
+
+  .drawer .current {
+    font-weight: 600;
+  }
+
+  .phoneIdentity {
+    display: flex;
+  }
+
+  .drawerButton {
+    display: grid;
+  }
+
+  /* Room for the tab bar, which pages sized to the window also take off their height. */
+  .content {
+    --account-bar: calc(32px + 64px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .account {
+    align-items: center;
+  }
 }
