@@ -38,7 +38,7 @@
   isolation: isolate;
   border-radius: 22px;
   border: 1px solid var(--border);
-  background: var(--album-paper);
+  background: var(--endpaper);
 }
 
 .album::before {
@@ -60,7 +60,7 @@
   inset: 11px;
   z-index: 2;
   border-radius: 11px;
-  background: linear-gradient(var(--album-paper), transparent 28px, transparent calc(100% - 40px), var(--album-paper));
+  background: linear-gradient(var(--endpaper), transparent 28px, transparent calc(100% - 40px), var(--endpaper));
   pointer-events: none;
 }
 
@@ -251,7 +251,7 @@
   box-sizing: border-box;
   border-radius: 50%;
   background: var(--accent);
-  border: 3px solid var(--album-paper);
+  border: 3px solid var(--endpaper);
 }
 
 /* The first line starts at its dot. */

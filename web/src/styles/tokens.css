@@ -49,9 +49,9 @@
   --book-divider: #b5c99a;
   --gold: #d9c38c;
   --gold-pale: #eadfc2;
-  --endpaper: #e8efe9;
-  /* Paler than the endpapers, so the album page (tree, Events) stays apart from the sky band (owner's pick, 2026-11-25). */
-  --album-paper: #f0f5f1;
+  /* Pale, so the book's endpapers and the album page (tree, Events) stay apart from the sky band (owner's pick,
+     2026-11-25). */
+  --endpaper: #f0f5f1;
   --cover-light: rgba(255, 255, 255, 0.1);
   --cover-dark: rgba(0, 0, 0, 0.22);
   --cover-grain: rgba(0, 0, 0, 0.025);
