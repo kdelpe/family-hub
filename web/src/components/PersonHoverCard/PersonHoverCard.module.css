@@ -1,0 +1,63 @@
+.card {
+  z-index: 30;
+  box-sizing: border-box;
+  width: 280px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 16px 34px var(--shadow-lift);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--avatar-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+}
+
+.words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* A name can be 100 characters with no space to break at. */
+  overflow-wrap: anywhere;
+}
+
+.relation {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.links {
+  display: flex;
+  gap: 8px;
+}
+
+.link {
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: var(--chip);
+  color: var(--text);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.link:hover,
+.link:focus-visible {
+  background: var(--nav-active);
+}

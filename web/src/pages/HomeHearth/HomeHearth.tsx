@@ -1,17 +1,17 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { m } from 'motion/react'
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import { type Birthday, type Home, homeQuery, type Newcomer } from '../../api/home'
-import { treeQuery } from '../../api/tree'
 import { addedOn, inDays, monthAndDay } from '../../lib/dates'
 import { dayPartLabel, greeting } from '../../lib/dayPart'
 import { errorMessage } from '../../lib/errorMessage'
 import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { fullName, initials } from '../../lib/names'
-import { relationsTo } from '../../lib/relation'
+import { useRelations } from '../../lib/useRelations'
 import { useSignedIn } from '../../lib/useSignedIn'
+import { PersonHoverCard } from '../../components/PersonHoverCard/PersonHoverCard'
 import styles from './HomeHearth.module.css'
 
 // Home (design-notes §4.1): the hero, Coming up and New in the family. On this day and Story of the week wait for
@@ -51,7 +51,7 @@ export function HomeHearth({ now = new Date() }: { now?: Date }) {
           empty="No birthdays in the next two weeks."
           items={home.data?.birthdays}
         >
-          {(b, i) => <BirthdayRow key={b.id} birthday={b} soonest={i === 0} />}
+          {(b, i) => <BirthdayRow key={b.id} birthday={b} soonest={i === 0} viewerId={user?.person_id ?? null} />}
         </Card>
         <Newcomers query={home} viewerId={user?.person_id ?? null} now={now} />
       </div>
@@ -207,7 +207,7 @@ function Card<T>({
   )
 }
 
-function BirthdayRow({ birthday, soonest }: { birthday: Birthday; soonest: boolean }) {
+function BirthdayRow({ birthday, soonest, viewerId }: { birthday: Birthday; soonest: boolean; viewerId: string | null }) {
   const { month, day } = monthAndDay(birthday.on)
   return (
     <div className={styles.row}>
@@ -216,9 +216,11 @@ function BirthdayRow({ birthday, soonest }: { birthday: Birthday; soonest: boole
         <span className={styles.tileDay}>{day}</span>
       </span>
       <div className={styles.rowWords}>
-        <Link to={`/people/${birthday.id}`} className={styles.rowTitle}>
-          {birthday.first_name}’s birthday
-        </Link>
+        <PersonHoverCard person={birthday} viewerId={viewerId}>
+          <Link to={`/people/${birthday.id}`} className={styles.rowTitle}>
+            {birthday.first_name}’s birthday
+          </Link>
+        </PersonHoverCard>
         <span className={styles.muted}>
           {inDays(birthday.in_days)}
           <span className="visually-hidden">, {month} {day}</span>
@@ -232,10 +234,9 @@ function Newcomers({ query, viewerId, now }: { query: UseQueryResult<Home>; view
   const newcomers = query.data?.newcomers
   // The whole tree, only when there's someone to name a relation for.
   const needsTree = viewerId !== null && (newcomers?.length ?? 0) > 0
-  const tree = useQuery({ ...treeQuery, enabled: needsTree })
-  const relations = useMemo(() => (tree.data && viewerId ? relationsTo(tree.data, viewerId) : null), [tree.data, viewerId])
+  const { relations, isPending } = useRelations(viewerId, needsTree)
   // Held until the tree is read, so a row's line doesn't change under the reader; without it, just when.
-  const ready = !needsTree || !tree.isPending
+  const ready = !needsTree || !isPending
   return (
     <Card
       id="home-new"
@@ -255,9 +256,11 @@ function Newcomers({ query, viewerId, now }: { query: UseQueryResult<Home>; view
               {initials(n)}
             </span>
             <div className={styles.rowWords}>
-              <Link to={`/people/${n.id}`} className={styles.rowTitle}>
-                {fullName(n)}
-              </Link>
+              <PersonHoverCard person={n} viewerId={viewerId}>
+                <Link to={`/people/${n.id}`} className={styles.rowTitle}>
+                  {fullName(n)}
+                </Link>
+              </PersonHoverCard>
               <span className={styles.muted}>{relation ? `${relation} · ${added}` : added[0]!.toUpperCase() + added.slice(1)}</span>
             </div>
           </div>
