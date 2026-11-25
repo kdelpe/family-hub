@@ -13,11 +13,11 @@ import { errorMessage } from '../lib/errorMessage'
 import { useNarrow } from '../lib/useNarrow'
 import { useSignedIn } from '../lib/useSignedIn'
 import { AccountMenu } from './AccountMenu'
+import sheet from './AccountMenu.module.css'
 import styles from './AppShell.module.css'
 import { MenuIcon } from './MenuIcon'
 import { adminPages, menuPages } from './signedInPages'
 
-const item = ({ isActive }: { isActive: boolean }) => (isActive ? `${styles.item} ${styles.current}` : styles.item)
 
 const foldedKey = 'family-hub.menu-folded'
 
@@ -45,7 +45,9 @@ function useFolded() {
 function MenuItem({ path, label, short, icon, rail, narrow }: (typeof menuPages)[number] & { rail: boolean; narrow: boolean }) {
   const tab = narrow && short
   const link = (
-    <NavLink to={path} end aria-label={tab ? label : undefined} className={item}>
+    // NavLink marks the current page with aria-current, which the styles read: a plain className, which the tooltip's
+    // trigger can merge with its own.
+    <NavLink to={path} end aria-label={tab ? label : undefined} className={styles.item}>
       {({ isActive }) => (
         <>
           {isActive && <m.span layoutId="menu-current" className={styles.currentPill} transition={{ type: 'spring', stiffness: 380, damping: 32 }} />}
@@ -58,12 +60,9 @@ function MenuItem({ path, label, short, icon, rail, narrow }: (typeof menuPages)
   if (!rail) {
     return link
   }
-  // Wrapped, as the trigger's merged className would break NavLink's className function.
   return (
     <Tooltip.Root>
-      <Tooltip.Trigger asChild>
-        <span className={styles.tipAnchor}>{link}</span>
-      </Tooltip.Trigger>
+      <Tooltip.Trigger asChild>{link}</Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content side="right" sideOffset={10} className={styles.tip}>
           {label}
@@ -73,7 +72,8 @@ function MenuItem({ path, label, short, icon, rail, narrow }: (typeof menuPages)
   )
 }
 
-// Phones: the admin pages don't fit the tab bar, so admins get them in a drawer from the top right.
+// Phones: the admin pages don't fit the tab bar, so admins get them in a drawer from the top right, the account
+// panel's sheet.
 function AdminDrawer() {
   const [open, setOpen] = useState(false)
   return (
@@ -82,12 +82,12 @@ function AdminDrawer() {
         <span aria-hidden="true" className={styles.bars} />
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className={styles.drawerScrim} />
-        <Dialog.Content aria-describedby={undefined} className={styles.drawer}>
+        <Dialog.Overlay className={sheet.scrim} />
+        <Dialog.Content aria-describedby={undefined} className={`${sheet.panel} ${styles.drawer}`}>
           <Dialog.Title className={styles.drawerTitle}>Admin</Dialog.Title>
           <nav aria-label="Admin">
             {adminPages.map(({ path, label, icon }) => (
-              <NavLink key={path} to={path} end onClick={() => setOpen(false)} className={item}>
+              <NavLink key={path} to={path} end onClick={() => setOpen(false)} className={styles.item}>
                 <MenuIcon name={icon} className={styles.icon} />
                 <span className={styles.label}>{label}</span>
               </NavLink>
@@ -166,7 +166,8 @@ export function AppShell() {
             <Logo size={34} />
             <span className={styles.familyName}>Pluviose</span>
           </Link>
-          {user.role === 'admin' && <AdminDrawer />}
+          {/* Only while it can show: a drawer left open as the screen widens would have no ☰ to close it. */}
+          {user.role === 'admin' && narrow && <AdminDrawer />}
           <AccountMenu
             initials={person ? initials(person) : (user.email[0] ?? '?').toUpperCase()}
             name={person ? `${person.first_name} ${person.last_name ?? ''}`.trim() : user.email}

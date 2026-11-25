@@ -178,13 +178,38 @@ describe('AppShell', () => {
 
       const menu = screen.getByRole('navigation', { name: 'Main' })
       expect(within(menu).getByRole('button', { name: 'Unfold the menu' })).toHaveAttribute('aria-expanded', 'false')
-      fireEvent.focus(within(menu).getByRole('link', { name: 'Events' }))
+      const events = within(menu).getByRole('link', { name: 'Events' })
+      fireEvent.focus(events)
       expect(await screen.findByRole('tooltip')).toHaveTextContent('Events')
+      // Tied to the link itself, for a screen reader.
+      expect(events).toHaveAccessibleDescription('Events')
 
       cleanup()
       signedIn()
       renderShell()
       expect(await screen.findByRole('button', { name: 'Unfold the menu' })).toBeInTheDocument()
+    })
+
+    it('puts the admin drawer away when the screen widens', async () => {
+      const listeners = new Set<() => void>()
+      let narrow = true
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        get matches() {
+          return narrow && query.includes('max-width')
+        },
+        media: query,
+        addEventListener: (_: string, l: () => void) => listeners.add(l),
+        removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+      }))
+      signedIn()
+      renderShell()
+      fireEvent.click(await screen.findByRole('button', { name: 'Admin menu' }))
+      expect(screen.getByRole('dialog', { name: 'Admin' })).toBeInTheDocument()
+
+      narrow = false
+      act(() => listeners.forEach((l) => l()))
+
+      expect(screen.queryByRole('dialog', { name: 'Admin' })).toBeNull()
     })
 
     it('keeps the tab bar on a phone, with short labels that keep their full names', async () => {
@@ -204,6 +229,8 @@ describe('AppShell', () => {
     { name: 'opens the admin pages from the drawer for an admin', role: 'admin' },
     { name: 'offers no admin drawer to a member', role: 'member' },
   ])('$name', async ({ role }) => {
+    // A phone: the drawer is only there while the screen is narrow.
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {} }))
     stubApi({ '/api/auth/me': { status: 200, body: { ...maya, role } }, '/api/persons/p1': { status: 200, body: mayaPerson } })
     renderShell()
     await screen.findByRole('button', { name: 'Your account' })

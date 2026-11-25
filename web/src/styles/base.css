@@ -57,6 +57,13 @@ a:hover {
   box-shadow: 0 1px 3px var(--shadow-press);
 }
 
+/* The phone's tab bar (AppShell), which toasts and the page's foot keep clear of. */
+@media (max-width: 600px) {
+  :root {
+    --tab-bar: calc(66px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
