@@ -253,7 +253,8 @@ export function Events() {
       ) : (
         <div ref={album} className={styles.album}>
           {/* Focusable, so the timeline scrolls from the keyboard too. */}
-          <div ref={setScroller} role="region" aria-label="Timeline" tabIndex={0} className={styles.scroller}>
+          {/* layoutScroll: the glides inside measure past how far it's scrolled. */}
+          <m.div ref={setScroller} layoutScroll role="region" aria-label="Timeline" tabIndex={0} className={styles.scroller}>
             <ol className={styles.timeline}>
             <AnimatePresence initial={false}>
               {list.map((event, i) => {
@@ -283,7 +284,7 @@ export function Events() {
               })}
             </AnimatePresence>
             </ol>
-          </div>
+          </m.div>
           {years.length > 1 && (
             <YearHandle years={years} current={current} label={handleLabel(shown)} still={reduced} onPick={pick} />
           )}
