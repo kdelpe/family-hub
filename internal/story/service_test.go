@@ -556,3 +556,92 @@ func TestTheTellerMayHideTheirStory(t *testing.T) {
 		require.ErrorIs(t, f.svc.Delete(t.Context(), teller, story.ID), ErrNotAllowed)
 	})
 }
+
+func TestANewTellerMustConsentAgain(t *testing.T) {
+	f := newFixture(t)
+	jr, nad := f.person(t, "Jean-Robert", "Pluviose"), f.person(t, "Nadège", "Pluviose")
+	consent := family.Opt[bool]{Set: true, Value: true}
+
+	tests := []struct {
+		name        string
+		published   bool
+		patch       Patch
+		wantErr     error
+		wantConsent bool
+	}{
+		{name: "a published story, new teller", published: true, patch: Patch{TellerID: family.Opt[*uuid.UUID]{Set: true, Value: &nad}}, wantErr: ErrInvalidStory},
+		{name: "a published story, new teller who agreed", published: true,
+			patch: Patch{TellerID: family.Opt[*uuid.UUID]{Set: true, Value: &nad}, ConsentConfirmed: consent}, wantConsent: true},
+		{name: "a consented draft, new teller", patch: Patch{TellerID: family.Opt[*uuid.UUID]{Set: true, Value: &nad}}},
+		{name: "a consented draft, no teller any more", patch: Patch{TellerID: family.Opt[*uuid.UUID]{Set: true}}},
+		{name: "the same teller sent again", patch: Patch{TellerID: family.Opt[*uuid.UUID]{Set: true, Value: &jr}}, wantConsent: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := Input{Title: "Brooklyn", TellerID: &jr, ConsentConfirmed: true}
+			story := f.publish(t, f.member, in)
+			if !tt.published {
+				var err error
+				story, err = f.svc.Update(t.Context(), f.member, story.ID, Patch{Status: family.Opt[string]{Set: true, Value: "draft"}})
+				require.NoError(t, err)
+			}
+
+			got, err := f.svc.Update(t.Context(), f.member, story.ID, tt.patch)
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantConsent, got.ConsentConfirmed)
+		})
+	}
+}
+
+func TestATellerWhoCanEditStillWithdrawsConsentByHiding(t *testing.T) {
+	f := newFixture(t)
+	grandma := f.person(t, "Marie-Claire", "Pluviose")
+
+	tests := []struct {
+		name   string
+		viewer family.Viewer
+	}{
+		{name: "the teller is an admin", viewer: family.Viewer{UserID: f.admin.UserID, IsAdmin: true, PersonID: &grandma}},
+		{name: "the teller added it", viewer: family.Viewer{UserID: f.member.UserID, PersonID: &grandma}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			story := f.publish(t, f.member, Input{Title: "Our wedding", TellerID: &grandma})
+
+			got, err := f.svc.Update(t.Context(), tt.viewer, story.ID, Patch{Status: family.Opt[string]{Set: true, Value: "draft"}})
+
+			require.NoError(t, err)
+			assert.False(t, got.ConsentConfirmed)
+		})
+	}
+}
+
+func TestATranscriptTooVariedToSearchIsRefused(t *testing.T) {
+	f := newFixture(t)
+	// Distinct three-character words in a multibyte script: within the length limits, over Postgres's 1 MB tsvector.
+	var lines []Line
+	var b strings.Builder
+	for i := 0; i < maxTranscriptLength/4; i++ {
+		b.WriteRune(rune(0x4E00 + i/400))
+		b.WriteRune(rune(0x4E00 + (i/20)%20))
+		b.WriteRune(rune(0x4E00 + i%20))
+		b.WriteRune(' ')
+		if (i+1)%(maxLineLength/4) == 0 {
+			lines = append(lines, Line{At: len(lines), Text: b.String()})
+			b.Reset()
+		}
+	}
+	lines = append(lines, Line{At: len(lines), Text: b.String()})
+
+	_, err := f.svc.Create(t.Context(), f.member, Input{Title: "Long", Transcript: lines})
+
+	require.ErrorIs(t, err, ErrInvalidStory)
+	assert.EqualError(t, err, "create story: invalid story: the transcript has too many different words to search; split it into two stories")
+}

@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kdelpe/family-hub/internal/auth"
@@ -36,10 +37,11 @@ const (
 	maxChapters      = 200
 	maxLines         = 10000
 	// About six hours of speech; it also keeps the search index under Postgres's 1 MB tsvector limit.
-	maxTranscriptLength = 300000
-	maxSeconds          = 24 * 60 * 60
-	statusDraft         = "draft"
-	statusPublished     = "published"
+	maxTranscriptLength  = 300000
+	maxSeconds           = 24 * 60 * 60
+	statusDraft          = "draft"
+	programLimitExceeded = "54000"
+	statusPublished      = "published"
 )
 
 var (
@@ -226,7 +228,7 @@ func (s *Service) Create(ctx context.Context, viewer family.Viewer, in Input) (S
 			Chapters: chapters, Transcript: transcript, Topics: f.Topics, OtherPeople: f.OtherPeople, CreatedBy: &viewer.UserID,
 		})
 		if err != nil {
-			return fmt.Errorf("create story: %w", err)
+			return fmt.Errorf("create story: %w", tooLongToSearch(err))
 		}
 		if err := addPeople(ctx, q, id, f.PersonIDs); err != nil {
 			return err
@@ -280,10 +282,16 @@ func (s *Service) Update(ctx context.Context, viewer family.Viewer, id uuid.UUID
 		}
 		// Kept when still confirmed, so it says when the teller first agreed.
 		consentAt := row.ConsentConfirmedAt
-		// A teller hiding their story withdraws consent with it, so it isn't republished without asking them again.
-		if !f.ConsentConfirmed || !canEdit(viewer, row.CreatedBy) {
+		// A teller hiding their story withdraws consent with it, so it isn't republished without asking them again,
+		// even when they could also edit it.
+		hiddenByTeller := patch.OnlyHides() && isTeller(viewer, row.LiveTellerID)
+		// A new teller hasn't agreed to anything yet, unless consent is confirmed again in this same change.
+		newTeller := patch.TellerID.Set && !equalIDs(patch.TellerID.Value, row.TellerPersonID)
+		reconfirmed := patch.ConsentConfirmed.Set && patch.ConsentConfirmed.Value
+		switch {
+		case !f.ConsentConfirmed || hiddenByTeller || (newTeller && !reconfirmed):
 			consentAt = nil
-		} else if consentAt == nil {
+		case newTeller || consentAt == nil:
 			consentAt = new(time.Now())
 		}
 		if status == statusPublished && consentAt == nil {
@@ -330,7 +338,7 @@ func (s *Service) Update(ctx context.Context, viewer family.Viewer, id uuid.UUID
 			FeaturedAt: featuredAt,
 		})
 		if err != nil {
-			return fmt.Errorf("update story: %w", err)
+			return fmt.Errorf("update story: %w", tooLongToSearch(err))
 		}
 		if patch.PersonIDs.Set {
 			if err := q.ClearStoryPeople(ctx, id); err != nil {
@@ -395,6 +403,20 @@ func (s *Service) read(ctx context.Context, what string, fn func(q *gen.Queries)
 		return fmt.Errorf("commit %s: %w", what, err)
 	}
 	return nil
+}
+
+func equalIDs(a, b *uuid.UUID) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
+}
+
+// tooLongToSearch turns Postgres refusing a search index over 1 MB into a refusal the editor can act on; the length
+// limits keep most stories well under it, but many distinct words in a multibyte script can still pass them.
+func tooLongToSearch(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == programLimitExceeded {
+		return fmt.Errorf("%w: the transcript has too many different words to search; split it into two stories", ErrInvalidStory)
+	}
+	return err
 }
 
 func canSee(viewer family.Viewer, status string, createdBy, teller *uuid.UUID) bool {
