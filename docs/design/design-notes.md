@@ -337,7 +337,7 @@ Owner's picks, 2026-11-25: layout **B2, full-width cover**, and the **full-scree
 
 ### 4.7 A story
 - Player: dark frame, big play/pause, progress bar, time, **Captions** (on by default, large 20px on dark), Full screen.
-- Title, *"Recorded October 2026 in Rose's kitchen · filmed by Maya Pluviose"*.
+- Title, *"Recorded October 2026 in Rose's kitchen"* (no "filmed by": dropped 2026-11-26).
 - **Transcript** with timestamps; clicking a line jumps there; the current chapter's lines are highlighted; search box.
 - Side: **Told by** card · **Chapters** (click to jump; current one highlighted) · **People in this story** (can include people not in the tree) and matching years on the timeline · **More from Rose**.
 
@@ -345,7 +345,7 @@ Owner's picks, 2026-11-25: layout **B2, full-width cover**, and the **full-scree
 A five-step guide with a clickable step bar (Storyteller · Recording · Details · Transcript · Share), **Back / Save as draft / Continue** at the bottom of every step.
 1. **Storyteller:** search the tree; pick a person card (radio). "Not in the tree yet? Add them first."
 2. **Recording:** choose **Upload a file** (drop zone, any phone video; large files upload in parts and resume if the connection drops; progress shows "72% · 2.4 GB") or **Record now** (camera preview, big record button, timer, tips: quiet room, phone sideways, sit close). Beside it, **Questions to ask** prompts (*"How did you and Lucien meet?"*, *"What did you bring with you when you left?"* …).
-3. **Details:** title, where it was recorded, when (Exact day · Month · Year · About), "Filmed by <you>", short summary, topic pills (Growing up, Moving & immigration, Weddings, Work, Recipes, Holidays), people in this story (chips + Add person).
+3. **Details:** title, where it was recorded, when (Exact day · Month · Year · About), short summary, topic pills (Growing up, Moving & immigration, Weddings, Work, Recipes, Holidays), people in this story (chips + Add person).
 4. **Transcript:** "Ready, please check it" + *Spoken in* (Haitian Creole · French · English · A mix); note that Creole needs a human read-through; each line is an editable box with its timestamp; **Show English translation** switch shows a translation under each line. **Chapters** panel: small player + **Start a chapter here (21:30)**, list of chapters.
 5. **Share:** required consent checkbox *"Rose agreed to share this recording with the family."*; choose **Save as draft** (only you and admins) or **Publish to the family**. Publishing is disabled until consent is ticked (drafts don't need it).
 Finish screen: *"Your story is on its way"* with steps ✓ Recording uploaded · … Preparing the video · … Making captions; **Back to Stories** / **Add another story**. The story shows as "Processing…" in the Stories list until ready.
