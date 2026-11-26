@@ -6,13 +6,49 @@
 }
 
 .brand {
+  /* The menu's green cover (owner's pick A, 2026-11-25), so signing in opens the same book. */
+  position: relative;
   flex: 1 1 480px;
   padding: 56px;
-  background: var(--brand-panel);
+  background: linear-gradient(180deg, var(--accent), var(--cover-deep));
+  color: var(--on-cover);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 24px;
+  --tree-branch: var(--cover-tree-branch);
+  --tree-root: var(--cover-tree-root);
+  --mountain-back: var(--cover-hill-back);
+  --mountain-front: var(--cover-hill-front);
+  --grass: var(--cover-ground);
+  --line: var(--cover-ground);
+  --leaf-1: var(--cover-leaf-1);
+  --leaf-2: var(--cover-leaf-2);
+  --leaf-3: var(--cover-leaf-3);
+  --leaf-4: var(--cover-leaf-4);
+  --leaf-5: var(--cover-leaf-5);
+  --leaf-6: var(--cover-leaf-6);
+  --leaf-7: var(--cover-leaf-7);
+}
+
+/* The cover's thin gold double frame. */
+.brand::before,
+.brand::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  border-radius: 14px;
+  border: 1px solid var(--cover-frame);
+}
+
+.brand::before {
+  inset: 12px;
+}
+
+.brand::after {
+  inset: 17px;
+  border-radius: 10px;
+  opacity: 0.45;
 }
 
 /* Side by side, the panel is exactly one window tall and the tree takes what the words leave. */
@@ -50,16 +86,18 @@
 
 .familyName {
   font-family: var(--font-serif);
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 600;
   line-height: 1.1;
+  color: var(--on-cover-current);
 }
 
 .hub {
   font-size: 13px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted);
+  /* The paler gold: the cover's own gold is under 4.5:1 for text this small. */
+  color: var(--gold-pale);
 }
 
 .words {
@@ -76,10 +114,49 @@
   font-family: var(--font-serif);
   font-size: 26px;
   line-height: 1.3;
+  color: var(--on-cover-current);
 }
 
 .proverb {
   margin: 0;
-  color: var(--muted);
+  color: var(--on-cover-soft);
   font-style: italic;
+}
+
+/* Stacked, the cover shrinks to a green bar over the form, as the menu does, so the form starts on the first screen. */
+@media (width < 960px) {
+  /* Wrapped rows would otherwise share the window's height, stretching the bar. */
+  .page {
+    align-content: flex-start;
+  }
+
+  .brand {
+    flex-basis: 100%;
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 24px 32px;
+  }
+
+  .brand > :not(.identity) {
+    display: none;
+  }
+
+  .identity {
+    flex-direction: row;
+    gap: 14px;
+    text-align: left;
+  }
+
+  .identity svg {
+    width: 52px;
+    height: 52px;
+  }
+
+  .names {
+    align-items: flex-start;
+  }
+
+  .familyName {
+    font-size: 24px;
+  }
 }
