@@ -16,7 +16,7 @@ All names, dates, stories, phone numbers and addresses in the mockups are **made
 |---|---|---|
 | **On this day** | Home | Home shows Coming up, New in the family and Story of the week, without the On this day card. |
 | **Record now**, and uploads that resume in parts | Add a story, step 2 | Upload a file only, up to the 2 GiB cap, said in plain words. |
-| Any phone video (needs the Phase 6 converter) | Add a story, step 2 | The drop zone says which files work before upload: *"MP4 videos and audio files (MP3, M4A, WAV). iPhone videos: share them as 'Most Compatible' or export as MP4."* A video the browser reports as HEVC/QuickTime is refused with that same line. |
+| Any phone video (needs the Phase 6 converter) | Add a story, step 2 | The drop zone says which files work before upload: *"MP4 videos. iPhone videos: share them as 'Most Compatible' or export as MP4."* A video the browser reports as HEVC/QuickTime is refused with that same line. |
 | HEIC photos, TIFF scans and phone videos (need the Phase 6 converter) | Events, + Upload | The drop zone says which files work: *"JPEG, PNG or WebP photos and MP4 videos. Scans: save them as JPEG. iPhone: share as 'Most Compatible'."* Other files are refused with that same line. |
 | Machine transcription and English translation | Add a story, step 4; the finish screen | The transcript is typed or pasted; no "Show English translation". The finish screen has no "Preparing the video" or "Making captions" steps and the story shows no "Processing…": it's ready when saved. |
 | Dark mode | everywhere | Light theme only (§1.1 keeps the variables ready). |
@@ -331,8 +331,8 @@ Owner's picks, 2026-11-25: layout **B2, full-width cover**, and the **full-scree
 
 ### 4.6 Stories (own menu item)
 - **Story of the week** hero: large video still with play button and duration, title, storyteller (avatar, relation, recorded date), short summary, people/topic chips, **Watch the story**.
-- **Storytellers** row: filter by teller (shows count; older audio like "cassette, 1994" called out). Clicking again clears.
-- **All stories** grid: thumbnail, length, Video/Audio badge, title, teller · year, "About …". Topic chips. Search covers what was said, not just titles. **+ Add a story**.
+- **Storytellers** row: filter by teller (shows count). Clicking again clears.
+- **All stories** grid: thumbnail, length, title, teller · year, "About …". Topic chips. Search covers what was said, not just titles. **+ Add a story**.
 - **Your drafts** (only when you have some; admins see everyone's): a row above All stories with the same cards, a "Draft" chip and the step reached, each with **Continue editing**, which reopens Add a story at that step.
 
 ### 4.7 A story
@@ -344,7 +344,7 @@ Owner's picks, 2026-11-25: layout **B2, full-width cover**, and the **full-scree
 ### 4.7b Add a story (from **+ Add a story** on Stories; admins, or members with `MEMBERS_CAN_CONTRIBUTE`)
 A five-step guide with a clickable step bar (Storyteller · Recording · Details · Transcript · Share), **Back / Save as draft / Continue** at the bottom of every step.
 1. **Storyteller:** search the tree; pick a person card (radio). "Not in the tree yet? Add them first."
-2. **Recording:** choose **Upload a file** (drop zone, any phone video, voice memo or digitized cassette; large files upload in parts and resume if the connection drops; progress shows "72% · 2.4 GB") or **Record now** (camera preview, big record button, timer, tips: quiet room, phone sideways, sit close). Beside it, **Questions to ask** prompts (*"How did you and Lucien meet?"*, *"What did you bring with you when you left?"* …).
+2. **Recording:** choose **Upload a file** (drop zone, any phone video; large files upload in parts and resume if the connection drops; progress shows "72% · 2.4 GB") or **Record now** (camera preview, big record button, timer, tips: quiet room, phone sideways, sit close). Beside it, **Questions to ask** prompts (*"How did you and Lucien meet?"*, *"What did you bring with you when you left?"* …).
 3. **Details:** title, where it was recorded, when (Exact day · Month · Year · About), "Filmed by <you>", short summary, topic pills (Growing up, Moving & immigration, Weddings, Work, Recipes, Holidays), people in this story (chips + Add person).
 4. **Transcript:** "Ready, please check it" + *Spoken in* (Haitian Creole · French · English · A mix); note that Creole needs a human read-through; each line is an editable box with its timestamp; **Show English translation** switch shows a translation under each line. **Chapters** panel: small player + **Start a chapter here (21:30)**, list of chapters.
 5. **Share:** required consent checkbox *"Rose agreed to share this recording with the family."*; choose **Save as draft** (only you and admins) or **Publish to the family**. Publishing is disabled until consent is ticked (drafts don't need it).
