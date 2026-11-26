@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -145,14 +146,15 @@ type Filter struct {
 	Q        *string
 }
 
-// List gives published stories, the story of the week first, or drafts: the viewer's own, or everyone's for admins.
+// List gives published stories, the story of the week first, or drafts: those the viewer added or tells, or everyone's
+// for admins.
 // Its stories carry no chapters or transcript; Get has them.
 func (s *Service) List(ctx context.Context, viewer family.Viewer, f Filter) ([]Story, error) {
 	params := gen.ListStoriesParams{Status: statusPublished, TellerID: f.TellerID, Topic: trimmed(f.Topic), Q: trimmed(f.Q)}
 	if f.Drafts {
 		params.Status = statusDraft
 		if !viewer.IsAdmin {
-			params.CreatedBy = &viewer.UserID
+			params.CreatedBy, params.TellerOf = &viewer.UserID, viewer.PersonID
 		}
 	}
 	var stories []Story
@@ -177,13 +179,17 @@ func (s *Service) List(ctx context.Context, viewer family.Viewer, f Filter) ([]S
 	return stories, nil
 }
 
-// Get answers for a draft only to its creator and admins; to anyone else it doesn't exist.
+// Get answers for a draft only to its creator, its teller and admins; to anyone else it doesn't exist.
 func (s *Service) Get(ctx context.Context, viewer family.Viewer, id uuid.UUID) (Story, error) {
 	var story Story
 	err := s.read(ctx, "get story", func(q *gen.Queries) error {
 		var err error
 		story, err = get(ctx, q, id)
-		if err == nil && !canSee(viewer, story.Status, story.CreatedBy) {
+		var teller *uuid.UUID
+		if story.Teller != nil {
+			teller = &story.Teller.ID
+		}
+		if err == nil && !canSee(viewer, story.Status, story.CreatedBy, teller) {
 			return ErrStoryNotFound
 		}
 		return err
@@ -234,7 +240,8 @@ func (s *Service) Create(ctx context.Context, viewer family.Viewer, in Input) (S
 	return story, nil
 }
 
-// Update is for admins and the story's creator; only admins choose the story of the week.
+// Update is for admins and the story's creator, and its teller may hide it (Patch.OnlyHides); only admins choose
+// the story of the week.
 func (s *Service) Update(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch Patch) (Story, error) {
 	// One alone would be read against the other's stored value: "1984-11-13" can't be read as a year.
 	if patch.RecordedOn.Set != patch.RecordedOnPrecision.Set {
@@ -252,7 +259,7 @@ func (s *Service) Update(ctx context.Context, viewer family.Viewer, id uuid.UUID
 				return fmt.Errorf("lock story of the week: %w", err)
 			}
 		}
-		row, err := lock(ctx, q, viewer, id)
+		row, err := lock(ctx, q, viewer, id, patch.OnlyHides())
 		if err != nil {
 			return err
 		}
@@ -273,7 +280,8 @@ func (s *Service) Update(ctx context.Context, viewer family.Viewer, id uuid.UUID
 		}
 		// Kept when still confirmed, so it says when the teller first agreed.
 		consentAt := row.ConsentConfirmedAt
-		if !f.ConsentConfirmed {
+		// A teller hiding their story withdraws consent with it, so it isn't republished without asking them again.
+		if !f.ConsentConfirmed || !canEdit(viewer, row.CreatedBy) {
 			consentAt = nil
 		} else if consentAt == nil {
 			consentAt = new(time.Now())
@@ -344,7 +352,7 @@ func (s *Service) Update(ctx context.Context, viewer family.Viewer, id uuid.UUID
 // Delete only hides the story, so it can be brought back by hand (§3.1); for admins and the story's creator.
 func (s *Service) Delete(ctx context.Context, viewer family.Viewer, id uuid.UUID) error {
 	return s.write(ctx, "delete story", func(q *gen.Queries) error {
-		if _, err := lock(ctx, q, viewer, id); err != nil {
+		if _, err := lock(ctx, q, viewer, id, false); err != nil {
 			return err
 		}
 		if err := q.SoftDeleteStory(ctx, id); err != nil {
@@ -389,8 +397,30 @@ func (s *Service) read(ctx context.Context, what string, fn func(q *gen.Queries)
 	return nil
 }
 
-func canSee(viewer family.Viewer, status string, createdBy *uuid.UUID) bool {
-	return status == statusPublished || canEdit(viewer, createdBy)
+func canSee(viewer family.Viewer, status string, createdBy, teller *uuid.UUID) bool {
+	return status == statusPublished || canEdit(viewer, createdBy) || isTeller(viewer, teller)
+}
+
+func isTeller(viewer family.Viewer, teller *uuid.UUID) bool {
+	return teller != nil && viewer.PersonID != nil && *teller == *viewer.PersonID
+}
+
+// OnlyHides is the one change a story's teller may make: take it back to draft, withdraw consent, or both. Any other
+// field set, including one added to Patch later, makes it something else.
+func (p Patch) OnlyHides() bool {
+	if !p.Status.Set && !p.ConsentConfirmed.Set {
+		return false
+	}
+	if (p.Status.Set && p.Status.Value != statusDraft) || (p.ConsentConfirmed.Set && p.ConsentConfirmed.Value) {
+		return false
+	}
+	v := reflect.ValueOf(p)
+	for i := range v.NumField() {
+		if name := v.Type().Field(i).Name; name != "Status" && name != "ConsentConfirmed" && v.Field(i).FieldByName("Set").Bool() {
+			return false
+		}
+	}
+	return true
 }
 
 func canEdit(viewer family.Viewer, createdBy *uuid.UUID) bool {
@@ -398,7 +428,8 @@ func canEdit(viewer family.Viewer, createdBy *uuid.UUID) bool {
 }
 
 // lock takes the story for a change by someone who may make it; a draft they can't see doesn't exist for them.
-func lock(ctx context.Context, q *gen.Queries, viewer family.Viewer, id uuid.UUID) (gen.LockStoryRow, error) {
+// tellerMay says the change is one the story's teller may make too.
+func lock(ctx context.Context, q *gen.Queries, viewer family.Viewer, id uuid.UUID, tellerMay bool) (gen.LockStoryRow, error) {
 	row, err := q.LockStory(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return gen.LockStoryRow{}, ErrStoryNotFound
@@ -406,11 +437,11 @@ func lock(ctx context.Context, q *gen.Queries, viewer family.Viewer, id uuid.UUI
 	if err != nil {
 		return gen.LockStoryRow{}, fmt.Errorf("lock story: %w", err)
 	}
-	if !canSee(viewer, row.Status, row.CreatedBy) {
+	if !canSee(viewer, row.Status, row.CreatedBy, row.LiveTellerID) {
 		return gen.LockStoryRow{}, ErrStoryNotFound
 	}
-	if !canEdit(viewer, row.CreatedBy) {
-		return gen.LockStoryRow{}, fmt.Errorf("%w: only admins and whoever added it can change a story", ErrNotAllowed)
+	if mayChange := canEdit(viewer, row.CreatedBy) || (tellerMay && isTeller(viewer, row.LiveTellerID)); !mayChange {
+		return gen.LockStoryRow{}, fmt.Errorf("%w: only admins and whoever added it can change a story; its teller can only hide it", ErrNotAllowed)
 	}
 	return row, nil
 }

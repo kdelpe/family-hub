@@ -147,18 +147,20 @@ SELECT s.id, s.title, s.status, s.consent_confirmed_at, s.recorded_on, s.recorde
 FROM stories s
 LEFT JOIN persons p ON p.id = s.teller_person_id AND p.deleted_at IS NULL
 WHERE s.deleted_at IS NULL AND s.status = $1
-  AND ($2::uuid IS NULL OR s.created_by = $2)
-  AND ($3::uuid IS NULL OR p.id = $3)
-  AND ($4::text IS NULL OR lower($4) = ANY(SELECT lower(t) FROM unnest(s.topics) t))
+  AND ($2::uuid IS NULL OR s.created_by = $2
+    OR p.id = $3)
+  AND ($4::uuid IS NULL OR p.id = $4)
+  AND ($5::text IS NULL OR lower($5) = ANY(SELECT lower(t) FROM unnest(s.topics) t))
   -- A search of punctuation alone parses to an empty query, which would match nothing: it searches for nothing instead.
-  AND ($5::text IS NULL OR numnode(websearch_to_tsquery('simple', $5)) = 0
-    OR s.search_tsv @@ websearch_to_tsquery('simple', $5))
+  AND ($6::text IS NULL OR numnode(websearch_to_tsquery('simple', $6)) = 0
+    OR s.search_tsv @@ websearch_to_tsquery('simple', $6))
 ORDER BY s.featured_at DESC NULLS LAST, s.created_at DESC, s.id DESC
 `
 
 type ListStoriesParams struct {
 	Status    string
 	CreatedBy *uuid.UUID
+	TellerOf  *uuid.UUID
 	TellerID  *uuid.UUID
 	Topic     *string
 	Q         *string
@@ -186,12 +188,13 @@ type ListStoriesRow struct {
 	TellerLastName      *string
 }
 
-// Published: the story of the week first, then the latest added. Drafts: the given creator's, or everyone's.
+// Published: the story of the week first, then the latest added. Drafts: those the given user added or tells, or everyone's.
 // Chapters and transcripts are left out: a list shows neither, and a transcript can be long.
 func (q *Queries) ListStories(ctx context.Context, arg ListStoriesParams) ([]ListStoriesRow, error) {
 	rows, err := q.db.Query(ctx, listStories,
 		arg.Status,
 		arg.CreatedBy,
+		arg.TellerOf,
 		arg.TellerID,
 		arg.Topic,
 		arg.Q,
@@ -275,9 +278,12 @@ func (q *Queries) ListStoryPeople(ctx context.Context, storyIds []uuid.UUID) ([]
 }
 
 const lockStory = `-- name: LockStory :one
-SELECT id, title, teller_person_id, status, consent_confirmed_at, recorded_on, recorded_on_precision, place, summary,
-  language, chapters, transcript, topics, other_people, featured_at, created_by
-FROM stories WHERE id = $1 AND deleted_at IS NULL FOR UPDATE
+SELECT s.id, s.title, s.teller_person_id, s.status, s.consent_confirmed_at, s.recorded_on, s.recorded_on_precision,
+  s.place, s.summary, s.language, s.chapters, s.transcript, s.topics, s.other_people, s.featured_at, s.created_by,
+  p.id AS live_teller_id
+FROM stories s
+LEFT JOIN persons p ON p.id = s.teller_person_id AND p.deleted_at IS NULL
+WHERE s.id = $1 AND s.deleted_at IS NULL FOR UPDATE OF s
 `
 
 type LockStoryRow struct {
@@ -297,8 +303,10 @@ type LockStoryRow struct {
 	OtherPeople         []string
 	FeaturedAt          *time.Time
 	CreatedBy           *uuid.UUID
+	LiveTellerID        *uuid.UUID
 }
 
+// live_teller_id is the teller while they're still in the tree, as Get and List see them.
 func (q *Queries) LockStory(ctx context.Context, id uuid.UUID) (LockStoryRow, error) {
 	row := q.db.QueryRow(ctx, lockStory, id)
 	var i LockStoryRow
@@ -319,6 +327,7 @@ func (q *Queries) LockStory(ctx context.Context, id uuid.UUID) (LockStoryRow, er
 		&i.OtherPeople,
 		&i.FeaturedAt,
 		&i.CreatedBy,
+		&i.LiveTellerID,
 	)
 	return i, err
 }

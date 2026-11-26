@@ -484,3 +484,75 @@ func longTranscript() []Line {
 	}
 	return lines
 }
+
+func TestTheTellerMayHideTheirStory(t *testing.T) {
+	f := newFixture(t)
+	grandma := f.person(t, "Marie-Claire", "Pluviose")
+	teller := family.Viewer{UserID: f.other.UserID, PersonID: &grandma}
+	toDraft := family.Opt[string]{Set: true, Value: "draft"}
+	noConsent := family.Opt[bool]{Set: true}
+
+	tests := []struct {
+		name       string
+		patch      Patch
+		wantErr    error
+		wantStatus string
+	}{
+		{name: "back to draft and consent withdrawn", patch: Patch{Status: toDraft, ConsentConfirmed: noConsent}, wantStatus: "draft"},
+		{name: "back to draft", patch: Patch{Status: toDraft}, wantStatus: "draft"},
+		{name: "consent alone, while it's published", patch: Patch{ConsentConfirmed: noConsent}, wantErr: ErrInvalidStory},
+		{name: "a new title", patch: Patch{Title: family.Opt[string]{Set: true, Value: "Mine"}}, wantErr: ErrNotAllowed},
+		{name: "hiding and a new title together", patch: Patch{Status: toDraft, Title: family.Opt[string]{Set: true, Value: "Mine"}}, wantErr: ErrNotAllowed},
+		{name: "publishing again", patch: Patch{Status: family.Opt[string]{Set: true, Value: "published"}}, wantErr: ErrNotAllowed},
+		{name: "an empty change", patch: Patch{}, wantErr: ErrNotAllowed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			story := f.publish(t, f.member, Input{Title: "Our wedding", TellerID: &grandma})
+
+			got, err := f.svc.Update(t.Context(), teller, story.ID, tt.patch)
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStatus, got.Status)
+			assert.False(t, got.ConsentConfirmed, "hiding withdraws consent, so it isn't republished without asking again")
+			_, err = f.svc.Update(t.Context(), f.member, story.ID, Patch{Status: family.Opt[string]{Set: true, Value: "published"}})
+			require.ErrorIs(t, err, ErrInvalidStory)
+			_, err = f.svc.Get(t.Context(), teller, story.ID)
+			require.NoError(t, err, "the teller still sees their hidden story")
+			_, err = f.svc.Get(t.Context(), f.admin, story.ID)
+			require.NoError(t, err)
+			_, err = f.svc.Get(t.Context(), family.Viewer{UserID: uuid.New()}, story.ID)
+			require.ErrorIs(t, err, ErrStoryNotFound, "the rest of the family no longer sees it")
+		})
+	}
+
+	t.Run("their drafts list has the stories they tell, while they're in the tree", func(t *testing.T) {
+		fresh := newFixture(t)
+		aunt := fresh.person(t, "Nadège", "Pluviose")
+		teller := family.Viewer{UserID: fresh.other.UserID, PersonID: &aunt}
+		_, err := fresh.svc.Create(t.Context(), fresh.member, Input{Title: "Thirty years of third grade", TellerID: &aunt})
+		require.NoError(t, err)
+		_, err = fresh.svc.Create(t.Context(), fresh.member, Input{Title: "Someone else's"})
+		require.NoError(t, err)
+
+		drafts, err := fresh.svc.List(t.Context(), teller, Filter{Drafts: true})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"Thirty years of third grade"}, titles(drafts))
+
+		_, err = fresh.pool.Exec(t.Context(), `UPDATE persons SET deleted_at = now() WHERE id = $1`, aunt)
+		require.NoError(t, err)
+		drafts, err = fresh.svc.List(t.Context(), teller, Filter{Drafts: true})
+		require.NoError(t, err)
+		assert.Empty(t, drafts)
+	})
+
+	t.Run("they can't delete it", func(t *testing.T) {
+		story := f.publish(t, f.member, Input{Title: "Our wedding", TellerID: &grandma})
+		require.ErrorIs(t, f.svc.Delete(t.Context(), teller, story.ID), ErrNotAllowed)
+	})
+}

@@ -7,7 +7,7 @@ FROM stories s
 LEFT JOIN persons p ON p.id = s.teller_person_id AND p.deleted_at IS NULL
 WHERE s.id = @id AND s.deleted_at IS NULL;
 
--- Published: the story of the week first, then the latest added. Drafts: the given creator's, or everyone's.
+-- Published: the story of the week first, then the latest added. Drafts: those the given user added or tells, or everyone's.
 -- Chapters and transcripts are left out: a list shows neither, and a transcript can be long.
 -- name: ListStories :many
 SELECT s.id, s.title, s.status, s.consent_confirmed_at, s.recorded_on, s.recorded_on_precision, s.place, s.summary,
@@ -16,7 +16,8 @@ SELECT s.id, s.title, s.status, s.consent_confirmed_at, s.recorded_on, s.recorde
 FROM stories s
 LEFT JOIN persons p ON p.id = s.teller_person_id AND p.deleted_at IS NULL
 WHERE s.deleted_at IS NULL AND s.status = @status
-  AND (sqlc.narg(created_by)::uuid IS NULL OR s.created_by = sqlc.narg(created_by))
+  AND (sqlc.narg(created_by)::uuid IS NULL OR s.created_by = sqlc.narg(created_by)
+    OR p.id = sqlc.narg(teller_of))
   AND (sqlc.narg(teller_id)::uuid IS NULL OR p.id = sqlc.narg(teller_id))
   AND (sqlc.narg(topic)::text IS NULL OR lower(sqlc.narg(topic)) = ANY(SELECT lower(t) FROM unnest(s.topics) t))
   -- A search of punctuation alone parses to an empty query, which would match nothing: it searches for nothing instead.
@@ -39,10 +40,14 @@ VALUES (@title, sqlc.narg(teller_person_id), sqlc.narg(consent_confirmed_at), sq
   @topics, @other_people, sqlc.narg(created_by))
 RETURNING id;
 
+-- live_teller_id is the teller while they're still in the tree, as Get and List see them.
 -- name: LockStory :one
-SELECT id, title, teller_person_id, status, consent_confirmed_at, recorded_on, recorded_on_precision, place, summary,
-  language, chapters, transcript, topics, other_people, featured_at, created_by
-FROM stories WHERE id = @id AND deleted_at IS NULL FOR UPDATE;
+SELECT s.id, s.title, s.teller_person_id, s.status, s.consent_confirmed_at, s.recorded_on, s.recorded_on_precision,
+  s.place, s.summary, s.language, s.chapters, s.transcript, s.topics, s.other_people, s.featured_at, s.created_by,
+  p.id AS live_teller_id
+FROM stories s
+LEFT JOIN persons p ON p.id = s.teller_person_id AND p.deleted_at IS NULL
+WHERE s.id = @id AND s.deleted_at IS NULL FOR UPDATE OF s;
 
 -- name: UpdateStory :exec
 UPDATE stories SET title = @title, teller_person_id = sqlc.narg(teller_person_id), status = @status,
