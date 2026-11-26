@@ -122,6 +122,34 @@ type Session struct {
 	UserAgent  *string
 }
 
+type Story struct {
+	ID                  uuid.UUID
+	Title               string
+	TellerPersonID      *uuid.UUID
+	Status              string
+	ConsentConfirmedAt  *time.Time
+	RecordedOn          *time.Time
+	RecordedOnPrecision *string
+	Place               *string
+	Summary             *string
+	Language            *string
+	Chapters            []byte
+	Transcript          []byte
+	Topics              []string
+	OtherPeople         []string
+	SearchTsv           interface{}
+	FeaturedAt          *time.Time
+	CreatedBy           *uuid.UUID
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	DeletedAt           *time.Time
+}
+
+type StoryPerson struct {
+	StoryID  uuid.UUID
+	PersonID uuid.UUID
+}
+
 type User struct {
 	ID                uuid.UUID
 	Email             string
