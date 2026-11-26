@@ -393,16 +393,6 @@ form.who {
   font-weight: 500;
 }
 
-.sideButton {
-  height: 44px;
-  border: 1px solid var(--input-border);
-  border-radius: 22px;
-  background: transparent;
-  font-family: inherit;
-  font-size: inherit;
-  color: var(--text);
-}
-
 .signOut {
   height: 44px;
 }
@@ -472,17 +462,6 @@ form.who {
   align-items: center;
   column-gap: 12px;
   line-height: 1.4;
-}
-
-.suggest {
-  height: 44px;
-  border: 1px solid var(--accent);
-  border-radius: 22px;
-  background: transparent;
-  font-family: inherit;
-  font-size: inherit;
-  font-weight: 600;
-  color: var(--accent);
 }
 
 .suggestForm {
