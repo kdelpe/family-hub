@@ -8,41 +8,56 @@ import { PasswordStrength } from '../../components/PasswordStrength/PasswordStre
 import { errorMessage } from '../../lib/errorMessage'
 import { lengthRefusal, passwordRule } from '../../lib/passwordStrength'
 import { signInKey, useSignInBusy } from '../../lib/useSignOut'
-import styles from './MyProfile.module.css'
+import styles from '../MyProfile/MyProfile.module.css'
+import sheet from './Account.module.css'
 
 export function SignInCard({ email }: { email: string }) {
   const [changing, setChanging] = useState(false)
   const [changed, setChanged] = useState(false)
 
   return (
-    <section aria-labelledby="mp-signin" className={styles.side}>
-      <h2 id="mp-signin" className={styles.sideTitle}>
+    <section aria-labelledby="mp-signin">
+      <h2 id="mp-signin" className={sheet.groupLabel}>
         Sign-in
       </h2>
-      <span className={styles.muted}>Password set</span>
-      {changing ? (
-        <PasswordForm
-          email={email}
-          onDone={(done) => {
-            setChanging(false)
-            setChanged(done)
-          }}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            setChanged(false)
-            setChanging(true)
-          }}
-          className={`pill ${styles.sideButton}`}
-        >
-          Change password
-        </button>
-      )}
-      <span role="status" className={styles.small}>
-        {changed && 'Password changed. You’re signed out on your other devices.'}
-      </span>
+      <div className={sheet.sheet}>
+        <div className={sheet.row}>
+          <div>
+            <h3 className={sheet.rowTitle}>Email</h3>
+            <span className={sheet.rowText}>{email}</span>
+          </div>
+        </div>
+        <div className={sheet.row}>
+          <div>
+            <h3 className={sheet.rowTitle}>Password</h3>
+            <span className={sheet.rowText}>Set</span>
+          </div>
+          {changing ? (
+            <PasswordForm
+              email={email}
+              onDone={(done) => {
+                setChanging(false)
+                setChanged(done)
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              aria-label="Change password"
+              onClick={() => {
+                setChanged(false)
+                setChanging(true)
+              }}
+              className={sheet.rowAction}
+            >
+              Change ›
+            </button>
+          )}
+          <span role="status" className={`${styles.small} ${sheet.rowStatus}`}>
+            {changed && 'Password changed. You’re signed out on your other devices.'}
+          </span>
+        </div>
+      </div>
     </section>
   )
 }
