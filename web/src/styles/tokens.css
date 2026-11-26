@@ -69,6 +69,19 @@
   --cover-current: rgba(255, 253, 248, 0.14);
   --cover-shade: rgba(30, 63, 54, 0.2);
   --logo-cover-leaf: #e0a07f;
+  /* The sign-in tree drawn on the green cover: gold branches and hills, buds that show on green. */
+  --cover-tree-branch: #d9c38c;
+  --cover-tree-root: rgba(217, 195, 140, 0.55);
+  --cover-hill-back: rgba(217, 195, 140, 0.22);
+  --cover-hill-front: rgba(217, 195, 140, 0.4);
+  --cover-ground: rgba(217, 195, 140, 0.5);
+  --cover-leaf-1: #e0a07f;
+  --cover-leaf-2: #d9c38c;
+  --cover-leaf-3: #cfe0d4;
+  --cover-leaf-4: #a7c4b2;
+  --cover-leaf-5: #eadfc2;
+  --cover-leaf-6: #c98f6e;
+  --cover-leaf-7: #8fb3a0;
   /* The sky band across the top of each signed-in page: sage to peach. */
   --sky-1: #d4e5da;
   --sky-2: #e7ecd6;

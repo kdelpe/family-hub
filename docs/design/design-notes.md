@@ -34,7 +34,7 @@ Warm, archival, calm. Parchment ground, cream cards, one deep green accent, a se
 | `--bg` | `#F6F1E7` | Page ground |
 | `--surface` | `#FFFDF8` | Cards, inputs, panels |
 | `--surface-soft` | `#FBF7EF` | Soft panels (tree area, household boxes, textareas) |
-| `--brand-panel` | `#EFE7D8` | Left brand panel on sign-in pages; nav hover |
+| `--brand-panel` | `#EFE7D8` | Hover on account-menu and admin-drawer items and the drawer buttons (the sign-in panel is the green cover since 2026-11-25) |
 | `--nav-active` | `#E9E0CF` | Current menu item, segmented control track |
 | `--border` | `#E2D9C8` | Card and panel borders |
 | `--divider` | `#EFE8DA` | Lines inside cards |
@@ -146,9 +146,13 @@ Primary: pill, `--accent` background, white 600 text. Secondary: pill, transpare
 
 ## 3. Before signing in (in this order)
 
-All five pages share a two-column layout: **left brand panel** (`--brand-panel`), **right form** (max-width 420–460px, centered, fades up 14px on load).
+All five pages (and First setup, §3.4) share a two-column layout: **left brand panel**, **right form** (max-width 420–460px, centered, fades up 14px on load).
 
-**Brand panel**, top to bottom, all centered: logo + name stacked · the animated tree (§6.1) filling the middle · tagline in Fraunces 26px, breaking after "stories,": *"A private home for our family's stories, / photos and history."* · proverb in italic `--muted`: *"Sa w plante, se li w rekòlte." — What you plant is what you harvest.*
+**Brand panel** (owner's pick A, 2026-11-25): the menu's **green cover** (`--accent` to `--cover-deep`, a thin gold double frame), so signing in opens the same book. Top to bottom, all centered: the logo on the cover (gold ring) + name stacked, the name in `--on-cover-current` and *Family Hub* in `--gold-pale` · the animated tree (§6.1) filling the middle, drawn in gold with buds that show on green (`--cover-tree-*`, `--cover-hill-*`, `--cover-leaf-1…7`) · tagline in Fraunces 26px, breaking after "stories,": *"A private home for our family's stories, / photos and history."* · proverb in italic `--on-cover-soft`: *"Sa w plante, se li w rekòlte." — What you plant is what you harvest.*
+
+**The form side** gets the sky band and its dots, as every signed-in page has (§2.1).
+
+**Under 960px**, where the two stack, the cover shrinks to a green bar over the form: the logo and name in a row, no tree or words, so the form starts on the first screen.
 
 ### 3.1 Sign in
 - Heading **"Lakay se lakay"** (`lang="ht"`), subline *"There's no place like home."*

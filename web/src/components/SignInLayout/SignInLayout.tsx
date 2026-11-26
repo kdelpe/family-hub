@@ -11,7 +11,7 @@ export function SignInLayout() {
     <div className={styles.page}>
       <section aria-label="About this site" className={styles.brand}>
         <div className={styles.identity}>
-          <Logo size={64} />
+          <Logo size={80} onCover />
           <span className={styles.names}>
             <span className={styles.familyName}>Pluviose</span>
             <span className={styles.hub}>Family Hub</span>
