@@ -535,10 +535,10 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/api/media/{id}/url` | session | `?variant=original\|poster\|mp4_720` → presigned GET (supports `Range`) |
 | PATCH | `/api/media/{id}` | uploader/admin | Caption, tags |
 | DELETE | `/api/media/{id}` | uploader/admin | Soft delete (object removal is deferred, §9) |
-| GET | `/api/stories` | session | Published stories; `?teller_id=&topic=&q=` (`q` searches title, summary and transcript); the featured one first. `?status=draft` lists drafts instead: those the caller added or tells, or everyone's for admins (the "Your drafts" row) |
-| POST | `/api/stories` | admin (members when `MEMBERS_CAN_CONTRIBUTE=true`) | Create a draft (with `person_ids`, `other_people`, and from Phase 5 `media_id`). `media_id` must be a `for_story` recording uploaded by the caller (admins may use anyone's), and not already used by another story |
-| GET/PATCH | `/api/stories/{id}` | GET: session (drafts: their creator, their teller and admins); PATCH: admin, or the creator when contributions are enabled; the teller may always hide it (§9.6) | Read / update, including chapters, transcript and publishing (requires `consent_confirmed_at`) |
-| DELETE | `/api/stories/{id}` | creator/admin | Soft delete |
+| GET | `/api/stories` | session | Published stories, without chapters or transcript (`GET /api/stories/{id}` has them); `?teller_id=&topic=&q=` (`q` searches title, summary and transcript); the featured one first. `?status=draft` lists drafts instead: those the caller added or tells, or everyone's for admins (the "Your drafts" row) |
+| POST | `/api/stories` | admin (members when `MEMBERS_CAN_CONTRIBUTE=true`, not built yet) | Create a draft (with `person_ids`, `other_people`, and from Phase 5 `media_id`). `media_id` must be a `for_story` recording uploaded by the caller (admins may use anyone's), and not already used by another story |
+| GET/PATCH | `/api/stories/{id}` | GET: session (drafts: their creator, their teller and admins); PATCH: admin, or the creator when contributions are enabled; the teller may always hide it (§9.6): a member's PATCH other than `{status: "draft", consent_confirmed: false}` (either or both) is a `403` | Read / update, including chapters, transcript and publishing (requires `consent_confirmed_at`) |
+| DELETE | `/api/stories/{id}` | admin (the creator too once members can contribute) | Soft delete |
 | GET | `/api/stories/{id}/captions.vtt` | as GET `/api/stories/{id}` | WebVTT captions generated from the transcript |
 
 ## 5. Authentication & sessions
@@ -1059,7 +1059,7 @@ A story is a recorded video of a relative telling something (video only, no audi
 - **Profiles** list "Stories <name> told" (`teller_person_id`) and "Stories about <name>" (`story_persons`). A story's year can appear on the Events timeline.
 - **Length:** long recordings can pass the 2 GiB single-PUT cap (§9.1). Until multipart uploads exist, the Add a story page says so and suggests a smaller export.
 - **Playback:** until the Phase 6 worker, stories must be H.264 MP4; an iPhone HEVC `.mov` won't play in Chrome or Firefox. So `upload-url` refuses `video/quicktime` until then (§9.1), and Add a story says which files work before the upload starts (design-notes, Scope for the MVP).
-- **Who:** drafts are seen only by their creator, their teller and admins (anyone else gets a 404); the teller (a member linked to the teller person) may hide their story at any time, taking it back to draft and withdrawing consent, but can't otherwise change, republish or delete it; a story is changed or deleted by an admin or whoever added it, and the router refuses members' other changes while `MEMBERS_CAN_CONTRIBUTE` is off; only admins choose the story of the week, which must be published, and featuring one takes it from the one before.
+- **Who:** drafts are seen only by their creator, their teller and admins (anyone else gets a 404); the teller (a member linked to the teller person) may hide their story at any time, taking it back to draft and withdrawing consent, but can't otherwise change, republish or delete it; a story is changed or deleted by an admin or whoever added it, and the stories handler refuses members' other changes while `MEMBERS_CAN_CONTRIBUTE` is off (it isn't built yet); only admins choose the story of the week, which must be published, and featuring one takes it from the one before.
 - **Drafts** are listed with `GET /api/stories?status=draft` (those the caller added or tells; admins see all), so a draft saved at any step can be found again and continued.
 
 ## 10. Family-tree queries
