@@ -77,14 +77,18 @@ describe('EventPage', () => {
     link('Older ›', older)
   })
 
-  it('moves focus back to the top of the next event', () => {
-    renderAt('/events/thanks')
-    const older = screen.getByRole('link', { name: 'Older ›Naomie is born · 2025' })
-    older.focus()
+  it.each([
+    { name: 'one with another beyond it', from: 'thanks', link: 'Older ›Naomie is born · 2025', to: 'Naomie is born' },
+    { name: 'the newest, whose Newer link goes', from: 'naomie', link: '‹ NewerThanksgiving at Fritz’s · 2026', to: 'Thanksgiving at Fritz’s' },
+    { name: 'the oldest, whose Older link goes', from: 'naomie', link: 'Older ›Jean-Robert & Nadège’s wedding · 1984', to: 'Jean-Robert & Nadège’s wedding' },
+  ])('moves focus to the top of the next event: $name', ({ from, link, to }) => {
+    renderAt(`/events/${from}`)
+    const followed = screen.getByRole('link', { name: link })
+    followed.focus()
 
-    fireEvent.click(older)
+    fireEvent.click(followed)
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Naomie is born' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: to })).toBeInTheDocument()
     expect(screen.getByRole('main')).toHaveFocus()
   })
 

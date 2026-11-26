@@ -24,13 +24,15 @@ export function EventPage() {
   const newer = list[at - 1]
   const older = list[at + 1]
 
-  // Newer and Older sit at the bottom; the next event starts at its top, and so does Tab from a followed link.
+  // Newer and Older sit at the bottom; the next event starts at its top, and so does Tab from a followed link,
+  // including one that's gone because the next event is at an end of the timeline (focus then falls to the body).
   useLayoutEffect(() => {
     if (document.scrollingElement) {
       document.scrollingElement.scrollTop = 0
     }
     const page = pageRef.current
-    if (page && page !== document.activeElement && page.contains(document.activeElement)) {
+    const focused = document.activeElement
+    if (page && page !== focused && (focused === document.body || page.contains(focused))) {
       page.focus({ preventScroll: true })
     }
   }, [id])
