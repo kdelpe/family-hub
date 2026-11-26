@@ -81,7 +81,7 @@ family-hub/
 │   ├── contacts/                 # contact methods, visibility, directory            (Phase 3)
 │   ├── event/                    # timeline events and who was there; built ahead of Phase 5, media join later
 │   ├── media/                    # upload/confirm/view; worker in Phase 6            (Phase 5)
-│   ├── story/                    # stories, chapters, transcripts, captions          (Phase 5b)
+│   ├── story/                    # stories, chapters, transcripts; built ahead of Phase 5, the video joins later
 │   ├── mail/                     # Mailer interface + net/smtp impl
 │   ├── storage/                  # Storage interface + s3.go (presign, head, delete)    (Phase 5)
 │   ├── database/
@@ -322,7 +322,7 @@ CREATE TABLE media (
   id                UUID PRIMARY KEY DEFAULT uuidv7(),
   event_id          UUID REFERENCES events(id) ON DELETE SET NULL,
   uploader_id       UUID REFERENCES users(id)  ON DELETE SET NULL,
-  kind              TEXT NOT NULL CHECK (kind IN ('photo','video','audio')),  -- audio for stories (Phase 5b)
+  kind              TEXT NOT NULL CHECK (kind IN ('photo','video')),
   for_story         BOOLEAN NOT NULL DEFAULT false,     -- a story's recording: private until a published story uses it (§9.6)
   storage_key       TEXT NOT NULL UNIQUE,               -- media/2026/<uuid>/original.<ext>
   original_filename TEXT,                               -- display only, never used in keys
@@ -355,38 +355,38 @@ CREATE TABLE media_tags (
 );
 CREATE INDEX idx_media_tags_person ON media_tags(person_id);
 
--- Stories (Phase 5b): a recorded video or audio story told by a relative (§9.6)
+-- Stories: a recorded video of a relative telling a story (§9.6). Built ahead of media; media_id joins in Phase 5
 CREATE TABLE stories (
   id                    UUID PRIMARY KEY DEFAULT uuidv7(),
   title                 TEXT NOT NULL CHECK (btrim(title) <> ''),
   teller_person_id      UUID REFERENCES persons(id) ON DELETE SET NULL,
-  media_id              UUID REFERENCES media(id)   ON DELETE SET NULL,   -- the video or audio
+  media_id              UUID REFERENCES media(id)   ON DELETE SET NULL,   -- the video (Phase 5)
   status                TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),
   consent_confirmed_at  TIMESTAMPTZ,                  -- the teller agreed to share it; required to publish
   recorded_on           DATE,
   recorded_on_precision TEXT CHECK (recorded_on_precision IN ('day','month','year','circa')),
-  recorded_by           UUID REFERENCES users(id) ON DELETE SET NULL,
   place                 TEXT,
   summary               TEXT,
-  language              TEXT,                         -- spoken language: 'ht', 'fr', 'en', 'mixed'
+  language              TEXT CHECK (language IN ('ht','fr','en','mixed')),  -- spoken language
   chapters              JSONB NOT NULL DEFAULT '[]',  -- [{"at": 400, "title": "…"}], seconds from the start
   transcript            JSONB NOT NULL DEFAULT '[]',  -- [{"at": 12, "text": "…"}], typed or pasted by an editor
   topics                TEXT[] NOT NULL DEFAULT '{}',
   other_people          TEXT[] NOT NULL DEFAULT '{}', -- people in the story who aren't in the tree ("Père Antoine")
-  search_tsv            TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple',
-                          title || ' ' || coalesce(summary, '') || ' ' ||
-                          jsonb_path_query_array(transcript, '$[*].text')::text)) STORED,  -- line texts only, not keys or timestamps; 'simple' because the stories mix Creole, French and English
+  search_tsv            TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', title || ' ' || coalesce(summary, ''))
+                          || to_tsvector('simple', transcript)) STORED,  -- the jsonb form reads only the lines' strings, unescaped; 'simple' because the stories mix Creole, French and English
   featured_at           TIMESTAMPTZ,                  -- "Story of the week": the latest featured one
   created_by            UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at            TIMESTAMPTZ,
   CHECK ((recorded_on IS NULL) = (recorded_on_precision IS NULL)),
-  CHECK (status <> 'published' OR consent_confirmed_at IS NOT NULL)
+  CHECK (status <> 'published' OR consent_confirmed_at IS NOT NULL),
+  CHECK (featured_at IS NULL OR status = 'published')
 );
 CREATE INDEX idx_stories_search ON stories USING gin (search_tsv) WHERE deleted_at IS NULL;
 CREATE INDEX idx_stories_teller ON stories(teller_person_id) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX uq_stories_media ON stories(media_id) WHERE deleted_at IS NULL;  -- one story per recording
+CREATE UNIQUE INDEX uq_stories_featured ON stories((true)) WHERE featured_at IS NOT NULL;  -- one story of the week
+CREATE UNIQUE INDEX uq_stories_media ON stories(media_id) WHERE deleted_at IS NULL;  -- one story per recording (Phase 5)
 
 CREATE TABLE story_persons (            -- tree people mentioned in or appearing in a story
   story_id  UUID NOT NULL REFERENCES stories(id)  ON DELETE CASCADE,
@@ -535,9 +535,9 @@ Server-side checks enforce this (a member's `PATCH /api/persons/{id}` is rejecte
 | GET | `/api/media/{id}/url` | session | `?variant=original\|poster\|mp4_720` → presigned GET (supports `Range`) |
 | PATCH | `/api/media/{id}` | uploader/admin | Caption, tags |
 | DELETE | `/api/media/{id}` | uploader/admin | Soft delete (object removal is deferred, §9) |
-| GET | `/api/stories` | session | Published stories; `?teller_id=&topic=&q=` (`q` searches title, summary and transcript); the featured one first. `?status=draft` lists drafts instead: the caller's own, or everyone's for admins (the "Your drafts" row) |
-| POST | `/api/stories` | admin (members when `MEMBERS_CAN_CONTRIBUTE=true`) | Create a draft (with `person_ids`, `other_people`, `media_id`). `media_id` must be a `for_story` recording uploaded by the caller (admins may use anyone's), and not already used by another story |
-| GET/PATCH | `/api/stories/{id}` | GET: session (drafts: their creator and admins); PATCH: admin, or the creator when contributions are enabled | Read / update, including chapters, transcript and publishing (requires `consent_confirmed_at`) |
+| GET | `/api/stories` | session | Published stories; `?teller_id=&topic=&q=` (`q` searches title, summary and transcript); the featured one first. `?status=draft` lists drafts instead: those the caller added or tells, or everyone's for admins (the "Your drafts" row) |
+| POST | `/api/stories` | admin (members when `MEMBERS_CAN_CONTRIBUTE=true`) | Create a draft (with `person_ids`, `other_people`, and from Phase 5 `media_id`). `media_id` must be a `for_story` recording uploaded by the caller (admins may use anyone's), and not already used by another story |
+| GET/PATCH | `/api/stories/{id}` | GET: session (drafts: their creator, their teller and admins); PATCH: admin, or the creator when contributions are enabled; the teller may always hide it (§9.6) | Read / update, including chapters, transcript and publishing (requires `consent_confirmed_at`) |
 | DELETE | `/api/stories/{id}` | creator/admin | Soft delete |
 | GET | `/api/stories/{id}/captions.vtt` | as GET `/api/stories/{id}` | WebVTT captions generated from the transcript |
 
@@ -1017,7 +1017,7 @@ The image builds its own `dist/` (the placeholder until Phase 4a, then the web s
 
 ### 9.1 Upload
 
-1. `POST /api/media/upload-url {filename, mime_type, size_bytes, event_id?, for_story?}`. Audio types are accepted only with `for_story` (a story's recording, §9.6). Server validates the MIME against an allowlist (`image/jpeg`, `image/png`, `image/webp`, `image/heic`, `image/tiff` for flatbed scans of old photos, `video/mp4`, `video/quicktime`, and for stories `audio/mpeg`, `audio/mp4`, `audio/x-m4a` (voice memos), `audio/wav`, `audio/x-wav`, `audio/wave` (old cassette transfers; browsers report WAV and M4A under these different names); TIFF and HEIC are shown through the Phase 6 JPEG variant, since browsers can't display TIFF; until that worker exists, `image/heic`, `image/tiff` and `video/quicktime` are refused for every upload, because nothing could show them yet) and `size_bytes <= MAX_UPLOAD_BYTES`; inserts a `pending` row with key `media/<yyyy>/<uuid>/original.<ext>` (extension derived from MIME, **never** from the filename); returns a presigned PUT (15 min) that signs `Content-Type` and `Content-Length`.
+1. `POST /api/media/upload-url {filename, mime_type, size_bytes, event_id?, for_story?}`. Server validates the MIME against an allowlist (`image/jpeg`, `image/png`, `image/webp`, `image/heic`, `image/tiff` for flatbed scans of old photos, `video/mp4`, `video/quicktime`; TIFF and HEIC are shown through the Phase 6 JPEG variant, since browsers can't display TIFF; until that worker exists, `image/heic`, `image/tiff` and `video/quicktime` are refused for every upload, because nothing could show them yet) and `size_bytes <= MAX_UPLOAD_BYTES`; inserts a `pending` row with key `media/<yyyy>/<uuid>/original.<ext>` (extension derived from MIME, **never** from the filename); returns a presigned PUT (15 min) that signs `Content-Type` and `Content-Length`.
 2. Browser PUTs directly to the bucket. The response's `headers` contain only `Content-Type`; browsers forbid scripts from setting `Content-Length` and send it automatically from the file body, which must equal the signed value. A SigV4-signed `Content-Length` makes the storage service reject mismatches, which is what enforces the size cap. **(verify on the chosen storage server and on R2 in the Phase 5 storage spike)**; the `HeadObject` size check in step 3 is the backstop either way.
 3. `POST /api/media/{id}/confirm` → server calls `HeadObject`, checks it exists and `ContentLength == size_bytes`, sets `status='ready'`, records tags/caption, and (Phase 6) sets `processing_status='queued'`.
 
@@ -1051,15 +1051,16 @@ MinIO was the V2 default. Its community edition is in maintenance mode and has b
 
 ### 9.6 Stories (Phase 5b)
 
-A story is a recorded video or audio of a relative telling something, with chapters and a transcript (design-notes §4.6–4.7b). Its file is a `media` row uploaded the normal way (§9.1) but with `for_story: true` on `upload-url`, which sets `media.for_story`.
+A story is a recorded video of a relative telling something (video only, no audio-only stories), with chapters and a transcript (design-notes §4.6–4.7b). Its file is a `media` row uploaded the normal way (§9.1) but with `for_story: true` on `upload-url`, which sets `media.for_story`.
 
 - **Transcripts are typed or pasted by an editor** in the MVP, as timestamped lines; chapters likewise. Captions (`captions.vtt`, on by default in the player) are generated from the transcript. Machine transcription (self-hosted Whisper or a hosted speech-to-text API) is a later, separate decision: it's a new dependency, and Haitian Creole accuracy needs a human read-through anyway.
-- **Consent:** a story is published only once `consent_confirmed_at` is set; drafts are visible to their creator and admins. Its recording follows the story, from upload on: `for_story` media never appear in `GET /api/media` (Stories lists them, not Media), and `GET /api/media/{id}` and `/url` answer for them only to the uploader and admins, plus everyone once a **published, non-deleted** story uses them. So a recording whose draft was never saved, abandoned or deleted, or isn't consented yet, stays private. `DELETE /api/media/{id}` refuses media that a non-deleted story uses; delete the story first. The captions follow the same rule as the story.
+- **Consent:** a story is published only once `consent_confirmed_at` is set, and changing its teller clears it unless it is confirmed again in the same change; drafts are visible to their creator and admins. Its recording follows the story, from upload on: `for_story` media never appear in `GET /api/media` (Stories lists them, not Media), and `GET /api/media/{id}` and `/url` answer for them only to the uploader and admins, plus everyone once a **published, non-deleted** story uses them. So a recording whose draft was never saved, abandoned or deleted, or isn't consented yet, stays private. `DELETE /api/media/{id}` refuses media that a non-deleted story uses; delete the story first. The captions follow the same rule as the story.
 - **Search** covers what was said: `search_tsv` is a generated column over title, summary and transcript, so no write path can leave it stale; `q` uses it. Tree people in a story go in `story_persons`; others ("Père Antoine") go in `other_people`, so "People in this story" can list both.
 - **Profiles** list "Stories <name> told" (`teller_person_id`) and "Stories about <name>" (`story_persons`). A story's year can appear on the Events timeline.
 - **Length:** long recordings can pass the 2 GiB single-PUT cap (§9.1). Until multipart uploads exist, the Add a story page says so and suggests a smaller export.
-- **Playback:** until the Phase 6 worker, stories must be H.264 MP4 or audio; an iPhone HEVC `.mov` won't play in Chrome or Firefox. So `upload-url` refuses `video/quicktime` until then (§9.1), and Add a story says which files work before the upload starts (design-notes, Scope for the MVP).
-- **Drafts** are listed with `GET /api/stories?status=draft` (the caller's own; admins see all), so a draft saved at any step can be found again and continued.
+- **Playback:** until the Phase 6 worker, stories must be H.264 MP4; an iPhone HEVC `.mov` won't play in Chrome or Firefox. So `upload-url` refuses `video/quicktime` until then (§9.1), and Add a story says which files work before the upload starts (design-notes, Scope for the MVP).
+- **Who:** drafts are seen only by their creator, their teller and admins (anyone else gets a 404); the teller (a member linked to the teller person) may hide their story at any time, taking it back to draft and withdrawing consent, but can't otherwise change, republish or delete it; a story is changed or deleted by an admin or whoever added it, and the router refuses members' other changes while `MEMBERS_CAN_CONTRIBUTE` is off; only admins choose the story of the week, which must be published, and featuring one takes it from the one before.
+- **Drafts** are listed with `GET /api/stories?status=draft` (those the caller added or tells; admins see all), so a draft saved at any step can be found again and continued.
 
 ## 10. Family-tree queries
 
@@ -1173,7 +1174,7 @@ Either way: `TRUSTED_PROXY=true` only when behind Caddy/the platform proxy, `COO
 
 **MVP = Phases 1 through 5b**: a working tree, logins, access requests, contact visibility and upcoming birthdays, events with photos and video, and family stories, **deployed with backups and in the family's hands**. The transcoding worker (Phase 6) comes only once you've actually hit a playback problem.
 
-**Order (changed November 2026):** after Phase 2, Phase 4a starts with the shell and the five pages before sign-in (Login, Request access, Welcome, First setup, Forgot password), which need only the auth API, so the design can be seen early. Request access already sends to `POST /api/access-requests`; until Phase 3 adds the endpoint, sending shows the general error. Its side labels are the sample family's until the frontend can read `FAMILY_SIDES`. First setup (`/setup`) showed the mockup's made-up sample until Phase 3; it now shows and saves the signed-in person's own story, contact visibility and place in the tree, and its photo button waits for Phase 5. Then Phase 3, then the rest of 4a. **Events ahead of media (2026-11-21):** while the server account was being set up, the events API and the Events timeline (no Media tab, no uploads) were built before Phase 4c's backups; photos join events in Phase 5 as planned.
+**Order (changed November 2026):** after Phase 2, Phase 4a starts with the shell and the five pages before sign-in (Login, Request access, Welcome, First setup, Forgot password), which need only the auth API, so the design can be seen early. Request access already sends to `POST /api/access-requests`; until Phase 3 adds the endpoint, sending shows the general error. Its side labels are the sample family's until the frontend can read `FAMILY_SIDES`. First setup (`/setup`) showed the mockup's made-up sample until Phase 3; it now shows and saves the signed-in person's own story, contact visibility and place in the tree, and its photo button waits for Phase 5. Then Phase 3, then the rest of 4a. **Events ahead of media (2026-11-21):** while the server account was being set up, the events API and the Events timeline (no Media tab, no uploads) were built before Phase 4c's backups; photos join events in Phase 5 as planned. **Stories ahead of media (2026-11-26):** the stories table, API and pages are built next, without the link to the video; the recording, player and captions file join in Phase 5.
 
 Real family data gets entered from Phase 4 onward, so Phase 4c deploys with backups before any media work starts, and the family can start using it then. Nothing precious should live only on a laptop. Phases 5 and 5b complete the MVP on that deployment.
 
@@ -1186,7 +1187,7 @@ Real family data gets entered from Phase 4 onward, so Phase 4c deploys with back
 | **4b. Family tree** | **Mockup first:** a standalone clickable focus-view mockup (§7) with the real family shape, tried on the owner's phone, then by one non-technical relative. Then the real focus-view family tree centered on "you" (§7), "back to me", search-to-jump, admin add-parent/child/partner/sibling flows (§7). Before the real tree, measure `GET /api/tree` for a test family of 5,000+ people on a phone; if it's too slow, build the neighborhood read (§10) and have the tree, People and profile pages use it | Sample family can be navigated by clicking, with multiple marriages and step-children shown as households, on desktop and phone; an admin can build a branch without touching raw edges; the tree's load time for 5,000+ people is measured, and the neighborhood read is built if needed |
 | **4c. First deploy** | Deploy (§14), mail provider + domain with SPF/DKIM/DMARC, nightly backups + failure alert, restore drill, TLS, basic security headers | Deployed behind TLS; login email lands in Gmail and Outlook inboxes; restore drill passes; a deliberately failed backup triggers the alert; first real invites sent |
 | **5. Events & media (originals)** | **Storage spike first:** choose the local server and prove the four capabilities in §9.5 against it and R2 with a throwaway Go test; add `storage` to compose. Then events + feed, upload/confirm/view (admin-only at first; members via `MEMBERS_CAN_CONTRIBUTE`), avatars (members can always set their own), tagging, orphan sweep, admin "missing info" tracker (§5.4) | Upload a 1 GB video from the browser and play it back with seeking |
-| **5b. Stories** | Stories with chapters, typed transcripts, captions, search, consent; Stories, A story and Add a story pages (§9.6) | Add a story with an audio file and a video file, publish it after confirming consent, find it by a word from its transcript, and play it with captions on desktop and phone |
+| **5b. Stories** | Stories with chapters, typed transcripts, captions, search, consent; Stories, A story and Add a story pages (§9.6) | Add a story with a video file, publish it after confirming consent, find it by a word from its transcript, and play it with captions on desktop and phone |
 | **6. Processing** | Worker: thumbnails, posters, H.264 variant, HEIC, EXIF; start accepting HEIC, TIFF and QuickTime uploads | An iPhone HEVC `.mov` plays in Chrome and Firefox |
 | **7. Harden** | Strict CSP covering the media bucket, runbook + handover note, export command if wanted (§11) | Second admin named and handover note written; CSP has no violations in normal use; restore drill re-run with media in the backups |
 
