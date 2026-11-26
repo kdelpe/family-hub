@@ -5,7 +5,8 @@ import { relationships, suggestRelative } from '../../api/accessRequests'
 import { authKeys, onSessionEnded, sameSession, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { refusedMessage } from '../../lib/errorMessage'
-import styles from './MyProfile.module.css'
+import styles from '../MyProfile/MyProfile.module.css'
+import sheet from './Account.module.css'
 
 // design-notes §4.8. The mockup draws only the button; the form was settled with the owner.
 export function SuggestCard({ personId, yourName }: { personId: string; yourName: string }) {
@@ -23,44 +24,50 @@ export function SuggestCard({ personId, yourName }: { personId: string; yourName
   }, [focusAfter])
 
   return (
-    <section aria-labelledby="mp-suggest" className={styles.side}>
-      <h2 id="mp-suggest" className={styles.sideTitle}>
-        Know someone who should be here?
+    <section aria-labelledby="mp-family">
+      <h2 id="mp-family" className={sheet.groupLabel}>
+        Family
       </h2>
-      <span ref={thanksRef} tabIndex={-1} role="status" className={styles.sideText}>
-        {sent && `Thanks. An admin will take a look, and if they approve, ${sent} gets an invitation by email.`}
-      </span>
-      {open ? (
-        <SuggestForm
-          personId={personId}
-          yourName={yourName}
-          onDone={(sentTo) => {
-            setOpen(false)
-            setSent(sentTo)
-            setFocusAfter(sentTo ? 'thanks' : 'button')
-          }}
-        />
-      ) : (
-        <>
-          {!sent && (
-            <p className={styles.sideText}>
-              Suggest a relative and an admin will take a look. If they approve, your relative gets an invitation by email.
-            </p>
+      <div className={sheet.sheet}>
+        <div className={sheet.row}>
+          <div>
+            <h3 className={sheet.rowTitle}>Know someone who should be here?</h3>
+            <span ref={thanksRef} tabIndex={-1} role="status" className={`${styles.sideText} ${sheet.rowText}`}>
+              {sent && `Thanks. An admin will take a look, and if they approve, ${sent} gets an invitation by email.`}
+            </span>
+            {!open && !sent && (
+              <p className={sheet.rowText}>
+                Suggest a relative and an admin will take a look. If they approve, your relative gets an invitation by email.
+              </p>
+            )}
+          </div>
+          {open ? (
+            <SuggestForm
+              personId={personId}
+              yourName={yourName}
+              onDone={(sentTo) => {
+                setOpen(false)
+                setSent(sentTo)
+                setFocusAfter(sentTo ? 'thanks' : 'button')
+              }}
+            />
+          ) : (
+            <button
+              ref={buttonRef}
+              type="button"
+              aria-label={sent ? 'Suggest someone else' : 'Suggest a relative'}
+              onClick={() => {
+                setSent(null)
+                setFocusAfter(null)
+                setOpen(true)
+              }}
+              className={sheet.rowAction}
+            >
+              {sent ? 'Suggest someone else ›' : 'Suggest ›'}
+            </button>
           )}
-          <button
-            ref={buttonRef}
-            type="button"
-            onClick={() => {
-              setSent(null)
-              setFocusAfter(null)
-              setOpen(true)
-            }}
-            className={`pill ${styles.suggest}`}
-          >
-            {sent ? 'Suggest someone else' : 'Suggest a relative'}
-          </button>
-        </>
-      )}
+        </div>
+      </div>
     </section>
   )
 }

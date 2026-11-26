@@ -1,9 +1,9 @@
 .page {
-  max-width: 560px;
+  max-width: 640px;
   padding: 40px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 .title {
@@ -13,6 +13,133 @@
   font-weight: 500;
 }
 
+.who {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The account menu's picture, larger, with a gold ring as on the cover. */
+.picture {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--on-cover-current);
+  font-family: var(--font-serif);
+  font-size: 26px;
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 0 0 4px var(--gold);
+}
+
+.name {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.email {
+  display: block;
+  color: var(--muted);
+}
+
 .card {
   scroll-margin-top: 24px;
+}
+
+/* Settings sheets (owner's pick A, 2026-11-25), built like the account menu: a small label over a frosted panel,
+   one row per setting with a hairline between. A row's form opens inside it. */
+.groupLabel {
+  margin: 0 0 8px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.sheet {
+  padding: 4px 0;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    inset 0 1px 0 var(--frost-edge),
+    0 12px 30px var(--shadow-press);
+}
+
+.row {
+  position: relative;
+  padding: 14px 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 16px;
+  overflow-wrap: anywhere;
+}
+
+.row + .row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* A row's form, and its status line, take the whole width under it. */
+.row > form,
+.rowStatus {
+  grid-column: 1 / -1;
+}
+
+.row > form {
+  margin-top: 12px;
+}
+
+.rowTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.rowText {
+  display: block;
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.rowAction {
+  padding: 8px 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rowAction:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 32px 16px 40px;
+  }
+
+  .title {
+    font-size: 32px;
+  }
 }
