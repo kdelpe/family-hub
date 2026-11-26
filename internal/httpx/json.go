@@ -18,11 +18,16 @@ func JSON(w http.ResponseWriter, status int, v any) {
 
 // DecodeJSON reads one JSON object into dst; on false it has already answered.
 func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	return DecodeJSONUpTo(w, r, dst, maxJSONBody)
+}
+
+// DecodeJSONUpTo is DecodeJSON with its own cap on the body, for the few requests that carry long text.
+func DecodeJSONUpTo(w http.ResponseWriter, r *http.Request, dst any, maxBytes int64) bool {
 	if mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mediaType != "application/json" {
 		Error(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "send application/json")
 		return false
 	}
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody))
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
 	dec.DisallowUnknownFields()
 	err := dec.Decode(dst)
 	if err == nil {
