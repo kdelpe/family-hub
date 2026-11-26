@@ -1,19 +1,21 @@
 import { useIsMutating, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, m } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router'
 
 import { onSessionEnded, sameSession, sessionGeneration } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { createEventKey, deleteEvent, eventKeys, eventsQuery, type FamilyEvent } from '../../api/events'
 import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
 import { useToast } from '../../components/Toaster/Toaster'
-import { bornOn, year } from '../../lib/dates'
+import { year } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
 import { useMotionPaused, useReducedMotion } from '../../lib/motion'
 import { useSignedIn } from '../../lib/useSignedIn'
 import styles from './Events.module.css'
 import { NewEvent } from './NewEvent'
 import { hideEvent, unhideEvent, usePendingRemovals } from './pendingRemovals'
+import { whenItHappened } from './whenItHappened'
 import { undated, YearHandle } from './YearHandle'
 
 const yearOf = (event: FamilyEvent) => event.date?.match(/^\d{4}/)?.[0] ?? undated
@@ -346,7 +348,12 @@ function TimelineEntry({
       <span aria-hidden="true" className={styles.tick} />
       <m.article layout="position" className={styles.card}>
         <div className={styles.cardHead}>
-          <h2 className={styles.cardTitle}>{event.title}</h2>
+          <h2 className={styles.cardTitle}>
+            {/* Covers the whole card, so the card opens the event's page. */}
+            <Link to={`/events/${event.id}`} className={styles.open}>
+              {event.title}
+            </Link>
+          </h2>
           {onRemove && (
             <button type="button" aria-label={`Remove “${event.title}”`} onClick={onRemove} className={styles.removeEvent}>
               ×
@@ -358,12 +365,4 @@ function TimelineEntry({
       </m.article>
     </m.li>
   )
-}
-
-// "November 13, 1984", "July 2025", "1984", or "Around 1962", as the design writes them.
-function whenItHappened(event: FamilyEvent) {
-  if (event.date_precision === 'circa') {
-    return `Around ${event.date}`
-  }
-  return bornOn(event.date, event.date_precision)
 }

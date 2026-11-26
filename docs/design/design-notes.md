@@ -315,6 +315,16 @@ Title **Events**. Segmented **Timeline / Media**, plus two buttons shown to admi
   - Saving closes the panel, says *Saved "…"*, and the event takes its place on the timeline by date.
   - A refused save keeps the panel and what was typed, and says why.
 
+### 4.5a An event (`/events/<id>`)
+
+Owner's picks, 2026-11-25: layout **B2, full-width cover**, and the **full-screen viewer** for its photos. Clicking anywhere on a timeline card opens its page (the title is the link; an admin's × stays above it), and Events stays lit in the menu.
+
+- **‹ Events** back to the timeline. On the album paper: the **cover**, the event's first photo across the full width, with the title and *date · place* on it over a soft shade; then the story, *In these photos: …* (names from the photos' tags), and the rest of its photos and videos as mounted prints with their captions.
+- **Until uploads arrive (Phase 5)**, the cover is a dashed frame, *No photos or videos yet* / *The first photo added becomes the cover.*, with the title, date · place and story under it.
+- Under the album, links to the events either side on the timeline: **‹ Newer** and **Older ›**, each with its title · year; none at either end.
+- An event that isn't there (removed, or a wrong link): *This event isn't in the album. It may have been removed.*
+- **Viewer (Phase 5):** tapping the cover or a print opens a dark full-screen viewer on it: ‹ › arrows, swipe on a phone, ← → keys, Esc or × to close; under the photo its caption, who's tagged (links to their profiles), *3 of 6*, and thumbnails to jump. Videos play there.
+
 ### 4.6 Stories (own menu item)
 - **Story of the week** hero: large video still with play button and duration, title, storyteller (avatar, relation, recorded date), short summary, people/topic chips, **Watch the story**.
 - **Storytellers** row: filter by teller (shows count; older audio like "cassette, 1994" called out). Clicking again clears.

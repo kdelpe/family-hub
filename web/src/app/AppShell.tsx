@@ -49,7 +49,8 @@ function MenuItem({
       <Tooltip.Trigger asChild>
         <NavLink
           to={path}
-          end
+          // Only Home needs an exact match, so a page under a menu item's path (an event's, under /events) keeps it lit.
+          end={path === '/'}
           aria-label={tab ? label : undefined}
           data-pointed={pointed || undefined}
           onPointerEnter={(event) => event.pointerType === 'mouse' && setPointed(true)}
