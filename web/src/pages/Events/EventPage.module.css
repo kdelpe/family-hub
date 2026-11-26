@@ -5,6 +5,11 @@
   gap: 20px;
 }
 
+/* Focused only to move Tab back to the top after Newer or Older. */
+.page:focus {
+  outline: none;
+}
+
 .back {
   align-self: flex-start;
   font-weight: 600;
@@ -109,6 +114,7 @@
   background: var(--surface);
   color: var(--text);
   text-decoration: none;
+  overflow-wrap: anywhere;
 }
 
 .neighbor small {

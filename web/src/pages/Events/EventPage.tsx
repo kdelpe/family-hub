@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useLayoutEffect } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { eventsQuery, type FamilyEvent } from '../../api/events'
@@ -13,6 +13,7 @@ import styles from './EventPage.module.css'
 // photos and videos, and the viewer that opens them, come with uploads (Phase 5).
 export function EventPage() {
   const { id = '' } = useParams()
+  const pageRef = useRef<HTMLElement>(null)
   // The timeline's list: usually already loaded, and it gives the events either side.
   const events = useQuery(eventsQuery)
   // As on the timeline: one being removed (its Undo still showing) is already gone.
@@ -23,15 +24,19 @@ export function EventPage() {
   const newer = list[at - 1]
   const older = list[at + 1]
 
-  // Newer and Older sit at the bottom; the next event starts at its top.
+  // Newer and Older sit at the bottom; the next event starts at its top, and so does Tab from a followed link.
   useLayoutEffect(() => {
     if (document.scrollingElement) {
       document.scrollingElement.scrollTop = 0
     }
+    const page = pageRef.current
+    if (page && page !== document.activeElement && page.contains(document.activeElement)) {
+      page.focus({ preventScroll: true })
+    }
   }, [id])
 
   return (
-    <main className={styles.page}>
+    <main ref={pageRef} tabIndex={-1} className={styles.page}>
       <title>{`${event?.title ?? 'Event'} — Pluviose Family Hub`}</title>
       <Link to="/events" className={styles.back}>
         ‹ Events

@@ -77,6 +77,17 @@ describe('EventPage', () => {
     link('Older ›', older)
   })
 
+  it('moves focus back to the top of the next event', () => {
+    renderAt('/events/thanks')
+    const older = screen.getByRole('link', { name: 'Older ›Naomie is born · 2025' })
+    older.focus()
+
+    fireEvent.click(older)
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Naomie is born' })).toBeInTheDocument()
+    expect(screen.getByRole('main')).toHaveFocus()
+  })
+
   it('says so when the event isn’t there', () => {
     renderAt('/events/gone')
 
