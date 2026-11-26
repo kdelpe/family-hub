@@ -26,6 +26,7 @@ type Handlers struct {
 	Access   *handler.Access
 	Home     *handler.Home
 	Events   *handler.Events
+	Stories  *handler.Stories
 }
 
 type Middleware struct {
@@ -86,6 +87,10 @@ func New(h Handlers, mw Middleware) http.Handler {
 			r.Get("/home", h.Home.Show)
 			r.Get("/events", h.Events.List)
 			r.Get("/events/{id}", h.Events.Get)
+			r.Get("/stories", h.Stories.List)
+			r.Get("/stories/{id}", h.Stories.Get)
+			// Admins, and a member hiding a story they tell; the handler and service check (§9.6).
+			r.Patch("/stories/{id}", h.Stories.Update)
 			// Members may change their own bio; the service checks (§4).
 			r.Patch("/persons/{id}", h.Family.UpdatePerson)
 			r.Get("/persons/{id}/contacts", h.Contacts.ListFor)
@@ -123,6 +128,8 @@ func New(h Handlers, mw Middleware) http.Handler {
 				r.Post("/events", h.Events.Create)
 				r.Patch("/events/{id}", h.Events.Update)
 				r.Delete("/events/{id}", h.Events.Delete)
+				r.Post("/stories", h.Stories.Create)
+				r.Delete("/stories/{id}", h.Stories.Delete)
 			})
 		})
 	})

@@ -23,6 +23,7 @@ import (
 	"github.com/kdelpe/family-hub/internal/mail"
 	"github.com/kdelpe/family-hub/internal/ratelimit"
 	"github.com/kdelpe/family-hub/internal/router"
+	"github.com/kdelpe/family-hub/internal/story"
 )
 
 const (
@@ -107,6 +108,7 @@ func newServer(pool *pgxpool.Pool, cfg config.Config) (*http.Server, *auth.Reset
 			Access:   handler.NewAccess(admin.NewAccessRequests(pool)),
 			Home:     handler.NewHome(familySvc, cfg.Timezone),
 			Events:   handler.NewEvents(event.NewService(pool)),
+			Stories:  handler.NewStories(story.NewService(pool)),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(auth.NewSessions(pool), cookie).Require,
