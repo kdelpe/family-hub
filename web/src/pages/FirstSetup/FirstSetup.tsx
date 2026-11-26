@@ -263,7 +263,8 @@ function cousinsLine(cousins: TreePerson[]) {
 }
 
 // Parents, grandparents and living first cousins (children of a parent's siblings), by birth or adoption: foster
-// links aren't family (architecture §3.4).
+// links aren't family (architecture §3.4). The hub follows the Pluviose family, so grandparents and cousins from the
+// other side (`second`) are left out; a parent from it stays (owner's call, 2026-11-25).
 function family(tree: Tree, personId: string) {
   const byId = new Map(tree.persons.map((p) => [p.id, p]))
   const parentIds = new Map<string, string[]>()
@@ -283,10 +284,11 @@ function family(tree: Tree, personId: string) {
   const siblings = new Set([personId, ...parents.flatMap(childrenOf)])
   const auntsAndUncles = new Set(grandparents.flatMap(childrenOf).filter((id) => !parents.includes(id)))
   const cousins = [...auntsAndUncles].flatMap(childrenOf).filter((id) => !siblings.has(id))
+  const pluviose = (p: TreePerson) => p.side !== 'second'
   return {
     parents: people(parents),
-    grandparents: people(grandparents),
-    cousins: people(cousins).filter((p) => !p.is_deceased),
+    grandparents: people(grandparents).filter(pluviose),
+    cousins: people(cousins).filter((p) => pluviose(p) && !p.is_deceased),
   }
 }
 
