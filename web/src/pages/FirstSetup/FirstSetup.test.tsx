@@ -9,7 +9,7 @@ import { FirstSetup } from './FirstSetup'
 type Answer = { status: number; body?: unknown }
 
 const darlineLogin = { id: 'u', email: 'darline@example.com', role: 'member', person_id: 'darline' }
-const darline = { id: 'darline', first_name: 'Darline', last_name: 'Monestime', bio: 'Physical therapist in Miami.', birth_date: null, birth_date_precision: null }
+const darline = { id: 'darline', first_name: 'Darline', last_name: 'Pluviose', bio: 'Physical therapist in Miami.', birth_date: null, birth_date_precision: null }
 
 const contact = (id: string, kind: string, value: string, platform: string | null = null) => ({
   id,
@@ -22,7 +22,7 @@ const contact = (id: string, kind: string, value: string, platform: string | nul
   shared_with_you: false,
 })
 
-const person = (id: string, first_name: string, last_name: string, side: string | null = 'second', is_deceased = false) => ({
+const person = (id: string, first_name: string, last_name: string, side: string | null = 'first', is_deceased = false) => ({
   id,
   first_name,
   last_name,
@@ -34,15 +34,15 @@ const parent = (parent_id: string, child_id: string, subtype = 'biological') => 
 
 const tree = {
   persons: [
-    person('lucien', 'Lucien', 'Monestime'),
-    person('rose', 'Rose', 'Monestime'),
-    person('frantz', 'Frantz', 'Monestime'),
-    person('mirlande', 'Mirlande', 'Monestime'),
-    person('darline', 'Darline', 'Monestime'),
-    person('paul', 'Paul', 'Monestime'),
+    person('lucien', 'Lucien', 'Pluviose'),
+    person('rose', 'Rose', 'Pluviose'),
+    person('frantz', 'Frantz', 'Pluviose'),
+    person('mirlande', 'Mirlande', 'Pluviose'),
+    person('darline', 'Darline', 'Pluviose'),
+    person('paul', 'Paul', 'Pluviose'),
     person('maya', 'Maya', 'Pluviose'),
     person('fritz', 'Fritz', 'Pluviose'),
-    person('ghost', 'Ghost', 'Monestime', 'second', true),
+    person('ghost', 'Ghost', 'Pluviose', 'first', true),
     person('foster', 'Foster', 'Parent'),
   ],
   relationships: [
@@ -108,7 +108,7 @@ describe('FirstSetup', () => {
     const { fetch } = renderPage()
     expect(await screen.findByLabelText('A line or two about you')).toHaveValue('Physical therapist in Miami.')
     expect(screen.getByText('Step 1 of 3')).toBeInTheDocument()
-    expect(screen.getByText('DM')).toBeInTheDocument()
+    expect(screen.getByText('DP')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
 
     click('Continue')
@@ -254,10 +254,10 @@ describe('FirstSetup', () => {
     click('Continue')
     click('Continue')
 
-    expect(await screen.findByText('Lucien Monestime')).toBeInTheDocument()
-    expect(screen.getByText('Rose Monestime')).toBeInTheDocument()
-    expect(screen.getByText('Frantz Monestime')).toBeInTheDocument()
-    expect(screen.getByText('Mirlande Monestime')).toBeInTheDocument()
+    expect(await screen.findByText('Lucien Pluviose')).toBeInTheDocument()
+    expect(screen.getByText('Rose Pluviose')).toBeInTheDocument()
+    expect(screen.getByText('Frantz Pluviose')).toBeInTheDocument()
+    expect(screen.getByText('Mirlande Pluviose')).toBeInTheDocument()
     expect(screen.queryByText('Foster Parent')).not.toBeInTheDocument()
     expect(screen.getByText('Darline · You')).toBeInTheDocument()
     expect(
@@ -265,8 +265,36 @@ describe('FirstSetup', () => {
     ).toBeInTheDocument()
   })
 
+  it('leaves out the Monestime side’s grandparents and cousins, but not a parent from it', async () => {
+    renderPage({
+      'GET /api/tree': {
+        status: 200,
+        body: {
+          persons: [
+            ...tree.persons.filter((p) => p.id !== 'mirlande'),
+            person('mirlande', 'Mirlande', 'Pluviose', 'second'),
+            person('odette', 'Odette', 'Monestime', 'second'),
+            person('serge', 'Serge', 'Monestime', 'second'),
+            person('kerline', 'Kerline', 'Monestime', 'second'),
+          ],
+          relationships: [...tree.relationships, parent('odette', 'mirlande'), parent('odette', 'serge'), parent('serge', 'kerline')],
+        },
+      },
+    })
+    await screen.findByLabelText('A line or two about you')
+    click('Continue')
+    click('Continue')
+
+    expect(await screen.findByText('Lucien Pluviose')).toBeInTheDocument()
+    expect(screen.getByText('Mirlande Pluviose')).toBeInTheDocument()
+    expect(screen.queryByText('Odette Monestime')).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Your cousins Maya and Fritz are here too. Something look wrong? Let an admin know and they’ll fix it.'),
+    ).toBeInTheDocument()
+  })
+
   it('counts a cousin your parents also fostered, and names three before “and N more”', async () => {
-    const extra = ['sabine', 'lise', 'jean'].map((id) => person(id, id[0]!.toUpperCase() + id.slice(1), 'Monestime'))
+    const extra = ['sabine', 'lise', 'jean'].map((id) => person(id, id[0]!.toUpperCase() + id.slice(1), 'Pluviose'))
     renderPage({
       'GET /api/tree': {
         status: 200,
@@ -286,7 +314,7 @@ describe('FirstSetup', () => {
   })
 
   it('says so when your parents aren’t in the tree yet', async () => {
-    renderPage({ 'GET /api/tree': { status: 200, body: { persons: [person('darline', 'Darline', 'Monestime')], relationships: [] } } })
+    renderPage({ 'GET /api/tree': { status: 200, body: { persons: [person('darline', 'Darline', 'Pluviose')], relationships: [] } } })
     await screen.findByLabelText('A line or two about you')
     click('Continue')
     click('Continue')

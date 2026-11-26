@@ -180,7 +180,7 @@ All five pages (and First setup, §3.4) share a two-column layout: **left brand 
 ### 3.4 First-time setup (3 steps, progress bar, Back / Continue / Skip for now)
 1. *"Let the family see who you are"*: photo (optional now) + "A line or two about you".
 2. *"How can family reach you?"*: phone, email, address and **social accounts** (WhatsApp, Instagram, …), each with a switch, **all start as "Only me"**; label flips to "Visible to family" (email, social) or "Family can ask" (phone, WhatsApp, address). Footer: admins can see everything.
-3. *"Here's your place in the family"*: grandparents → parents → **You** highlighted; *"Something look wrong? Let an admin know and they'll fix it."* → **Go to my home page**.
+3. *"Here's your place in the family"*: grandparents → parents → **You** highlighted. Only the Pluviose side's grandparents and cousins are named; a parent from the other side still shows (owner's call, 2026-11-25); *"Something look wrong? Let an admin know and they'll fix it."* → **Go to my home page**.
 
 Not drawn in the mockup, proposed with the real data (November 2026):
 - It shows the signed-in person's own data. **Continue** on step 1 saves a changed story (an error keeps them on the step); **Skip for now** leaves it as it was. The switches save as soon as they're flipped, the same switch as My profile's.
