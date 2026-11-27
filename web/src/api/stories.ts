@@ -30,6 +30,7 @@ export const storyKeys = {
   published: ['stories', 'published'] as const,
   drafts: ['stories', 'drafts'] as const,
   search: (q: string) => ['stories', 'search', q] as const,
+  one: (id: string) => ['stories', 'one', id] as const,
 }
 
 const list = (query: string, signal?: AbortSignal) =>
@@ -52,3 +53,12 @@ export const searchStoriesQuery = (q: string) => ({
   queryKey: storyKeys.search(q),
   queryFn: ({ signal }: { signal?: AbortSignal }) => list(`?${new URLSearchParams({ q })}`, signal),
 })
+
+export const storyQuery = (id: string) => ({
+  queryKey: storyKeys.one(id),
+  queryFn: ({ signal }: { signal?: AbortSignal }) => api<Story>('GET', `/stories/${encodeURIComponent(id)}`, { signal }),
+})
+
+// The storyteller's own change: back to a draft, consent withdrawn, so it isn't shared again without asking them.
+export const hideStory = (id: string) =>
+  api<Story>('PATCH', `/stories/${encodeURIComponent(id)}`, { body: { status: 'draft', consent_confirmed: false } })
