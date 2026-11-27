@@ -4,21 +4,17 @@ import { Link } from 'react-router'
 
 import { draftStoriesQuery, publishedStoriesQuery, searchStoriesQuery, type Story, type StoryPerson } from '../../api/stories'
 import { MenuIcon } from '../../components/MenuIcon/MenuIcon'
-import { bornOn } from '../../lib/dates'
 import { errorMessage } from '../../lib/errorMessage'
-import { fullName, initials } from '../../lib/names'
+import { fullName } from '../../lib/names'
 import { useRelations } from '../../lib/useRelations'
 import { useSignedIn } from '../../lib/useSignedIn'
+import { Portrait } from './Portrait'
 import styles from './Stories.module.css'
+import { pick, recorded, stories, yourRelation } from './storyText'
 
 // The Add a story guide's topics (design-notes §4.7b), in its order; any others follow A–Z.
 const topicOrder = ['Growing up', 'Moving & immigration', 'Weddings', 'Work', 'Recipes', 'Holidays']
-const tones = [styles.t1, styles.t2, styles.t3, styles.t4, styles.t5]
 const stills = [styles.v1, styles.v2, styles.v3, styles.v4, styles.v5, styles.v6]
-// The same person or story always gets the same colour.
-const pick = <T,>(list: T[], id: string) => list[[...id].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 0) % list.length]!
-const stories = (n: number) => `${n} ${n === 1 ? 'story' : 'stories'}`
-const recorded = (s: Story) => bornOn(s.recorded_on, s.recorded_on_precision)
 
 // Stories (design-notes §4.6).
 export function Stories() {
@@ -109,7 +105,7 @@ export function Stories() {
                     onClick={() => setTeller((was) => (was === person.id ? null : person.id))}
                     className={styles.teller}
                   >
-                    <Portrait person={person} />
+                    <Portrait person={person} className={styles.tellerPortrait} />
                     <b>{person.first_name}</b>
                     <small>{stories(count)}</small>
                   </button>
@@ -179,7 +175,7 @@ function Featured({ story }: { story: Story }) {
   const { relations } = useRelations(user?.person_id ?? null, story.teller !== null)
   const relation = story.teller ? relations?.get(story.teller.id) : undefined
   const when = recorded(story)
-  const about = [relation && (relation === 'You' ? relation : `Your ${relation.toLowerCase()}`), when && `recorded ${when}`]
+  const about = [relation && yourRelation(relation), when && `recorded ${when}`]
     .filter(Boolean)
     .join(' · ')
   const aboutLine = about && about.charAt(0).toUpperCase() + about.slice(1)
@@ -237,14 +233,6 @@ function Still({ story }: { story: Story }) {
         </i>
       </span>
       {story.status === 'draft' && <span className={styles.draftChip}>Draft</span>}
-    </span>
-  )
-}
-
-function Portrait({ person, small = false }: { person: StoryPerson; small?: boolean }) {
-  return (
-    <span aria-hidden="true" className={[styles.portrait, small && styles.portraitSmall, pick(tones, person.id)].filter(Boolean).join(' ')}>
-      {initials(person)}
     </span>
   )
 }
