@@ -157,4 +157,70 @@ VALUES
    'He has a box of old photos from Cap-Haïtien he wants to share.', 'member_suggestion',
    (SELECT id FROM users WHERE email = 'stanley.jl@example.com'), now() - interval '1 day');
 
+
+-- The Stories mockup's (design-notes §4.6–4.7), added by Maya: How we came to Brooklyn is the story of the week and
+-- the one with chapters and a transcript; Grandma's kitchen is her draft. No video until uploads arrive (Phase 5).
+CREATE TEMP TABLE seed_story (k text PRIMARY KEY, id uuid NOT NULL) ON COMMIT DROP;
+INSERT INTO seed_story
+SELECT k, ('019a0000-0000-7000-8000-1000000000' || k)::uuid
+FROM unnest(ARRAY['01','02','03','04','05','06','07','08','09']) k;
+
+INSERT INTO stories (id, title, teller_person_id, status, consent_confirmed_at, recorded_on, recorded_on_precision,
+                     place, summary, language, topics, other_people, featured_at, created_by, created_at)
+SELECT st.id, x.title, t.id, x.status, CASE WHEN x.status = 'published' THEN now() END, x.recorded::date, x.precision,
+       x.place, x.summary, x.language, x.topics::text[], x.other_people::text[], CASE WHEN x.featured THEN now() END, maya.id,
+       now() - x.added_ago
+FROM (VALUES
+  ('01', 'How we came to Brooklyn', '07', 'published', '2026-10-01', 'month', 'Nadège’s kitchen',
+   'Jean-Robert remembers the night they left Jacmel, the cold January in 1972 when the family landed at JFK, and the first winter coat he ever owned.',
+   'mixed', '{"Moving & immigration"}', '{"Père Antoine"}', true, interval '1 hour'),
+  ('02', 'Thirty years of third grade', '08', 'published', '2026-08-01', 'month', NULL,
+   'Teaching, and her first classroom.', 'en', '{"Work"}', '{}', false, interval '2 hours'),
+  ('03', 'The night the band bus broke down', '07', 'published', '2026-09-01', 'month', NULL,
+   'The 1991 state finals.', 'en', '{"Growing up"}', '{}', false, interval '3 hours'),
+  ('04', 'Joseph and the yellow cab', '04', 'published', '2009-01-01', 'year', NULL,
+   'Thirty years behind the wheel.', 'ht', '{"Work"}', '{}', false, interval '4 hours'),
+  ('05', 'Our wedding on Rue Sainte-Anne', '04', 'published', '2009-01-01', 'year', NULL,
+   'The church, the rain and the band.', 'ht', '{"Weddings"}', '{}', false, interval '5 hours'),
+  ('06', 'Fritz’s Thanksgiving turkey', '15', 'published', '2026-11-01', 'month', NULL,
+   'The recipe, start to finish.', 'en', '{"Recipes"}', '{}', false, interval '6 hours'),
+  ('07', 'Christmas Eve, 1988', '08', 'published', '2025-12-01', 'month', NULL,
+   'The snow, the soup joumou and midnight mass.', 'en', '{"Holidays"}', '{}', false, interval '7 hours'),
+  ('08', 'The first apartment on Nostrand', '03', 'published', '2002-01-01', 'year', NULL,
+   'Six people, two rooms.', 'mixed', '{"Moving & immigration"}', '{}', false, interval '8 hours'),
+  ('09', 'Grandma’s kitchen in Jacmel', '08', 'draft', '2026-11-01', 'month', NULL,
+   NULL, 'en', '{"Recipes"}', '{}', false, interval '30 minutes')
+) AS x(k, title, teller, status, recorded, precision, place, summary, language, topics, other_people, featured, added_ago)
+JOIN seed_story st USING (k)
+JOIN seed_person t ON t.k = x.teller
+CROSS JOIN (SELECT id FROM users WHERE email = 'maya.pluviose@example.com') maya;
+
+UPDATE stories SET
+  chapters = '[{"at": 0, "title": "Growing up in Jacmel"}, {"at": 495, "title": "The night we left"},
+               {"at": 1050, "title": "Landing at JFK"}, {"at": 1450, "title": "The first winter"},
+               {"at": 1905, "title": "Brooklyn becomes home"}]',
+  transcript = '[
+    {"at": 0, "text": "We lived two streets from the market in Jacmel, over Grandpa Jean-Baptiste’s bakery."},
+    {"at": 62, "text": "We had the sea in front and the mountains behind. As a boy I thought that was the whole world."},
+    {"at": 190, "text": "Manman sang while she cooked. Even now when I smell pikliz, I hear her."},
+    {"at": 340, "text": "My sister Marie-Thérèse and I sold pen mayi on the road to the tourists, two for a gourde."},
+    {"at": 495, "text": "Papa had gone ahead to New York. One night in December his letter came: “Nou prale.” We are going."},
+    {"at": 610, "text": "We had one suitcase each. Manman sewed money into the lining of my coat."},
+    {"at": 780, "text": "Père Antoine drove us to the airport in Port-au-Prince. Nobody talked the whole way."},
+    {"at": 1050, "text": "When the doors opened at JFK, the cold hit me in the chest. I had never felt anything like it."},
+    {"at": 1180, "text": "Papa was waiting with three coats over his arm. None of them fit."},
+    {"at": 1450, "text": "That first winter we lived six people in two rooms on Nostrand Avenue."},
+    {"at": 1620, "text": "I saw snow for the first time from the window and ran out in my socks."},
+    {"at": 1905, "text": "By spring Papa was driving a yellow cab, and Manman was cooking for half the building."},
+    {"at": 2100, "text": "People ask me where home is. Home is where Manman’s pot was on the stove."}
+  ]'
+WHERE id = (SELECT id FROM seed_story WHERE k = '01');
+
+INSERT INTO story_persons (story_id, person_id)
+SELECT st.id, p.id
+FROM (VALUES ('01', '01'), ('01', '03'), ('01', '04'), ('01', '0a'), ('04', '03'), ('05', '03'), ('06', '16'),
+             ('07', '07'), ('07', '0f'), ('08', '04'), ('08', '07'), ('09', '06')) AS x(story, person)
+JOIN seed_story st ON st.k = x.story
+JOIN seed_person p ON p.k = x.person;
+
 COMMIT;

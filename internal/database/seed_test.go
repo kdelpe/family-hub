@@ -44,6 +44,13 @@ func TestSeed(t *testing.T) {
 		{name: "every parent is at least 15 years older than their child, so no link is backwards",
 			query: `SELECT count(*) FROM relationships r JOIN persons p ON p.id = r.person_a JOIN persons c ON c.id = r.person_b
 				WHERE r.type = 'parent_child' AND p.birth_date > c.birth_date - interval '15 years'`},
+		{name: "stories", query: `SELECT count(*) FROM stories WHERE status = 'published'`, want: 8},
+		{name: "a draft", query: `SELECT count(*) FROM stories WHERE status = 'draft'`, want: 1},
+		{name: "one story of the week", query: `SELECT count(*) FROM stories WHERE featured_at IS NOT NULL`, want: 1},
+		{name: "people tagged in stories", query: `SELECT count(*) FROM story_persons`, want: 12},
+		{name: "its transcript is searchable", query: `SELECT count(*) FROM stories WHERE search_tsv @@ websearch_to_tsquery('simple', 'snow socks')`, want: 1},
+		{name: "nobody tells a story recorded after they died",
+			query: `SELECT count(*) FROM stories s JOIN persons p ON p.id = s.teller_person_id WHERE s.recorded_on > p.death_date`},
 		{name: "invites as the mockup shows them, one open and one expired",
 			query: `SELECT count(*) FROM auth_tokens WHERE purpose = 'invite' AND consumed_at IS NULL`, want: 2},
 	}
