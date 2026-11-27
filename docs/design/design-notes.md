@@ -334,6 +334,8 @@ Owner's picks, 2026-11-25: layout **B2, full-width cover**, and the **full-scree
 - **Storytellers** row: filter by teller (shows count). Clicking again clears.
 - **All stories** grid: thumbnail, length, title, teller · year, "About …". Topic chips. Search covers what was said, not just titles. **+ Add a story**.
 - **Your drafts** (only when you have some; admins see everyone's): a row above All stories with the same cards, a "Draft" chip and the step reached, each with **Continue editing**, which reopens Add a story at that step.
+- **Look A, "Screening room"** (owner's pick, 2026-11-26): the story of the week as a dark screen (still left, text right, gold **Watch the story**), the storytellers as round portraits with gold rings, and Your drafts and All stories on the album paper, each story a mounted print with photo corners (still, title, *teller · recorded* in the print-date colour, summary). Topic chips sit beside the album's title.
+- **Built ahead of media (2026-11-26):** the stills are placeholders, with no length, until uploads arrive (Phase 5); a draft shows its summary rather than the step reached; **+ Add a story** waits for its guide. Search asks the server, so it covers what was said; storyteller and topic filter what it returns.
 - **Sample stories** (`make seed`, 2026-11-26) follow the owner's newer Stories mockup rather than `Stories.dc.html`: the Pluviose family only and video only, so Rose's and Lucien's stories (Lucien's a cassette) are left out.
 
 ### 4.7 A story
