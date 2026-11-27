@@ -142,7 +142,7 @@ describe('Stories', () => {
     renderPage({ drafts: [story({ id: 'kitchen', title: 'Grandma’s kitchen in Jacmel', status: 'draft', teller: nadege })] })
 
     const drafts = screen.getAllByRole('region').find((r) => r.querySelector('h2#drafts'))!
-    expect(within(drafts).getByText('only you and admins see these')).toBeInTheDocument()
+    expect(within(drafts).getByText('only you, their storytellers and admins see these')).toBeInTheDocument()
     expect(printTitles(drafts)).toEqual(['Grandma’s kitchen in Jacmel'])
     expect(within(drafts).getByText('Draft')).toBeInTheDocument()
   })

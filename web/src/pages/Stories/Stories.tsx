@@ -121,7 +121,7 @@ export function Stories() {
           {myDrafts.length > 0 && (
             <section aria-labelledby="drafts" className={styles.album}>
               <h2 id="drafts" className={styles.secLabel}>
-                Your drafts <small>only you and admins see these</small>
+                Your drafts <small>only you, their storytellers and admins see these</small>
               </h2>
               <ul className={styles.prints}>
                 {myDrafts.map((s) => (
