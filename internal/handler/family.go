@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -101,7 +102,7 @@ type optional[T any] family.Opt[T]
 
 func (o *optional[T]) UnmarshalJSON(data []byte) error {
 	o.Set = true
-	return json.Unmarshal(data, &o.Value)
+	return decodeStrict(data, &o.Value)
 }
 
 // required is a PATCH field that can be left out but not cleared: null would otherwise decode as the zero value.
@@ -112,7 +113,15 @@ func (o *required[T]) UnmarshalJSON(data []byte) error {
 		return errors.New("null for a field that can't be cleared")
 	}
 	o.Set = true
-	return json.Unmarshal(data, &o.Value)
+	return decodeStrict(data, &o.Value)
+}
+
+// decodeStrict keeps DisallowUnknownFields inside a PATCH field: the outer decoder's setting doesn't reach a custom
+// UnmarshalJSON, so a misspelled key in a chapter would otherwise read as a zero value.
+func decodeStrict(data []byte, dst any) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	return dec.Decode(dst)
 }
 
 // relationshipResponse has parent_id and child_id for a parent link, person_ids for a couple, as the request does.
