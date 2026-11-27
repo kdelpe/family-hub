@@ -16,6 +16,7 @@ import { MyProfile } from '../pages/MyProfile/MyProfile'
 import { PersonProfile } from '../pages/PersonProfile/PersonProfile'
 import { RequestAccess } from '../pages/RequestAccess/RequestAccess'
 import { Requests } from '../pages/Requests/Requests'
+import { Stories } from '../pages/Stories/Stories'
 import { WelcomeInvite } from '../pages/WelcomeInvite/WelcomeInvite'
 import { AppShell } from './AppShell'
 import { NotBuiltYet } from './NotBuiltYet'
@@ -26,6 +27,7 @@ const built: Record<string, ReactNode> = {
   '/tree': <Main />,
   '/members': <Members />,
   '/events': <Events />,
+  '/stories': <Stories />,
   '/admin/members': <ManageAccess />,
 }
 
@@ -47,6 +49,8 @@ export const routes: RouteObject[] = [
       ...[...menuPages, ...adminPages].map(({ path }) => ({ path, element: built[path] ?? <NotBuiltYet /> })),
       { path: '/people/:id', element: <PersonProfile /> },
       { path: '/events/:id', element: <EventPage /> },
+      // A story's page comes next; its links land inside the shell until then.
+      { path: '/stories/:id', element: <NotBuiltYet /> },
       { path: '/profile', element: <MyProfile /> },
       { path: '/requests', element: <Requests /> },
       { path: '/account', element: <Account /> },

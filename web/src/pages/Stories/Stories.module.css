@@ -1,0 +1,543 @@
+.page {
+  padding: 32px 40px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px 18px;
+}
+
+.headText {
+  flex: 1 1 280px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.sub {
+  margin: 4px 0 0;
+  color: var(--text-2);
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+}
+
+.search {
+  position: relative;
+  flex: 0 1 300px;
+}
+
+.searchIcon {
+  position: absolute;
+  top: 13px;
+  left: 14px;
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 0 14px 0 40px;
+  border: 1px solid var(--input-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  font: inherit;
+  color: inherit;
+}
+
+.secLabel {
+  margin: 0 0 10px;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.secLabel small {
+  margin-left: 8px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* Placeholder stills until the videos arrive (Phase 5). */
+.still {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 3px;
+}
+
+.v1 {
+  background: radial-gradient(circle at 34% 62%, #e9c79a 0 15%, transparent 16%), linear-gradient(160deg, #6b4a34, #b98a5e 60%, #e6c79c);
+}
+
+.v2 {
+  background: radial-gradient(circle at 60% 50%, #f0d0a8 0 12%, transparent 13%), linear-gradient(200deg, #3c4a5a, #7d8c94 55%, #c9b79a);
+}
+
+.v3 {
+  background: radial-gradient(circle at 45% 55%, #f3dcc0 0 13%, transparent 14%), linear-gradient(140deg, #5d3f2e, #a7724c 55%, #e2c08f);
+}
+
+.v4 {
+  background: radial-gradient(circle at 40% 45%, #f6dcc0 0 12%, transparent 13%), linear-gradient(120deg, #3f5b4f, #8aa58f 60%, #e7dcc2);
+}
+
+.v5 {
+  background: radial-gradient(ellipse at 50% 100%, #b9744a 0 28%, transparent 29%), linear-gradient(180deg, #9fb3bd, #d9d2bf 60%, #8a6a4c);
+}
+
+.v6 {
+  background: radial-gradient(circle at 65% 40%, #f3e0bf 0 14%, transparent 15%), linear-gradient(150deg, #4a3d33, #8b6f55 55%, #d8bb92);
+}
+
+.play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.play i {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  color: var(--accent);
+}
+
+.play svg {
+  margin-left: 3px;
+}
+
+.draftChip {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--print-date);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.portrait {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 500;
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 0 0 4px var(--gold);
+}
+
+.portraitSmall {
+  width: 40px;
+  height: 40px;
+  font-size: 14px;
+}
+
+.t1 {
+  background: #2f5d50;
+}
+
+.t2 {
+  background: #8a6f4a;
+}
+
+.t3 {
+  background: #a5553a;
+}
+
+.t4 {
+  background: #5e6b66;
+}
+
+.t5 {
+  background: #7d6a5a;
+}
+
+/* The story of the week, as a dark screen (look A). */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 22px;
+  background: #1c1915;
+  color: #f3ede2;
+  box-shadow: 0 18px 40px rgba(28, 25, 21, 0.25);
+  transition: translate 0.2s ease;
+}
+
+.hero .still {
+  min-height: 300px;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+
+.hero .play i {
+  width: 72px;
+  height: 72px;
+}
+
+.hero .play svg {
+  width: 24px;
+  height: 24px;
+}
+
+.heroText {
+  align-self: center;
+  padding: 28px 30px;
+  overflow-wrap: anywhere;
+}
+
+.heroText h2 {
+  margin: 2px 0 0;
+  font-family: var(--font-serif);
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.heroText p {
+  margin: 10px 0 0;
+  color: #d9d1c3;
+}
+
+.kick {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.by {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.by small {
+  display: block;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.watch {
+  margin-top: 16px;
+  height: 46px;
+  padding: 0 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #1c1915;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.watch:hover,
+.watch:focus-visible {
+  background: var(--gold-pale);
+}
+
+.tellers {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  padding: 6px 4px 8px;
+}
+
+.teller {
+  width: 96px;
+  flex: none;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: translate 0.2s ease;
+}
+
+.teller b {
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.teller small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.teller[aria-pressed='true'] .portrait {
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 0 0 6px var(--accent);
+}
+
+.teller[aria-pressed='true'] b {
+  color: var(--accent);
+}
+
+/* The album paper, as on Events and the event page. */
+.album {
+  display: grid;
+  gap: 20px;
+  padding: 26px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background-color: var(--endpaper);
+  background-image:
+    radial-gradient(circle at 25% 25%, color-mix(in srgb, var(--accent) 20%, transparent) 2.2px, transparent 2.8px),
+    radial-gradient(circle at 75% 75%, color-mix(in srgb, var(--accent) 12%, transparent) 2.2px, transparent 2.8px);
+  background-size: 30px 30px;
+}
+
+.album .secLabel {
+  margin: 0;
+}
+
+.albumHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  padding: 6px 14px;
+  border: 1px solid var(--input-border);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+}
+
+.chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.prints {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  align-items: start;
+  gap: 26px;
+}
+
+/* A print mounted in the album: held by photo corners, set slightly askew. */
+.print {
+  position: relative;
+  padding: 9px 9px 12px;
+  background: var(--surface);
+  box-shadow:
+    0 1px 2px rgba(43, 38, 32, 0.06),
+    0 12px 26px rgba(43, 38, 32, 0.1);
+  rotate: var(--tilt, 0deg);
+  overflow-wrap: anywhere;
+  transition:
+    translate 0.2s ease,
+    rotate 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.print:nth-child(3n + 1) {
+  --tilt: -0.5deg;
+}
+
+.print:nth-child(3n + 2) {
+  --tilt: 0.4deg;
+}
+
+.print:nth-child(3n) {
+  --tilt: -0.2deg;
+}
+
+.print::before,
+.print::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  background: color-mix(in srgb, var(--text) 78%, transparent);
+  pointer-events: none;
+}
+
+.print::before {
+  top: -4px;
+  left: -4px;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+.print::after {
+  right: -4px;
+  bottom: -4px;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+.print:hover,
+.print:focus-within {
+  box-shadow: 0 16px 30px rgba(43, 38, 32, 0.16);
+}
+
+/* Turning transitions off doesn't stop a move, so the lift and straightening wait for motion to be welcome (§2.4). */
+@media (prefers-reduced-motion: no-preference) {
+  .print:hover,
+  .print:focus-within {
+    translate: 0 -3px;
+    rotate: 0deg;
+  }
+
+  .hero:hover,
+  .hero:focus-within,
+  .teller:hover,
+  .teller:focus-visible {
+    translate: 0 -4px;
+  }
+}
+
+.print h3 {
+  margin: 9px 2px 0;
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.open {
+  color: inherit;
+  text-decoration: none;
+}
+
+.open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.open:hover,
+.open:focus-visible {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.who {
+  margin: 2px 2px 0;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-style: italic;
+  font-weight: 500;
+  color: var(--print-date);
+}
+
+.about {
+  margin: 4px 2px 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.empty {
+  padding: 48px 20px;
+  border: 2px dashed color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  text-align: center;
+}
+
+.empty h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 500;
+}
+
+.empty p {
+  max-width: 52ch;
+  margin: 8px auto 0;
+  color: var(--text-2);
+}
+
+@media (max-width: 860px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .hero .still {
+    min-height: 0;
+    aspect-ratio: 16 / 9;
+  }
+
+  .heroText h2 {
+    font-size: 28px;
+  }
+
+  .search {
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 24px 16px 40px;
+  }
+
+  .title {
+    font-size: 32px;
+  }
+
+  .album {
+    padding: 16px;
+  }
+}
