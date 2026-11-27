@@ -17,6 +17,7 @@ import { PersonProfile } from '../pages/PersonProfile/PersonProfile'
 import { RequestAccess } from '../pages/RequestAccess/RequestAccess'
 import { Requests } from '../pages/Requests/Requests'
 import { Stories } from '../pages/Stories/Stories'
+import { StoryPage } from '../pages/Stories/StoryPage'
 import { WelcomeInvite } from '../pages/WelcomeInvite/WelcomeInvite'
 import { AppShell } from './AppShell'
 import { NotBuiltYet } from './NotBuiltYet'
@@ -49,8 +50,7 @@ export const routes: RouteObject[] = [
       ...[...menuPages, ...adminPages].map(({ path }) => ({ path, element: built[path] ?? <NotBuiltYet /> })),
       { path: '/people/:id', element: <PersonProfile /> },
       { path: '/events/:id', element: <EventPage /> },
-      // A story's page comes next; its links land inside the shell until then.
-      { path: '/stories/:id', element: <NotBuiltYet /> },
+      { path: '/stories/:id', element: <StoryPage /> },
       { path: '/profile', element: <MyProfile /> },
       { path: '/requests', element: <Requests /> },
       { path: '/account', element: <Account /> },

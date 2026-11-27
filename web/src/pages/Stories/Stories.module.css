@@ -143,48 +143,6 @@
   font-weight: 600;
 }
 
-.portrait {
-  width: 56px;
-  height: 56px;
-  flex: none;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  color: #fff;
-  font-family: var(--font-serif);
-  font-size: 19px;
-  font-weight: 500;
-  box-shadow:
-    0 0 0 3px var(--surface),
-    0 0 0 4px var(--gold);
-}
-
-.portraitSmall {
-  width: 40px;
-  height: 40px;
-  font-size: 14px;
-}
-
-.t1 {
-  background: #2f5d50;
-}
-
-.t2 {
-  background: #8a6f4a;
-}
-
-.t3 {
-  background: #a5553a;
-}
-
-.t4 {
-  background: #5e6b66;
-}
-
-.t5 {
-  background: #7d6a5a;
-}
-
 /* The story of the week, as a dark screen (look A). */
 .hero {
   display: grid;
@@ -296,6 +254,10 @@
   transition: translate 0.2s ease;
 }
 
+.tellerPortrait {
+  transition: box-shadow 0.2s ease;
+}
+
 .teller b {
   font-size: 14px;
   line-height: 1.25;
@@ -306,7 +268,7 @@
   color: var(--muted);
 }
 
-.teller[aria-pressed='true'] .portrait {
+.teller[aria-pressed='true'] .tellerPortrait {
   box-shadow:
     0 0 0 3px var(--surface),
     0 0 0 6px var(--accent);
