@@ -56,6 +56,7 @@ func TestRoutes(t *testing.T) {
 		{name: "descendants need a session", method: http.MethodGet, path: "/api/persons/" + testID + "/descendants", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "the tree needs a session", method: http.MethodGet, path: "/api/tree", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "home needs a session", method: http.MethodGet, path: "/api/home", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
+		{name: "stories need a session", method: http.MethodGet, path: "/api/stories", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "the family summary needs a session", method: http.MethodGet, path: "/api/family/summary", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "contacts need a session", method: http.MethodGet, path: "/api/persons/" + testID + "/contacts", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
 		{name: "the directory needs a session", method: http.MethodGet, path: "/api/directory", wantStatus: http.StatusUnauthorized, wantType: "application/json"},
@@ -194,6 +195,12 @@ func TestFamilyWritesAreAdminOnly(t *testing.T) {
 		{name: "an admin can add an event", method: http.MethodPost, path: "/api/events", role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "an admin can edit an event", method: http.MethodPatch, path: "/api/events/" + testID, role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
 		{name: "an admin can delete an event", method: http.MethodDelete, path: "/api/events/42", role: auth.RoleAdmin, wantStatus: http.StatusNotFound},
+		{name: "a member can read a story", method: http.MethodGet, path: "/api/stories/42", role: auth.RoleMember, wantStatus: http.StatusNotFound},
+		{name: "a member reaches a story's PATCH, to hide one they tell", method: http.MethodPatch, path: "/api/stories/" + testID, role: auth.RoleMember, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "a member can't add a story", method: http.MethodPost, path: "/api/stories", role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "a member can't delete a story", method: http.MethodDelete, path: "/api/stories/" + testID, role: auth.RoleMember, wantStatus: http.StatusForbidden},
+		{name: "an admin can add a story", method: http.MethodPost, path: "/api/stories", role: auth.RoleAdmin, wantStatus: http.StatusUnsupportedMediaType},
+		{name: "an admin can delete a story", method: http.MethodDelete, path: "/api/stories/42", role: auth.RoleAdmin, wantStatus: http.StatusNotFound},
 	}
 
 	for _, tt := range tests {
@@ -231,6 +238,7 @@ func newRoutesWith(t *testing.T, sessions handler.SessionAuthenticator, perHour 
 			Access:   handler.NewAccess(mocks.NewAccessService(t)),
 			Home:     handler.NewHome(mocks.NewHomeService(t), time.UTC),
 			Events:   handler.NewEvents(mocks.NewEventService(t)),
+			Stories:  handler.NewStories(mocks.NewStoryService(t)),
 		},
 		router.Middleware{
 			RequireSession: handler.NewSessionGate(sessions, cookie).Require,

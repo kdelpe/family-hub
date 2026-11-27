@@ -242,9 +242,21 @@ func (s *Service) Create(ctx context.Context, viewer family.Viewer, in Input) (S
 	return story, nil
 }
 
-// Update is for admins and the story's creator, and its teller may hide it (Patch.OnlyHides); only admins choose
-// the story of the week.
+// Update is for admins and the story's creator; only admins choose the story of the week.
 func (s *Service) Update(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch Patch) (Story, error) {
+	return s.update(ctx, viewer, id, patch, func(row gen.LockStoryRow) bool { return canEdit(viewer, row.CreatedBy) })
+}
+
+// Hide is the one change a story's teller may make (Patch.OnlyHides), and only they may make it this way, whoever
+// added the story.
+func (s *Service) Hide(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch Patch) (Story, error) {
+	if !patch.OnlyHides() {
+		return Story{}, fmt.Errorf("%w: its teller can only hide it", ErrNotAllowed)
+	}
+	return s.update(ctx, viewer, id, patch, func(row gen.LockStoryRow) bool { return isTeller(viewer, row.LiveTellerID) })
+}
+
+func (s *Service) update(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch Patch, may func(gen.LockStoryRow) bool) (Story, error) {
 	// One alone would be read against the other's stored value: "1984-11-13" can't be read as a year.
 	if patch.RecordedOn.Set != patch.RecordedOnPrecision.Set {
 		return Story{}, fmt.Errorf("%w: give the date and its precision together", ErrInvalidStory)
@@ -261,7 +273,7 @@ func (s *Service) Update(ctx context.Context, viewer family.Viewer, id uuid.UUID
 				return fmt.Errorf("lock story of the week: %w", err)
 			}
 		}
-		row, err := lock(ctx, q, viewer, id, patch.OnlyHides())
+		row, err := lock(ctx, q, viewer, id, may)
 		if err != nil {
 			return err
 		}
@@ -360,7 +372,7 @@ func (s *Service) Update(ctx context.Context, viewer family.Viewer, id uuid.UUID
 // Delete only hides the story, so it can be brought back by hand (§3.1); for admins and the story's creator.
 func (s *Service) Delete(ctx context.Context, viewer family.Viewer, id uuid.UUID) error {
 	return s.write(ctx, "delete story", func(q *gen.Queries) error {
-		if _, err := lock(ctx, q, viewer, id, false); err != nil {
+		if _, err := lock(ctx, q, viewer, id, func(row gen.LockStoryRow) bool { return canEdit(viewer, row.CreatedBy) }); err != nil {
 			return err
 		}
 		if err := q.SoftDeleteStory(ctx, id); err != nil {
@@ -450,8 +462,7 @@ func canEdit(viewer family.Viewer, createdBy *uuid.UUID) bool {
 }
 
 // lock takes the story for a change by someone who may make it; a draft they can't see doesn't exist for them.
-// tellerMay says the change is one the story's teller may make too.
-func lock(ctx context.Context, q *gen.Queries, viewer family.Viewer, id uuid.UUID, tellerMay bool) (gen.LockStoryRow, error) {
+func lock(ctx context.Context, q *gen.Queries, viewer family.Viewer, id uuid.UUID, may func(gen.LockStoryRow) bool) (gen.LockStoryRow, error) {
 	row, err := q.LockStory(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return gen.LockStoryRow{}, ErrStoryNotFound
@@ -462,7 +473,7 @@ func lock(ctx context.Context, q *gen.Queries, viewer family.Viewer, id uuid.UUI
 	if !canSee(viewer, row.Status, row.CreatedBy, row.LiveTellerID) {
 		return gen.LockStoryRow{}, ErrStoryNotFound
 	}
-	if mayChange := canEdit(viewer, row.CreatedBy) || (tellerMay && isTeller(viewer, row.LiveTellerID)); !mayChange {
+	if !may(row) {
 		return gen.LockStoryRow{}, fmt.Errorf("%w: only admins and whoever added it can change a story; its teller can only hide it", ErrNotAllowed)
 	}
 	return row, nil

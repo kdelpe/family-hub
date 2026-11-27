@@ -16,6 +16,7 @@ packages:
       AccessService: {}
       HomeService: {}
       EventService: {}
+      StoryService: {}
   github.com/kdelpe/family-hub/internal/admin:
     interfaces:
       Terminal: {}
