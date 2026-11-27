@@ -182,20 +182,23 @@ function Featured({ story }: { story: Story }) {
   const about = [relation && (relation === 'You' ? relation : `Your ${relation.toLowerCase()}`), when && `recorded ${when}`]
     .filter(Boolean)
     .join(' · ')
+  const aboutLine = about && about.charAt(0).toUpperCase() + about.slice(1)
   return (
     <section aria-label="Story of the week" className={styles.hero}>
       <Still story={story} />
       <div className={styles.heroText}>
         <span className={styles.kick}>Story of the week</span>
         <h2>{story.title}</h2>
-        {story.teller && (
+        {story.teller ? (
           <div className={styles.by}>
             <Portrait person={story.teller} small />
             <span>
               <b>Told by {fullName(story.teller)}</b>
-              {about && <small>{about.charAt(0).toUpperCase() + about.slice(1)}</small>}
+              {aboutLine && <small>{aboutLine}</small>}
             </span>
           </div>
+        ) : (
+          aboutLine && <p>{aboutLine}</p>
         )}
         {story.summary && <p>{story.summary}</p>}
         <Link to={`/stories/${story.id}`} className={styles.watch}>
@@ -227,8 +230,8 @@ function Print({ story }: { story: Story }) {
 
 function Still({ story }: { story: Story }) {
   return (
-    <span aria-hidden="true" className={`${styles.still} ${pick(stills, story.id)}`}>
-      <span className={styles.play}>
+    <span className={`${styles.still} ${pick(stills, story.id)}`}>
+      <span aria-hidden="true" className={styles.play}>
         <i>
           <PlayIcon />
         </i>

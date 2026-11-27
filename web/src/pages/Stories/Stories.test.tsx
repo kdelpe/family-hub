@@ -144,7 +144,15 @@ describe('Stories', () => {
     const drafts = screen.getAllByRole('region').find((r) => r.querySelector('h2#drafts'))!
     expect(within(drafts).getByText('only you, their storytellers and admins see these')).toBeInTheDocument()
     expect(printTitles(drafts)).toEqual(['Grandma’s kitchen in Jacmel'])
-    expect(within(drafts).getByText('Draft')).toBeInTheDocument()
+    // Read out too, not only drawn on the still.
+    expect(within(drafts).getByText('Draft')).not.toHaveAttribute('aria-hidden')
+    expect(within(drafts).getByText('Draft').closest('[aria-hidden="true"]')).toBeNull()
+  })
+
+  it('gives the recording date even when the storyteller isn’t known', () => {
+    renderPage({ stories: [story({ id: 'x', title: 'Untold', featured: true, recorded_on: '1994-01-01', recorded_on_precision: 'year' })] })
+
+    expect(within(screen.getByRole('region', { name: 'Story of the week' })).getByText('Recorded 1994')).toBeInTheDocument()
   })
 
   it('has an empty page until the first story is shared', () => {
