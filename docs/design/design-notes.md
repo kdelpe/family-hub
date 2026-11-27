@@ -334,6 +334,7 @@ Owner's picks, 2026-11-25: layout **B2, full-width cover**, and the **full-scree
 - **Storytellers** row: filter by teller (shows count). Clicking again clears.
 - **All stories** grid: thumbnail, length, title, teller · year, "About …". Topic chips. Search covers what was said, not just titles. **+ Add a story**.
 - **Your drafts** (only when you have some; admins see everyone's): a row above All stories with the same cards, a "Draft" chip and the step reached, each with **Continue editing**, which reopens Add a story at that step.
+- **Sample stories** (`make seed`, 2026-11-26) follow the owner's newer Stories mockup rather than `Stories.dc.html`: the Pluviose family only and video only, so Rose's and Lucien's stories (Lucien's a cassette) are left out.
 
 ### 4.7 A story
 - Player: dark frame, big play/pause, progress bar, time, **Captions** (on by default, large 20px on dark), Full screen.
