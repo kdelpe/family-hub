@@ -344,6 +344,10 @@ Owner's picks, 2026-11-25: layout **B2, full-width cover**, and the **full-scree
 - **Transcript** with timestamps; clicking a line jumps there; the current chapter's lines are highlighted; search box.
 - Side: **Told by** card · **Chapters** (click to jump; current one highlighted) · **People in this story** (can include people not in the tree) and matching years on the timeline · **More from Rose**.
 
+- **Layout "Theatre"** (owner's pick, 2026-11-26): the screen across the full width, the title with *Recorded <when> in <place>* in the print-date colour, then the transcript as the main column (chapter headings in the print-date colour, timestamps, its own search that marks the words found) beside frosted cards: **Told by** (portrait, *Your father · 2 stories*, linking to their profile) · **Chapters** · **People in this story** (profile links; people not in the tree in italics) · **More from <first name>**. No "filmed by".
+- **Built ahead of media (2026-11-26):** the screen says *Video coming with uploads*; until then Chapters jump to their heading in the transcript, and lines don't seek. "Also on the timeline" and the current line lit wait for the player (Phase 5). A draft says *Draft · not shared with the family yet*.
+- **Hide this story** (owner's call, 2026-11-26): only its storyteller sees it, under the title, while the story is shared. It asks *Hide “<title>”?* (*It goes back to a draft that only you, whoever added it and admins can see. It won’t be shared again unless you agree.*, **Keep it shared** / **Hide it**), then takes it back to a draft and withdraws consent (§9.6).
+
 ### 4.7b Add a story (from **+ Add a story** on Stories; admins, or members with `MEMBERS_CAN_CONTRIBUTE`)
 A five-step guide with a clickable step bar (Storyteller · Recording · Details · Transcript · Share), **Back / Save as draft / Continue** at the bottom of every step.
 1. **Storyteller:** search the tree; pick a person card (radio). "Not in the tree yet? Add them first."
