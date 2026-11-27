@@ -485,6 +485,40 @@ func longTranscript() []Line {
 	return lines
 }
 
+func TestHideIsForTheTellerAlone(t *testing.T) {
+	f := newFixture(t)
+	grandma := f.person(t, "Marie-Claire", "Pluviose")
+	teller := family.Viewer{UserID: f.other.UserID, PersonID: &grandma}
+	hide := Patch{Status: family.Opt[string]{Set: true, Value: "draft"}, ConsentConfirmed: family.Opt[bool]{Set: true}}
+
+	tests := []struct {
+		name    string
+		viewer  family.Viewer
+		patch   Patch
+		wantErr error
+	}{
+		{name: "its teller", viewer: teller, patch: hide},
+		{name: "whoever added it, now a member", viewer: f.member, patch: hide, wantErr: ErrNotAllowed},
+		{name: "its teller changing something else", viewer: teller, patch: Patch{Title: family.Opt[string]{Set: true, Value: "Mine"}}, wantErr: ErrNotAllowed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			story := f.publish(t, f.member, Input{Title: "Our wedding", TellerID: &grandma})
+
+			got, err := f.svc.Hide(t.Context(), tt.viewer, story.ID, tt.patch)
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, "draft", got.Status)
+			assert.False(t, got.ConsentConfirmed)
+		})
+	}
+}
+
 func TestTheTellerMayHideTheirStory(t *testing.T) {
 	f := newFixture(t)
 	grandma := f.person(t, "Marie-Claire", "Pluviose")
@@ -511,7 +545,7 @@ func TestTheTellerMayHideTheirStory(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			story := f.publish(t, f.member, Input{Title: "Our wedding", TellerID: &grandma})
 
-			got, err := f.svc.Update(t.Context(), teller, story.ID, tt.patch)
+			got, err := f.svc.Hide(t.Context(), teller, story.ID, tt.patch)
 
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)

@@ -172,6 +172,10 @@ func TestUpdateStory(t *testing.T) {
 				Featured: family.Opt[bool]{Set: true, Value: true}, Transcript: family.Opt[[]story.Line]{Set: true}},
 			wantStatus: http.StatusOK, wantBody: testStoryBody},
 		{name: "a title can't be cleared", role: auth.RoleAdmin, body: `{"title":null}`, wantStatus: http.StatusBadRequest, wantBody: badJSONBody},
+		{name: "a misspelled transcript field", role: auth.RoleAdmin, body: `{"transcript":[{"at_seconds":30,"text":"Hello"}]}`,
+			wantStatus: http.StatusBadRequest, wantBody: badJSONBody},
+		{name: "a misspelled chapter field", role: auth.RoleAdmin, body: `{"chapters":[{"at_seconds":30,"title":"Jacmel"}]}`,
+			wantStatus: http.StatusBadRequest, wantBody: badJSONBody},
 		{name: "a member hides a story they tell", role: auth.RoleMember, body: `{"status":"draft","consent_confirmed":false}`,
 			wantPatch: hide, wantStatus: http.StatusOK, wantBody: testStoryBody},
 		{name: "a member hiding one they don't tell is refused by the service", role: auth.RoleMember, body: `{"status":"draft","consent_confirmed":false}`,
@@ -190,12 +194,11 @@ func TestUpdateStory(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := mocks.NewStoryService(t)
-			if tt.wantPatch != nil {
-				viewer := memberViewerNoPerson
-				if tt.role == auth.RoleAdmin {
-					viewer = adminViewerNoPerson
-				}
-				svc.EXPECT().Update(mock.Anything, viewer, testStoryID, *tt.wantPatch).Return(testStory, tt.updateErr)
+			if tt.wantPatch != nil && tt.role == auth.RoleAdmin {
+				svc.EXPECT().Update(mock.Anything, adminViewerNoPerson, testStoryID, *tt.wantPatch).Return(testStory, tt.updateErr)
+			}
+			if tt.wantPatch != nil && tt.role == auth.RoleMember {
+				svc.EXPECT().Hide(mock.Anything, memberViewerNoPerson, testStoryID, *tt.wantPatch).Return(testStory, tt.updateErr)
 			}
 			id := storyIDOr(tt.id)
 			req := httptest.NewRequest(http.MethodPatch, "/api/stories/"+id, strings.NewReader(tt.body))

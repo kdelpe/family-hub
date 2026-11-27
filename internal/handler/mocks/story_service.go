@@ -256,6 +256,84 @@ func (_c *StoryService_Get_Call) RunAndReturn(run func(ctx context.Context, view
 	return _c
 }
 
+// Hide provides a mock function for the type StoryService
+func (_mock *StoryService) Hide(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch story.Patch) (story.Story, error) {
+	ret := _mock.Called(ctx, viewer, id, patch)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Hide")
+	}
+
+	var r0 story.Story
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, uuid.UUID, story.Patch) (story.Story, error)); ok {
+		return returnFunc(ctx, viewer, id, patch)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, family.Viewer, uuid.UUID, story.Patch) story.Story); ok {
+		r0 = returnFunc(ctx, viewer, id, patch)
+	} else {
+		r0 = ret.Get(0).(story.Story)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, family.Viewer, uuid.UUID, story.Patch) error); ok {
+		r1 = returnFunc(ctx, viewer, id, patch)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// StoryService_Hide_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Hide'
+type StoryService_Hide_Call struct {
+	*mock.Call
+}
+
+// Hide is a helper method to define mock.On call
+//   - ctx context.Context
+//   - viewer family.Viewer
+//   - id uuid.UUID
+//   - patch story.Patch
+func (_e *StoryService_Expecter) Hide(ctx any, viewer any, id any, patch any) *StoryService_Hide_Call {
+	return &StoryService_Hide_Call{Call: _e.mock.On("Hide", ctx, viewer, id, patch)}
+}
+
+func (_c *StoryService_Hide_Call) Run(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch story.Patch)) *StoryService_Hide_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 family.Viewer
+		if args[1] != nil {
+			arg1 = args[1].(family.Viewer)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		var arg3 story.Patch
+		if args[3] != nil {
+			arg3 = args[3].(story.Patch)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *StoryService_Hide_Call) Return(story1 story.Story, err error) *StoryService_Hide_Call {
+	_c.Call.Return(story1, err)
+	return _c
+}
+
+func (_c *StoryService_Hide_Call) RunAndReturn(run func(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch story.Patch) (story.Story, error)) *StoryService_Hide_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // List provides a mock function for the type StoryService
 func (_mock *StoryService) List(ctx context.Context, viewer family.Viewer, f story.Filter) ([]story.Story, error) {
 	ret := _mock.Called(ctx, viewer, f)

@@ -20,6 +20,7 @@ type StoryService interface {
 	Get(ctx context.Context, viewer family.Viewer, id uuid.UUID) (story.Story, error)
 	Create(ctx context.Context, viewer family.Viewer, in story.Input) (story.Story, error)
 	Update(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch story.Patch) (story.Story, error)
+	Hide(ctx context.Context, viewer family.Viewer, id uuid.UUID, patch story.Patch) (story.Story, error)
 	Delete(ctx context.Context, viewer family.Viewer, id uuid.UUID) error
 }
 
@@ -164,7 +165,7 @@ func (s *Stories) Create(w http.ResponseWriter, r *http.Request) {
 	s.answer(w, r, http.StatusCreated, st, err, "create story")
 }
 
-// Update is for admins; a member may only hide a story they tell, which the service checks.
+// Update is for admins; a member may only hide a story they tell, even one they added.
 func (s *Stories) Update(w http.ResponseWriter, r *http.Request) {
 	viewer, ok := currentViewer(w, r)
 	if !ok {
@@ -187,11 +188,15 @@ func (s *Stories) Update(w http.ResponseWriter, r *http.Request) {
 		Topics: family.Opt[[]string](req.Topics), PersonIDs: family.Opt[[]uuid.UUID](req.PersonIDs),
 		OtherPeople: family.Opt[[]string](req.OtherPeople),
 	}
-	if !viewer.IsAdmin && !patch.OnlyHides() {
-		httpx.Error(w, http.StatusForbidden, "forbidden", "only admins change a story; its teller can only hide it")
-		return
+	update := s.svc.Update
+	if !viewer.IsAdmin {
+		if !patch.OnlyHides() {
+			httpx.Error(w, http.StatusForbidden, "forbidden", "only admins change a story; its teller can only hide it")
+			return
+		}
+		update = s.svc.Hide
 	}
-	st, err := s.svc.Update(r.Context(), viewer, id, patch)
+	st, err := update(r.Context(), viewer, id, patch)
 	s.answer(w, r, http.StatusOK, st, err, "update story")
 }
 
